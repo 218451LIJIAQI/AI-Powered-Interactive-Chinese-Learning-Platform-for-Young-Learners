@@ -11,12 +11,10 @@ import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Getter
 @Setter
-@NoArgsConstructor
 @Entity
 @Table(name = "quiz_options", indexes = {
         @Index(name = "idx_quiz_options_question_id", columnList = "question_id")

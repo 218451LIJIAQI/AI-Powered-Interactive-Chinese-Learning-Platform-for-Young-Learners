@@ -21,7 +21,6 @@ public final class SecurityUserDetails implements UserDetails {
     private final Long userId;
     private final String username;
     private final String password;
-    private final String displayName;
     private final boolean active;
     private final long sessionVersion;
     private final int fallbackHashCode;
@@ -33,37 +32,27 @@ public final class SecurityUserDetails implements UserDetails {
         this.userId = user.getId();
         this.username = user.getEmail();
         this.password = user.getPasswordHash();
-        this.displayName = user.getDisplayName();
         this.active = user.isActive();
         this.sessionVersion = user.getSessionVersion();
         this.fallbackHashCode = System.identityHashCode(user);
-        Set<Role> roles = user.getRoles();
-        if (roles == null || roles.isEmpty()) {
-            this.authorities = List.of();
-            this.roleNames = List.of();
-        } else {
-            List<RoleName> validRoleNames = roles.stream()
-                    .filter(Objects::nonNull)
-                    .map(Role::getName)
-                    .filter(Objects::nonNull)
-                    .distinct()
-                    .sorted(Comparator.comparing(RoleName::name))
-                    .toList();
-            this.authorities = validRoleNames.stream()
-                    .map(roleName -> (GrantedAuthority) new SimpleGrantedAuthority(roleName.authority()))
-                    .toList();
-            this.roleNames = validRoleNames.stream()
-                    .map(RoleName::name)
-                    .toList();
-        }
+        Set<Role> roles = user.getRoles() == null ? Set.of() : user.getRoles();
+        List<RoleName> validRoleNames = roles.stream()
+                .filter(Objects::nonNull)
+                .map(Role::getName)
+                .filter(Objects::nonNull)
+                .distinct()
+                .sorted(Comparator.comparing(RoleName::name))
+                .toList();
+        this.authorities = validRoleNames.stream()
+                .map(roleName -> (GrantedAuthority) new SimpleGrantedAuthority(roleName.authority()))
+                .toList();
+        this.roleNames = validRoleNames.stream()
+                .map(RoleName::name)
+                .toList();
     }
 
     public Long getUserId() {
         return userId;
-    }
-
-    public String getDisplayName() {
-        return displayName;
     }
 
     public long getSessionVersion() {
@@ -87,21 +76,6 @@ public final class SecurityUserDetails implements UserDetails {
     @Override
     public String getUsername() {
         return username;
-    }
-
-    @Override
-    public boolean isAccountNonExpired() {
-        return true;
-    }
-
-    @Override
-    public boolean isAccountNonLocked() {
-        return true;
-    }
-
-    @Override
-    public boolean isCredentialsNonExpired() {
-        return true;
     }
 
     @Override

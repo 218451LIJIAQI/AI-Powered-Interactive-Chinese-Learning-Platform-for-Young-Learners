@@ -1,15 +1,12 @@
 package com.example.aichinese.dto.ai;
 
-import java.time.LocalDateTime;
-
-import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-
-@JsonPropertyOrder({ "sessionId", "userMessage", "aiResponse", "language", "createdAt", "status" })
+/**
+ * One Ask SparkBot turn. On success {@code chatMessageId} is the stored answer (a report names it); otherwise
+ * {@code aiResponse} is the fixed message that explains why there is no answer.
+ */
 public record AiChatResponse(
         Long sessionId,
-        String userMessage,
+        Long chatMessageId,
         String aiResponse,
-        String language,
-        LocalDateTime createdAt,
         String status) {
 }

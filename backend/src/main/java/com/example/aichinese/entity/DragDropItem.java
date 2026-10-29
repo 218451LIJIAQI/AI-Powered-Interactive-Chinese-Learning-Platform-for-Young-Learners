@@ -10,12 +10,15 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * One item of a drag-and-drop activity. In a Practice sentence set an item is one sentence to build: {@code dragText}
+ * holds its tiles in order separated by spaces, {@code targetZone} what the sentence means (the prompt the student
+ * builds it from), {@code distractors} extra tiles that do not belong.
+ */
 @Getter
 @Setter
-@NoArgsConstructor
 @Entity
 @Table(name = "drag_drop_items", indexes = {
         @Index(name = "idx_drag_drop_items_activity_id", columnList = "drag_drop_activity_id")
@@ -37,6 +40,10 @@ public class DragDropItem extends BaseEntity {
 
     @Column(name = "image_url", length = 255)
     private String imageUrl;
+
+    /** Practice sentence sets: extra tiles that do not belong in the sentence, separated by spaces. */
+    @Column(name = "distractors", length = 255)
+    private String distractors;
 
     @Column(name = "sort_order", nullable = false)
     private Integer sortOrder = 0;

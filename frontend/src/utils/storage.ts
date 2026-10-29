@@ -1,17 +1,16 @@
 import type { AppLanguage } from '@/types/api'
+import { normalizeAppLanguage } from '@/utils/locale'
 
 export const storageKeys = {
   token: 'mandarin-spark.token',
   recoveryEmail: 'mandarin-spark.recovery-email',
   language: 'mandarin-spark.language',
-  previewRole: 'mandarin-spark.preview-role',
+  /** Written when a tab starts an access-token refresh, so the other tabs learn the refresh cookie may rotate. */
+  refreshMarker: 'mandarin-spark.refresh-started',
 } as const
 
+/** The browser's storage, or null where reading it throws (e.g. blocked site data). */
 function browserStorage(name: 'localStorage' | 'sessionStorage'): Storage | null {
-  if (typeof window === 'undefined') {
-    return null
-  }
-
   try {
     return window[name]
   } catch {
@@ -19,45 +18,40 @@ function browserStorage(name: 'localStorage' | 'sessionStorage'): Storage | null
   }
 }
 
-function getLocalStorage(): Storage | null {
-  return browserStorage('localStorage')
-}
-
 export function getSessionStorage(): Storage | null {
   return browserStorage('sessionStorage')
 }
 
-export function safeGetItem(key: string, storage: Storage | null = getLocalStorage()): string | null {
-  if (!storage) {
-    return null
-  }
+/* The helpers below use localStorage unless given another storage, and never throw (blocked or full storage). */
 
+export function safeGetItem(key: string, storage = browserStorage('localStorage')): string | null {
   try {
-    return storage.getItem(key)
+    return storage?.getItem(key) ?? null
   } catch {
     return null
   }
 }
 
-function writeStorage(storage: Storage | null, action: (storage: Storage) => void): void {
-  if (!storage) return
-
+export function safeSetItem(key: string, value: string, storage = browserStorage('localStorage')): void {
   try {
-    action(storage)
+    storage?.setItem(key, value)
   } catch {}
 }
 
-export function safeSetItem(key: string, value: string, storage: Storage | null = getLocalStorage()): void {
-  writeStorage(storage, (availableStorage) => availableStorage.setItem(key, value))
+export function safeRemoveItem(key: string, storage = browserStorage('localStorage')): void {
+  try {
+    storage?.removeItem(key)
+  } catch {}
 }
 
-export function safeRemoveItem(key: string, storage: Storage | null = getLocalStorage()): void {
-  writeStorage(storage, (availableStorage) => availableStorage.removeItem(key))
-}
-
-const validLocales: ReadonlySet<string> = new Set<AppLanguage>(['en', 'ms', 'zh'])
-
+/**
+ * Reads the stored interface language. A value saved by an earlier build with the legacy
+ * Chinese code is mapped to zh-CN and written back so the old value disappears.
+ */
 export function readPersistedLocale(): AppLanguage {
   const raw = safeGetItem(storageKeys.language)
-  return raw !== null && validLocales.has(raw) ? (raw as AppLanguage) : 'en'
+  const locale = normalizeAppLanguage(raw)
+  if (!locale) return 'en'
+  if (raw !== locale) safeSetItem(storageKeys.language, locale)
+  return locale
 }

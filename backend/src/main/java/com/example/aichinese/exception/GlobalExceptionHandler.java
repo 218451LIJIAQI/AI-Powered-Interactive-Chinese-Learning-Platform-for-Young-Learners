@@ -1,16 +1,14 @@
 package com.example.aichinese.exception;
 
-import java.util.IdentityHashMap;
+import static com.example.aichinese.dto.ApiResponse.failure;
+
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.core.DefaultParameterNameDiscoverer;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -18,9 +16,7 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
-import org.springframework.security.access.AccessDeniedException;
-import org.springframework.context.MessageSourceResolvable;
-import org.springframework.validation.FieldError;
+import org.springframework.web.ErrorResponse;
 import org.springframework.web.HttpMediaTypeNotAcceptableException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
@@ -30,15 +26,14 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
-import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
-import org.springframework.validation.method.ParameterErrors;
-import org.springframework.validation.method.ParameterValidationResult;
 
+import com.example.aichinese.config.SecurityConfig;
 import com.example.aichinese.dto.ApiResponse;
 import com.example.aichinese.util.RequestIdHolder;
 
@@ -51,22 +46,7 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
-    private static final String UNKNOWN_CAUSE = "unknown";
-
-    private static final int MAX_CAUSE_DEPTH = 20;
-
-    private static final String REQUEST_FIELD = "request";
-
-    private static final DefaultParameterNameDiscoverer PARAMETER_NAME_DISCOVERER =
-            new DefaultParameterNameDiscoverer();
-
-    private static final Set<String> PUBLIC_AUTH_VALIDATION_PATHS = Set.of(
-            "/api/v1/auth/login",
-            "/api/v1/auth/register/student",
-            "/api/v1/auth/register/teacher",
-            "/api/v1/auth/forgot-password",
-            "/api/v1/auth/reset-password",
-            "/api/v1/auth/refresh");
+    private static final int MAX_FIELD_KEY_LENGTH = 80;
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Void>> handleMethodArgumentNotValidException(
@@ -92,10 +72,7 @@ public class GlobalExceptionHandler {
             HttpMediaTypeNotSupportedException exception) {
         log.warn("Unsupported content type rejected with HTTP 415 [requestId={}]: {}",
                 requestId(), exception.getContentType());
-        ApiResponse<Void> response = failure(FriendlyErrorMessageResolver.invalidRequestMessage());
-        return ResponseEntity.status(exception.getStatusCode())
-                .headers(exception.getHeaders())
-                .body(response);
+        return invalidRequest(exception);
     }
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
@@ -103,16 +80,17 @@ public class GlobalExceptionHandler {
             HttpRequestMethodNotSupportedException exception) {
         log.warn("Unsupported HTTP method rejected with HTTP 405 [requestId={}]: {}",
                 requestId(), exception.getMethod());
-        ApiResponse<Void> response = failure(FriendlyErrorMessageResolver.invalidRequestMessage());
-        return ResponseEntity.status(exception.getStatusCode())
-                .headers(exception.getHeaders())
-                .body(response);
+        return invalidRequest(exception);
     }
 
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<ApiResponse<Void>> handleResponseStatusException(ResponseStatusException exception) {
+        if (exception.getStatusCode().is5xxServerError()) {
+            // The user only sees a friendly message, so a server-side failure must at least reach the log.
+            log.error("Request failed with HTTP {} [requestId={}]", exception.getStatusCode().value(), requestId(), exception);
+        }
         String message = FriendlyErrorMessageResolver.resolve(exception.getStatusCode(), exception.getReason());
-        return ResponseEntity.status(exception.getStatusCode()).body(failure(message));
+        return ResponseEntity.status(exception.getStatusCode()).headers(exception.getHeaders()).body(failure(message));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
@@ -126,16 +104,7 @@ public class GlobalExceptionHandler {
             ConstraintViolationException exception) {
         log.warn("Constraint violation rejected request with HTTP 400 [requestId={}]: {} violation(s)",
                 requestId(),
-                exception.getConstraintViolations() == null ? 0 : exception.getConstraintViolations().size());
-        return validationBadRequest(extractFieldErrors(exception));
-    }
-
-    @ExceptionHandler(HandlerMethodValidationException.class)
-    public ResponseEntity<ApiResponse<Void>> handleHandlerMethodValidationException(
-            HandlerMethodValidationException exception) {
-        log.warn("Handler-method validation rejected request with HTTP 400 [requestId={}]: {} error(s)",
-                requestId(),
-                exception.getAllErrors().size());
+                exception.getConstraintViolations().size());
         return validationBadRequest(extractFieldErrors(exception));
     }
 
@@ -161,10 +130,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleHttpMediaTypeNotAcceptableException(
             HttpMediaTypeNotAcceptableException exception) {
         log.warn("Unacceptable media type rejected with HTTP 406 [requestId={}]", requestId());
-        ApiResponse<Void> response = failure(FriendlyErrorMessageResolver.invalidRequestMessage());
-        return ResponseEntity.status(exception.getStatusCode())
-                .headers(exception.getHeaders())
-                .body(response);
+        return invalidRequest(exception);
     }
 
     @ExceptionHandler(NoResourceFoundException.class)
@@ -173,25 +139,22 @@ public class GlobalExceptionHandler {
                 .body(failure(FriendlyErrorMessageResolver.notFoundMessage()));
     }
 
-    @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<ApiResponse<Void>> handleAccessDeniedException(AccessDeniedException exception) {
-        return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(failure(FriendlyErrorMessageResolver.permissionDeniedMessage()));
-    }
-
-    @ExceptionHandler(MaxUploadSizeExceededException.class)
-    public ResponseEntity<ApiResponse<Void>> handleMaxUploadSizeExceededException(
-            MaxUploadSizeExceededException exception) {
-        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
-                .body(failure(FriendlyErrorMessageResolver.uploadTooLargeMessage()));
-    }
-
+    /** Also handles {@link MaxUploadSizeExceededException}, a MultipartException itself. */
     @ExceptionHandler(MultipartException.class)
     public ResponseEntity<ApiResponse<Void>> handleMultipartException(MultipartException exception) {
-        if (isUploadTooLarge(exception)) {
+        if (exception.contains(MaxUploadSizeExceededException.class)) {
             return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
                     .body(failure(FriendlyErrorMessageResolver.uploadTooLargeMessage()));
         }
+        return badRequest(FriendlyErrorMessageResolver.uploadFailedMessage());
+    }
+
+    /** A required multipart part (for example {@code file}) is missing: a client error, not a server fault. */
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMissingServletRequestPartException(
+            MissingServletRequestPartException exception) {
+        log.warn("Missing multipart part rejected with HTTP 400 [requestId={}]: {}",
+                requestId(), exception.getRequestPartName());
         return badRequest(FriendlyErrorMessageResolver.uploadFailedMessage());
     }
 
@@ -199,7 +162,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleDataIntegrityViolationException(
             DataIntegrityViolationException exception) {
         log.warn("Database integrity constraint rejected request [requestId={}]: {}",
-                requestId(), rootCauseClassName(exception));
+                requestId(), exception.getMostSpecificCause().getClass().getSimpleName());
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(failure(FriendlyErrorMessageResolver.conflictMessage()));
     }
@@ -208,7 +171,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleOptimisticLockingFailureException(
             OptimisticLockingFailureException exception) {
         log.warn("Concurrent update rejected request [requestId={}]: {}",
-                requestId(), rootCauseClassName(exception));
+                requestId(), exception.getMostSpecificCause().getClass().getSimpleName());
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(failure(FriendlyErrorMessageResolver.conflictMessage()));
     }
@@ -225,93 +188,40 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(failure(message));
     }
 
-    private static ResponseEntity<ApiResponse<Void>> validationBadRequest(Map<String, List<String>> fieldErrors) {
-        String message = FriendlyErrorMessageResolver.validationFailedMessage();
-        Map<String, List<String>> safeFieldErrors = shouldExposeFieldErrors() ? fieldErrors : Map.of();
-        return ResponseEntity.badRequest()
-                .body(ApiResponse.failure(message, List.of(message), safeFieldErrors));
+    /** The exception's own status and headers (such as {@code Allow} or {@code Accept}) with the generic message. */
+    private static ResponseEntity<ApiResponse<Void>> invalidRequest(ErrorResponse exception) {
+        return ResponseEntity.status(exception.getStatusCode())
+                .headers(exception.getHeaders())
+                .body(failure(FriendlyErrorMessageResolver.invalidRequestMessage()));
     }
 
-    private static ApiResponse<Void> failure(String message) {
-        return ApiResponse.failure(message, List.of(message));
+    private static ResponseEntity<ApiResponse<Void>> validationBadRequest(Map<String, List<String>> fieldErrors) {
+        Map<String, List<String>> safeFieldErrors = shouldExposeFieldErrors() ? fieldErrors : Map.of();
+        return ResponseEntity.badRequest()
+                .body(failure(FriendlyErrorMessageResolver.validationFailedMessage(), safeFieldErrors));
     }
 
     private static Map<String, List<String>> extractFieldErrors(MethodArgumentNotValidException exception) {
         Map<String, List<String>> fieldErrors = new LinkedHashMap<>();
-        exception.getBindingResult().getFieldErrors().forEach(error -> {
-            String field = error.getField();
-            String message = error.getDefaultMessage();
-            addFieldError(fieldErrors, field, message);
-        });
-        return copyFieldErrors(fieldErrors);
+        exception.getBindingResult().getFieldErrors()
+                .forEach(error -> addFieldError(fieldErrors, error.getField(), error.getDefaultMessage()));
+        return fieldErrors;
     }
 
     private static Map<String, List<String>> extractFieldErrors(ConstraintViolationException exception) {
-        if (exception.getConstraintViolations() == null || exception.getConstraintViolations().isEmpty()) {
-            return Map.of();
-        }
-
         Map<String, List<String>> fieldErrors = new LinkedHashMap<>();
-        exception.getConstraintViolations().forEach(violation -> {
-            String field = lastPathSegment(violation.getPropertyPath());
-            String message = violation.getMessage();
-            addFieldError(fieldErrors, field, message);
-        });
-        return copyFieldErrors(fieldErrors);
-    }
-
-    private static Map<String, List<String>> extractFieldErrors(HandlerMethodValidationException exception) {
-        if (exception.getParameterValidationResults().isEmpty()) {
-            return Map.of();
-        }
-
-        Map<String, List<String>> fieldErrors = new LinkedHashMap<>();
-        for (ParameterValidationResult result : exception.getParameterValidationResults()) {
-            if (result instanceof ParameterErrors parameterErrors) {
-                for (FieldError error : parameterErrors.getFieldErrors()) {
-                    addFieldError(fieldErrors, error.getField(), error.getDefaultMessage());
-                }
-                parameterErrors.getGlobalErrors().forEach(error ->
-                        addFieldError(fieldErrors, parameterName(result), error.getDefaultMessage()));
-                continue;
-            }
-
-            String field = parameterName(result);
-            result.getResolvableErrors().forEach(error ->
-                    addFieldError(fieldErrors, fieldName(field, error), error.getDefaultMessage()));
-        }
-        return copyFieldErrors(fieldErrors);
+        exception.getConstraintViolations().forEach(violation ->
+                addFieldError(fieldErrors, lastPathSegment(violation.getPropertyPath()), violation.getMessage()));
+        return fieldErrors;
     }
 
     private static void addFieldError(Map<String, List<String>> fieldErrors, String field, String message) {
         String safeField = normalizeFieldKey(field);
-        if (safeField == null || message == null || message.isBlank()) {
+        if (safeField == null || safeField.length() > MAX_FIELD_KEY_LENGTH || message == null || message.isBlank()) {
             return;
         }
         fieldErrors.computeIfAbsent(safeField, ignored -> new ArrayList<>())
                 .add(message.strip());
-    }
-
-    private static String parameterName(ParameterValidationResult result) {
-        if (result == null || result.getMethodParameter() == null) {
-            return REQUEST_FIELD;
-        }
-        result.getMethodParameter().initParameterNameDiscovery(PARAMETER_NAME_DISCOVERER);
-        String parameterName = result.getMethodParameter().getParameterName();
-        return parameterName == null || parameterName.isBlank() ? REQUEST_FIELD : parameterName;
-    }
-
-    private static String fieldName(String fallback, MessageSourceResolvable error) {
-        String[] codes = error == null ? null : error.getCodes();
-        if (codes != null) {
-            for (String code : codes) {
-                String safeCode = normalizeFieldKey(code);
-                if (safeCode != null) {
-                    return safeCode;
-                }
-            }
-        }
-        return fallback;
     }
 
     private static String normalizeFieldKey(String field) {
@@ -344,25 +254,13 @@ public class GlobalExceptionHandler {
     }
 
     private static String lastPathSegment(Path path) {
-        if (path == null) {
-            return null;
-        }
         String last = null;
         for (Path.Node node : path) {
-            if (node != null && node.getName() != null && !node.getName().isBlank()) {
+            if (node.getName() != null && !node.getName().isBlank()) {
                 last = node.getName();
             }
         }
         return last;
-    }
-
-    private static Map<String, List<String>> copyFieldErrors(Map<String, List<String>> source) {
-        if (source.isEmpty()) {
-            return Map.of();
-        }
-        Map<String, List<String>> copied = new LinkedHashMap<>();
-        source.forEach((field, messages) -> copied.put(field, List.copyOf(messages)));
-        return Collections.unmodifiableMap(copied);
     }
 
     private static boolean shouldExposeFieldErrors() {
@@ -371,43 +269,10 @@ public class GlobalExceptionHandler {
             return false;
         }
         String path = attributes.getRequest().getRequestURI();
-        return path == null || !PUBLIC_AUTH_VALIDATION_PATHS.contains(path);
-    }
-
-    private static boolean isUploadTooLarge(Throwable exception) {
-        Set<Throwable> visited = newIdentitySet();
-        Throwable current = exception;
-        int depth = 0;
-        while (current != null && depth++ < MAX_CAUSE_DEPTH && visited.add(current)) {
-            if (current instanceof MaxUploadSizeExceededException) {
-                return true;
-            }
-            current = current.getCause();
-        }
-        return false;
-    }
-
-    private static String rootCauseClassName(Throwable exception) {
-        if (exception == null) {
-            return UNKNOWN_CAUSE;
-        }
-        Set<Throwable> visited = newIdentitySet();
-        Throwable current = exception;
-        Throwable root = exception;
-        int depth = 0;
-        while (current != null && depth++ < MAX_CAUSE_DEPTH && visited.add(current)) {
-            root = current;
-            current = current.getCause();
-        }
-        return root.getClass().getSimpleName();
-    }
-
-    private static Set<Throwable> newIdentitySet() {
-        return Collections.newSetFromMap(new IdentityHashMap<>(8));
+        return path == null || !SecurityConfig.PUBLIC_AUTH_POST_ENDPOINTS.contains(path);
     }
 
     private static String requestId() {
-        String id = RequestIdHolder.get();
-        return id == null ? "-" : id;
+        return RequestIdHolder.currentOrDash();
     }
 }

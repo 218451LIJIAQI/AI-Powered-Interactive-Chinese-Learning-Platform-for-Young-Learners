@@ -1,19 +1,17 @@
 package com.example.aichinese.config;
 
-import java.util.Objects;
+import java.util.List;
 
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
-import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -21,23 +19,13 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 import org.springframework.web.cors.CorsConfigurationSource;
 
-import com.example.aichinese.security.JwtAccessDeniedHandler;
-import com.example.aichinese.security.JwtAuthenticationEntryPoint;
 import com.example.aichinese.security.JwtAuthenticationFilter;
+import com.example.aichinese.security.JwtSecurityErrorHandler;
+import com.example.aichinese.security.JwtService;
 
 import jakarta.servlet.DispatcherType;
 
 @Configuration(proxyBeanMethods = false)
-@EnableMethodSecurity
-@EnableConfigurationProperties({
-        SecurityProperties.class,
-        ForwardedHeaderProperties.class,
-        UploadProperties.class,
-        PlatformProperties.class,
-        AiProperties.class,
-        PaymentProperties.class,
-        EmailProperties.class
-})
 public class SecurityConfig {
 
     private static final int BCRYPT_STRENGTH = 12;
@@ -51,12 +39,6 @@ public class SecurityConfig {
                     + "form-action 'self'; img-src 'self' data: https:; font-src 'self' data:; "
                     + "script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'";
 
-    private static final String[] HEALTH_ENDPOINTS = {
-            "/api/v1/health",
-            "/actuator/health",
-            "/actuator/health/**",
-            "/actuator/info"
-    };
     private static final String[] API_DOC_ENDPOINTS = {
             "/v3/api-docs",
             "/v3/api-docs/**",
@@ -64,33 +46,29 @@ public class SecurityConfig {
             "/swagger-ui.html",
             "/swagger-ui/**"
     };
-    private static final String[] PUBLIC_AUTH_POST_ENDPOINTS = {
+    /** Also the endpoints whose validation errors are answered without field errors (GlobalExceptionHandler). */
+    public static final List<String> PUBLIC_AUTH_POST_ENDPOINTS = List.of(
             "/api/v1/auth/register/student",
             "/api/v1/auth/register/teacher",
             "/api/v1/auth/login",
             "/api/v1/auth/refresh",
             "/api/v1/auth/forgot-password",
-            "/api/v1/auth/reset-password"
-    };
+            "/api/v1/auth/reset-password",
+            "/api/v1/auth/reset-password/check",
+            "/api/v1/auth/confirm-email",
+            "/api/v1/auth/confirm-signup-email",
+            "/api/v1/auth/admin-invite/check",
+            "/api/v1/auth/admin-invite/accept",
+            "/api/v1/public/support");
 
-    private final JwtAuthenticationFilter jwtAuthenticationFilter;
-    private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
-    private final JwtAccessDeniedHandler jwtAccessDeniedHandler;
-    private final CorsConfigurationSource corsConfigurationSource;
-
-    public SecurityConfig(
-            JwtAuthenticationFilter jwtAuthenticationFilter,
-            JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint,
-            JwtAccessDeniedHandler jwtAccessDeniedHandler,
-            CorsConfigurationSource corsConfigurationSource) {
-        this.jwtAuthenticationFilter = Objects.requireNonNull(jwtAuthenticationFilter, "jwtAuthenticationFilter");
-        this.jwtAuthenticationEntryPoint = Objects.requireNonNull(jwtAuthenticationEntryPoint, "jwtAuthenticationEntryPoint");
-        this.jwtAccessDeniedHandler = Objects.requireNonNull(jwtAccessDeniedHandler, "jwtAccessDeniedHandler");
-        this.corsConfigurationSource = Objects.requireNonNull(corsConfigurationSource, "corsConfigurationSource");
-    }
-
+    /** Keep the name corsConfigurationSource: it picks CorsConfig's bean over the MVC HandlerMappingIntrospector. */
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            JwtService jwtService,
+            UserDetailsService userDetailsService,
+            JwtSecurityErrorHandler jwtSecurityErrorHandler,
+            CorsConfigurationSource corsConfigurationSource) throws Exception {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .csrf(AbstractHttpConfigurer::disable)
@@ -107,34 +85,31 @@ public class SecurityConfig {
                                 .maxAgeInSeconds(31_536_000L))
                         .permissionsPolicyHeader(perms -> perms.policy(PERMISSIONS_POLICY)))
                 .exceptionHandling(exception -> exception
-                        .authenticationEntryPoint(jwtAuthenticationEntryPoint)
-                        .accessDeniedHandler(jwtAccessDeniedHandler))
+                        .authenticationEntryPoint(jwtSecurityErrorHandler)
+                        .accessDeniedHandler(jwtSecurityErrorHandler))
                 .authorizeHttpRequests(authorize -> authorize
                         .dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR).permitAll()
-                        .requestMatchers(HEALTH_ENDPOINTS).permitAll()
+                        .requestMatchers("/api/v1/health").permitAll()
                         .requestMatchers(API_DOC_ENDPOINTS).permitAll()
-                        .requestMatchers(HttpMethod.POST, PUBLIC_AUTH_POST_ENDPOINTS).permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/payments/webhooks/stripe").permitAll()
+                        .requestMatchers(HttpMethod.POST, PUBLIC_AUTH_POST_ENDPOINTS.toArray(String[]::new)).permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/public/**").permitAll()
                         .requestMatchers("/api/v1/auth/me", "/api/v1/auth/logout").authenticated()
                         .requestMatchers("/api/v1/notifications/**").authenticated()
+                        // Account management (profile, change password) for every signed-in role (FRAUTH07-08).
+                        .requestMatchers("/api/v1/users/me/**").authenticated()
+                        // Learner AI tools stay student-only; approved teachers get unsaved AI drafts under
+                        // /api/v1/teachers/ai/** (FRAI05), covered by the TEACHER rule below plus the
+                        // ApprovedTeacherInterceptor status guard (FRTVER04).
                         .requestMatchers("/api/v1/ai/**").hasRole("STUDENT")
-                        .requestMatchers("/api/v1/payments/**").hasRole("STUDENT")
                         .requestMatchers("/api/v1/students/**").hasRole("STUDENT")
                         .requestMatchers("/api/v1/teachers/**").hasRole("TEACHER")
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated())
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(
+                        new JwtAuthenticationFilter(jwtService, userDetailsService),
+                        UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
-    }
-
-    @Bean
-    public FilterRegistrationBean<JwtAuthenticationFilter> jwtAuthenticationFilterRegistration(
-            JwtAuthenticationFilter filter) {
-        FilterRegistrationBean<JwtAuthenticationFilter> registration = new FilterRegistrationBean<>(filter);
-        registration.setEnabled(false);
-        return registration;
     }
 
     @Bean

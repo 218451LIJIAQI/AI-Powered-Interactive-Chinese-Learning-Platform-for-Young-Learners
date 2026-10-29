@@ -13,12 +13,10 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Getter
 @Setter
-@NoArgsConstructor
 @Entity
 @Table(name = "refresh_tokens", indexes = {
         @Index(name = "idx_refresh_tokens_user_id", columnList = "user_id"),
@@ -56,4 +54,8 @@ public class RefreshToken extends BaseEntity {
 
     @Column(name = "user_agent", length = 255)
     private String userAgent;
+
+    /** "Keep me signed in": a persistent cookie; otherwise the cookie ends with the browser session. */
+    @Column(name = "persistent", nullable = false)
+    private boolean persistent = true;
 }

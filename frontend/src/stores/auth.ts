@@ -1,159 +1,64 @@
 import { defineStore } from 'pinia'
 
-import { setAccessToken } from '@/api/http'
+import { refreshAccessToken, setAccessToken } from '@/api/http'
 import { authApi } from '@/api/services'
-import { appEnv } from '@/config/env'
-import { demoUsers } from '@/demo/users'
-import { clearOfflineCaches } from '@/plugins/pwa'
+import { useUiStore } from '@/stores/ui'
 import type { CurrentUserResponse, UserRole } from '@/types/api'
-import { getSessionStorage, safeGetItem, safeRemoveItem, safeSetItem, storageKeys } from '@/utils/storage'
 
-function canUsePreviewMode(): boolean {
-  return appEnv.useDemoData && appEnv.enablePreviewMode
-}
-
-function isUserRole(value: string | null): value is UserRole {
-  return value === 'STUDENT' || value === 'TEACHER' || value === 'ADMIN'
-}
-
-function readPersistedPreviewRole(): UserRole | null {
-  if (!canUsePreviewMode()) {
-    return null
-  }
-
-  const sessionStorage = getSessionStorage()
-  const role = safeGetItem(storageKeys.previewRole, sessionStorage)
-  if (isUserRole(role)) {
-    return role
-  }
-
-  safeRemoveItem(storageKeys.previewRole)
-  safeRemoveItem(storageKeys.previewRole, sessionStorage)
-  return null
-}
-
-function persistToken(token: string | null): void {
-  const sessionStorage = getSessionStorage()
-
-  safeRemoveItem(storageKeys.token)
-  safeRemoveItem(storageKeys.token, sessionStorage)
-  setAccessToken(token)
-}
-
-function persistPreviewRole(role: UserRole | null): void {
-  const sessionStorage = getSessionStorage()
-
-  safeRemoveItem(storageKeys.previewRole)
-  safeRemoveItem(storageKeys.previewRole, sessionStorage)
-
-  if (role && canUsePreviewMode()) {
-    safeSetItem(storageKeys.previewRole, role, sessionStorage)
-  }
-}
-
-function clearPersistedPreviewRole(): void {
-  persistPreviewRole(null)
-}
+let bootstrapInFlight: Promise<void> | null = null
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
-    token: null as string | null,
+    /** True while this tab holds an access token; the token itself lives in memory in api/http.ts only. */
+    hasSession: false,
     currentUser: null as CurrentUserResponse | null,
-    previewRole: readPersistedPreviewRole(),
     bootstrapped: false,
     loading: false,
   }),
   getters: {
     activeRole(state): UserRole | null {
-      if (state.currentUser) {
-        return state.currentUser.roles[0] ?? null
-      }
-      if (canUsePreviewMode() && !state.token) {
-        return state.previewRole
-      }
-      return null
-    },
-    isPreviewSession(state): boolean {
-      return canUsePreviewMode() && !state.token && state.previewRole !== null
+      return state.currentUser?.roles[0] ?? null
     },
     isAuthenticated(state): boolean {
-      return Boolean(state.token)
+      return state.hasSession
     },
+    /** No hard-coded English name: callers fall back to their translated default label. */
     displayName(state): string {
-      if (state.currentUser) {
-        return state.currentUser.fullName
-      }
-      if (state.previewRole && canUsePreviewMode() && !state.token) {
-        return demoUsers[state.previewRole].fullName
-      }
-      return 'Guest Learner'
+      return state.currentUser?.fullName ?? ''
     },
-    hasRole: (state) => (role: UserRole) =>
-      (state.currentUser?.roles ?? []).includes(role) ||
-      (canUsePreviewMode() && !state.token && state.previewRole === role),
+    isApprovedTeacher(state): boolean {
+      return state.currentUser?.teacherProfile?.teacherStatus === 'APPROVED'
+    },
+    hasRole: (state) => (role: UserRole) => (state.currentUser?.roles ?? []).includes(role),
   },
   actions: {
     async bootstrap(): Promise<void> {
       if (this.bootstrapped) return
-
-      this.loading = true
-
-      if (!canUsePreviewMode()) {
-        this.previewRole = null
-        clearPersistedPreviewRole()
-      }
-
-      if (this.token) {
-        if (this.previewRole) {
-          this.previewRole = null
-          clearPersistedPreviewRole()
-        }
-
-        persistToken(this.token)
+      // Two navigations during start-up share one session restore (one refresh and one /auth/me request).
+      bootstrapInFlight ??= this.restoreSession().finally(() => {
+        bootstrapInFlight = null
+      })
+      return bootstrapInFlight
+    },
+    async restoreSession(): Promise<void> {
+      // The refresh cookie restores a session; refreshAccessToken() serialises it across tabs.
+      if (await refreshAccessToken()) {
+        this.hasSession = true
         try {
           this.currentUser = await authApi.me()
         } catch {
           this.clearSession()
         }
-      } else {
-        if (canUsePreviewMode()) {
-          persistToken(null)
-          if (this.previewRole) {
-            this.currentUser = demoUsers[this.previewRole]
-          }
-          this.bootstrapped = true
-          this.loading = false
-          return
-        }
-
-        try {
-          const response = await authApi.refresh()
-          this.token = response.token
-          persistToken(response.token)
-          this.previewRole = null
-          clearPersistedPreviewRole()
-          try {
-            this.currentUser = await authApi.me()
-          } catch {
-            this.clearSession()
-          }
-        } catch {
-          persistToken(null)
-        }
       }
-
       this.bootstrapped = true
-      this.loading = false
     },
-    async login(email: string, password: string): Promise<void> {
+    async login(email: string, password: string, keepSignedIn = true): Promise<void> {
       this.loading = true
 
       try {
-        const response = await authApi.login({ email, password })
-        this.token = response.token
-        this.previewRole = null
-        persistToken(response.token)
-        clearPersistedPreviewRole()
+        const response = await authApi.login({ email, password, keepSignedIn })
+        this.hasSession = true
+        setAccessToken(response.token)
 
         try {
           this.currentUser = await authApi.me()
@@ -161,31 +66,55 @@ export const useAuthStore = defineStore('auth', {
           this.clearSession()
           throw reason
         }
+
+        // FRAUTH07: an explicit sign-in switches the interface to the account's preferred language (zh -> zh-CN).
+        useUiStore().applyPreferredLanguage(this.currentUser.preferredLanguage)
       } finally {
         this.loading = false
       }
     },
-    setPreviewRole(role: UserRole | null): void {
-      if (this.token) {
-        this.previewRole = null
-        clearPersistedPreviewRole()
-        return
+    /**
+     * The teacher status is read once at sign-in. A pending or rejected teacher re-reads the account before each
+     * teaching page, so an approval given during the session unlocks the pages without a reload.
+     */
+    async refreshTeacherApproval(): Promise<void> {
+      const user = this.currentUser
+      if (!user?.roles.includes('TEACHER') || user.teacherProfile?.teacherStatus === 'APPROVED') return
+      await this.refreshCurrentUser()
+    },
+    /** Re-reads the signed-in account (after a change made on another page, e.g. the teaching profile's name). */
+    async refreshCurrentUser(): Promise<void> {
+      const user = this.currentUser
+      if (!this.hasSession || !user) return
+      try {
+        const refreshed = await authApi.me()
+        // A sign-out (or another account signing in) while the request ran must not bring this account back.
+        if (this.hasSession && this.currentUser?.id === user.id) this.currentUser = refreshed
+      } catch {
+        // Keep the current account; the page's own requests report any problem.
       }
-
-      this.previewRole = role && canUsePreviewMode() ? role : null
-      this.currentUser = this.previewRole ? demoUsers[this.previewRole] : null
-      persistPreviewRole(this.previewRole)
+    },
+    /** Applies `PUT /users/me/profile` (FRAUTH07): refreshes the signed-in user and switches the UI language. */
+    applyProfileUpdate(user: CurrentUserResponse): void {
+      if (!this.hasSession) return
+      this.currentUser = user
+      useUiStore().applyPreferredLanguage(user.preferredLanguage)
+    },
+    /**
+     * After a password change the server revokes every other session and returns a fresh access token for this
+     * tab (the refresh cookie is rotated by the response). Replace the in-memory token so requests keep working.
+     */
+    replaceAccessToken(token: string): void {
+      if (!this.hasSession || !token) return
+      setAccessToken(token)
     },
     clearSession(): void {
-      this.token = null
+      this.hasSession = false
       this.currentUser = null
-      this.previewRole = null
-      persistToken(null)
-      clearPersistedPreviewRole()
-      void clearOfflineCaches()
+      setAccessToken(null)
     },
     async logout(): Promise<void> {
-      if (this.token) {
+      if (this.hasSession) {
         await authApi.logout().catch(() => undefined)
       }
 

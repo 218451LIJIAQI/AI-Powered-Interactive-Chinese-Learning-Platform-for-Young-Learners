@@ -1,13 +1,11 @@
 package com.example.aichinese.dto.auth;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
-@JsonPropertyOrder({ "token", "password", "confirmPassword" })
 public record ResetPasswordRequest(
         @NotBlank(message = "Reset token is required")
         @Size(max = 128, message = "Reset token must be at most 128 characters")

@@ -6,6 +6,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Consumer;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,7 +26,6 @@ class TransactionalEmailDispatcherTests {
 
     private static final long USER_ID = 321L;
     private static final String EMAIL = "student@example.com";
-    private static final String DISPLAY_NAME = "Student";
     private static final String RAW_SECRET = "raw-secret";
     private static final String BEARER_SECRET = "bearer-secret";
     private static final String RESET_URL = "https://learn.example/reset-password?token=" + RAW_SECRET;
@@ -58,6 +60,38 @@ class TransactionalEmailDispatcherTests {
                 .doesNotContain("at com.example.aichinese");
     }
 
+    @Test
+    void teacherDecisionEmailsStripUnicodeWhitespaceFromNotesAndReasons() throws Exception {
+        assertThat(deliveredBody(dispatcher ->
+                dispatcher.enqueueTeacherApproval(recipient(), "\u3000Approved after review\u3000")))
+                .contains("Note: Approved after review")
+                .doesNotContain("\u3000");
+        assertThat(deliveredBody(dispatcher ->
+                dispatcher.enqueueTeacherRejection(recipient(), "\u3000Missing certificate\u3000")))
+                .contains("Reason: Missing certificate")
+                .doesNotContain("\u3000");
+    }
+
+    @Test
+    void teacherDecisionEmailsOmitBlankOnlyNotesAndReasons() throws Exception {
+        assertThat(deliveredBody(dispatcher -> dispatcher.enqueueTeacherApproval(recipient(), "\u3000")))
+                .doesNotContain("Note:");
+        assertThat(deliveredBody(dispatcher -> dispatcher.enqueueTeacherRejection(recipient(), "\u3000")))
+                .doesNotContain("Reason:");
+    }
+
+    /** Enqueues one e-mail on a fresh dispatcher, delivers its event and returns the body that was sent. */
+    private static String deliveredBody(Consumer<TransactionalEmailDispatcher> enqueue) throws Exception {
+        ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
+        List<String> bodies = new ArrayList<>();
+        TransactionalEmailDispatcher dispatcher =
+                new TransactionalEmailDispatcher(eventPublisher, (recipient, subject, body) -> bodies.add(body));
+        enqueue.accept(dispatcher);
+        Object event = publishedEvent(eventPublisher);
+        deliverMethod(event).invoke(dispatcher, event);
+        return bodies.getFirst();
+    }
+
     private static EmailService failingEmailService() {
         return (recipient, subject, body) -> {
             throw new IllegalStateException(SMTP_FAILURE_MESSAGE);
@@ -68,7 +102,6 @@ class TransactionalEmailDispatcherTests {
         User recipient = new User();
         recipient.setId(USER_ID);
         recipient.setEmail(EMAIL);
-        recipient.setDisplayName(DISPLAY_NAME);
         return recipient;
     }
 

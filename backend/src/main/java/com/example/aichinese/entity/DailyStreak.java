@@ -14,12 +14,10 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Getter
 @Setter
-@NoArgsConstructor
 @Entity
 @Table(name = "daily_streaks", indexes = {
         @Index(name = "idx_daily_streaks_student_id", columnList = "student_id")

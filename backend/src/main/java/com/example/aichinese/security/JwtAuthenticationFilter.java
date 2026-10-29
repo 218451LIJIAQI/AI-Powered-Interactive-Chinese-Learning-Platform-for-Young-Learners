@@ -13,16 +13,15 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
-import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
-@Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
@@ -30,8 +29,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final String BEARER_PREFIX = "Bearer ";
 
     private static final int BEARER_PREFIX_LENGTH = BEARER_PREFIX.length();
-
-    private static final long DEFAULT_SESSION_VERSION = 0L;
 
     private final JwtService jwtService;
     private final UserDetailsService userDetailsService;
@@ -60,9 +57,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
+        Claims claims;
         String email;
         try {
-            email = jwtService.extractUsername(token);
+            claims = jwtService.extractAllClaims(token);
+            email = claims.getSubject();
         } catch (Exception exception) {
             log.debug("Rejecting unparsable bearer token: {}", exception.getClass().getSimpleName());
             filterChain.doFilter(request, response);
@@ -78,11 +77,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 filterChain.doFilter(request, response);
                 return;
             }
-            if (userDetails.isEnabled()
-                    && userDetails.isAccountNonExpired()
-                    && userDetails.isAccountNonLocked()
-                    && userDetails.isCredentialsNonExpired()
-                    && isTokenValidForCurrentSession(token, userDetails)) {
+            if (userDetails.isEnabled() && isTokenValidForCurrentSession(claims, userDetails)) {
                 UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(
                         userDetails,
                         null,
@@ -95,14 +90,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    private boolean isTokenValidForCurrentSession(@NonNull String token, @NonNull UserDetails userDetails) {
-        if (userDetails instanceof SecurityUserDetails securityUserDetails) {
-            return jwtService.isTokenValid(
-                    token,
-                    securityUserDetails.getUsername(),
-                    securityUserDetails.getSessionVersion());
-        }
-
-        return jwtService.isTokenValid(token, userDetails.getUsername(), DEFAULT_SESSION_VERSION);
+    private boolean isTokenValidForCurrentSession(@NonNull Claims claims, @NonNull UserDetails userDetails) {
+        // Only SecurityUserDetails carries the session version that revokes old tokens (SDD 3.4); fail closed otherwise.
+        return userDetails instanceof SecurityUserDetails securityUserDetails
+                && jwtService.isTokenValid(
+                        claims,
+                        securityUserDetails.getUsername(),
+                        securityUserDetails.getSessionVersion());
     }
 }

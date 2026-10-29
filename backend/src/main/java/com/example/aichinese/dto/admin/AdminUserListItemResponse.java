@@ -1,38 +1,24 @@
 package com.example.aichinese.dto.admin;
 
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Objects;
 
-import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-import com.example.aichinese.entity.enums.TeacherStatus;
+import com.example.aichinese.dto.teacher.TeacherVerificationState;
+import com.example.aichinese.entity.enums.RoleName;
 
-@JsonPropertyOrder({
-        "userId",
-        "fullName",
-        "email",
-        "roles",
-        "active",
-        "teacherStatus",
-        "createdAt",
-        "updatedAt"
-})
+/** One row of the admin Users list. */
 public record AdminUserListItemResponse(
-        Long userId,
+        Long id,
         String fullName,
         String email,
-        List<String> roles,
+        RoleName role,
         boolean active,
-        TeacherStatus teacherStatus,
-        LocalDateTime createdAt,
-        LocalDateTime updatedAt) {
+        /** Teachers only. */
+        TeacherVerificationState verificationState,
+        LocalDateTime joinedAt) {
 
     public AdminUserListItemResponse {
-        Objects.requireNonNull(userId, "userId must not be null");
-        Objects.requireNonNull(fullName, "fullName must not be null");
-        Objects.requireNonNull(email, "email must not be null");
-        Objects.requireNonNull(createdAt, "createdAt must not be null");
-        Objects.requireNonNull(updatedAt, "updatedAt must not be null");
-        roles = roles == null ? List.of() : List.copyOf(roles);
+        Objects.requireNonNull(id, "id must not be null");
+        Objects.requireNonNull(role, "role must not be null");
     }
 }

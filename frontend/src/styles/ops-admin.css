@@ -1,0 +1,1022 @@
+/* Admin console pages: dashboard, users and teacher applications, content review and teacher classes, AI reports,
+   usage and settings, support, analytics and audit log. The patterns every admin page shares (sheet, toolbar, table,
+   inbox, reader, figures) are in the Admin console block of main.css; this file holds each page's own parts. */
+
+/* ----- Dashboard: what needs a decision, the platform's health and its numbers ----- */
+
+.admin-home-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+}
+
+.admin-home-health {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.admin-home-health strong {
+  color: var(--text-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.admin-home-health-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-round);
+  background: var(--color-ink-400);
+}
+
+.admin-home-health.is-ok .admin-home-health-dot {
+  background: var(--color-success);
+}
+
+.admin-home-health.is-warn .admin-home-health-dot {
+  background: var(--color-warning);
+}
+
+.admin-home-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.75fr) minmax(260px, 1fr);
+  grid-template-rows: auto 1fr auto;
+  grid-template-areas:
+    'attention activity'
+    'attention registrations'
+    'numbers numbers';
+  gap: var(--space-10);
+  align-items: start;
+}
+
+.admin-home-attention {
+  display: grid;
+  grid-area: attention;
+  gap: var(--section-gap);
+  min-width: 0;
+}
+
+.admin-home-queues {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-xs);
+}
+
+.admin-home-queues > li + li {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.admin-home-queue {
+  display: grid;
+  grid-template-columns: var(--space-12) minmax(0, 1fr) auto;
+  grid-template-areas:
+    'count head action'
+    '. items items';
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-5) var(--space-6);
+}
+
+.admin-home-queue-count {
+  grid-area: count;
+  font-size: var(--font-size-4xl);
+  text-align: right;
+}
+
+.admin-home-queue-head {
+  grid-area: head;
+  min-width: 0;
+}
+
+.admin-home-queue h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+}
+
+.admin-home-queue-action {
+  grid-area: action;
+}
+
+.admin-home-queue.is-clear {
+  padding-block: var(--space-3);
+}
+
+.admin-home-queue.is-clear .admin-home-queue-count {
+  color: var(--color-ink-500);
+  font-size: var(--font-size-2xl);
+}
+
+.admin-home-queue.is-clear h3 {
+  color: var(--text-secondary);
+  font-size: var(--font-size-base);
+}
+
+.admin-home-queue-clear {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  margin: var(--space-0-5) 0 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.admin-home-queue-items {
+  display: grid;
+  grid-area: items;
+  margin: 0 0 0 calc(-1 * var(--space-2));
+  padding: 0;
+  list-style: none;
+}
+
+.admin-home-queue-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--space-2);
+  padding: var(--space-1-5) var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+
+.admin-home-queue-item:hover {
+  background: var(--surface-hover);
+}
+
+.admin-home-queue-item strong {
+  font-weight: var(--font-weight-semibold);
+}
+
+.admin-home-queue-item span {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.admin-home-activity,
+.admin-home-registrations {
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.admin-home-activity {
+  grid-area: activity;
+}
+
+.admin-home-side-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.admin-home-side-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+}
+
+.admin-home-side-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.admin-home-feed {
+  margin: calc(-1 * var(--space-3)) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-home-feed > li + li {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.admin-home-feed-item {
+  display: grid;
+  gap: var(--space-0-5);
+  padding: var(--space-3) 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.admin-home-feed-item:hover strong {
+  text-decoration: underline;
+}
+
+.admin-home-feed-what strong {
+  font-weight: var(--font-weight-semibold);
+}
+
+.admin-home-feed-meta {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.admin-home-numbers {
+  grid-area: numbers;
+  min-width: 0;
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--border-default);
+}
+
+.admin-home-registrations {
+  grid-area: registrations;
+}
+
+.admin-home-bars {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  align-items: end;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-home-bars li {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.admin-home-bar-count,
+.admin-home-bar-day {
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-home-bar-track {
+  display: flex;
+  align-items: flex-end;
+  width: 100%;
+  height: var(--space-16);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.admin-home-bar {
+  display: block;
+  width: 100%;
+  min-height: 2px;
+  border-radius: var(--radius-xs) var(--radius-xs) 0 0;
+  background: var(--color-primary-500);
+}
+
+/* ----- Users: the accounts table, its drawer and the pending admin invites ----- */
+
+.admin-users-account {
+  color: var(--text-secondary);
+}
+
+.admin-users-invites {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.admin-users-invites-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+}
+
+.admin-users-invite-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--border-default);
+}
+
+.admin-users-invite-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  min-width: 0;
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border-subtle);
+  overflow-wrap: anywhere;
+}
+
+.admin-users-invite-list li > span {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.admin-users-profile {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.admin-users-profile-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.admin-users-audit {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-users-audit-entry {
+  display: grid;
+  gap: var(--space-0-5);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.admin-users-audit-entry:hover strong {
+  text-decoration: underline;
+}
+
+.admin-users-audit-entry strong {
+  font-weight: var(--font-weight-semibold);
+}
+
+.admin-users-audit-entry span {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+/* ----- Teacher applications: the reader's bio, documents and history ----- */
+
+.admin-applications-bio {
+  max-width: var(--reading-max);
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
+.admin-applications-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+/* The documents as hairline rows inside the reader (no box in a box). */
+.admin-applications-documents {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-block: 1px solid var(--border-subtle);
+}
+
+.admin-applications-documents li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+}
+
+.admin-applications-documents li + li {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.admin-applications-documents .admin-cell-title {
+  flex: 1 1 200px;
+}
+
+.admin-applications-document-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: var(--space-8);
+  height: var(--space-8);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xs);
+  color: var(--color-ink-700);
+}
+
+.admin-reader-section.type-caption {
+  margin: 0;
+}
+
+/* ----- Content review: kind marks in the queue, the student preview and the lessons in the reader ----- */
+
+.admin-review-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
+}
+
+.admin-review-preview {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-6);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-page);
+}
+
+.admin-review-preview p,
+.admin-review-lesson p {
+  margin: 0;
+}
+
+.admin-review-preview-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+}
+
+.admin-review-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-review-list > li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-2-5) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.admin-review-list > li:last-child {
+  border-bottom: 0;
+}
+
+.admin-review-list .admin-cell-title {
+  flex: 1 1 auto;
+}
+
+.admin-review-step {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: var(--space-6);
+  height: var(--space-6);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-round);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-review-lesson {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.admin-review-lesson + .admin-review-lesson {
+  padding-top: var(--space-5);
+  border-top: 1px dashed var(--border-default);
+}
+
+.admin-review-block {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.admin-review-video {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+}
+
+/* ----- Teacher classes ----- */
+
+.admin-content-table {
+  min-width: 680px;
+}
+
+.admin-content-table td:first-child {
+  min-width: 12rem;
+}
+
+/* A teacher's name never breaks over two lines in the table. */
+.admin-teacher-classes-teacher {
+  white-space: nowrap;
+}
+
+.admin-teacher-classes-facts {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+}
+
+/* ----- AI reports: what was asked, what the AI answered and the student's note ----- */
+
+.admin-ai-exchange {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.admin-ai-said {
+  display: grid;
+  gap: var(--space-2);
+  padding-left: var(--space-4);
+  border-left: 2px solid var(--border-default);
+}
+
+.admin-ai-said p {
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
+/* The AI's own words carry the AI pigment as a thin rule; the student's note is dashed. */
+.admin-ai-said.is-answer {
+  border-left-color: var(--module-ai);
+}
+
+.admin-ai-said.is-note {
+  border-left-style: dashed;
+}
+
+.admin-ai-decision {
+  display: grid;
+  gap: var(--space-4);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* ----- AI usage: totals, the request log and requests by feature ----- */
+
+.admin-ai-usage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);
+  gap: var(--space-10);
+  align-items: start;
+}
+
+.admin-ai-log .admin-cell-title strong {
+  white-space: nowrap;
+}
+
+.admin-ai-result {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-1);
+}
+
+.admin-ai-result small {
+  max-width: 32ch;
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  white-space: normal;
+}
+
+/* A footnote under the feature breakdown: what the log keeps and what it never does. */
+.admin-ai-retention {
+  display: flex;
+  gap: var(--space-2);
+  margin: 0;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+  max-width: var(--reading-max);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.admin-ai-retention > .icon-glyph {
+  flex: 0 0 auto;
+  margin-top: var(--space-0-5);
+}
+
+.admin-ai-features {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.admin-ai-side-head {
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.admin-ai-side-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* ----- AI settings: one row per setting, what it does on the left and its control on the right ----- */
+
+.admin-ai-settings {
+  max-width: 1040px;
+}
+
+.admin-ai-setting {
+  display: grid;
+  grid-template-columns: minmax(200px, 0.8fr) minmax(0, 1.6fr);
+  gap: var(--space-4) var(--space-10);
+  padding: var(--space-6) var(--card-padding);
+}
+
+.admin-ai-setting + .admin-ai-setting {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.admin-ai-setting-copy {
+  display: grid;
+  align-content: start;
+  gap: var(--space-1-5);
+}
+
+.admin-ai-setting-copy h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+}
+
+.admin-ai-setting-copy p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+}
+
+.admin-ai-setting-control {
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.admin-ai-setting .field-counter {
+  margin-left: auto;
+}
+
+.admin-ai-preview {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px dashed var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--surface-page);
+}
+
+/* The switches as hairline rows inside the form sheet (no box in a box). */
+.admin-ai-toggles {
+  gap: 0;
+}
+
+.admin-ai-toggle {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-3) var(--space-4);
+  padding: var(--space-4) 0;
+  cursor: pointer;
+}
+
+.admin-ai-toggle + .admin-ai-toggle {
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* The first switch sits right under the section heading, the last on the section's own divider. */
+.admin-ai-toggle:first-child {
+  padding-top: 0;
+}
+
+.admin-ai-toggle:last-child {
+  padding-bottom: 0;
+}
+
+.admin-ai-toggle-copy {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.admin-ai-toggle-copy small {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.admin-ai-toggle-state {
+  min-width: 3ch;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  text-align: right;
+}
+
+.admin-ai-toggle-state.is-on {
+  color: var(--text-primary);
+}
+
+.admin-ai-settings-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-4);
+  padding: var(--space-4) var(--card-padding);
+  border-top: 1px solid var(--border-subtle);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  background: var(--surface-subtle);
+}
+
+.admin-ai-settings-foot > p {
+  display: flex;
+  flex: 1 1 320px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.admin-ai-unsaved {
+  color: var(--color-warning-text);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+@media (max-width: 1200px) {
+  .admin-ai-usage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ----- Support: the request queue and the conversation with the requester ----- */
+
+.admin-support-number {
+  min-width: 5ch;
+  padding-top: var(--space-0-5);
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The conversation: the requester's messages on the page colour, support's replies as white sheets set in a little. */
+.admin-support-thread {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-support-message {
+  display: grid;
+  gap: var(--space-2);
+  max-width: var(--reading-max);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-page);
+}
+
+.admin-support-message.is-support {
+  justify-self: end;
+  width: min(100%, var(--reading-max));
+  margin-left: var(--space-10);
+  background: var(--surface-card);
+  box-shadow: inset 2px 0 0 var(--color-ink-900);
+}
+
+.admin-support-message-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.admin-support-message-meta strong {
+  color: var(--text-primary);
+}
+
+.admin-support-message-body {
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
+.admin-support-attachment {
+  justify-self: start;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.admin-support-status-note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.admin-support-reply {
+  display: grid;
+  gap: var(--space-3);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* ----- Analytics: the key figures, the registrations line and three breakdowns ----- */
+
+.admin-insights-plot {
+  gap: var(--space-2);
+}
+
+.admin-insights-plot .mini-chart {
+  height: 220px;
+}
+
+/* Each label is placed under its point (left set per label); the end labels align to the chart's edges. */
+.admin-insights-axis {
+  position: relative;
+  height: 1.6em;
+  margin: 0;
+  padding: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+  list-style: none;
+}
+
+.admin-insights-axis li {
+  position: absolute;
+  top: 0;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+.admin-insights-axis li:first-child {
+  transform: none;
+}
+
+.admin-insights-axis li:last-child {
+  transform: translateX(-100%);
+}
+
+.admin-insights-axis li.is-quiet {
+  visibility: hidden;
+}
+
+.admin-insights-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-10);
+  align-items: start;
+}
+
+/* The three blocks share their rows (head, figures, link), so a lede that wraps in one block keeps the rules and
+   first rows of all three level. */
+.admin-insights-block {
+  display: grid;
+  grid-row: span 3;
+  grid-template-rows: subgrid;
+  align-content: start;
+  justify-items: start;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.admin-insights-block > .admin-shares,
+.admin-insights-block > .admin-insights-head,
+.admin-insights-block > dl {
+  justify-self: stretch;
+}
+
+.admin-insights-head {
+  display: grid;
+  gap: var(--space-1);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.admin-insights-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+}
+
+.admin-insights-head p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.admin-insights-learning {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5) var(--space-4);
+  margin: 0;
+}
+
+.admin-insights-learning > div {
+  display: grid;
+  align-content: start;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.admin-insights-learning dt {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.admin-insights-learning dd {
+  display: grid;
+  gap: var(--space-0-5);
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-insights-learning dd .type-caption {
+  font-family: var(--font-body);
+  font-weight: var(--font-weight-regular);
+}
+
+@media (max-width: 1200px) {
+  .admin-insights-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-insights-grid > :first-child {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ----- Audit log: the actor filter and the entry drawer ----- */
+
+/* The actor's e-mail needs a little more room than the other filters (its example address shows in full). */
+.admin-toolbar .admin-audit-actor {
+  flex-basis: 200px;
+}
+
+.admin-audit-range-error {
+  margin: 0;
+}
+
+.admin-audit-what {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.admin-audit-what p {
+  margin: 0;
+  font-size: var(--font-size-base);
+  overflow-wrap: anywhere;
+}
+
+.admin-audit-facts dd {
+  text-align: left;
+}

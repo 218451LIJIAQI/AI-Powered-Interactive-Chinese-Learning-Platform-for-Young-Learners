@@ -1,0 +1,1399 @@
+/* Learn module: the Learn path, its rail, the lesson player and mistakes review, and the parts every Learn,
+   Practice, Progress and admin learning page shares (drawer, dialog, Listen buttons, stamp seal, question stage,
+   check bar). Page-prefixed classes only (`.learn-*`); tokens only. */
+
+/* Path page: the path as a book's table of contents on the left, the rail on the right.
+   -------------------------------------------------------------------------- */
+.learn-page {
+  --progress-color: var(--module-learn);
+}
+
+.learn-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  align-items: start;
+  gap: var(--space-12);
+}
+
+/* Loading and error states of the page take the whole width. */
+.learn-layout > :only-child {
+  grid-column: 1 / -1;
+}
+
+.learn-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  width: 100%;
+  max-width: 800px;
+  min-width: 0;
+}
+
+.learn-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+/* A level is a part of the book: an ink rule under its title, its chapters, then its checkpoint. */
+.learn-level {
+  /* The column the chapter numbers, lesson seals and the thread between them share. */
+  --learn-col: 56px;
+  --learn-gap: var(--space-5);
+  --learn-inset: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.learn-level-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-4);
+  padding-bottom: var(--space-3);
+  border-bottom: var(--border-width-thick) solid var(--color-ink-900);
+}
+
+.learn-level-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--type-h2-size);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-display);
+}
+
+.learn-level-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* A level that opens after the checkpoint: its chapters, greyed like the later pages of a book. */
+.learn-level-preview {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.learn-level-preview li {
+  display: grid;
+  grid-template-columns: var(--learn-col) minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: var(--learn-gap);
+  padding: var(--space-3) var(--learn-inset);
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+}
+
+.learn-level-preview-number {
+  color: var(--color-ink-300);
+  font-family: var(--font-display);
+  font-size: var(--font-size-2xl);
+  line-height: 1;
+  text-align: center;
+}
+
+.learn-level-preview-title {
+  min-width: 0;
+}
+
+.learn-level-preview-count {
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+}
+
+/* One unit: a chapter. The open one is the white sheet of the page; the others are lines of the contents.
+   -------------------------------------------------------------------------- */
+.learn-unit {
+  /* What a hollow seal shows through: the sheet or the paper. */
+  --learn-ground: var(--surface-page);
+  min-width: 0;
+  padding: var(--space-4) var(--learn-inset);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.learn-unit.is-active {
+  --learn-ground: var(--surface-card);
+  margin: var(--space-4) 0;
+  padding-top: var(--space-6);
+  padding-bottom: var(--space-5);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-xs);
+}
+
+.learn-unit-head {
+  display: grid;
+  grid-template-columns: var(--learn-col) minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-2) var(--learn-gap);
+}
+
+.learn-unit-numeral {
+  color: var(--color-ink-300);
+  font-family: var(--font-display);
+  font-size: var(--font-size-6xl);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: lining-nums;
+  line-height: 0.9;
+  text-align: center;
+}
+
+.learn-unit.is-active .learn-unit-numeral {
+  color: var(--module-learn);
+}
+
+/* A finished unit is stamped 完 (finished). */
+.learn-unit-seal {
+  --seal-size: 44px;
+  justify-self: center;
+  transform: rotate(-4deg);
+}
+
+.learn-unit-copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.learn-unit-overline {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--type-overline-size);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-wide);
+  text-transform: uppercase;
+}
+
+.learn-unit.is-active .learn-unit-overline {
+  color: var(--text-brand);
+}
+
+.learn-unit-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+  overflow-wrap: anywhere;
+}
+
+.learn-unit.is-active .learn-unit-title {
+  font-size: var(--font-size-3xl);
+  letter-spacing: var(--letter-spacing-display);
+}
+
+.learn-unit.is-locked .learn-unit-title {
+  color: var(--text-secondary);
+}
+
+.learn-unit-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  margin: var(--space-1) 0 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.learn-unit-bar {
+  flex: 0 1 180px;
+  margin-right: var(--space-2);
+}
+
+.learn-unit-teaser {
+  margin: var(--space-1) 0 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-relaxed);
+}
+
+.learn-unit-teaser-item {
+  white-space: nowrap;
+}
+
+.learn-unit-tools {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-1);
+}
+
+.learn-unit-toggle > svg {
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+
+.learn-unit.is-expanded .learn-unit-toggle > svg {
+  transform: rotate(180deg);
+}
+
+/* The lessons of a chapter: seals on an ink thread that hangs from the chapter number. */
+.learn-lessons {
+  margin: var(--space-5) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.learn-lesson {
+  --learn-seal: 36px;
+  --learn-row-pad: var(--space-2);
+  position: relative;
+}
+
+/* The thread from this seal to the next: ink where the student has been, dashed ahead. */
+.learn-lesson::before {
+  position: absolute;
+  top: calc(var(--learn-row-pad) + var(--learn-seal) / 2);
+  bottom: calc(-1 * (var(--learn-row-pad) + var(--learn-seal) / 2));
+  left: calc(var(--learn-col) / 2 - 1px);
+  border-left: var(--border-width-thick) dashed var(--border-strong);
+  content: '';
+}
+
+.learn-lesson:last-child::before {
+  display: none;
+}
+
+.learn-lesson.is-done::before {
+  border-left-style: solid;
+  border-left-color: var(--color-ink-900);
+}
+
+.learn-lesson-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.learn-lesson-button {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: var(--learn-col) minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--learn-gap);
+  min-width: 0;
+  padding: var(--learn-row-pad) var(--space-2) var(--learn-row-pad) 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.learn-lesson-button:hover {
+  background: var(--surface-hover);
+}
+
+.learn-lesson-seal {
+  --seal-size: var(--learn-seal);
+  position: relative;
+  z-index: var(--z-raised);
+  justify-self: center;
+}
+
+.learn-lesson-seal.is-outline,
+.learn-lesson-seal.is-muted {
+  background: var(--learn-ground);
+}
+
+/* The current lesson: a heavier purple ring. */
+.learn-lesson.is-current .learn-lesson-seal {
+  box-shadow: inset 0 0 0 var(--border-width-thick) var(--color-primary-500);
+}
+
+.learn-lesson-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.learn-lesson-title {
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.learn-lesson.is-current .learn-lesson-title {
+  font-weight: var(--font-weight-bold);
+}
+
+.learn-lesson.is-locked .learn-lesson-title {
+  color: var(--text-secondary);
+}
+
+.learn-lesson-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.learn-lesson-chevron {
+  color: var(--text-secondary);
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+
+.learn-lesson.is-open .learn-lesson-chevron {
+  transform: rotate(180deg);
+}
+
+/* Its right edge lines up with the chevrons of the other rows (the button's end padding). */
+.learn-lesson-continue {
+  flex: 0 0 auto;
+  margin-right: var(--space-2);
+}
+
+/* A lesson's card opens in place under its title. */
+.learn-lesson-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  margin: var(--space-1) 0 var(--space-3) calc(var(--learn-col) + var(--learn-gap));
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-subtle);
+}
+
+.learn-lesson-card-meta,
+.learn-lesson-card-locked {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.learn-lesson-card-locked {
+  display: flex;
+  flex-basis: 100%;
+  align-items: flex-start;
+  gap: var(--space-1-5);
+}
+
+/* The checkpoint that closes a level: a 关 seal, muted until it opens. */
+.learn-checkpoint {
+  display: grid;
+  grid-template-columns: var(--learn-col) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2) var(--learn-gap);
+  margin-top: var(--space-6);
+  padding: var(--space-5) var(--learn-inset);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-xl);
+}
+
+.learn-checkpoint.is-available {
+  border: var(--border-width-thick) solid var(--color-primary-300);
+  background: var(--surface-card);
+}
+
+.learn-checkpoint.is-done {
+  border-style: solid;
+  border-color: var(--border-subtle);
+}
+
+.learn-checkpoint-seal {
+  --seal-size: 44px;
+  justify-self: center;
+}
+
+.learn-checkpoint-copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.learn-checkpoint-overline {
+  margin: 0;
+  color: var(--text-brand);
+  font-size: var(--type-overline-size);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-wide);
+  text-transform: uppercase;
+}
+
+.learn-checkpoint.is-locked .learn-checkpoint-overline {
+  color: var(--text-secondary);
+}
+
+.learn-checkpoint-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+}
+
+.learn-checkpoint-meta {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+/* Rail beside the path: sections on the paper, split by hairlines.
+   -------------------------------------------------------------------------- */
+.learn-rail,
+.learn-more {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.learn-more {
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--border-default);
+}
+
+.learn-rail-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.learn-rail-card + .learn-rail-card {
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.learn-rail-card > * {
+  max-width: 100%;
+}
+
+.learn-rail-overline {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--type-overline-size);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-wide);
+  text-transform: uppercase;
+}
+
+.learn-rail-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+}
+
+.learn-rail-text {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+}
+
+.learn-rail-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+}
+
+.learn-rail-meta {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* This unit and the one it opens, as two seals on a thread. */
+.learn-rail-units {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  margin: var(--space-1) 0;
+}
+
+.learn-rail-seal {
+  --seal-size: 32px;
+}
+
+.learn-rail-thread {
+  flex: 1 1 auto;
+  border-top: var(--border-width-thick) dashed var(--border-strong);
+}
+
+.learn-rail-note {
+  margin: 0;
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.learn-rail-note a {
+  color: var(--text-link);
+  font-weight: var(--font-weight-bold);
+}
+
+.learn-rail-note a:hover {
+  color: var(--text-link-hover);
+  text-decoration: underline;
+}
+
+/* Daily goal meter (Learn rail, Practice rail): an overline, today's XP in figures, a slim bar and the hint. */
+.learn-goal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.learn-goal-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.learn-goal-label {
+  color: var(--text-secondary);
+  font-size: var(--type-overline-size);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-wide);
+  text-transform: uppercase;
+}
+
+/* The same figure style as the path row beside it in the rail (.learn-rail-meta), so the rows line up. */
+.learn-goal-value {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.learn-goal-hint {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.learn-goal.is-reached .learn-goal-hint {
+  color: var(--color-success-text);
+}
+
+/* Guidebook drawer: the unit's key phrases as hairline rows (tile, phrase, Listen), then its tips. */
+.learn-guide-heading {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--type-overline-size);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-wide);
+  text-transform: uppercase;
+}
+
+.learn-guide-phrases {
+  display: flex;
+  flex-direction: column;
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  list-style: none;
+}
+
+.learn-guide-phrase {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.learn-guide-tile {
+  --hanzi-tile-size: 52px;
+}
+
+.learn-guide-phrase-copy {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-0-5);
+  min-width: 0;
+}
+
+.learn-guide-phrase-copy strong {
+  font-family: var(--font-hanzi);
+  font-size: var(--font-size-xl);
+}
+
+.learn-guide-phrase-meaning {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.learn-guide-tips {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: var(--space-5);
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-relaxed);
+}
+
+/* Listen buttons (speech synthesis): a small Listen, or the round speaker of a listening question.
+   -------------------------------------------------------------------------- */
+.learn-listen {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.learn-listen.is-large {
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.learn-listen.is-large .learn-listen-play {
+  width: 96px;
+  height: 96px;
+  padding: 0;
+  border-radius: var(--radius-round);
+}
+
+/* Stamp seal: the red 印章 every finished task gets, pressed down as it appears. */
+.learn-stamp {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.learn-stamp-seal {
+  --seal-size: 112px;
+  transform: rotate(-6deg);
+  animation: learn-stamp var(--duration-slow) var(--ease-spring) both;
+}
+
+.learn-stamp-caption {
+  color: var(--color-primary-600);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+@keyframes learn-stamp {
+  from {
+    opacity: 0;
+    transform: scale(1.5) rotate(-14deg);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(-6deg);
+  }
+}
+
+/* Question stage (lesson player, mistakes review, practice quizzes, level check, listening and sentence building).
+   -------------------------------------------------------------------------- */
+.learn-question {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.learn-question-instruction {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.learn-question-context {
+  margin: calc(-1 * var(--space-4)) 0 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+  text-align: center;
+}
+
+/* What the question is about, centred: tiles or the phrase, its pinyin, Listen. */
+.learn-question-prompt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.learn-question-word {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.learn-question-tile {
+  --hanzi-tile-size: 120px;
+}
+
+.learn-question-hanzi {
+  margin: 0;
+  font-family: var(--font-hanzi);
+  font-size: var(--font-size-6xl);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-snug);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.learn-question-pinyin {
+  margin: 0;
+  color: var(--color-ink-700);
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-medium);
+  text-align: center;
+}
+
+.learn-question-meaning {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+/* Options: large paper keys, numbered for the keyboard. */
+.learn-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.learn-options.is-three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.learn-options.is-stacked {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.learn-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  height: 100%;
+  min-height: 76px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-xs);
+  color: var(--text-primary);
+  text-align: left;
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    background-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard),
+    opacity var(--duration-fast) var(--ease-standard);
+}
+
+.learn-option:hover:not(:disabled) {
+  border-color: var(--border-interactive);
+  box-shadow: var(--shadow-sm);
+}
+
+.learn-option:active:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.learn-option:disabled {
+  cursor: default;
+}
+
+.learn-option-key {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xs);
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.learn-option-text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-0-5);
+  min-width: 0;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+  overflow-wrap: anywhere;
+}
+
+.learn-option-hanzi {
+  font-family: var(--font-hanzi);
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+}
+
+.learn-option-pinyin {
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-medium);
+}
+
+.learn-option-mark {
+  flex: 0 0 auto;
+}
+
+/* Selected: ink. Checking or checked: the options not in play step back. */
+.learn-option.is-selected {
+  border-color: var(--color-primary-500);
+  background: var(--surface-subtle);
+  box-shadow: inset 0 0 0 1px var(--color-primary-500);
+}
+
+.learn-option.is-selected .learn-option-key {
+  border-color: var(--color-primary-500);
+  background: var(--color-primary-500);
+  color: var(--text-on-dark);
+}
+
+.learn-option:disabled:not(.is-selected, .is-correct, .is-wrong) {
+  opacity: 0.55;
+}
+
+.learn-option.is-correct {
+  border-color: var(--color-success);
+  background: var(--color-success-soft);
+  box-shadow: inset 0 0 0 1px var(--color-success);
+  color: var(--color-success-text);
+}
+
+.learn-option.is-wrong {
+  border-color: var(--color-danger);
+  background: var(--color-danger-soft);
+  box-shadow: inset 0 0 0 1px var(--color-danger);
+  color: var(--color-danger-text);
+}
+
+.learn-option.is-correct .learn-option-key,
+.learn-option.is-wrong .learn-option-key {
+  border-color: currentColor;
+  background: transparent;
+  color: inherit;
+}
+
+.learn-option.is-correct .learn-option-pinyin,
+.learn-option.is-wrong .learn-option-pinyin {
+  color: inherit;
+}
+
+/* Sentence building: a ruled answer line over the bank of word tiles. */
+.learn-build {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.learn-build-answer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 88px;
+  padding: var(--space-3);
+  border-bottom: var(--border-width-thick) solid var(--border-strong);
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    background-color var(--duration-fast) var(--ease-standard);
+}
+
+.learn-build-answer.is-correct {
+  border-bottom-color: var(--color-success);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: var(--color-success-soft);
+}
+
+.learn-build-answer.is-wrong {
+  border-bottom-color: var(--color-danger);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: var(--color-danger-soft);
+}
+
+.learn-build-placeholder {
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+}
+
+.learn-build-bank {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.learn-tile {
+  min-width: 56px;
+  min-height: 56px;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-xs);
+  color: var(--text-primary);
+  font-family: var(--font-hanzi);
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-snug);
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.learn-tile:hover:not(:disabled) {
+  border-color: var(--border-interactive);
+  box-shadow: var(--shadow-sm);
+}
+
+.learn-tile:disabled {
+  cursor: default;
+}
+
+/* A used tile keeps its place in the bank as an empty, dashed slot. */
+.learn-tile.is-used {
+  border-style: dashed;
+  background: transparent;
+  box-shadow: none;
+  color: transparent;
+}
+
+/* Check bar: Skip / Check, then the verdict and Continue. Fixed to the bottom in focus mode, inline in Practice.
+   -------------------------------------------------------------------------- */
+.learn-checkbar {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: var(--z-sticky);
+  border-top: 1px solid var(--border-default);
+  background: var(--surface-card);
+  transition: background-color var(--duration-base) var(--ease-standard);
+}
+
+.learn-checkbar.is-correct {
+  border-top-color: var(--color-success-border);
+  background: var(--color-success-soft);
+}
+
+.learn-checkbar.is-wrong {
+  border-top-color: var(--color-danger-border);
+  background: var(--color-danger-soft);
+}
+
+/* Inside a practice card: at rest it is the card's footer (a hairline and the action, like the other practice
+   types); the answer's feedback turns it into a tinted box. */
+.learn-checkbar.is-inline {
+  position: static;
+  border: 0;
+  border-top: 1px solid var(--border-subtle);
+  border-radius: 0;
+  background: transparent;
+}
+
+.learn-checkbar.is-inline.is-correct,
+.learn-checkbar.is-inline.is-wrong {
+  border: 1px solid var(--color-success-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-success-soft);
+}
+
+.learn-checkbar.is-inline.is-wrong {
+  border-color: var(--color-danger-border);
+  background: var(--color-danger-soft);
+}
+
+.learn-checkbar-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4) var(--space-6);
+  max-width: calc(720px + 2 * var(--page-gutter));
+  margin: 0 auto;
+  padding: var(--space-5) var(--page-gutter);
+}
+
+.learn-checkbar.is-inline .learn-checkbar-inner {
+  padding: var(--space-5) 0 0;
+}
+
+.learn-checkbar.is-inline:is(.is-correct, .is-wrong) .learn-checkbar-inner {
+  padding: var(--space-4);
+}
+
+/* The default button size, as in the other practice footers (the full-screen lesson keeps the large one). */
+.learn-checkbar.is-inline .learn-checkbar-main {
+  min-height: var(--control-height-md);
+  padding-inline: var(--space-5);
+  font-size: var(--font-size-md);
+}
+
+.learn-checkbar-feedback {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: flex-start;
+  gap: var(--space-4);
+  min-width: 0;
+  animation: learn-rise var(--duration-base) var(--ease-out);
+}
+
+.learn-checkbar.is-correct .learn-checkbar-feedback {
+  align-items: center;
+}
+
+.learn-checkbar-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-round);
+  background: var(--color-success);
+  color: var(--color-white);
+  animation: learn-pop var(--duration-slow) var(--ease-spring);
+}
+
+.learn-checkbar.is-wrong .learn-checkbar-icon {
+  background: var(--color-danger-strong);
+}
+
+.learn-checkbar.is-correct .learn-checkbar-title {
+  color: var(--color-success-text);
+}
+
+.learn-checkbar.is-wrong .learn-checkbar-title {
+  color: var(--color-danger-text);
+}
+
+.learn-checkbar-copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+  min-width: 0;
+}
+
+.learn-checkbar-copy p {
+  margin: 0;
+}
+
+.learn-checkbar-title {
+  font-family: var(--font-display);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+}
+
+.learn-checkbar-answer {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  overflow-wrap: anywhere;
+}
+
+.learn-checkbar-pinyin,
+.learn-checkbar-explanation {
+  color: var(--color-ink-700);
+  font-size: var(--font-size-md);
+}
+
+.learn-checkbar-hint {
+  flex: 1 1 auto;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+}
+
+.learn-checkbar-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--space-2);
+}
+
+.learn-checkbar-main {
+  min-width: 168px;
+}
+
+@keyframes learn-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes learn-pop {
+  from {
+    transform: scale(0.6);
+  }
+
+  to {
+    transform: scale(1);
+  }
+}
+
+/* Lesson player and mistakes review (focus mode).
+   -------------------------------------------------------------------------- */
+.learn-player {
+  --focus-width: 720px;
+  max-width: 960px;
+  margin: 0 auto;
+  /* Room for the fixed check bar, so the last line and an error stay readable above it. */
+  padding-bottom: calc(var(--space-20) + var(--space-12));
+}
+
+.learn-player-body {
+  padding-top: var(--space-6);
+}
+
+.learn-player-footer {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: var(--z-sticky);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-5) max(var(--page-gutter), calc((100% - 960px) / 2));
+  border-top: 1px solid var(--border-default);
+  background: var(--surface-card);
+}
+
+/* The action error of a focus-mode task (.alert.alert-danger), under the task. */
+.learn-player-error {
+  max-width: 720px;
+  margin: var(--space-4) auto 0;
+}
+
+/* Lesson player (focus mode): a quiet stage centred between the top bar and the check bar, then the completion
+   moment: the seal, the title, three figures and what follows.
+   -------------------------------------------------------------------------- */
+.learn-lesson-page {
+  --progress-color: var(--module-learn);
+}
+
+.learn-lesson-page .learn-player-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  /* The viewport less the top bar, the room kept for the fixed check bar and the page's own bottom padding, so the
+     lesson fits the screen without a few pixels of scroll. */
+  min-height: calc(100vh - 4 * var(--space-16) - var(--space-3));
+  padding-top: var(--space-8);
+}
+
+.learn-lesson-page .learn-player-footer {
+  justify-content: center;
+}
+
+.learn-done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-6);
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.learn-done-copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.learn-done-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--type-h1-size);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+  letter-spacing: var(--letter-spacing-display);
+}
+
+.learn-done-sub {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.learn-done-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100%;
+  margin: 0;
+  padding: var(--space-5) 0;
+  border-top: 1px solid var(--border-default);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.learn-done-stats > div {
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.learn-done-stats > div + div {
+  border-left: 1px solid var(--border-subtle);
+}
+
+.learn-done-stats dt {
+  color: var(--text-secondary);
+  font-size: var(--type-overline-size);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-wide);
+  text-transform: uppercase;
+}
+
+.learn-done-stats dd {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--font-size-4xl);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: lining-nums tabular-nums;
+  line-height: 1;
+}
+
+.learn-done-stats .is-xp dd {
+  color: var(--text-brand);
+}
+
+.learn-done-note {
+  max-width: 46ch;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+}
+
+.learn-done-after {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.learn-done-after li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+}
+
+.learn-done-after li > svg {
+  flex: 0 0 auto;
+  color: var(--text-brand);
+}
+
+.learn-done-next {
+  display: flex;
+  flex-direction: column;
+}
+
+.learn-done-label {
+  color: var(--text-brand);
+  font-size: var(--type-overline-size);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-wide);
+  text-transform: uppercase;
+}
+
+/* Responsive
+   -------------------------------------------------------------------------- */
+/* Below 1200px the rail becomes a compact strip above the path (a 260px rail would squeeze the open unit); the
+   plan, mistakes and classes note follow the path. */
+@media (max-width: 1200px) {
+  .learn-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-8);
+  }
+
+  .learn-main {
+    max-width: none;
+  }
+
+  .learn-side {
+    display: contents;
+  }
+
+  .learn-rail {
+    display: grid;
+    order: -1;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--space-4) var(--space-6);
+    padding: var(--space-4) var(--space-5);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    background: var(--surface-card);
+  }
+
+  .learn-rail .learn-rail-card + .learn-rail-card {
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  .learn-rail .learn-rail-title {
+    font-size: var(--font-size-lg);
+  }
+
+  .learn-rail-units {
+    display: none;
+  }
+
+  .learn-more {
+    order: 1;
+  }
+}

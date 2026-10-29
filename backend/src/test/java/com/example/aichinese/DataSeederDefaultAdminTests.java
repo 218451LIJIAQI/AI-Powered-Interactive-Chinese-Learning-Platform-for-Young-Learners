@@ -1,10 +1,13 @@
 package com.example.aichinese;
 
+import static com.example.aichinese.support.LearningApiTestClient.ADMIN_EMAIL;
+import static com.example.aichinese.support.LearningApiTestClient.ADMIN_PASSWORD;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 
 import com.example.aichinese.entity.Role;
@@ -17,27 +20,23 @@ import com.example.aichinese.repository.UserRepository;
  * are configured: a default admin user is provisioned with the ADMIN
  * role and the supplied credentials, ready for first-run login.
  */
-@SpringBootTest(properties = {
-        DataSeederDefaultAdminTests.DEFAULT_ADMIN_EMAIL_PROPERTY,
-        DataSeederDefaultAdminTests.DEFAULT_ADMIN_PASSWORD_PROPERTY
-})
+// Its own context (no MockMvc), so no other test has changed the seeded admin before it is checked.
+@SpringBootTest(properties = {"DEFAULT_ADMIN_EMAIL=" + ADMIN_EMAIL, "DEFAULT_ADMIN_PASSWORD=" + ADMIN_PASSWORD})
 @ActiveProfiles("test")
 class DataSeederDefaultAdminTests {
-
-    private static final String DEFAULT_ADMIN_EMAIL = "admin@example.com";
-    static final String DEFAULT_ADMIN_EMAIL_PROPERTY = "DEFAULT_ADMIN_EMAIL=" + DEFAULT_ADMIN_EMAIL;
-    static final String DEFAULT_ADMIN_PASSWORD_PROPERTY = "DEFAULT_ADMIN_PASSWORD=SuperSecure123!";
-    private static final String DEFAULT_ADMIN_DISPLAY_NAME = "Platform Administrator";
 
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
     @Test
     void shouldCreateDefaultAdminWhenEnvironmentVariablesAreProvided() {
-        User admin = userRepository.findByEmailWithRoles(DEFAULT_ADMIN_EMAIL).orElseThrow();
+        User admin = userRepository.findByEmailWithRoles(ADMIN_EMAIL).orElseThrow();
 
-        assertThat(admin.getDisplayName()).isEqualTo(DEFAULT_ADMIN_DISPLAY_NAME);
-        assertThat(admin.getPasswordHash()).isNotBlank();
+        assertThat(admin.getDisplayName()).isEqualTo("Platform Administrator");
+        assertThat(passwordEncoder.matches(ADMIN_PASSWORD, admin.getPasswordHash())).isTrue();
         assertThat(admin.getRoles())
                 .extracting(Role::getName)
                 .contains(RoleName.ADMIN);

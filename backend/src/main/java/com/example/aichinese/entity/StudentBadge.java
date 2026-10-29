@@ -14,12 +14,10 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Getter
 @Setter
-@NoArgsConstructor
 @Entity
 @Table(name = "student_badges", indexes = {
         @Index(name = "idx_student_badges_student_id", columnList = "student_id"),
@@ -41,6 +39,7 @@ public class StudentBadge extends BaseEntity {
     @Column(name = "awarded_at", nullable = false, updatable = false)
     private LocalDateTime awardedAt;
 
+    /** The award time is set once, when the badge row is first saved; nothing else sets it. */
     @PrePersist
     void ensureAwardedAt() {
         if (awardedAt == null) {

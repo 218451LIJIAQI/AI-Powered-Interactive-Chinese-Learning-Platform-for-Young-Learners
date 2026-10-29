@@ -11,12 +11,10 @@ import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Getter
 @Setter
-@NoArgsConstructor
 @Entity
 @Table(name = "quiz_questions", indexes = {
         @Index(name = "idx_quiz_questions_quiz_id", columnList = "quiz_id")
@@ -24,7 +22,7 @@ import lombok.Setter;
 public class QuizQuestion extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "quiz_id", nullable = false, updatable = false)
+    @JoinColumn(name = "quiz_id", nullable = false)
     private Quiz quiz;
 
     @Column(name = "question_type", nullable = false, length = 50)
@@ -37,11 +35,23 @@ public class QuizQuestion extends BaseEntity {
     @Column(name = "correct_answer_text", length = 1000)
     private String correctAnswerText;
 
-    @Column(name = "explanation", length = 1000)
+    @Column(name = "explanation", length = 2000)
     private String explanation;
 
+    /** Optional teacher-authored hint (FRLRN10), revealed to students only on request and never for INDEPENDENT quizzes. */
+    @Column(name = "hint", length = 1000)
+    private String hint;
+
+    /** Recording a LISTEN_CHOOSE question plays (SDD 5.4); null for every other type. */
+    @Column(name = "audio_url", length = 500)
+    private String audioUrl;
+
+    /** Picture a MATCH_WORD_IMAGE question shows (SDD 5.4); null for every other type. */
+    @Column(name = "image_url", length = 500)
+    private String imageUrl;
+
     @Column(name = "points", nullable = false)
-    private Integer points = 0;
+    private Integer points = 1;
 
     @Column(name = "sort_order", nullable = false)
     private Integer sortOrder = 0;

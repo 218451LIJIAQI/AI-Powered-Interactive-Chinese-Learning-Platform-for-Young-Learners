@@ -4,50 +4,54 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 
-import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-import com.example.aichinese.entity.enums.TeacherStatus;
+import com.example.aichinese.dto.DtoNormalization;
+import com.example.aichinese.dto.PublishedClassSummary;
+import com.example.aichinese.entity.enums.TeacherVerificationDocumentType;
 
-@JsonPropertyOrder({
-        "userId",
-        "fullName",
-        "email",
-        "teacherProfileId",
-        "bio",
-        "shortIntroduction",
-        "teachingCategories",
-        "teacherStatus",
-        "rejectionReason",
-        "verificationDocuments",
-        "createdAt",
-        "updatedAt"
-})
+/** The Teaching profile page: the public profile, the verification and the classes students see the teacher on. */
 public record TeacherProfileResponse(
-        Long userId,
+        Long teacherId,
         String fullName,
         String email,
-        Long teacherProfileId,
         String bio,
-        String shortIntroduction,
-        List<String> teachingCategories,
-        TeacherStatus teacherStatus,
-        String rejectionReason,
-        List<TeacherVerificationDocumentSummaryResponse> verificationDocuments,
-        LocalDateTime createdAt,
-        LocalDateTime updatedAt) {
+        TeacherVerificationState verificationState,
+        /** When the application was last sent to the admins. */
+        LocalDateTime submittedAt,
+        LocalDateTime approvedAt,
+        /** The latest admin decision (its reason when changes were requested); null before the first decision. */
+        Decision latestDecision,
+        List<Document> documents,
+        List<PublishedClassSummary> publishedClasses) {
 
     public TeacherProfileResponse {
-        Objects.requireNonNull(userId, "userId must not be null");
+        Objects.requireNonNull(teacherId, "teacherId must not be null");
         Objects.requireNonNull(fullName, "fullName must not be null");
-        Objects.requireNonNull(email, "email must not be null");
-        Objects.requireNonNull(teacherProfileId, "teacherProfileId must not be null");
-        Objects.requireNonNull(teacherStatus, "teacherStatus must not be null");
-        Objects.requireNonNull(createdAt, "createdAt must not be null");
-        Objects.requireNonNull(updatedAt, "updatedAt must not be null");
-        teachingCategories = teachingCategories == null
-                ? List.of()
-                : List.copyOf(teachingCategories);
-        verificationDocuments = verificationDocuments == null
-                ? List.of()
-                : List.copyOf(verificationDocuments);
+        Objects.requireNonNull(verificationState, "verificationState must not be null");
+        documents = DtoNormalization.immutableListOrEmpty(documents);
+        publishedClasses = DtoNormalization.immutableListOrEmpty(publishedClasses);
+    }
+
+    /** How one current document stands: new since the last submission, waiting, verified or already sent. */
+    public enum DocumentStatus {
+        READY,
+        IN_REVIEW,
+        VERIFIED,
+        SENT
+    }
+
+    public record Document(
+            Long id,
+            TeacherVerificationDocumentType documentType,
+            String fileName,
+            long fileSize,
+            LocalDateTime uploadedAt,
+            DocumentStatus status) {
+    }
+
+    public record Decision(
+            TeacherVerificationState outcome,
+            String reason,
+            String reviewerName,
+            LocalDateTime decidedAt) {
     }
 }

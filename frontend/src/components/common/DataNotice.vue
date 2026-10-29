@@ -1,97 +1,73 @@
 <template>
   <div
-    v-if="noticeKind"
+    v-if="notice"
     class="data-notice"
-    :class="noticeClass"
-    :role="noticeRole"
-    :aria-live="noticeLive"
+    :class="`is-${notice.kind}`"
+    :role="notice.kind === 'error' ? 'alert' : 'status'"
+    :aria-live="notice.kind === 'error' ? 'assertive' : 'polite'"
     aria-atomic="true"
   >
-    <div class="data-notice-icon">
-      <IconGlyph :name="noticeIcon" />
+    <div class="data-notice-icon" aria-hidden="true">
+      <IconGlyph :name="notice.icon" />
     </div>
     <div class="data-notice-copy">
-      <strong>{{ title }}</strong>
-      <span>{{ message }}</span>
+      <strong>{{ notice.title }}</strong>
+      <span>{{ notice.message }}</span>
     </div>
     <div v-if="detail" class="data-notice-detail">{{ detail }}</div>
+    <div v-if="$slots.actions" class="data-notice-actions">
+      <slot name="actions" />
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
 
+import { useLocalMessages } from '@/composables/useLocalMessages'
+import { dataNoticeMessages } from '@/plugins/dataNoticeMessages'
+
 import IconGlyph from './IconGlyph.vue'
 
 interface Props {
-  usingFallback?: boolean
   error?: string | null
   success?: string | null
-  fallbackTitle?: string
-  fallbackMessage?: string
+  /** Neutral guidance (blue). */
+  info?: string | null
   errorTitle?: string
   successTitle?: string
+  infoTitle?: string
   detail?: string | null
 }
 
-type NoticeKind = 'error' | 'success' | 'fallback'
+const { t } = useLocalMessages({ dataNotice: dataNoticeMessages })
 
 const props = withDefaults(defineProps<Props>(), {
-  usingFallback: false,
   error: null,
   success: null,
-  fallbackTitle: '',
-  fallbackMessage: '',
+  info: null,
   errorTitle: '',
   successTitle: '',
+  infoTitle: '',
   detail: null,
 })
 
-const noticeKind = computed<NoticeKind | null>(() => {
-  if (props.error) return 'error'
-  if (props.success) return 'success'
-  if (props.usingFallback) return 'fallback'
+/** The most important message wins: error, then success, then info. */
+const notice = computed(() => {
+  if (props.error) {
+    return { kind: 'error', icon: 'alert', title: props.errorTitle || t('dataNotice.errorTitle'), message: props.error }
+  }
+  if (props.success) {
+    return {
+      kind: 'success',
+      icon: 'status',
+      title: props.successTitle || t('dataNotice.successTitle'),
+      message: props.success,
+    }
+  }
+  if (props.info) {
+    return { kind: 'info', icon: 'info', title: props.infoTitle || t('dataNotice.infoTitle'), message: props.info }
+  }
   return null
-})
-
-const title = computed<string>(() => {
-  switch (noticeKind.value) {
-    case 'error':
-      return props.errorTitle || 'Connection notice'
-    case 'success':
-      return props.successTitle || 'Saved successfully'
-    case 'fallback':
-      return props.fallbackTitle || 'Preview data mode'
-    default:
-      return ''
-  }
-})
-
-const noticeIcon = computed<string>(() => {
-  if (noticeKind.value === 'error') return 'alert'
-  if (noticeKind.value === 'success') return 'status'
-  return 'safe'
-})
-
-const noticeRole = computed<'alert' | 'status'>(() => (noticeKind.value === 'error' ? 'alert' : 'status'))
-const noticeLive = computed<'assertive' | 'polite'>(() => (noticeKind.value === 'error' ? 'assertive' : 'polite'))
-
-const noticeClass = computed(() => ({
-  'is-error': noticeKind.value === 'error',
-  'is-fallback': noticeKind.value === 'fallback',
-  'is-success': noticeKind.value === 'success',
-}))
-
-const message = computed<string>(() => {
-  switch (noticeKind.value) {
-    case 'error':
-      return props.error ?? ''
-    case 'success':
-      return props.success ?? ''
-    case 'fallback':
-      return props.fallbackMessage || 'Showing safe preview data. Connect the backend to use live platform data.'
-    default:
-      return ''
-  }
 })
 </script>

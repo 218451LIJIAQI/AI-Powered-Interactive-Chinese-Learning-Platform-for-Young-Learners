@@ -1,31 +1,24 @@
 package com.example.aichinese.dto.ai;
 
+import static com.example.aichinese.dto.DtoNormalization.redactLength;
 import static com.example.aichinese.dto.DtoNormalization.strip;
 import static com.example.aichinese.dto.DtoNormalization.stripToNull;
-
-import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
-@JsonPropertyOrder({
-        "aiUsageLogId",
-        "chatSessionId",
-        "chatMessageId",
-        "featureKey",
-        "reasonCategory",
-        "description",
-        "promptSnapshot",
-        "aiResponseSnapshot"
-})
+/**
+ * A student's report of an AI answer. An Ask SparkBot answer is named by {@code chatMessageId} and a practice score
+ * by {@code practiceCheckId} (the server attaches what was asked and answered); a Xiaomei reply, a quiz or a story is
+ * attached as the snapshots the page shows.
+ */
 public record CreateAiResponseReportRequest(
-        @Positive(message = "AI usage log id must be positive.")
-        Long aiUsageLogId,
-        @Positive(message = "Chat session id must be positive.")
-        Long chatSessionId,
         @Positive(message = "Chat message id must be positive.")
         Long chatMessageId,
+
+        @Positive(message = "Practice check id must be positive.")
+        Long practiceCheckId,
 
         @NotBlank(message = "AI feature key is required.")
         @Size(max = 100, message = "AI feature key must be 100 characters or fewer.")
@@ -55,18 +48,13 @@ public record CreateAiResponseReportRequest(
     @Override
     public String toString() {
         return "CreateAiResponseReportRequest["
-                + "aiUsageLogId=" + aiUsageLogId
-                + ", chatSessionId=" + chatSessionId
-                + ", chatMessageId=" + chatMessageId
+                + "chatMessageId=" + chatMessageId
+                + ", practiceCheckId=" + practiceCheckId
                 + ", featureKey=" + featureKey
                 + ", reasonCategory=" + reasonCategory
                 + ", description=" + redactLength(description)
                 + ", promptSnapshot=" + redactLength(promptSnapshot)
                 + ", aiResponseSnapshot=" + redactLength(aiResponseSnapshot)
                 + "]";
-    }
-
-    private static String redactLength(String value) {
-        return value == null ? "null" : "<redacted:" + value.length() + ">";
     }
 }

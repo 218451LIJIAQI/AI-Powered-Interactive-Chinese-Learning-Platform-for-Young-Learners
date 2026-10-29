@@ -1,10 +1,18 @@
 package com.example.aichinese.config;
 
+import static com.example.aichinese.support.ConfigFixtures.environment;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Named.named;
+import static org.junit.jupiter.params.provider.Arguments.arguments;
+
+import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.mock.env.MockEnvironment;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 /**
  * Unit coverage for {@code AiProductionGuard}: pins the fail-fast
@@ -14,91 +22,53 @@ import org.springframework.mock.env.MockEnvironment;
  */
 class AiProductionGuardTests {
 
-    private static final String DEEPSEEK_PROVIDER = "deepseek";
-    private static final String DEEPSEEK_BASE_URL = "https://api.deepseek.com";
-    private static final String API_KEY = "live-ai-key";
-    private static final String MODEL_NAME = "deepseek-chat";
+    static Stream<Arguments> productionMisconfigurations() {
+        return Stream.of(
+                misconfiguration("real provider disabled",
+                        properties -> properties.setEnableRealProvider(false), "AI_ENABLE_REAL_PROVIDER"),
+                misconfiguration("unsupported provider",
+                        properties -> properties.setProvider("unknown-provider"), "AI_PROVIDER"),
+                misconfiguration("blank API key", properties -> properties.setApiKey(" "), "AI_API_KEY"),
+                misconfiguration("blank model name", properties -> properties.setModelName(" "), "AI_MODEL_NAME"),
+                misconfiguration("placeholder API key",
+                        properties -> properties.setApiKey("replace-with-your-deepseek-api-key"), "placeholder"),
+                misconfiguration("HTTP base URL",
+                        properties -> properties.setApiBaseUrl("http://api.deepseek.com"), "HTTPS"),
+                misconfiguration("loopback base URL", properties -> {
+                    properties.setProvider("openai_compatible");
+                    properties.setApiBaseUrl("https://localhost:11434");
+                }, "non-loopback public host"));
+    }
 
-    @Test
-    void rejectsProdProfileWhenRealProviderIsDisabled() {
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("productionMisconfigurations")
+    void prodProfileRejectsAnIncompleteOrUnsafeRealProviderConfiguration(
+            Consumer<AiProperties> misconfiguration, String expectedMessage) {
         AiProperties properties = configuredProperties();
-        properties.setEnableRealProvider(false);
+        misconfiguration.accept(properties);
 
-        assertThatThrownBy(() -> new AiProductionGuard(prodEnvironment(), properties))
+        assertThatThrownBy(() -> new AiProductionGuard(environment("prod"), properties))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("AI_ENABLE_REAL_PROVIDER");
-    }
-
-    @Test
-    void prodProfileRequiresSupportedProviderWhenRealProviderIsEnabled() {
-        AiProperties properties = configuredProperties();
-        properties.setProvider("unknown-provider");
-
-        assertThatThrownBy(() -> new AiProductionGuard(prodEnvironment(), properties))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("AI_PROVIDER");
-    }
-
-    @Test
-    void prodProfileRequiresApiKeyAndModelWhenRealProviderIsEnabled() {
-        AiProperties missingKey = configuredProperties();
-        missingKey.setApiKey(" ");
-        assertThatThrownBy(() -> new AiProductionGuard(prodEnvironment(), missingKey))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("AI_API_KEY");
-
-        AiProperties missingModel = configuredProperties();
-        missingModel.setModelName(" ");
-        assertThatThrownBy(() -> new AiProductionGuard(prodEnvironment(), missingModel))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("AI_MODEL_NAME");
-    }
-
-    @Test
-    void prodProfileRejectsPlaceholderApiKeyWhenRealProviderIsEnabled() {
-        AiProperties properties = configuredProperties();
-        properties.setApiKey("replace-with-your-deepseek-api-key");
-
-        assertThatThrownBy(() -> new AiProductionGuard(prodEnvironment(), properties))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("placeholder");
-    }
-
-    @Test
-    void prodProfileRequiresPublicHttpsProviderBaseUrlWhenRealProviderIsEnabled() {
-        AiProperties httpBaseUrl = configuredProperties();
-        httpBaseUrl.setApiBaseUrl("http://api.deepseek.com");
-        assertThatThrownBy(() -> new AiProductionGuard(prodEnvironment(), httpBaseUrl))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("HTTPS");
-
-        AiProperties loopbackBaseUrl = configuredProperties();
-        loopbackBaseUrl.setProvider("openai_compatible");
-        loopbackBaseUrl.setApiBaseUrl("https://localhost:11434");
-        assertThatThrownBy(() -> new AiProductionGuard(prodEnvironment(), loopbackBaseUrl))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("non-loopback public host");
+                .hasMessageContaining(expectedMessage);
     }
 
     @Test
     void prodProfileAllowsProductionReadyRealProviderConfiguration() {
-        assertThatCode(() -> new AiProductionGuard(prodEnvironment(), configuredProperties()))
+        assertThatCode(() -> new AiProductionGuard(environment("prod"), configuredProperties()))
                 .doesNotThrowAnyException();
     }
 
-    private static MockEnvironment prodEnvironment() {
-        MockEnvironment environment = new MockEnvironment();
-        environment.setActiveProfiles("prod");
-        return environment;
+    private static Arguments misconfiguration(String name, Consumer<AiProperties> change, String expectedMessage) {
+        return arguments(named(name, change), expectedMessage);
     }
 
     private static AiProperties configuredProperties() {
         AiProperties properties = new AiProperties();
         properties.setEnableRealProvider(true);
-        properties.setProvider(DEEPSEEK_PROVIDER);
-        properties.setApiBaseUrl(DEEPSEEK_BASE_URL);
-        properties.setApiKey(API_KEY);
-        properties.setModelName(MODEL_NAME);
+        properties.setProvider("deepseek");
+        properties.setApiBaseUrl("https://api.deepseek.com");
+        properties.setApiKey("live-ai-key");
+        properties.setModelName("deepseek-chat");
         return properties;
     }
 }

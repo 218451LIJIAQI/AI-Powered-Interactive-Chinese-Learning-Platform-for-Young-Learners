@@ -14,12 +14,10 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Getter
 @Setter
-@NoArgsConstructor
 @Entity
 @Table(name = "lesson_progress", indexes = {
         @Index(name = "idx_lesson_progress_student_id", columnList = "student_id"),
@@ -36,9 +34,6 @@ public class LessonProgress extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "lesson_id", nullable = false, updatable = false)
     private Lesson lesson;
-
-    @Column(name = "completion_percent")
-    private Integer completionPercent;
 
     @Version
     @Column(name = "version", nullable = false)

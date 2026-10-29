@@ -1,16 +1,13 @@
 package com.example.aichinese.config;
 
 import java.io.IOException;
-import java.net.URI;
 import java.util.Locale;
-import java.util.Objects;
 import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.env.Environment;
-import org.springframework.core.env.Profiles;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.lang.NonNull;
@@ -40,7 +37,6 @@ import jakarta.servlet.http.HttpServletResponse;
 @Order(Ordered.HIGHEST_PRECEDENCE + 10)
 public class RefreshCookieOriginFilter extends OncePerRequestFilter {
 
-    private static final Profiles PROD_PROFILES = Profiles.of("prod", "production");
     private static final String REFRESH_PATH = "/api/v1/auth/refresh";
     private static final String SEC_FETCH_SITE = "Sec-Fetch-Site";
     private static final String SAME_ORIGIN_FETCH = "same-origin";
@@ -53,12 +49,9 @@ public class RefreshCookieOriginFilter extends OncePerRequestFilter {
             Environment environment,
             @Value("${app.cors.allowed-origins:#{T(com.example.aichinese.config.CorsConfig).defaultLocalDevOriginsCsv()}}")
             String allowedOrigins) {
-        this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper");
-        Objects.requireNonNull(environment, "environment");
-        this.trustedOrigins = Set.copyOf(CorsConfig.resolveExactOrigins(
-                allowedOrigins,
-                environment.acceptsProfiles(PROD_PROFILES),
-                CorsConfig.defaultLocalDevOrigins()));
+        this.objectMapper = objectMapper;
+        this.trustedOrigins = Set.copyOf(
+                CorsConfig.resolveExactOrigins(allowedOrigins, ProductionProfiles.isActive(environment)));
     }
 
     @Override
@@ -67,7 +60,8 @@ public class RefreshCookieOriginFilter extends OncePerRequestFilter {
             @NonNull HttpServletResponse response,
             @NonNull FilterChain filterChain) throws ServletException, IOException {
         if (requiresOriginCheck(request) && !hasTrustedBrowserOrigin(request)) {
-            reject(response);
+            ApiErrorResponseWriter.write(
+                    objectMapper, response, HttpStatus.FORBIDDEN, FriendlyErrorMessageResolver.permissionDeniedMessage());
             return;
         }
 
@@ -76,7 +70,7 @@ public class RefreshCookieOriginFilter extends OncePerRequestFilter {
 
     private boolean requiresOriginCheck(HttpServletRequest request) {
         return "POST".equalsIgnoreCase(request.getMethod())
-                && REFRESH_PATH.equals(normalizedRequestPath(request));
+                && REFRESH_PATH.equals(RequestPaths.applicationPath(request));
     }
 
     private boolean hasTrustedBrowserOrigin(HttpServletRequest request) {
@@ -104,15 +98,6 @@ public class RefreshCookieOriginFilter extends OncePerRequestFilter {
         return origin.equals(requestOrigin(request)) || trustedOrigins.contains(origin);
     }
 
-    private static String normalizedRequestPath(HttpServletRequest request) {
-        String contextPath = request.getContextPath();
-        String requestUri = request.getRequestURI();
-        if (contextPath != null && !contextPath.isBlank() && requestUri.startsWith(contextPath)) {
-            return requestUri.substring(contextPath.length());
-        }
-        return requestUri == null ? "" : requestUri;
-    }
-
     private static String requestOrigin(HttpServletRequest request) {
         String scheme = request.getScheme() == null
                 ? ""
@@ -126,44 +111,20 @@ public class RefreshCookieOriginFilter extends OncePerRequestFilter {
         return scheme + "://" + hostPart + (defaultPort || port < 0 ? "" : ":" + port);
     }
 
+    /** Normalised like a configured CORS origin, so the two compare equal; {@code null} when it is not an origin. */
     private static String normalizeOriginHeader(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
         try {
-            URI uri = HttpUrlValidation.requireAbsoluteHttpUrl(value, "Origin");
-            if ((uri.getRawPath() != null && !uri.getRawPath().isBlank() && !"/".equals(uri.getRawPath()))
-                    || uri.getRawQuery() != null
-                    || uri.getRawFragment() != null) {
-                return null;
-            }
-            return originOf(uri);
+            return CorsConfig.normalizeOrigin(value, false);
         } catch (IllegalArgumentException exception) {
             return null;
         }
     }
 
     private static String normalizeRefererOrigin(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
         try {
-            return originOf(HttpUrlValidation.requireAbsoluteHttpUrl(value, "Referer"));
+            return HttpUrlValidation.originOf(HttpUrlValidation.requireAbsoluteHttpUrl(value, "Referer"));
         } catch (IllegalArgumentException exception) {
             return null;
         }
-    }
-
-    private static String originOf(URI uri) {
-        String scheme = HttpUrlValidation.normalizeScheme(uri.getScheme());
-        String host = HttpUrlValidation.normalizeHost(uri.getHost());
-        String port = uri.getPort() >= 0 ? ":" + uri.getPort() : "";
-        String hostPart = host.contains(":") ? "[" + host + "]" : host;
-        return scheme + "://" + hostPart + port;
-    }
-
-    private void reject(HttpServletResponse response) throws IOException {
-        String message = FriendlyErrorMessageResolver.permissionDeniedMessage();
-        ApiErrorResponseWriter.write(objectMapper, response, HttpStatus.FORBIDDEN, message);
     }
 }

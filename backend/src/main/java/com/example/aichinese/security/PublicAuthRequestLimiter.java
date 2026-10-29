@@ -6,7 +6,6 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Locale;
-import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -63,7 +62,7 @@ public class PublicAuthRequestLimiter {
                 || maxRegisterRequests < 1 || maxForgotPasswordRequests < 1 || maxTrackedRequestRecords < 1) {
             throw new IllegalArgumentException("Rate limit thresholds must be positive");
         }
-        this.clock = Objects.requireNonNull(clock, "clock");
+        this.clock = clock;
         this.window = window;
         this.maxRegisterRequests = maxRegisterRequests;
         this.maxForgotPasswordRequests = maxForgotPasswordRequests;
@@ -80,6 +79,17 @@ public class PublicAuthRequestLimiter {
     public void checkForgotPasswordAllowed(String email, String clientIp) {
         checkAllowed("FORGOT_PASSWORD_IP", "", clientIp, maxForgotPasswordRequests);
         checkAllowed("FORGOT_PASSWORD_EMAIL", email, "", maxForgotPasswordRequests);
+    }
+
+    /** Reset-password submissions get their own per-IP bucket capped at the forgot-password limit. */
+    public void checkResetPasswordAllowed(String clientIp) {
+        checkAllowed("RESET_PASSWORD_IP", "", clientIp, maxForgotPasswordRequests);
+    }
+
+    /** The Help page message form: per IP and per e-mail address, capped at the forgot-password limit. */
+    public void checkSupportMessageAllowed(String email, String clientIp) {
+        checkAllowed("SUPPORT_MESSAGE_IP", "", clientIp, maxForgotPasswordRequests);
+        checkAllowed("SUPPORT_MESSAGE_EMAIL", email, "", maxForgotPasswordRequests);
     }
 
     int trackedRequestCount() {

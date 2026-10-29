@@ -4,32 +4,53 @@ import { normalizeAppRoute } from './routeCompat'
 
 describe('normalizeAppRoute', () => {
   it.each([
-    ['/catalog?level=beginner', '/courses?level=beginner'],
-    ['/student/payments?tab=history', '/student/profile?tab=history'],
-    ['/admin/ai-response-reports/42#review', '/admin/moderation#review'],
-  ])('rewrites %s to %s', (input, output) => {
-    expect(normalizeAppRoute(input)).toBe(output)
-  })
-
-  it.each([
     'https://evil.example/student/home',
     '//evil.example/student/home',
     '/%2f%2fevil.example/student/home',
     '/student/home%00',
     '/unknown',
+    '/student/classes/abc',
+    null,
   ])('rejects external or unknown target %s', (input) => {
     expect(normalizeAppRoute(input)).toBeNull()
   })
 
-  it.each(['/courses/../../admin/settings', '/courses/%2e%2e/%2e%2e/admin/settings', '/courses\\..\\admin\\settings'])(
+  it.each(['/classes/../../admin/settings', '/classes/%2e%2e/%2e%2e/admin/settings', '/classes\\..\\admin\\settings'])(
     'rejects path traversal target %s',
     (input) => {
       expect(normalizeAppRoute(input)).toBeNull()
     },
   )
 
-  it.each(['/courses/PACKAGE-42?tab=overview', '/student/quiz/123?lessonId=9'])(
-    'keeps valid dynamic app route %s',
+  it.each([
+    '/classes/42',
+    '/student/quiz/123',
+    '/student/classes/7/lessons/9',
+    '/student/classes/7/lessons/9/activities/flashcards/3',
+    '/student/learn/lessons/12',
+    '/student/practice/mistakes',
+    '/student/ai/voice',
+    '/student/support/1038',
+    '/teacher/classes/4/lessons/5/quiz',
+    '/teacher/live-sessions/past',
+    '/admin/content/learning-path',
+    '/admin/ai/settings',
+  ])('keeps valid dynamic app route %s', (input) => {
+    expect(normalizeAppRoute(input)).toBe(input)
+  })
+
+  it.each([
+    '/student/achievements',
+    '/courses/12',
+    '/teacher/content',
+    '/admin/moderation',
+    '/admin/content-review?id=7',
+  ])('keeps an old path from a stored notification, which the router redirects: %s', (input) => {
+    expect(normalizeAppRoute(input)).toBe(input)
+  })
+
+  it.each(['/responsible-ai', '/privacy#ai-provider', '/terms', '/help', '/safety'])(
+    'keeps public information route %s',
     (input) => {
       expect(normalizeAppRoute(input)).toBe(input)
     },
@@ -37,7 +58,7 @@ describe('normalizeAppRoute', () => {
 
   it.each([
     ['  /student/home  ', '/student/home'],
-    ['\n/admin/settings\t', '/admin/settings'],
+    ['\n/admin/ai\t', '/admin/ai'],
   ])('trims harmless surrounding whitespace in %s', (input, output) => {
     expect(normalizeAppRoute(input)).toBe(output)
   })

@@ -3,7 +3,6 @@ package com.example.aichinese.config;
 import java.net.URI;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -14,7 +13,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
-import org.springframework.core.env.Profiles;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -23,7 +21,6 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 public class CorsConfig {
 
     private static final Logger log = LoggerFactory.getLogger(CorsConfig.class);
-    private static final Profiles PROD_PROFILES = Profiles.of("prod", "production");
 
     private static final String CORS_ORIGIN_PROPERTY = "APP_CORS_ALLOWED_ORIGINS";
     private static final String ORIGIN_LABEL = "CORS allowed origin";
@@ -31,7 +28,7 @@ public class CorsConfig {
     private static final int VITE_DEV_PORT_END = 5183;
     private static final Duration PREFLIGHT_CACHE_MAX_AGE = Duration.ofHours(1);
 
-    private static final List<String> DEFAULT_LOCAL_DEV_ORIGINS = buildDefaultLocalDevOrigins();
+    static final List<String> DEFAULT_LOCAL_DEV_ORIGINS = buildDefaultLocalDevOrigins();
     private static final String DEFAULT_LOCAL_DEV_ORIGINS_CSV = String.join(",", DEFAULT_LOCAL_DEV_ORIGINS);
     private static final List<String> ALLOWED_METHODS = List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS");
     private static final List<String> ALLOWED_HEADERS = List.of(
@@ -43,20 +40,13 @@ public class CorsConfig {
         this.environment = environment;
     }
 
-    CorsConfig() {
-        this.environment = null;
-    }
-
     @Bean
     public CorsConfigurationSource corsConfigurationSource(
             @Value("${app.cors.allowed-origins:#{T(com.example.aichinese.config.CorsConfig).defaultLocalDevOriginsCsv()}}") String allowedOrigins) {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        boolean productionProfileActive = isProductionProfileActive();
-        Set<String> exactOrigins = resolveExactOrigins(
-                allowedOrigins,
-                productionProfileActive,
-                DEFAULT_LOCAL_DEV_ORIGINS);
+        boolean productionProfileActive = ProductionProfiles.isActive(environment);
+        Set<String> exactOrigins = resolveExactOrigins(allowedOrigins, productionProfileActive);
 
         configuration.setAllowedOrigins(List.copyOf(exactOrigins));
         configuration.setAllowedHeaders(ALLOWED_HEADERS);
@@ -69,22 +59,11 @@ public class CorsConfig {
         return source;
     }
 
-    private boolean isProductionProfileActive() {
-        return environment != null && environment.acceptsProfiles(PROD_PROFILES);
-    }
-
-    static List<String> defaultLocalDevOrigins() {
-        return DEFAULT_LOCAL_DEV_ORIGINS;
-    }
-
     public static String defaultLocalDevOriginsCsv() {
         return DEFAULT_LOCAL_DEV_ORIGINS_CSV;
     }
 
-    static Set<String> resolveExactOrigins(
-            String allowedOrigins,
-            boolean productionProfileActive,
-            Collection<String> fallbackOrigins) {
+    static Set<String> resolveExactOrigins(String allowedOrigins, boolean productionProfileActive) {
         Set<String> exactOrigins = new LinkedHashSet<>();
         String configuredOrigins = allowedOrigins == null ? "" : allowedOrigins;
         for (String rawOrigin : configuredOrigins.split(",")) {
@@ -105,9 +84,9 @@ public class CorsConfig {
                 throw new IllegalStateException(
                         CORS_ORIGIN_PROPERTY + " must contain explicit origins when the prod profile is active.");
             }
-            exactOrigins.addAll(fallbackOrigins);
+            exactOrigins.addAll(DEFAULT_LOCAL_DEV_ORIGINS);
             log.warn("No explicit CORS origins were configured; falling back to local dev origins {}.",
-                    fallbackOrigins);
+                    DEFAULT_LOCAL_DEV_ORIGINS);
         }
 
         return exactOrigins;
@@ -124,7 +103,7 @@ public class CorsConfig {
         return List.copyOf(origins);
     }
 
-    private static String normalizeOrigin(String origin, boolean productionProfileActive) {
+    static String normalizeOrigin(String origin, boolean productionProfileActive) {
         URI uri = HttpUrlValidation.requireAbsoluteHttpUrl(origin, ORIGIN_LABEL);
         if (uri.getRawPath() != null && !uri.getRawPath().isBlank() && !"/".equals(uri.getRawPath())) {
             throw new IllegalArgumentException("CORS allowed origin must not include a path.");
@@ -135,11 +114,6 @@ public class CorsConfig {
         if (productionProfileActive) {
             HttpUrlValidation.requirePublicHttpsUrl(origin, CORS_ORIGIN_PROPERTY, "when the prod profile is active");
         }
-
-        String scheme = HttpUrlValidation.normalizeScheme(uri.getScheme());
-        String host = HttpUrlValidation.normalizeHost(uri.getHost());
-        String port = uri.getPort() >= 0 ? ":" + uri.getPort() : "";
-        String normalizedHost = host.contains(":") ? "[" + host + "]" : host;
-        return scheme + "://" + normalizedHost + port;
+        return HttpUrlValidation.originOf(uri);
     }
 }

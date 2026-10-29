@@ -1,7 +1,7 @@
 package com.example.aichinese.config;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static java.util.Map.entry;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -63,7 +63,7 @@ class SentryConfigurationTests {
                 entry("token", "raw-tag-token"),
                 entry("page", "reset-password")));
         event.setExtras(linkedMap(
-                entry("stripeApiKey", "sk_live_secret"),
+                entry("providerApiKey", "sk_live_secret"),
                 entry("message", "token: raw-token-value")));
 
         Message message = new Message();
@@ -117,7 +117,7 @@ class SentryConfigurationTests {
                 .containsEntry("token", FILTERED)
                 .containsEntry("page", "reset-password");
         assertThat(event.getExtras())
-                .containsEntry("stripeApiKey", FILTERED)
+                .containsEntry("providerApiKey", FILTERED)
                 .containsEntry("message", "token=" + FILTERED);
     }
 

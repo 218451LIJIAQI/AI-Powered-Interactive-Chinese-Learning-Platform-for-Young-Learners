@@ -3,6 +3,7 @@ package com.example.aichinese.service;
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
+import static org.springframework.http.HttpStatus.PAYLOAD_TOO_LARGE;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -14,33 +15,36 @@ import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.util.unit.DataSize;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.example.aichinese.entity.UploadedFile;
 import com.example.aichinese.entity.User;
-import com.example.aichinese.service.storage.StorageProvider;
-import com.example.aichinese.service.storage.StoredObject;
+import com.example.aichinese.exception.FriendlyErrorMessageResolver;
+import com.example.aichinese.repository.UploadedFileRepository;
+import com.example.aichinese.util.ExceptionLogUtils;
+import com.example.aichinese.util.FileNames;
 
 /**
- * Package-private upload pipeline helpers shared by every storage
- * service ({@link AiFileStorageService}, {@link RecordedVideoStorageService},
- * {@link FileStorageService}).
+ * Package-private upload pipeline helpers used by {@link FileStorageService}.
  *
  * <h2>Defence in depth</h2>
  * <p>Provides the three independent checks every upload runs:</p>
  * <ol>
- *   <li>Safe original file-name extraction — strips path components,
- *       CR/LF, and other shell-tricky characters; rejects empty or
- *       traversal-attempt names.</li>
+ *   <li>Safe original file-name extraction — strips path components
+ *       (so {@code ../x.pdf} becomes {@code x.pdf}), replaces CR/LF and
+ *       other shell-tricky characters with {@code _}; rejects empty or
+ *       over-long names.</li>
  *   <li>Extension + Content-Type whitelist matching.</li>
  *   <li>Magic-byte / file-signature verification reading the first
  *       {@link #SIGNATURE_PREFIX_BYTES} bytes — defeats the classic
@@ -53,33 +57,101 @@ import com.example.aichinese.service.storage.StoredObject;
  * is canonicalised before write to defeat symlink-based escape
  * attempts. Reads stream through {@link FileSystemResource} so the
  * controller does not buffer entire blobs in memory.</p>
- *
- * <h2>Why a class instead of utility methods</h2>
- * <p>Package-private static methods keep the pipeline narrow — only
- * the three storage services in this package can call them, so a
- * future change cannot accidentally widen the surface to a less
- * defended path.</p>
  */
 final class UploadStorageSupport {
 
+    private static final Logger log = LoggerFactory.getLogger(UploadStorageSupport.class);
+
     private static final int SIGNATURE_PREFIX_BYTES = 64;
+    /** Length of {@code uploaded_files.file_name}, which stores the sanitised original name. */
+    private static final int MAX_ORIGINAL_FILE_NAME_LENGTH = 255;
+    /** Returned when a stored-file name would leave the managed upload directory. */
+    static final String INVALID_UPLOAD_TARGET_MESSAGE = "Invalid upload target path.";
+    static final String INVALID_FILE_NAME_MESSAGE = "Uploaded file name is invalid.";
 
     private UploadStorageSupport() {
     }
 
-    static String extractSafeOriginalFileName(String originalFileName, String invalidMessage) {
-        if (originalFileName == null || originalFileName.isBlank()) {
-            throw new ResponseStatusException(BAD_REQUEST, invalidMessage);
+    /**
+     * Runs every upload check in the same order for each storage service: present, within the size limit, a
+     * safe original name with an allowed extension and content type, and a matching file signature.
+     */
+    static ValidatedUpload validateUpload(MultipartFile multipartFile, DataSize maxFileSize, UploadPolicy policy) {
+        if (multipartFile == null || multipartFile.isEmpty()) {
+            throw new ResponseStatusException(BAD_REQUEST, policy.requiredMessage());
         }
 
-        String cleaned = sanitizeOriginalFileName(extractLastPathSegment(originalFileName));
-        if (cleaned.isBlank()) {
-            throw new ResponseStatusException(BAD_REQUEST, invalidMessage);
+        if (multipartFile.getSize() > maxFileSize.toBytes()) {
+            throw new ResponseStatusException(PAYLOAD_TOO_LARGE, FriendlyErrorMessageResolver.uploadTooLargeMessage());
+        }
+
+        String originalFileName = extractSafeOriginalFileName(multipartFile.getOriginalFilename());
+        String extension = getRequiredExtension(originalFileName, policy.missingExtensionMessage());
+        if (policy.allowedSignatures().stream().noneMatch(signature -> signature.supportsExtension(extension))) {
+            throw new ResponseStatusException(BAD_REQUEST, policy.unsupportedExtensionMessage());
+        }
+
+        String contentType = normalizeContentType(multipartFile.getContentType());
+        if (policy.allowedSignatures().stream().noneMatch(signature -> signature.supportsContentType(contentType))) {
+            throw new ResponseStatusException(BAD_REQUEST, policy.unsupportedContentTypeMessage());
+        }
+
+        validateFileSignature(
+                multipartFile,
+                extension,
+                contentType,
+                policy.allowedSignatures(),
+                policy.signatureMismatchMessage());
+
+        return new ValidatedUpload(originalFileName, extension);
+    }
+
+    /**
+     * Stores a validated upload under a new random name and saves its metadata row.
+     * The stored file is deleted again when the metadata cannot be saved or the surrounding transaction rolls back.
+     */
+    static UploadedFile storeUpload(
+            MultipartFile multipartFile,
+            ValidatedUpload validated,
+            Path baseDirectory,
+            String storageFailureMessage,
+            UploadedFileRepository uploadedFileRepository,
+            User ownerUser) {
+        String storedFileName = UUID.randomUUID() + validated.extension();
+
+        Path storedPath = storeMultipartFile(multipartFile, baseDirectory, storedFileName, storageFailureMessage);
+        registerRollbackCleanup(storedPath);
+
+        UploadedFile uploadedFile = new UploadedFile();
+        uploadedFile.setOwnerUser(ownerUser);
+        uploadedFile.setFileName(validated.originalFileName());
+        uploadedFile.setStoredFileName(storedFileName);
+        uploadedFile.setFilePath(storedPath.toString());
+        uploadedFile.setContentType(normalizeContentType(multipartFile.getContentType()));
+        uploadedFile.setFileSize(multipartFile.getSize());
+        uploadedFile.setAccessLevel("PRIVATE");
+        uploadedFile.setActive(true);
+        try {
+            return uploadedFileRepository.save(uploadedFile);
+        } catch (RuntimeException exception) {
+            deleteQuietly(storedPath);
+            throw exception;
+        }
+    }
+
+    static String extractSafeOriginalFileName(String originalFileName) {
+        if (originalFileName == null || originalFileName.isBlank()) {
+            throw new ResponseStatusException(BAD_REQUEST, INVALID_FILE_NAME_MESSAGE);
+        }
+
+        String cleaned = FileNames.sanitize(extractLastPathSegment(originalFileName));
+        if (cleaned.isBlank() || cleaned.length() > MAX_ORIGINAL_FILE_NAME_LENGTH) {
+            throw new ResponseStatusException(BAD_REQUEST, INVALID_FILE_NAME_MESSAGE);
         }
         return cleaned;
     }
 
-    static String getRequiredExtension(String fileName, String missingExtensionMessage) {
+    private static String getRequiredExtension(String fileName, String missingExtensionMessage) {
         int lastDot = fileName.lastIndexOf('.');
         if (lastDot < 0) {
             throw new ResponseStatusException(BAD_REQUEST, missingExtensionMessage);
@@ -92,23 +164,7 @@ final class UploadStorageSupport {
         return contentType == null ? "" : contentType.strip().toLowerCase(Locale.ROOT);
     }
 
-    static String buildStoredFileName(String extension) {
-        return UUID.randomUUID() + extension;
-    }
-
-    static Set<String> extensionsOf(Set<FileSignature> signatures) {
-        return signatures.stream()
-                .flatMap(signature -> signature.extensions().stream())
-                .collect(Collectors.toUnmodifiableSet());
-    }
-
-    static Set<String> contentTypesOf(Set<FileSignature> signatures) {
-        return signatures.stream()
-                .flatMap(signature -> signature.contentTypes().stream())
-                .collect(Collectors.toUnmodifiableSet());
-    }
-
-    static void validateFileSignature(
+    private static void validateFileSignature(
             MultipartFile multipartFile,
             String extension,
             String contentType,
@@ -144,7 +200,6 @@ final class UploadStorageSupport {
             MultipartFile multipartFile,
             Path baseDirectory,
             String storedFileName,
-            String invalidTargetMessage,
             String storageFailureMessage) {
         try {
             Files.createDirectories(baseDirectory);
@@ -152,17 +207,18 @@ final class UploadStorageSupport {
             Path targetPath = resolveManagedPath(
                     realDirectory(baseDirectory, INTERNAL_SERVER_ERROR, storageFailureMessage),
                     storedFileName,
-                    invalidTargetMessage);
+                    BAD_REQUEST,
+                    INVALID_UPLOAD_TARGET_MESSAGE);
             try (InputStream inputStream = multipartFile.getInputStream()) {
                 Files.copy(inputStream, targetPath);
             }
             return targetPath;
         } catch (IOException exception) {
-            throw new ResponseStatusException(INTERNAL_SERVER_ERROR, storageFailureMessage);
+            throw new ResponseStatusException(INTERNAL_SERVER_ERROR, storageFailureMessage, exception);
         }
     }
 
-    static void registerRollbackCleanup(StorageProvider storageProvider, StoredObject storedObject) {
+    private static void registerRollbackCleanup(Path storedPath) {
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
             return;
         }
@@ -170,35 +226,35 @@ final class UploadStorageSupport {
             @Override
             public void afterCompletion(int status) {
                 if (status == STATUS_ROLLED_BACK) {
-                    storageProvider.deleteQuietly(storedObject);
+                    deleteQuietly(storedPath);
                 }
             }
         });
     }
 
-    static UploadedFile saveUploadedFileMetadata(
-            Function<UploadedFile, UploadedFile> metadataSaver,
-            StorageProvider storageProvider,
-            StoredObject storedObject,
-            User ownerUser,
-            String originalFileName,
-            String storedFileName,
-            String contentType,
-            long fileSize) {
-        UploadedFile uploadedFile = new UploadedFile();
-        uploadedFile.setOwnerUser(ownerUser);
-        uploadedFile.setFileName(originalFileName);
-        uploadedFile.setStoredFileName(storedFileName);
-        uploadedFile.setFilePath(storedObject.location().toString());
-        uploadedFile.setContentType(normalizeContentType(contentType));
-        uploadedFile.setFileSize(fileSize);
-        uploadedFile.setAccessLevel("PRIVATE");
-        uploadedFile.setActive(true);
+    /** Deletes a stored upload of the managed directory; a file that is already gone is ignored. */
+    static void deleteManagedFile(String configuredDirectory, UploadedFile uploadedFile) {
+        if (uploadedFile == null || uploadedFile.getStoredFileName() == null || uploadedFile.getStoredFileName().isBlank()) {
+            return;
+        }
+        String missing = "Requested file could not be found.";
         try {
-            return metadataSaver.apply(uploadedFile);
-        } catch (RuntimeException exception) {
-            storageProvider.deleteQuietly(storedObject);
-            throw exception;
+            Path baseDirectory = realDirectory(resolveBaseDirectory(configuredDirectory), NOT_FOUND, missing);
+            deleteQuietly(resolveManagedPath(baseDirectory, uploadedFile.getStoredFileName(), NOT_FOUND, missing));
+        } catch (ResponseStatusException alreadyGone) {
+            log.debug("Stored upload {} was already gone.", uploadedFile.getId());
+        }
+    }
+
+    static void deleteQuietly(Path location) {
+        try {
+            Files.deleteIfExists(location);
+        } catch (IOException exception) {
+            String fileName = location.getFileName() == null ? "-" : location.getFileName().toString();
+            log.warn("Failed to delete stored object during upload rollback for name {}: {}",
+                    fileName,
+                    ExceptionLogUtils.exceptionType(exception));
+            log.debug("Stored object cleanup stack trace for name {}.", fileName, exception);
         }
     }
 
@@ -225,18 +281,11 @@ final class UploadStorageSupport {
                 normalizeContentType(uploadedFile.getContentType()));
     }
 
-    private static Path resolveManagedPath(Path baseDirectory, String storedFileName, String invalidMessage) {
-        return resolveManagedPath(baseDirectory, storedFileName, BAD_REQUEST, invalidMessage);
-    }
-
     private static Path resolveManagedPath(
             Path baseDirectory,
             String storedFileName,
             HttpStatus invalidStatus,
             String invalidMessage) {
-        if (storedFileName == null || storedFileName.isBlank()) {
-            throw new ResponseStatusException(invalidStatus, invalidMessage);
-        }
         Path targetPath = baseDirectory.resolve(storedFileName.strip()).normalize();
         if (!targetPath.startsWith(baseDirectory)) {
             throw new ResponseStatusException(invalidStatus, invalidMessage);
@@ -258,54 +307,6 @@ final class UploadStorageSupport {
         int lastWindowsSeparator = stripped.lastIndexOf('\\');
         int lastSeparator = Math.max(lastUnixSeparator, lastWindowsSeparator);
         return stripped.substring(lastSeparator + 1);
-    }
-
-    private static String sanitizeOriginalFileName(String fileName) {
-        StringBuilder sanitized = new StringBuilder(fileName.length());
-        boolean previousWasWhitespace = false;
-
-        for (int offset = 0; offset < fileName.length();) {
-            int codePoint = fileName.codePointAt(offset);
-            offset += Character.charCount(codePoint);
-
-            if (isUnsafeOriginalFileNameCodePoint(codePoint)) {
-                appendReplacement(sanitized);
-                previousWasWhitespace = false;
-                continue;
-            }
-
-            if (Character.isWhitespace(codePoint)) {
-                if (!previousWasWhitespace && !sanitized.isEmpty()) {
-                    sanitized.append(' ');
-                    previousWasWhitespace = true;
-                }
-                continue;
-            }
-
-            sanitized.appendCodePoint(codePoint);
-            previousWasWhitespace = false;
-        }
-
-        String cleaned = sanitized.toString().trim();
-        while (cleaned.startsWith(".")) {
-            cleaned = cleaned.substring(1).trim();
-        }
-        return cleaned;
-    }
-
-    private static boolean isUnsafeOriginalFileNameCodePoint(int codePoint) {
-        return Character.isISOControl(codePoint)
-                || Character.getType(codePoint) == Character.FORMAT
-                || switch (codePoint) {
-                    case '"', '*', '/', ':', '<', '>', '?', '\\', '|' -> true;
-                    default -> false;
-                };
-    }
-
-    private static void appendReplacement(StringBuilder sanitized) {
-        if (sanitized.isEmpty() || sanitized.charAt(sanitized.length() - 1) != '_') {
-            sanitized.append('_');
-        }
     }
 
     private static byte[] readPrefix(MultipartFile multipartFile, String invalidTypeMessage) {
@@ -339,20 +340,6 @@ final class UploadStorageSupport {
         return expected.equals(actual);
     }
 
-    private static boolean containsAscii(byte[] bytes, String expected) {
-        if (bytes.length < expected.length()) {
-            return false;
-        }
-
-        for (int index = 0; index <= bytes.length - expected.length(); index++) {
-            if (hasAsciiAt(bytes, index, expected)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     private static boolean hasFtypBox(byte[] bytes) {
         return hasAsciiAt(bytes, 4, "ftyp");
     }
@@ -362,6 +349,20 @@ final class UploadStorageSupport {
             return "";
         }
         return new String(bytes, 8, 4, StandardCharsets.US_ASCII).toLowerCase(Locale.ROOT);
+    }
+
+    /** What one kind of upload accepts, with its message for each failed check (all share the "too large" one). */
+    record UploadPolicy(
+            Set<FileSignature> allowedSignatures,
+            String requiredMessage,
+            String missingExtensionMessage,
+            String unsupportedExtensionMessage,
+            String unsupportedContentTypeMessage,
+            String signatureMismatchMessage) {
+    }
+
+    /** The sanitised original file name and lower-case extension of an upload that passed every check. */
+    record ValidatedUpload(String originalFileName, String extension) {
     }
 
     enum FileSignature {
@@ -406,7 +407,8 @@ final class UploadStorageSupport {
         WEBM(Set.of(".webm"), Set.of("video/webm", "audio/webm")) {
             @Override
             boolean matches(byte[] prefix) {
-                return startsWith(prefix, 0x1A, 0x45, 0xDF, 0xA3) && containsAscii(prefix, "webm");
+                return startsWith(prefix, 0x1A, 0x45, 0xDF, 0xA3)
+                        && new String(prefix, StandardCharsets.US_ASCII).contains("webm");
             }
         },
         QUICKTIME(Set.of(".mov"), Set.of("video/quicktime")) {
@@ -435,14 +437,6 @@ final class UploadStorageSupport {
         FileSignature(Set<String> extensions, Set<String> contentTypes) {
             this.extensions = extensions;
             this.contentTypes = contentTypes;
-        }
-
-        Set<String> extensions() {
-            return extensions;
-        }
-
-        Set<String> contentTypes() {
-            return contentTypes;
         }
 
         boolean supportsExtension(String extension) {

@@ -15,24 +15,21 @@
 <script setup lang="ts">
 import { computed, type StyleValue } from 'vue'
 
-type BarTone = 'primary' | 'success' | 'warning' | 'info'
+import { clampPercent } from '@/utils/format'
+
+type BarTone = 'primary' | 'success'
 
 interface Props {
   progress: number
   tone?: BarTone
-  label?: string
+  label: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
   tone: 'primary',
-  label: 'Progress',
 })
 
-function clampProgress(value: number): number {
-  return Number.isFinite(value) ? Math.round(Math.max(0, Math.min(100, value))) : 0
-}
-
-const safeProgress = computed<number>(() => clampProgress(props.progress))
+const safeProgress = computed<number>(() => clampPercent(props.progress))
 const fillStyle = computed<StyleValue>(() => ({ width: `${safeProgress.value}%` }))
 const toneClass = computed<string>(() => (props.tone === 'primary' ? '' : props.tone))
 const ariaLabel = computed<string>(() => `${props.label}: ${safeProgress.value}%`)

@@ -14,12 +14,10 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Getter
 @Setter
-@NoArgsConstructor
 @Entity
 @Table(name = "video_progress", indexes = {
         @Index(name = "idx_video_progress_student_id", columnList = "student_id"),
@@ -42,15 +40,9 @@ public class VideoProgress extends BaseEntity {
     @JoinColumn(name = "recorded_video_id", nullable = false, updatable = false)
     private RecordedLessonVideo recordedVideo;
 
-    @Column(name = "watched_seconds")
-    private Integer watchedSeconds;
-
     @Version
     @Column(name = "version", nullable = false)
     private Long version = 0L;
-
-    @Column(name = "total_seconds")
-    private Integer totalSeconds;
 
     @Column(name = "progress_percentage")
     private Integer progressPercentage;

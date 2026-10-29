@@ -1,25 +1,12 @@
 package com.example.aichinese.entity.enums;
 
-import java.util.Map;
-import java.util.Optional;
-
 public enum NotificationType {
 
     SYSTEM,
 
     TEACHER_FEEDBACK,
 
-    QUIZ_RESULT,
-
     PROGRESS_UPDATE,
-
-    REWARD_EARNED,
-
-    PAYMENT_STATUS,
-
-    REFUND_STATUS,
-
-    PAYOUT_STATUS,
 
     LIVE_CLASS_REMINDER,
 
@@ -31,27 +18,11 @@ public enum NotificationType {
 
     AI_REPORT_REVIEW,
 
-    ADMIN_TASK;
+    ADMIN_TASK,
 
-    private static final Map<String, NotificationType> LOOKUP =
-            EnumLookups.indexByName(NotificationType.class);
+    /** A support request was sent, answered or solved (Help & support, admin Support queue). */
+    SUPPORT_REQUEST,
 
-    public static Optional<NotificationType> tryFrom(String value) {
-        return EnumLookups.tryFrom(LOOKUP, value);
-    }
-
-    public static NotificationType fromValue(String value) {
-        return EnumLookups.fromValue(
-                LOOKUP,
-                value,
-                "Notification type is required.",
-                () -> "Invalid notification type. Allowed values are SYSTEM, TEACHER_FEEDBACK, "
-                        + "QUIZ_RESULT, PROGRESS_UPDATE, REWARD_EARNED, PAYMENT_STATUS, "
-                        + "REFUND_STATUS, PAYOUT_STATUS, LIVE_CLASS_REMINDER, TEACHER_APPROVAL, "
-                        + "CONTENT_REVIEW, MODERATION_ACTION, AI_REPORT_REVIEW, or ADMIN_TASK.");
-    }
-
-    public static NotificationType fromValueOrSystem(String value) {
-        return tryFrom(value).orElse(SYSTEM);
-    }
+    /** A student joined one of the teacher's classes. */
+    CLASS_ENROLMENT;
 }

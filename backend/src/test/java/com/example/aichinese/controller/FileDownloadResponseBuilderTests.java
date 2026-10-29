@@ -16,17 +16,16 @@ import com.example.aichinese.service.StoredFileDownload;
 /**
  * Unit coverage for {@code FileDownloadResponseBuilder} - pins the MIME fallback
  * chain (stored content-type to media-type sniff to {@code application/octet-stream}),
- * invalid-content-type tolerance, UTF-8 filename encoding, and the
- * {@code Cache-Control: no-store} hygiene applied to every private download.
+ * invalid-content-type tolerance, UTF-8 filename encoding, and the private-download
+ * headers. {@code Cache-Control: no-store} comes once from ApiInterceptorConfig
+ * (checked by the download integration tests), so the builder must not add a second copy.
  */
 class FileDownloadResponseBuilderTests {
 
     private static final String CONTENT_DISPOSITION = "Content-Disposition";
     private static final String CONTENT_TYPE_OPTIONS = "X-Content-Type-Options";
     private static final String CROSS_ORIGIN_RESOURCE_POLICY = "Cross-Origin-Resource-Policy";
-    private static final String NO_CACHE = "no-cache";
     private static final String NO_SNIFF = "nosniff";
-    private static final String NO_STORE = "no-store";
     private static final String SAME_ORIGIN = "same-origin";
 
     @Test
@@ -39,6 +38,26 @@ class FileDownloadResponseBuilderTests {
         assertPrivateDownloadHeaders(response);
         assertThat(response.getHeaders().getFirst(CONTENT_DISPOSITION)).contains("lesson.mp4");
         assertThat(response.getBody()).isSameAs(download.resource());
+    }
+
+    @Test
+    void missingStoredContentTypeIsSniffedFromTheResourceFileName() {
+        Resource video = new ByteArrayResource(bytes("demo")) {
+            @Override
+            public String getFilename() {
+                return "lesson.mp4";
+            }
+        };
+
+        ResponseEntity<Resource> sniffed = FileDownloadResponseBuilder.buildInlineDownloadResponse(
+                new StoredFileDownload(video, "lesson.mp4", null));
+        // A ByteArrayResource has no file name, so nothing can be sniffed and the octet-stream default applies.
+        ResponseEntity<Resource> unknown = FileDownloadResponseBuilder.buildInlineDownloadResponse(
+                new StoredFileDownload(resource("demo"), "notes", " "));
+
+        assertThat(sniffed.getHeaders().getContentType()).isEqualTo(MediaType.valueOf("video/mp4"));
+        assertThat(sniffed.getHeaders().getFirst(CONTENT_DISPOSITION)).startsWith("inline;");
+        assertThat(unknown.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_OCTET_STREAM);
     }
 
     @Test
@@ -119,8 +138,9 @@ class FileDownloadResponseBuilderTests {
     }
 
     private static void assertPrivateDownloadHeaders(ResponseEntity<Resource> response) {
-        assertThat(response.getHeaders().getCacheControl()).isEqualTo(NO_STORE);
-        assertThat(response.getHeaders().getPragma()).isEqualTo(NO_CACHE);
+        assertThat(response.getHeaders().getCacheControl()).isNull();
+        assertThat(response.getHeaders().getPragma()).isNull();
+        assertThat(response.getHeaders().getExpires()).isZero();
         assertThat(response.getHeaders().getFirst(CONTENT_TYPE_OPTIONS)).isEqualTo(NO_SNIFF);
     }
 }

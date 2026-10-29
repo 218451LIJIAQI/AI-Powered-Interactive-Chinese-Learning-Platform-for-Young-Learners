@@ -2,15 +2,8 @@ package com.example.aichinese.service;
 
 import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.Base64;
-import java.util.HexFormat;
-import java.util.Objects;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -28,77 +21,79 @@ import com.example.aichinese.util.TextUtils;
 @Service
 public class RefreshTokenService {
 
-    private static final int TOKEN_BYTES = 32;
     private static final int MAX_USER_AGENT_LENGTH = 255;
     private static final int MAX_IP_LENGTH = 64;
     private static final int MAX_RAW_TOKEN_LENGTH = 512;
-    private static final int TOKEN_GENERATION_ATTEMPTS = 5;
+
+    /**
+     * Two browser tabs that start together send the same refresh cookie: the first rotates it and the second finds it
+     * rotated a moment ago. Inside this window that second request only gets a 401, so the first tab keeps its new
+     * session; a rotated token presented later is treated as stolen.
+     */
+    public static final Duration ROTATION_GRACE_WINDOW = Duration.ofSeconds(30);
 
     private final RefreshTokenRepository refreshTokenRepository;
     private final UserRepository userRepository;
     private final SecurityProperties securityProperties;
-    private final SecureRandom secureRandom = new SecureRandom();
 
     public RefreshTokenService(
             RefreshTokenRepository refreshTokenRepository,
             UserRepository userRepository,
             SecurityProperties securityProperties) {
-        this.refreshTokenRepository = Objects.requireNonNull(refreshTokenRepository, "refreshTokenRepository");
-        this.userRepository = Objects.requireNonNull(userRepository, "userRepository");
-        this.securityProperties = Objects.requireNonNull(securityProperties, "securityProperties");
+        this.refreshTokenRepository = refreshTokenRepository;
+        this.userRepository = userRepository;
+        this.securityProperties = securityProperties;
     }
 
+    /** A new sign-in; {@code persistent} is "Keep me signed in" and is kept by every rotation of this sign-in. */
     @Transactional
-    public RefreshTokenIssue issue(User user, String clientIp, String userAgent) {
-        Objects.requireNonNull(user, "user");
-        String rawToken = generateUniqueRawToken();
+    public RefreshTokenIssue issue(User user, String clientIp, String userAgent, boolean persistent) {
+        String rawToken = SecureTokens.newRawToken();
         Duration ttl = refreshTokenTtl();
-        RefreshToken refreshToken = new RefreshToken();
-        refreshToken.setUser(user);
-        refreshToken.setTokenHash(hash(rawToken));
-        refreshToken.setFamilyId(UUID.randomUUID().toString());
-        refreshToken.setExpiresAt(LocalDateTime.now().plus(ttl));
-        refreshToken.setCreatedByIp(truncate(clientIp, MAX_IP_LENGTH));
-        refreshToken.setUserAgent(truncate(userAgent, MAX_USER_AGENT_LENGTH));
-        refreshTokenRepository.save(refreshToken);
-        return new RefreshTokenIssue(rawToken, ttl);
+        RefreshToken token = newRefreshToken(
+                user, rawToken, UUID.randomUUID().toString(), LocalDateTime.now().plus(ttl), clientIp, userAgent);
+        token.setPersistent(persistent);
+        refreshTokenRepository.save(token);
+        return new RefreshTokenIssue(rawToken, ttl, persistent);
     }
 
     @Transactional(noRollbackFor = ResponseStatusException.class)
     public RefreshSession rotate(String rawToken, String clientIp, String userAgent) {
         String token = TextUtils.trimToNull(rawToken);
-        if (token == null) {
-            throw unauthorizedRefresh();
-        }
-        if (token.length() > MAX_RAW_TOKEN_LENGTH) {
+        if (token == null || token.length() > MAX_RAW_TOKEN_LENGTH) {
             throw unauthorizedRefresh();
         }
 
-        String currentHash = hash(token);
+        String currentHash = SecureTokens.sha256Hex(token);
         RefreshToken current = refreshTokenRepository.findLockedByTokenHash(currentHash)
                 .orElseThrow(RefreshTokenService::unauthorizedRefresh);
         LocalDateTime now = LocalDateTime.now();
 
-        if (isConsumed(current) || isExpired(current, now)) {
+        if (current.getRotatedAt() != null) {
+            if (now.isBefore(current.getRotatedAt().plus(ROTATION_GRACE_WINDOW))) {
+                // A second tab refreshing with the same cookie: refused, but the sign-in stays valid.
+                throw unauthorizedRefresh();
+            }
+            // Reuse of a rotated token: revoke every token of the same sign-in (SDD 3.4).
             revokeFamilyAndSession(current, now);
+            throw unauthorizedRefresh();
+        }
+        if (current.getRevokedAt() != null || !current.getExpiresAt().isAfter(now)) {
+            // Signed out, password changed or expired: not a replay, so the user's newer sessions stay signed in.
             throw unauthorizedRefresh();
         }
 
         User user = current.getUser();
-        if (user == null || !user.isActive()) {
+        if (!user.isActive()) {
             revokeFamilyAndSession(current, now);
             throw unauthorizedRefresh();
         }
 
-        String replacementRawToken = generateUniqueRawToken();
+        String replacementRawToken = SecureTokens.newRawToken();
         Duration ttl = refreshTokenTtl();
-        RefreshToken replacement = new RefreshToken();
-        replacement.setUser(user);
-        replacement.setTokenHash(hash(replacementRawToken));
-        replacement.setFamilyId(current.getFamilyId());
-        replacement.setExpiresAt(now.plus(ttl));
-        replacement.setCreatedByIp(truncate(clientIp, MAX_IP_LENGTH));
-        replacement.setUserAgent(truncate(userAgent, MAX_USER_AGENT_LENGTH));
+        RefreshToken replacement = newRefreshToken(
+                user, replacementRawToken, current.getFamilyId(), now.plus(ttl), clientIp, userAgent);
+        replacement.setPersistent(current.isPersistent());
 
         current.setRotatedAt(now);
         current.setRevokedAt(now);
@@ -106,97 +101,54 @@ public class RefreshTokenService {
         refreshTokenRepository.save(current);
         refreshTokenRepository.save(replacement);
 
-        return new RefreshSession(user, new RefreshTokenIssue(replacementRawToken, ttl));
+        return new RefreshSession(user, new RefreshTokenIssue(replacementRawToken, ttl, current.isPersistent()));
     }
 
+    /** Bumps the session version (existing bearer tokens stop working), saves the user and revokes its refresh tokens. */
     @Transactional
-    public void revokeActiveTokensForUser(Long userId) {
-        if (userId == null) {
-            return;
-        }
-        refreshTokenRepository.revokeActiveTokensForUser(userId, LocalDateTime.now());
+    public User invalidateSessions(User user) {
+        rotateSessionVersion(user);
+        User saved = userRepository.save(user);
+        refreshTokenRepository.revokeActiveTokensForUser(saved.getId(), LocalDateTime.now());
+        return saved;
     }
 
     private void revokeFamilyAndSession(RefreshToken refreshToken, LocalDateTime now) {
-        if (refreshToken.getFamilyId() != null) {
-            refreshTokenRepository.revokeActiveTokenFamily(refreshToken.getFamilyId(), now);
-        }
-        User user = refreshToken.getUser();
-        if (user != null && user.getId() != null) {
-            userRepository.findLockedById(user.getId()).ifPresent(lockedUser -> {
-                rotateSessionVersion(lockedUser);
-                userRepository.save(lockedUser);
-            });
-        }
-    }
-
-    private String generateUniqueRawToken() {
-        for (int attempt = 0; attempt < TOKEN_GENERATION_ATTEMPTS; attempt++) {
-            byte[] bytes = new byte[TOKEN_BYTES];
-            secureRandom.nextBytes(bytes);
-            String candidate = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-            if (!refreshTokenRepository.existsByTokenHash(hash(candidate))) {
-                return candidate;
-            }
-        }
-        throw new IllegalStateException("Unable to generate a unique refresh token.");
+        refreshTokenRepository.revokeActiveTokenFamily(refreshToken.getFamilyId(), now);
+        userRepository.findLockedById(refreshToken.getUser().getId()).ifPresent(lockedUser -> {
+            rotateSessionVersion(lockedUser);
+            userRepository.save(lockedUser);
+        });
     }
 
     private Duration refreshTokenTtl() {
-        long expirationMillis = securityProperties.refreshTokenExpiration();
-        if (expirationMillis <= 0) {
-            throw new IllegalStateException("Refresh token expiration must be positive.");
-        }
-        return Duration.ofMillis(expirationMillis);
+        return Duration.ofMillis(securityProperties.refreshTokenExpiration());
+    }
+
+    private static RefreshToken newRefreshToken(
+            User user, String rawToken, String familyId, LocalDateTime expiresAt, String clientIp, String userAgent) {
+        RefreshToken token = new RefreshToken();
+        token.setUser(user);
+        token.setTokenHash(SecureTokens.sha256Hex(rawToken));
+        token.setFamilyId(familyId);
+        token.setExpiresAt(expiresAt);
+        token.setCreatedByIp(truncate(clientIp, MAX_IP_LENGTH));
+        token.setUserAgent(truncate(userAgent, MAX_USER_AGENT_LENGTH));
+        return token;
     }
 
     private static void rotateSessionVersion(User user) {
         user.setSessionVersion(user.getSessionVersion() + 1);
     }
 
-    private static boolean isConsumed(RefreshToken token) {
-        return token.getRevokedAt() != null || token.getRotatedAt() != null;
-    }
-
-    private static boolean isExpired(RefreshToken token, LocalDateTime now) {
-        return token.getExpiresAt() == null || !token.getExpiresAt().isAfter(now);
-    }
-
     private static ResponseStatusException unauthorizedRefresh() {
         return new ResponseStatusException(UNAUTHORIZED, "Refresh session is invalid or expired.");
     }
 
-    private static String hash(String rawToken) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(digest.digest(rawToken.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is unavailable for refresh-token hashing.", exception);
-        }
-    }
-
     private static String truncate(String value, int maxLength) {
-        String stripped = TextUtils.trimToNull(value);
-        if (stripped == null) {
-            return null;
-        }
-        if (stripped.length() <= maxLength) {
-            return stripped;
-        }
-        int endIndex = maxLength;
-        if (Character.isHighSurrogate(stripped.charAt(endIndex - 1))
-                && endIndex < stripped.length()
-                && Character.isLowSurrogate(stripped.charAt(endIndex))) {
-            endIndex--;
-        }
-        return stripped.substring(0, endIndex);
+        return TextUtils.safeTruncate(TextUtils.trimToNull(value), maxLength);
     }
 
     public record RefreshSession(User user, RefreshTokenIssue refreshToken) {
-
-        public RefreshSession {
-            Objects.requireNonNull(user, "user");
-            Objects.requireNonNull(refreshToken, "refreshToken");
-        }
     }
 }

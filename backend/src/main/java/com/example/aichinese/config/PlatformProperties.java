@@ -2,38 +2,17 @@ package com.example.aichinese.config;
 
 import java.time.DateTimeException;
 import java.time.ZoneId;
-import java.util.List;
-import java.util.Locale;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-/**
- * Cross-cutting deployment settings that affect data semantics and safe
- * runtime topology.
- */
+/** The platform time zone: the day boundary of streaks, daily goals and AI quotas. */
 @ConfigurationProperties(prefix = "app.platform")
-public record PlatformProperties(
-        String defaultTimeZone,
-        String deploymentMode,
-        boolean sharedAuthRateLimitingEnabled,
-        boolean localStorageMultiInstanceAcknowledged) {
+public record PlatformProperties(String defaultTimeZone) {
 
     private static final String DEFAULT_TIME_ZONE = "Asia/Singapore";
-    private static final String SINGLE_INSTANCE = "single-instance";
-    private static final String MULTI_INSTANCE = "multi-instance";
-    private static final List<String> DEPLOYMENT_MODES = List.of(SINGLE_INSTANCE, MULTI_INSTANCE);
 
     public PlatformProperties {
         defaultTimeZone = normalizeTimeZone(defaultTimeZone);
-        deploymentMode = normalizeDeploymentMode(deploymentMode);
-    }
-
-    public ZoneId defaultZoneId() {
-        return ZoneId.of(defaultTimeZone);
-    }
-
-    public boolean isMultiInstance() {
-        return MULTI_INSTANCE.equals(deploymentMode);
     }
 
     private static String normalizeTimeZone(String value) {
@@ -43,16 +22,5 @@ public record PlatformProperties(
         } catch (DateTimeException exception) {
             throw new IllegalArgumentException("APP_DEFAULT_TIME_ZONE must be a valid IANA time zone.", exception);
         }
-    }
-
-    private static String normalizeDeploymentMode(String value) {
-        String normalized = value == null || value.isBlank()
-                ? SINGLE_INSTANCE
-                : value.strip().toLowerCase(Locale.ROOT);
-        if (!DEPLOYMENT_MODES.contains(normalized)) {
-            throw new IllegalArgumentException(
-                    "APP_DEPLOYMENT_MODE must be one of: " + String.join(", ", DEPLOYMENT_MODES) + ".");
-        }
-        return normalized;
     }
 }

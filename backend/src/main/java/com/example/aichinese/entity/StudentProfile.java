@@ -1,29 +1,25 @@
 package com.example.aichinese.entity;
 
 import com.example.aichinese.entity.base.BaseEntity;
+import com.example.aichinese.entity.enums.PlanSetupState;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
-import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Getter
 @Setter
-@NoArgsConstructor
 @Entity
 @Table(
         name = "student_profiles",
-        indexes = {
-                @Index(name = "idx_student_profiles_current_level_id", columnList = "current_level_id")
-        },
         uniqueConstraints = {
                 @UniqueConstraint(name = "idx_student_profiles_user_id", columnNames = "user_id")
         }
@@ -34,22 +30,15 @@ public class StudentProfile extends BaseEntity {
     @JoinColumn(name = "user_id", nullable = false, updatable = false)
     private User user;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "current_level_id")
-    private LearningLevel currentLevel;
-
-    @Column(name = "display_name", length = 120)
-    private String displayName;
-
-    @Column(name = "country", length = 100)
-    private String country;
-
-    @Column(name = "school_name", length = 150)
-    private String schoolName;
-
-    @Column(name = "avatar_url", length = 255)
-    private String avatarUrl;
-
     @Column(name = "total_points", nullable = false)
     private Integer totalPoints = 0;
+
+    /** XP a day that keeps the streak: 10, 20 or 30 (chosen in Account). */
+    @Column(name = "daily_goal_xp", nullable = false)
+    private Integer dailyGoalXp = 20;
+
+    /** The learning plan setup: a new student is sent to it after sign-up; Home offers it again when skipped. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "plan_setup_state", nullable = false, length = 20)
+    private PlanSetupState planSetupState = PlanSetupState.NOT_STARTED;
 }

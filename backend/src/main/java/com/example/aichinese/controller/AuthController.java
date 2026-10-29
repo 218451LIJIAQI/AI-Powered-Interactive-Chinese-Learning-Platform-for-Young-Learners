@@ -1,11 +1,6 @@
 package com.example.aichinese.controller;
 
-import java.time.Duration;
-import java.util.Objects;
-
-import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.CookieValue;
@@ -24,7 +19,6 @@ import com.example.aichinese.dto.auth.LoginRequest;
 import com.example.aichinese.dto.auth.RegisterStudentRequest;
 import com.example.aichinese.dto.auth.RegisterTeacherRequest;
 import com.example.aichinese.dto.auth.RegistrationResponse;
-import com.example.aichinese.dto.auth.RefreshTokenIssue;
 import com.example.aichinese.dto.auth.ResetPasswordRequest;
 import com.example.aichinese.config.SecurityProperties;
 import com.example.aichinese.security.ClientIpResolver;
@@ -39,9 +33,6 @@ import jakarta.validation.Valid;
 @RequestMapping("/api/v1/auth")
 public class AuthController {
 
-    private static final String LEGACY_REFRESH_COOKIE_PATH = "/api/v1/auth";
-    private static final String REFRESH_COOKIE_PATH = "/api/v1/auth/refresh";
-
     private final AuthService authService;
     private final PublicAuthRequestLimiter publicAuthRequestLimiter;
     private final ClientIpResolver clientIpResolver;
@@ -52,12 +43,10 @@ public class AuthController {
             PublicAuthRequestLimiter publicAuthRequestLimiter,
             ClientIpResolver clientIpResolver,
             SecurityProperties securityProperties) {
-        this.authService = Objects.requireNonNull(authService, "authService");
-        this.publicAuthRequestLimiter = Objects.requireNonNull(
-                publicAuthRequestLimiter,
-                "publicAuthRequestLimiter");
-        this.clientIpResolver = Objects.requireNonNull(clientIpResolver, "clientIpResolver");
-        this.securityProperties = Objects.requireNonNull(securityProperties, "securityProperties");
+        this.authService = authService;
+        this.publicAuthRequestLimiter = publicAuthRequestLimiter;
+        this.clientIpResolver = clientIpResolver;
+        this.securityProperties = securityProperties;
     }
 
     @PostMapping("/register/student")
@@ -88,7 +77,7 @@ public class AuthController {
                 request,
                 clientIpResolver.resolve(httpRequest),
                 httpRequest.getHeader(HttpHeaders.USER_AGENT));
-        return withRefreshCookie("Login successful.", session.authResponse(), session.refreshToken());
+        return RefreshCookieWriter.sessionResponse(securityProperties, "Login successful.", session);
     }
 
     @PostMapping("/refresh")
@@ -100,26 +89,19 @@ public class AuthController {
                 refreshToken,
                 clientIpResolver.resolve(httpRequest),
                 httpRequest.getHeader(HttpHeaders.USER_AGENT));
-        return withRefreshCookie("Session refreshed successfully.", session.authResponse(), session.refreshToken());
+        return RefreshCookieWriter.sessionResponse(securityProperties, "Session refreshed successfully.", session);
     }
 
     @GetMapping("/me")
-    public ResponseEntity<ApiResponse<CurrentUserResponse>> getCurrentUser(
-            @AuthenticationPrincipal SecurityUserDetails currentUser) {
-        return ResponseEntity.ok()
-                .cacheControl(CacheControl.noStore())
-                .body(ApiResponse.success("Current user retrieved successfully.",
-                        authService.getCurrentUser(currentUser)));
+    public ApiResponse<CurrentUserResponse> getCurrentUser(@AuthenticationPrincipal SecurityUserDetails currentUser) {
+        return ApiResponse.success("Current user retrieved successfully.", authService.getCurrentUser(currentUser));
     }
 
     @PostMapping("/logout")
     public ResponseEntity<ApiResponse<Void>> logout(@AuthenticationPrincipal SecurityUserDetails currentUser) {
         authService.logout(currentUser);
         return ResponseEntity.ok()
-                .cacheControl(CacheControl.noStore())
-                .header(HttpHeaders.SET_COOKIE,
-                        clearRefreshCookie(REFRESH_COOKIE_PATH).toString(),
-                        clearRefreshCookie(LEGACY_REFRESH_COOKIE_PATH).toString())
+                .header(HttpHeaders.SET_COOKIE, RefreshCookieWriter.clearedCookieHeaders(securityProperties))
                 .body(ApiResponse.success("Logged out successfully.", null));
     }
 
@@ -135,37 +117,13 @@ public class AuthController {
     }
 
     @PostMapping("/reset-password")
-    public ApiResponse<Void> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+    public ApiResponse<Void> resetPassword(
+            @Valid @RequestBody ResetPasswordRequest request,
+            HttpServletRequest httpRequest) {
+        // Same per-IP limit as forgot-password, in a separate bucket.
+        publicAuthRequestLimiter.checkResetPasswordAllowed(clientIpResolver.resolve(httpRequest));
         authService.resetPassword(request);
         return ApiResponse.success("Password reset request processed successfully.", null);
-    }
-
-    private ResponseEntity<ApiResponse<AuthResponse>> withRefreshCookie(
-            String message,
-            AuthResponse authResponse,
-            RefreshTokenIssue refreshToken) {
-        return ResponseEntity.ok()
-                .cacheControl(CacheControl.noStore())
-                .header(HttpHeaders.SET_COOKIE,
-                        refreshCookie(refreshToken.rawToken(), refreshToken.ttl()).toString(),
-                        clearRefreshCookie(LEGACY_REFRESH_COOKIE_PATH).toString())
-                .body(ApiResponse.success(message, authResponse));
-    }
-
-    private ResponseCookie refreshCookie(String rawToken, Duration maxAge) {
-        return refreshCookieBuilder(rawToken, REFRESH_COOKIE_PATH).maxAge(maxAge).build();
-    }
-
-    private ResponseCookie clearRefreshCookie(String path) {
-        return refreshCookieBuilder("", path).maxAge(0).build();
-    }
-
-    private ResponseCookie.ResponseCookieBuilder refreshCookieBuilder(String value, String path) {
-        return ResponseCookie.from(securityProperties.refreshTokenCookieName(), value)
-                .httpOnly(true)
-                .secure(securityProperties.refreshTokenCookieSecure())
-                .sameSite(securityProperties.refreshTokenSameSite())
-                .path(path);
     }
 
     private void checkRegisterAllowed(HttpServletRequest httpRequest) {

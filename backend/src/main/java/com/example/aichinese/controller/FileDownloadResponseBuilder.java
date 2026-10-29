@@ -2,10 +2,8 @@ package com.example.aichinese.controller;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
-import java.util.Objects;
 
 import org.springframework.core.io.Resource;
-import org.springframework.http.CacheControl;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.InvalidMediaTypeException;
@@ -14,7 +12,14 @@ import org.springframework.http.MediaTypeFactory;
 import org.springframework.http.ResponseEntity;
 
 import com.example.aichinese.service.StoredFileDownload;
+import com.example.aichinese.util.FileNames;
+import com.example.aichinese.util.TextUtils;
 
+/**
+ * Response for a private file download. {@code Cache-Control: no-store} and {@code Pragma: no-cache} are not set
+ * here: ApiInterceptorConfig already sets them once on every route that serves a private file (under
+ * /api/v1/students, /teachers and /admin), and a second copy from the response entity would repeat each header.
+ */
 final class FileDownloadResponseBuilder {
 
     private static final MediaType DEFAULT_MEDIA_TYPE = MediaType.APPLICATION_OCTET_STREAM;
@@ -28,6 +33,17 @@ final class FileDownloadResponseBuilder {
     private FileDownloadResponseBuilder() {
     }
 
+    /** A CSV export as an attachment; the byte-order mark lets spreadsheet apps read it as UTF-8 (Chinese names). */
+    static ResponseEntity<byte[]> csvAttachment(String fileName, String csv) {
+        return ResponseEntity.ok()
+                .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
+                        .filename(fileName)
+                        .build()
+                        .toString())
+                .body(("\uFEFF" + csv).getBytes(StandardCharsets.UTF_8));
+    }
+
     static ResponseEntity<Resource> buildInlineDownloadResponse(StoredFileDownload download) {
         return buildDownloadResponse(download, true);
     }
@@ -39,30 +55,24 @@ final class FileDownloadResponseBuilder {
     private static ResponseEntity<Resource> buildDownloadResponse(
             StoredFileDownload download,
             boolean requestedInline) {
-        Objects.requireNonNull(download, "download");
-        Resource resource = Objects.requireNonNull(download.resource(), "download.resource");
+        Resource resource = download.resource();
         MediaType mediaType = resolveMediaType(download);
         boolean inline = requestedInline && isSafeInlineMediaType(mediaType);
-        ContentDisposition.Builder dispositionBuilder = inline
-                ? ContentDisposition.inline()
-                : ContentDisposition.attachment();
-        ContentDisposition disposition = dispositionBuilder
+        ContentDisposition disposition = (inline ? ContentDisposition.inline() : ContentDisposition.attachment())
                 .filename(resolveFileName(download), StandardCharsets.UTF_8)
                 .build();
 
         return ResponseEntity.ok()
-                .cacheControl(CacheControl.noStore())
-                .contentType(inline ? mediaType : safeAttachmentMediaType(mediaType))
+                .contentType(inline || !isExecutableOrStructuredText(mediaType) ? mediaType : DEFAULT_MEDIA_TYPE)
                 .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
                 .header(X_CONTENT_TYPE_OPTIONS, NOSNIFF)
-                .header(HttpHeaders.PRAGMA, "no-cache")
                 .header(HttpHeaders.EXPIRES, "Thu, 01 Jan 1970 00:00:00 GMT")
                 .header(CROSS_ORIGIN_RESOURCE_POLICY, SAME_ORIGIN)
                 .body(resource);
     }
 
     private static MediaType resolveMediaType(StoredFileDownload download) {
-        String contentType = trimToNull(download.contentType());
+        String contentType = download.contentType();
         if (contentType != null) {
             try {
                 return MediaType.parseMediaType(contentType);
@@ -74,100 +84,37 @@ final class FileDownloadResponseBuilder {
     }
 
     private static boolean isSafeInlineMediaType(MediaType mediaType) {
-        if (MediaType.APPLICATION_PDF.includes(mediaType) || MediaType.TEXT_PLAIN.includes(mediaType)) {
-            return true;
-        }
-        if ("audio".equals(mediaType.getType()) || "video".equals(mediaType.getType())) {
-            return true;
-        }
-        return "image".equals(mediaType.getType())
-                && !"svg+xml".equalsIgnoreCase(mediaType.getSubtype());
+        return MediaType.APPLICATION_PDF.includes(mediaType)
+                || MediaType.TEXT_PLAIN.includes(mediaType)
+                || "audio".equals(mediaType.getType())
+                || "video".equals(mediaType.getType())
+                || ("image".equals(mediaType.getType()) && !"svg+xml".equalsIgnoreCase(mediaType.getSubtype()));
     }
 
-    private static MediaType safeAttachmentMediaType(MediaType mediaType) {
-        if (isExecutableOrStructuredText(mediaType)) {
-            return DEFAULT_MEDIA_TYPE;
-        }
-        return mediaType;
-    }
-
+    /** Never served under its own type as an attachment: the browser could render or run it. */
     private static boolean isExecutableOrStructuredText(MediaType mediaType) {
         String subtype = mediaType.getSubtype().toLowerCase(Locale.ROOT);
-        if (MediaType.TEXT_HTML.includes(mediaType)
+        return MediaType.TEXT_HTML.includes(mediaType)
                 || MediaType.APPLICATION_XHTML_XML.includes(mediaType)
                 || MediaType.APPLICATION_XML.includes(mediaType)
                 || MediaType.TEXT_XML.includes(mediaType)
-                || MediaType.APPLICATION_JSON.includes(mediaType)) {
-            return true;
-        }
-        return "svg+xml".equals(subtype)
+                || MediaType.APPLICATION_JSON.includes(mediaType)
                 || subtype.endsWith("+xml")
                 || subtype.endsWith("+json")
                 || subtype.contains("javascript");
     }
 
     private static String resolveFileName(StoredFileDownload download) {
-        String originalFileName = trimToNull(download.originalFileName());
+        String originalFileName = download.originalFileName();
         if (originalFileName != null) {
             return sanitizeFileName(originalFileName);
         }
-        String resourceFileName = trimToNull(download.resource().getFilename());
+        String resourceFileName = TextUtils.trimToNull(download.resource().getFilename());
         return resourceFileName != null ? sanitizeFileName(resourceFileName) : DEFAULT_FILE_NAME;
     }
 
     private static String sanitizeFileName(String value) {
-        StringBuilder sanitized = new StringBuilder(value.length());
-        boolean previousWasWhitespace = false;
-
-        for (int offset = 0; offset < value.length();) {
-            int codePoint = value.codePointAt(offset);
-            offset += Character.charCount(codePoint);
-
-            if (isUnsafeFileNameCodePoint(codePoint)) {
-                appendReplacement(sanitized);
-                previousWasWhitespace = false;
-                continue;
-            }
-
-            if (Character.isWhitespace(codePoint)) {
-                if (!previousWasWhitespace && !sanitized.isEmpty()) {
-                    sanitized.append(' ');
-                    previousWasWhitespace = true;
-                }
-                continue;
-            }
-
-            sanitized.appendCodePoint(codePoint);
-            previousWasWhitespace = false;
-        }
-
-        String cleaned = sanitized.toString().trim();
-        while (cleaned.startsWith(".")) {
-            cleaned = cleaned.substring(1).trim();
-        }
-        return cleaned.isEmpty() || ".".equals(cleaned) || "..".equals(cleaned) ? DEFAULT_FILE_NAME : cleaned;
-    }
-
-    private static boolean isUnsafeFileNameCodePoint(int codePoint) {
-        return Character.isISOControl(codePoint)
-                || Character.getType(codePoint) == Character.FORMAT
-                || switch (codePoint) {
-                    case '"', '*', '/', ':', '<', '>', '?', '\\', '|' -> true;
-                    default -> false;
-                };
-    }
-
-    private static void appendReplacement(StringBuilder sanitized) {
-        if (sanitized.isEmpty() || sanitized.charAt(sanitized.length() - 1) != '_') {
-            sanitized.append('_');
-        }
-    }
-
-    private static String trimToNull(String value) {
-        if (value == null) {
-            return null;
-        }
-        String trimmed = value.trim();
-        return trimmed.isEmpty() ? null : trimmed;
+        String cleaned = FileNames.sanitize(value);
+        return cleaned.isEmpty() ? DEFAULT_FILE_NAME : cleaned;
     }
 }

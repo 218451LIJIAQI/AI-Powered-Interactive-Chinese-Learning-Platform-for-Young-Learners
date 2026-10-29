@@ -45,10 +45,6 @@
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-actuator</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-cache</artifactId>
 		</dependency>
 		<dependency>
@@ -62,9 +58,9 @@
 		</dependency>
 		<!--
 		  SpringDoc generates an OpenAPI 3 description of every controller in
-		  the application and exposes a Swagger UI at /swagger-ui.html. This
-		  is what the frontend uses to inspect every API contract without
-		  having to read backend source.
+		  the application and exposes a Swagger UI at /swagger-ui.html, so
+		  developers can inspect every API contract without having to read
+		  backend source.
 		-->
 		<dependency>
 			<groupId>org.springdoc</groupId>
@@ -117,16 +113,6 @@
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
 		</dependency>
-		<dependency>
-			<groupId>org.mockito</groupId>
-			<artifactId>mockito-core</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.security</groupId>
-			<artifactId>spring-security-test</artifactId>
-			<scope>test</scope>
-		</dependency>
 	</dependencies>
 
 	<build>
@@ -166,7 +152,6 @@
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
 				<configuration>
-					<mainClass>com.example.aichinese.AichineseApplication</mainClass>
 					<profiles>
 						<profile>local</profile>
 					</profiles>

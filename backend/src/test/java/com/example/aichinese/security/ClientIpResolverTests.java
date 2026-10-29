@@ -5,7 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
 
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.mock.web.MockHttpServletRequest;
 
 import com.example.aichinese.config.ForwardedHeaderProperties;
@@ -19,114 +20,41 @@ import com.example.aichinese.config.ForwardedHeaderProperties;
  */
 class ClientIpResolverTests {
 
-    private static final String X_FORWARDED_FOR = "X-Forwarded-For";
-    private static final String LOOPBACK_PROXY = "127.0.0.1";
-    private static final String PROXY_IP = "198.51.100.200";
-    private static final String TRUSTED_PROXY_CIDR = "198.51.100.0/24";
-    private static final String TRUSTED_IPV6_PROXY = "2001:db8::10";
-    private static final String EQUIVALENT_TRUSTED_IPV6_PROXY = "2001:db8:0:0:0:0:0:10";
-    private static final String LOCAL_CLIENT_IP = "198.51.100.10";
-    private static final String CLIENT_IP = "203.0.113.9";
-    private static final String SECOND_CLIENT_IP = "203.0.113.10";
-    private static final String SPOOFED_IP = "192.0.2.44";
-    private static final String HOSTNAME_PROXY = "proxy.internal";
-    private static final String INVALID_CIDR_MESSAGE = "Trusted proxy CIDR contains an invalid address";
-    private static final String INVALID_LITERAL_MESSAGE = "Trusted proxy entry contains an invalid address";
+    /** An empty trusted proxy column configures none (loopback is always trusted). */
+    @ParameterizedTest(name = "{0}")
+    @CsvSource(delimiter = '|', textBlock = """
+            trusts the loopback proxy for local development         |                |127.0.0.1             |198.51.100.10, 127.0.0.1    |198.51.100.10
+            ignores the forwarded header of an untrusted proxy      |                |198.51.100.200        |203.0.113.9                 |198.51.100.200
+            trusts an explicit proxy literal                        |198.51.100.200  |198.51.100.200        |203.0.113.9, 198.51.100.200 |203.0.113.9
+            trusts a configured CIDR proxy range                    |198.51.100.0/24 |198.51.100.200        |203.0.113.10                |203.0.113.10
+            selects the real client after a spoofed forwarded value |198.51.100.200  |198.51.100.200        |192.0.2.44, 203.0.113.9     |203.0.113.9
+            ignores a non-address spoof before the real client      |198.51.100.200  |198.51.100.200        |spoofed.example, 203.0.113.9|203.0.113.9
+            falls back to the peer when the nearest hop is no address|198.51.100.200 |198.51.100.200        |203.0.113.9, not-an-address |198.51.100.200
+            canonicalizes equivalent client forms for rate limits   |198.51.100.200  |198.51.100.200        |203.000.113.009             |203.0.113.9
+            trusts equivalent IPv6 forms of a configured proxy      |2001:db8::10    |2001:db8:0:0:0:0:0:10 |203.0.113.9                 |203.0.113.9
+            """)
+    void resolvesTheClientAddressThroughTrustedProxiesOnly(
+            String scenario, String trustedProxy, String remoteAddr, String forwardedFor, String expectedClientIp) {
+        ClientIpResolver resolver = trustedProxy == null ? resolver() : resolver(trustedProxy);
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setRemoteAddr(remoteAddr);
+        request.addHeader("X-Forwarded-For", forwardedFor);
 
-    @Test
-    void trustsLoopbackProxyForLocalDevelopment() {
-        ClientIpResolver resolver = resolver();
-        MockHttpServletRequest request = request(LOOPBACK_PROXY, LOCAL_CLIENT_IP + ", " + LOOPBACK_PROXY);
-
-        assertThat(resolver.resolve(request)).isEqualTo(LOCAL_CLIENT_IP);
+        assertThat(resolver.resolve(request)).isEqualTo(expectedClientIp);
     }
 
-    @Test
-    void ignoresForwardedHeaderFromUntrustedProxy() {
-        ClientIpResolver resolver = resolver();
-        MockHttpServletRequest request = request(PROXY_IP, CLIENT_IP);
-
-        assertThat(resolver.resolve(request)).isEqualTo(PROXY_IP);
-    }
-
-    @Test
-    void trustsExplicitProxyLiteral() {
-        ClientIpResolver resolver = resolver(PROXY_IP);
-        MockHttpServletRequest request = request(PROXY_IP, CLIENT_IP + ", " + PROXY_IP);
-
-        assertThat(resolver.resolve(request)).isEqualTo(CLIENT_IP);
-    }
-
-    @Test
-    void trustsConfiguredCidrProxyRange() {
-        ClientIpResolver resolver = resolver(TRUSTED_PROXY_CIDR);
-        MockHttpServletRequest request = request(PROXY_IP, SECOND_CLIENT_IP);
-
-        assertThat(resolver.resolve(request)).isEqualTo(SECOND_CLIENT_IP);
-    }
-
-    @Test
-    void rejectsHostnameBasedTrustedProxyCidrEntries() {
-        assertThatThrownBy(() -> resolver(HOSTNAME_PROXY + "/24"))
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', textBlock = """
+            proxy.internal/24 | Trusted proxy CIDR contains an invalid address
+            proxy.internal    | Trusted proxy entry contains an invalid address
+            """)
+    void rejectsHostnameBasedTrustedProxyEntries(String trustedProxy, String expectedMessage) {
+        assertThatThrownBy(() -> resolver(trustedProxy))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining(INVALID_CIDR_MESSAGE);
-    }
-
-    @Test
-    void rejectsHostnameBasedTrustedProxyLiteralEntries() {
-        assertThatThrownBy(() -> resolver(HOSTNAME_PROXY))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining(INVALID_LITERAL_MESSAGE);
-    }
-
-    @Test
-    void selectsRealClientWhenTrustedProxyAppendsAfterSpoofedForwardedValue() {
-        ClientIpResolver resolver = resolver(PROXY_IP);
-        MockHttpServletRequest request = request(PROXY_IP, SPOOFED_IP + ", " + CLIENT_IP);
-
-        assertThat(resolver.resolve(request)).isEqualTo(CLIENT_IP);
-    }
-
-    @Test
-    void ignoresNonAddressSpoofBeforeRealClientAddress() {
-        ClientIpResolver resolver = resolver(PROXY_IP);
-        MockHttpServletRequest request = request(PROXY_IP, "spoofed.example, " + CLIENT_IP);
-
-        assertThat(resolver.resolve(request)).isEqualTo(CLIENT_IP);
-    }
-
-    @Test
-    void fallsBackToTrustedPeerWhenNearestForwardedHopIsNotAnAddress() {
-        ClientIpResolver resolver = resolver(PROXY_IP);
-        MockHttpServletRequest request = request(PROXY_IP, CLIENT_IP + ", not-an-address");
-
-        assertThat(resolver.resolve(request)).isEqualTo(PROXY_IP);
-    }
-
-    @Test
-    void canonicalizesEquivalentClientAddressFormsForStableRateLimitKeys() {
-        ClientIpResolver resolver = resolver(PROXY_IP);
-        MockHttpServletRequest request = request(PROXY_IP, "203.000.113.009");
-
-        assertThat(resolver.resolve(request)).isEqualTo(CLIENT_IP);
-    }
-
-    @Test
-    void trustsEquivalentIpv6LiteralFormsForConfiguredProxy() {
-        ClientIpResolver resolver = resolver(TRUSTED_IPV6_PROXY);
-        MockHttpServletRequest request = request(EQUIVALENT_TRUSTED_IPV6_PROXY, CLIENT_IP);
-
-        assertThat(resolver.resolve(request)).isEqualTo(CLIENT_IP);
+                .hasMessageContaining(expectedMessage);
     }
 
     private static ClientIpResolver resolver(String... trustedProxies) {
         return new ClientIpResolver(new ForwardedHeaderProperties(List.of(trustedProxies)));
-    }
-
-    private static MockHttpServletRequest request(String remoteAddr, String forwardedFor) {
-        MockHttpServletRequest request = new MockHttpServletRequest();
-        request.setRemoteAddr(remoteAddr);
-        request.addHeader(X_FORWARDED_FOR, forwardedFor);
-        return request;
     }
 }

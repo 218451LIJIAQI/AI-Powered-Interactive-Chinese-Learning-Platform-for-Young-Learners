@@ -13,12 +13,10 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Getter
 @Setter
-@NoArgsConstructor
 @Entity
 @Table(name = "package_items", indexes = {
         @Index(name = "idx_package_items_package_id", columnList = "course_package_id")
@@ -36,9 +34,6 @@ public class PackageItem extends BaseEntity {
     @Column(name = "item_id", nullable = false, updatable = false)
     private Long itemId;
 
-    @Column(name = "sort_order", nullable = false, updatable = false)
+    @Column(name = "sort_order", nullable = false)
     private Integer sortOrder = 0;
-
-    @Column(name = "title_snapshot", updatable = false, length = 200)
-    private String titleSnapshot;
 }

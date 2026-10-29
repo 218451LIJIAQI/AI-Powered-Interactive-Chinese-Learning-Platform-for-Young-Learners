@@ -28,13 +28,23 @@ describe('safe storage helpers', () => {
   })
 
   it('reads only supported persisted locales and falls back to English otherwise', () => {
-    window.localStorage.clear()
     expect(readPersistedLocale()).toBe('en')
 
-    window.localStorage.setItem(storageKeys.language, 'zh')
-    expect(readPersistedLocale()).toBe('zh')
+    window.localStorage.setItem(storageKeys.language, 'zh-CN')
+    expect(readPersistedLocale()).toBe('zh-CN')
+
+    window.localStorage.setItem(storageKeys.language, 'ms')
+    expect(readPersistedLocale()).toBe('ms')
 
     window.localStorage.setItem(storageKeys.language, 'fr')
     expect(readPersistedLocale()).toBe('en')
+  })
+
+  it('maps the legacy Chinese locale code from earlier builds to zh-CN and rewrites it', () => {
+    // Legacy value written by earlier builds, before the interface switched to the BCP-47 tag zh-CN.
+    window.localStorage.setItem(storageKeys.language, 'zh')
+
+    expect(readPersistedLocale()).toBe('zh-CN')
+    expect(window.localStorage.getItem(storageKeys.language)).toBe('zh-CN')
   })
 })

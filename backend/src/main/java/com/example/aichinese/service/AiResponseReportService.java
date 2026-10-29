@@ -1,316 +1,249 @@
 package com.example.aichinese.service;
 
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
-import static org.springframework.http.HttpStatus.FORBIDDEN;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.time.LocalDateTime;
-import java.util.LinkedHashMap;
+import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
-import java.util.Map;
+import java.util.Locale;
 import java.util.Objects;
+import java.util.Set;
 
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.example.aichinese.dto.PageResponse;
+import com.example.aichinese.dto.ai.AdminAiReportCountsResponse;
 import com.example.aichinese.dto.ai.AdminAiResponseReportResponse;
 import com.example.aichinese.dto.ai.CreateAiResponseReportRequest;
 import com.example.aichinese.dto.ai.ReviewAiResponseReportRequest;
 import com.example.aichinese.dto.ai.StudentAiResponseReportResponse;
 import com.example.aichinese.entity.AiChatMessage;
-import com.example.aichinese.entity.AiChatSession;
+import com.example.aichinese.entity.AiPracticeCheck;
 import com.example.aichinese.entity.AiResponseReport;
-import com.example.aichinese.entity.AiUsageLog;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.AiChatSenderRole;
 import com.example.aichinese.entity.enums.AiFeatureKey;
 import com.example.aichinese.entity.enums.AiResponseReportReason;
 import com.example.aichinese.entity.enums.AiResponseReportStatus;
 import com.example.aichinese.entity.enums.NotificationType;
+import com.example.aichinese.entity.enums.PracticeCheckType;
 import com.example.aichinese.entity.enums.RoleName;
 import com.example.aichinese.repository.AiChatMessageRepository;
-import com.example.aichinese.repository.AiChatSessionRepository;
 import com.example.aichinese.repository.AiResponseReportRepository;
-import com.example.aichinese.repository.AiUsageLogRepository;
 import com.example.aichinese.repository.UserRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.util.AiInputSanitizer;
 import com.example.aichinese.util.PaginationUtils;
 
+/**
+ * Reports of AI answers: a student reports an Ask SparkBot answer, a Xiaomei reply, a quiz, a story or a practice
+ * score, and an admin resolves it (the answer was wrong and the admin acted) or dismisses it (the answer was fine)
+ * with a note the student reads in My reports. Each report keeps its own copy of what was asked and answered.
+ */
 @Service
 public class AiResponseReportService {
 
     private static final String TARGET_TYPE = "AI_RESPONSE_REPORT";
-    private static final String RELATED_ENTITY_CHAT_SESSION = "AiChatSession";
     private static final int MAX_REPORT_DESCRIPTION_LENGTH = 1000;
     private static final int MAX_REVIEWER_NOTE_LENGTH = 1000;
     private static final int MAX_REPORT_SNAPSHOT_LENGTH = 4000;
+    private static final Set<AiFeatureKey> REPORTABLE_FEATURES = EnumSet.of(
+            AiFeatureKey.CHAT_TUTOR,
+            AiFeatureKey.XIAOMEI_CONVERSATION,
+            AiFeatureKey.QUIZ_GENERATOR,
+            AiFeatureKey.STORY_GENERATOR,
+            AiFeatureKey.PRACTICE_CHECK,
+            AiFeatureKey.LEARNING_PLAN);
+    private static final String STUDENT_REPORTS_PATH = "/student/ai";
+    private static final String ADMIN_REPORTS_PATH = "/admin/ai";
 
     private final AiResponseReportRepository aiResponseReportRepository;
-    private final AiUsageLogRepository aiUsageLogRepository;
-    private final AiChatSessionRepository aiChatSessionRepository;
     private final AiChatMessageRepository aiChatMessageRepository;
+    private final AiPracticeCheckService practiceCheckService;
     private final UserRepository userRepository;
     private final NotificationService notificationService;
     private final AuditLogService auditLogService;
 
     public AiResponseReportService(
             AiResponseReportRepository aiResponseReportRepository,
-            AiUsageLogRepository aiUsageLogRepository,
-            AiChatSessionRepository aiChatSessionRepository,
             AiChatMessageRepository aiChatMessageRepository,
+            AiPracticeCheckService practiceCheckService,
             UserRepository userRepository,
             NotificationService notificationService,
             AuditLogService auditLogService) {
-        this.aiResponseReportRepository = Objects.requireNonNull(aiResponseReportRepository, "aiResponseReportRepository");
-        this.aiUsageLogRepository = Objects.requireNonNull(aiUsageLogRepository, "aiUsageLogRepository");
-        this.aiChatSessionRepository = Objects.requireNonNull(aiChatSessionRepository, "aiChatSessionRepository");
-        this.aiChatMessageRepository = Objects.requireNonNull(aiChatMessageRepository, "aiChatMessageRepository");
-        this.userRepository = Objects.requireNonNull(userRepository, "userRepository");
-        this.notificationService = Objects.requireNonNull(notificationService, "notificationService");
-        this.auditLogService = Objects.requireNonNull(auditLogService, "auditLogService");
+        this.aiResponseReportRepository = aiResponseReportRepository;
+        this.aiChatMessageRepository = aiChatMessageRepository;
+        this.practiceCheckService = practiceCheckService;
+        this.userRepository = userRepository;
+        this.notificationService = notificationService;
+        this.auditLogService = auditLogService;
     }
 
     @Transactional
     public StudentAiResponseReportResponse createReport(
             SecurityUserDetails currentUser,
             CreateAiResponseReportRequest request) {
-        requireRole(currentUser, RoleName.STUDENT, "Only students can report AI responses.");
         User student = requireUser(currentUser.getUserId());
-        AiFeatureKey featureKey = parseFeatureKey(request.featureKey());
-        AiResponseReportReason reason = parseReportReason(request.reasonCategory());
-        ReportContext context = resolveReportContext(student, request, featureKey);
+        AiFeatureKey feature = AiFeatureKey.tryFrom(request.featureKey())
+                .filter(REPORTABLE_FEATURES::contains)
+                .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Invalid AI feature key."));
+        AiResponseReportReason reason = AiResponseReportReason.tryFrom(request.reasonCategory())
+                .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Invalid AI report reason category."));
 
         AiResponseReport report = new AiResponseReport();
         report.setStudentUser(student);
-        report.setAiUsageLog(context.usageLog());
-        report.setChatSession(context.chatSession());
-        report.setChatMessage(context.chatMessage());
-        report.setFeatureKey(featureKey.name());
+        report.setFeatureKey(feature);
         report.setReasonCategory(reason);
-        report.setDescription(normalizeReportText(request.description(), MAX_REPORT_DESCRIPTION_LENGTH));
-        report.setPromptSnapshot(context.promptSnapshot());
-        report.setAiResponseSnapshot(context.aiResponseSnapshot());
+        report.setDescription(AiInputSanitizer.sanitize(request.description(), MAX_REPORT_DESCRIPTION_LENGTH));
         report.setStatus(AiResponseReportStatus.PENDING_REVIEW);
+        if (feature == AiFeatureKey.CHAT_TUTOR && request.chatMessageId() != null) {
+            attachChatAnswer(report, student, request.chatMessageId());
+        } else if (feature == AiFeatureKey.PRACTICE_CHECK && request.practiceCheckId() != null) {
+            attachPracticeCheck(report, practiceCheckService.requireOwnCheck(student.getId(), request.practiceCheckId()));
+        } else {
+            report.setPromptSnapshot(snapshot(request.promptSnapshot()));
+            report.setAiResponseSnapshot(requireText(
+                    request.aiResponseSnapshot(),
+                    MAX_REPORT_SNAPSHOT_LENGTH,
+                    "AI response snapshot is required when no server-side AI chat message can be resolved."));
+        }
 
         AiResponseReport saved = aiResponseReportRepository.save(report);
         notifyAdmins(saved, student);
-        auditLogService.safeRecord(
-                student,
-                "AI_RESPONSE_REPORT_CREATE",
-                TARGET_TYPE,
-                saved.getId(),
-                "Student reported an AI response for review.",
-                null);
+        auditLogService.safeRecord(student, "AI_RESPONSE_REPORT_CREATE", TARGET_TYPE, saved.getId(),
+                "Student reported an AI answer for review.");
         return toStudentResponse(saved);
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<StudentAiResponseReportResponse> getCurrentUserReports(SecurityUserDetails currentUser, int page, int size) {
-        requireRole(currentUser, RoleName.STUDENT, "Only students can view their AI reports.");
-        int safePage = PaginationUtils.sanitizePage(page);
-        int safeSize = PaginationUtils.sanitizeSize(size);
-        Page<AiResponseReport> reportPage = aiResponseReportRepository.findByStudentUserIdOrderByCreatedAtDesc(
-                currentUser.getUserId(),
-                newestPageable(safePage, safeSize));
-        return mapStudentReportPage(reportPage, safePage, safeSize);
+    public PageResponse<StudentAiResponseReportResponse> getCurrentUserReports(
+            SecurityUserDetails currentUser, int page, int size) {
+        return PageResponse.from(
+                aiResponseReportRepository.findByStudentUserIdOrderByCreatedAtDescIdDesc(
+                        currentUser.getUserId(), PaginationUtils.pageRequest(page, size)),
+                AiResponseReportService::toStudentResponse);
     }
 
+    /**
+     * The admin queue. {@code status}: blank or ALL lists every report with open ones first; OPEN (or
+     * PENDING_REVIEW), RESOLVED and DISMISSED narrow it; CLOSED lists resolved and dismissed reports.
+     */
     @Transactional(readOnly = true)
     public PageResponse<AdminAiResponseReportResponse> getAdminReports(String status, int page, int size) {
-        AiResponseReportStatus parsedStatus = parseOptionalStatus(status);
-        int safePage = PaginationUtils.sanitizePage(page);
-        int safeSize = PaginationUtils.sanitizeSize(size);
-        Page<AiResponseReport> reportPage = parsedStatus == null
-                ? aiResponseReportRepository.findAll(newestPageable(safePage, safeSize))
-                : aiResponseReportRepository.findByStatusOrderByCreatedAtDesc(parsedStatus, newestPageable(safePage, safeSize));
-        return mapAdminReportPage(reportPage, safePage, safeSize);
+        Pageable pageable = PaginationUtils.pageRequest(page, size);
+        Set<AiResponseReportStatus> statuses = parseStatusFilter(status);
+        Page<AiResponseReport> reports = statuses == null
+                ? aiResponseReportRepository.findAllOpenFirst(pageable)
+                : aiResponseReportRepository.findByStatusInOrderByCreatedAtDescIdDesc(statuses, pageable);
+        return PageResponse.from(reports, AiResponseReportService::toAdminResponse);
     }
 
     @Transactional(readOnly = true)
-    public AdminAiResponseReportResponse getAdminReport(Long id) {
-        return toAdminResponse(requireReport(id));
+    public AdminAiReportCountsResponse getReportCounts() {
+        return new AdminAiReportCountsResponse(
+                aiResponseReportRepository.countByStatus(AiResponseReportStatus.PENDING_REVIEW),
+                aiResponseReportRepository.countByStatus(AiResponseReportStatus.RESOLVED),
+                aiResponseReportRepository.countByStatus(AiResponseReportStatus.DISMISSED));
     }
 
+    /** Resolves or dismisses an open report with the note the student reads; the student is notified. */
     @Transactional
     public AdminAiResponseReportResponse reviewReport(
             SecurityUserDetails currentUser,
             Long id,
             ReviewAiResponseReportRequest request) {
         User reviewer = requireUser(currentUser.getUserId());
-        AiResponseReport report = requireLockedReport(id);
-        AiResponseReportStatus newStatus = parseReportStatus(request.status());
-
-        if (newStatus == AiResponseReportStatus.PENDING_REVIEW) {
-            throw new ResponseStatusException(BAD_REQUEST, "Review status must move the report forward.");
-        }
-        if (isTerminal(report.getStatus())) {
+        AiResponseReport report = aiResponseReportRepository.findLockedById(id)
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "AI response report was not found."));
+        AiResponseReportStatus decision = AiResponseReportStatus.tryFrom(request.status())
+                .filter(status -> status != AiResponseReportStatus.PENDING_REVIEW)
+                .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Invalid AI report review status."));
+        if (report.getStatus() != AiResponseReportStatus.PENDING_REVIEW) {
             throw new ResponseStatusException(BAD_REQUEST, "This AI report is already closed.");
         }
 
-        report.setStatus(newStatus);
+        report.setStatus(decision);
         report.setReviewerUser(reviewer);
-        report.setReviewerNote(requireReportText(
-                request.reviewerNote(),
-                MAX_REVIEWER_NOTE_LENGTH,
-                "Reviewer note is required."));
+        report.setReviewerNote(requireText(request.reviewerNote(), MAX_REVIEWER_NOTE_LENGTH, "Reviewer note is required."));
         report.setReviewedAt(LocalDateTime.now());
 
-        auditLogService.safeRecord(
-                reviewer,
-                "AI_RESPONSE_REPORT_REVIEW",
+        auditLogService.record(reviewer, "AI_RESPONSE_REPORT_REVIEW", TARGET_TYPE, report.getId(),
+                "Admin " + (decision == AiResponseReportStatus.RESOLVED ? "resolved" : "dismissed")
+                        + " an AI report with a note to the student.");
+        notificationService.safeCreateNotification(
+                report.getStudentUser(),
+                NotificationType.AI_REPORT_REVIEW,
+                "An admin replied to your AI report",
+                decision == AiResponseReportStatus.RESOLVED
+                        ? "Your report was resolved. Read the admin's note in AI Helper, My reports."
+                        : "Your report was checked and dismissed. Read the admin's note in AI Helper, My reports.",
                 TARGET_TYPE,
                 report.getId(),
-                "Admin reviewed an AI response report with status " + newStatus.name() + ".",
-                null);
-
-        if (newStatus.isTerminal()) {
-            notificationService.safeCreateNotification(
-                    report.getStudentUser(),
-                    NotificationType.AI_REPORT_REVIEW,
-                    "AI report reviewed",
-                    "Your AI response report has been reviewed: " + newStatus.name() + ".",
-                    TARGET_TYPE,
-                    report.getId(),
-                    "/student/ai-helper",
-                    reviewer);
-        }
-
+                STUDENT_REPORTS_PATH,
+                reviewer);
         return toAdminResponse(report);
     }
 
-    private ReportContext resolveReportContext(
-            User student,
-            CreateAiResponseReportRequest request,
-            AiFeatureKey featureKey) {
-        AiUsageLog usageLog = resolveOwnedUsageLog(student, request.aiUsageLogId(), featureKey);
-        AiChatSession chatSession = resolveOwnedChatSession(student, request.chatSessionId());
-        AiChatMessage chatMessage = resolveOwnedAssistantMessage(student, request.chatMessageId());
-
-        chatSession = resolveUsageLogChatSession(student, usageLog, chatSession);
-        if (chatMessage != null) {
-            chatSession = requireMessageSession(chatMessage, chatSession);
-        } else if (chatSession != null) {
-            chatMessage = findLatestAssistantMessage(chatSession);
-        }
-
-        if (chatMessage != null) {
-            return new ReportContext(usageLog, chatSession, chatMessage, null, null);
-        }
-        return new ReportContext(
-                usageLog,
-                chatSession,
-                null,
-                normalizeSnapshot(request.promptSnapshot()),
-                requireReportText(
-                        request.aiResponseSnapshot(),
-                        MAX_REPORT_SNAPSHOT_LENGTH,
-                        "AI response snapshot is required when no server-side AI chat message can be resolved."));
-    }
-
-    private AiChatSession resolveUsageLogChatSession(
-            User student,
-            AiUsageLog usageLog,
-            AiChatSession selectedChatSession) {
-        if (selectedChatSession != null
-                || usageLog == null
-                || !RELATED_ENTITY_CHAT_SESSION.equals(usageLog.getRelatedEntityType())
-                || usageLog.getRelatedEntityId() == null) {
-            return selectedChatSession;
-        }
-        return aiChatSessionRepository.findByIdAndUserId(usageLog.getRelatedEntityId(), student.getId())
+    private void attachChatAnswer(AiResponseReport report, User student, Long chatMessageId) {
+        AiChatMessage answer = aiChatMessageRepository.findById(chatMessageId)
+                .filter(message -> message.getSenderRole() == AiChatSenderRole.ASSISTANT)
+                .filter(message -> Objects.equals(message.getSession().getUser().getId(), student.getId()))
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "AI chat message was not found."));
+        report.setChatSession(answer.getSession());
+        report.setChatMessage(answer);
+        String question = aiChatMessageRepository
+                .findFirstBySessionIdAndSenderRoleAndIdLessThanOrderByIdDesc(
+                        answer.getSession().getId(), AiChatSenderRole.USER, answer.getId())
+                .map(AiChatMessage::getMessageText)
                 .orElse(null);
+        report.setPromptSnapshot(snapshot(question));
+        report.setAiResponseSnapshot(snapshot(answer.getMessageText()));
     }
 
-    private static AiChatSession requireMessageSession(AiChatMessage chatMessage, AiChatSession selectedChatSession) {
-        AiChatSession messageSession = chatMessage.getSession();
-        if (selectedChatSession != null && !messageSession.getId().equals(selectedChatSession.getId())) {
-            throw new ResponseStatusException(BAD_REQUEST, "Chat message does not belong to the selected chat session.");
+    /** What was checked ("Recording · 谢谢 · Lesson title") and the score with its feedback, in plain text. */
+    private static void attachPracticeCheck(AiResponseReport report, AiPracticeCheck check) {
+        String kind = check.getCheckType() == PracticeCheckType.RECORDING ? "Recording" : "Handwriting";
+        report.setPromptSnapshot(snapshot(kind + " · " + check.getTargetText()
+                + (check.getLesson() == null ? "" : " · " + check.getLesson().getTitle())));
+        List<String> lines = new ArrayList<>();
+        lines.add(check.getScore() + " / 100 · " + check.getHeadline());
+        if (check.getCheckType() == PracticeCheckType.RECORDING) {
+            lines.add("Tones " + scoreText(check.getTonesScore()) + " · Clarity " + scoreText(check.getClarityScore())
+                    + " · Pace " + scoreText(check.getPaceScore()));
         }
-        return messageSession;
-    }
-
-    private AiChatMessage findLatestAssistantMessage(AiChatSession chatSession) {
-        return aiChatMessageRepository
-                .findFirstBySessionIdAndSenderRoleOrderByIdDesc(chatSession.getId(), AiChatSenderRole.ASSISTANT)
-                .orElse(null);
-    }
-
-    private AiUsageLog resolveOwnedUsageLog(User student, Long usageLogId, AiFeatureKey featureKey) {
-        if (usageLogId == null) {
-            return null;
+        if (check.getFeedback() != null) {
+            lines.add(check.getFeedback());
         }
-        AiUsageLog usageLog = aiUsageLogRepository.findByIdAndUserId(usageLogId, student.getId())
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "AI usage log was not found for this student."));
-        if (!featureKey.name().equals(usageLog.getFeatureKey())) {
-            throw new ResponseStatusException(BAD_REQUEST, "AI feature key does not match the selected usage log.");
+        if (check.getTips() != null) {
+            for (String tip : check.getTips().split("\n")) {
+                lines.add("- " + tip);
+            }
         }
-        return usageLog;
+        report.setAiResponseSnapshot(snapshot(String.join("\n", lines)));
     }
 
-    private AiChatSession resolveOwnedChatSession(User student, Long chatSessionId) {
-        if (chatSessionId == null) {
-            return null;
-        }
-        return aiChatSessionRepository.findByIdAndUserId(chatSessionId, student.getId())
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "AI chat session was not found for this student."));
-    }
-
-    private AiChatMessage resolveOwnedAssistantMessage(User student, Long chatMessageId) {
-        if (chatMessageId == null) {
-            return null;
-        }
-        AiChatMessage chatMessage = aiChatMessageRepository.findByIdAndSessionUserId(chatMessageId, student.getId())
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "AI chat message was not found for this student."));
-        if (chatMessage.getSenderRole() != AiChatSenderRole.ASSISTANT) {
-            throw new ResponseStatusException(BAD_REQUEST, "Only AI assistant messages can be reported.");
-        }
-        return chatMessage;
-    }
-
-    private static String normalizeSnapshot(String value) {
-        return normalizeReportText(value, MAX_REPORT_SNAPSHOT_LENGTH);
-    }
-
-    private static String normalizeReportText(String value, int maxLength) {
-        return AiInputSanitizer.sanitize(value, maxLength);
-    }
-
-    private static String requireReportText(String value, int maxLength, String message) {
-        String sanitized = normalizeReportText(value, maxLength);
-        if (sanitized == null) {
-            throw new ResponseStatusException(BAD_REQUEST, message);
-        }
-        return sanitized;
+    private static String scoreText(Integer score) {
+        return score == null ? "-" : score.toString();
     }
 
     private void notifyAdmins(AiResponseReport report, User student) {
+        String reason = report.getReasonCategory().name().replace('_', ' ').toLowerCase(Locale.ROOT);
         userRepository.findAllByRoleName(RoleName.ADMIN).forEach(admin ->
                 notificationService.safeCreateNotification(
                         admin,
                         NotificationType.ADMIN_TASK,
-                        "AI response report needs review",
-                        student.getDisplayName() + " reported an AI response as " + report.getReasonCategory().name() + ".",
+                        "AI report needs review",
+                        student.getDisplayName() + " reported an AI answer (" + reason + ").",
                         TARGET_TYPE,
                         report.getId(),
-                        "/admin/moderation",
+                        ADMIN_REPORTS_PATH,
                         student));
-    }
-
-    private AiResponseReport requireReport(Long id) {
-        return aiResponseReportRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "AI response report was not found."));
-    }
-
-    private AiResponseReport requireLockedReport(Long id) {
-        return aiResponseReportRepository.findLockedById(id)
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "AI response report was not found."));
     }
 
     private User requireUser(Long userId) {
@@ -318,161 +251,72 @@ public class AiResponseReportService {
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "User could not be found."));
     }
 
-    private static void requireRole(SecurityUserDetails currentUser, RoleName roleName, String message) {
-        if (currentUser == null || currentUser.getRoleNames().stream().noneMatch(role -> role.equals(roleName.name()))) {
-            throw new ResponseStatusException(FORBIDDEN, message);
-        }
-    }
-
-    private static AiResponseReportStatus parseOptionalStatus(String value) {
-        if (value == null || value.isBlank()) {
+    private static Set<AiResponseReportStatus> parseStatusFilter(String value) {
+        if (value == null || value.isBlank() || "ALL".equalsIgnoreCase(value.strip())) {
             return null;
         }
-        return AiResponseReportStatus.tryFrom(value)
+        String key = value.strip().toUpperCase(Locale.ROOT);
+        if ("OPEN".equals(key)) {
+            return EnumSet.of(AiResponseReportStatus.PENDING_REVIEW);
+        }
+        if ("CLOSED".equals(key)) {
+            return EnumSet.of(AiResponseReportStatus.RESOLVED, AiResponseReportStatus.DISMISSED);
+        }
+        return AiResponseReportStatus.tryFrom(key)
+                .map(EnumSet::of)
                 .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Invalid AI report status."));
     }
 
-    private static AiFeatureKey parseFeatureKey(String value) {
-        return AiFeatureKey.tryFrom(value)
-                .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Invalid AI feature key."));
+    private static String snapshot(String value) {
+        return AiInputSanitizer.sanitize(value, MAX_REPORT_SNAPSHOT_LENGTH);
     }
 
-    private static AiResponseReportReason parseReportReason(String value) {
-        return AiResponseReportReason.tryFrom(value)
-                .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Invalid AI report reason category."));
+    private static String requireText(String value, int maxLength, String message) {
+        String sanitized = AiInputSanitizer.sanitize(value, maxLength);
+        if (sanitized == null) {
+            throw new ResponseStatusException(BAD_REQUEST, message);
+        }
+        return sanitized;
     }
 
-    private static AiResponseReportStatus parseReportStatus(String value) {
-        return AiResponseReportStatus.tryFrom(value)
-                .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Invalid AI report review status."));
-    }
-
-    private static boolean isTerminal(AiResponseReportStatus status) {
-        return status != null && status.isTerminal();
-    }
-
-    private AdminAiResponseReportResponse toAdminResponse(AiResponseReport report) {
-        return toAdminResponse(report, loadPromptSnapshots(List.of(report)));
-    }
-
-    private AdminAiResponseReportResponse toAdminResponse(
-            AiResponseReport report,
-            Map<Long, String> promptSnapshotsByChatMessageId) {
+    private static AdminAiResponseReportResponse toAdminResponse(AiResponseReport report) {
         User student = report.getStudentUser();
         User reviewer = report.getReviewerUser();
-        ResolvedReportSnapshots resolvedSnapshots = resolveReportSnapshots(report, promptSnapshotsByChatMessageId);
         return new AdminAiResponseReportResponse(
                 report.getId(),
-                student != null ? student.getId() : null,
-                student != null ? student.getDisplayName() : null,
-                student != null ? student.getEmail() : null,
-                report.getAiUsageLog() != null ? report.getAiUsageLog().getId() : null,
-                report.getChatSession() != null ? report.getChatSession().getId() : null,
-                report.getChatMessage() != null ? report.getChatMessage().getId() : null,
-                report.getFeatureKey(),
-                report.getReasonCategory() != null ? report.getReasonCategory().name() : null,
+                student.getDisplayName(),
+                student.getEmail(),
+                report.getFeatureKey().name(),
+                report.getReasonCategory().name(),
                 report.getDescription(),
-                resolvedSnapshots.promptSnapshot(),
-                resolvedSnapshots.aiResponseSnapshot(),
-                report.getStatus() != null ? report.getStatus().name() : null,
-                reviewer != null ? reviewer.getId() : null,
+                report.getPromptSnapshot(),
+                reportedAnswer(report),
+                report.getStatus().name(),
                 reviewer != null ? reviewer.getDisplayName() : null,
                 report.getReviewerNote(),
                 report.getReviewedAt(),
-                report.getCreatedAt(),
-                report.getUpdatedAt());
+                report.getCreatedAt());
     }
 
-    private StudentAiResponseReportResponse toStudentResponse(AiResponseReport report) {
-        return toStudentResponse(report, loadPromptSnapshots(List.of(report)));
-    }
-
-    private StudentAiResponseReportResponse toStudentResponse(
-            AiResponseReport report,
-            Map<Long, String> promptSnapshotsByChatMessageId) {
-        ResolvedReportSnapshots resolvedSnapshots = resolveReportSnapshots(report, promptSnapshotsByChatMessageId);
+    private static StudentAiResponseReportResponse toStudentResponse(AiResponseReport report) {
         return new StudentAiResponseReportResponse(
                 report.getId(),
-                report.getAiUsageLog() != null ? report.getAiUsageLog().getId() : null,
-                report.getChatSession() != null ? report.getChatSession().getId() : null,
-                report.getChatMessage() != null ? report.getChatMessage().getId() : null,
-                report.getFeatureKey(),
-                report.getReasonCategory() != null ? report.getReasonCategory().name() : null,
+                report.getFeatureKey().name(),
+                report.getReasonCategory().name(),
                 report.getDescription(),
-                resolvedSnapshots.promptSnapshot(),
-                resolvedSnapshots.aiResponseSnapshot(),
-                report.getStatus() != null ? report.getStatus().name() : null,
+                report.getPromptSnapshot(),
+                reportedAnswer(report),
+                report.getStatus().name(),
+                report.getReviewerNote(),
                 report.getReviewedAt(),
-                report.getCreatedAt(),
-                report.getUpdatedAt());
+                report.getCreatedAt());
     }
 
-    private static Pageable newestPageable(int page, int size) {
-        return PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-    }
-
-    private PageResponse<AdminAiResponseReportResponse> mapAdminReportPage(Page<AiResponseReport> reportPage, int page, int size) {
-        Map<Long, String> promptSnapshotsByChatMessageId = loadPromptSnapshots(reportPage.getContent());
-        return new PageResponse<>(
-                reportPage.getContent().stream()
-                        .map(report -> toAdminResponse(report, promptSnapshotsByChatMessageId))
-                        .toList(),
-                page,
-                size,
-                reportPage.getTotalElements(),
-                PaginationUtils.totalPages(reportPage.getTotalElements(), size));
-    }
-
-    private PageResponse<StudentAiResponseReportResponse> mapStudentReportPage(Page<AiResponseReport> reportPage, int page, int size) {
-        Map<Long, String> promptSnapshotsByChatMessageId = loadPromptSnapshots(reportPage.getContent());
-        return new PageResponse<>(
-                reportPage.getContent().stream()
-                        .map(report -> toStudentResponse(report, promptSnapshotsByChatMessageId))
-                        .toList(),
-                page,
-                size,
-                reportPage.getTotalElements(),
-                PaginationUtils.totalPages(reportPage.getTotalElements(), size));
-    }
-
-    private static ResolvedReportSnapshots resolveReportSnapshots(
-            AiResponseReport report,
-            Map<Long, String> promptSnapshotsByChatMessageId) {
-        AiChatMessage chatMessage = report.getChatMessage();
-        if (chatMessage == null) {
-            return new ResolvedReportSnapshots(report.getPromptSnapshot(), report.getAiResponseSnapshot());
+    /** Older chat reports kept only the link to the answer; newer ones keep their own copy. */
+    private static String reportedAnswer(AiResponseReport report) {
+        if (report.getAiResponseSnapshot() != null || report.getChatMessage() == null) {
+            return report.getAiResponseSnapshot();
         }
-        return new ResolvedReportSnapshots(
-                promptSnapshotsByChatMessageId.get(chatMessage.getId()),
-                normalizeSnapshot(chatMessage.getMessageText()));
-    }
-
-    private Map<Long, String> loadPromptSnapshots(List<AiResponseReport> reports) {
-        List<Long> assistantMessageIds = reports.stream()
-                .map(AiResponseReport::getChatMessage)
-                .filter(Objects::nonNull)
-                .map(AiChatMessage::getId)
-                .distinct()
-                .toList();
-        if (assistantMessageIds.isEmpty()) {
-            return Map.of();
-        }
-        Map<Long, String> promptSnapshotsByChatMessageId = new LinkedHashMap<>();
-        aiChatMessageRepository.findPromptSnapshotsForAssistantMessageIds(assistantMessageIds).forEach(projection ->
-                promptSnapshotsByChatMessageId.put(
-                        projection.getAssistantMessageId(),
-                        normalizeSnapshot(projection.getPromptSnapshot())));
-        return promptSnapshotsByChatMessageId;
-    }
-
-    private record ResolvedReportSnapshots(String promptSnapshot, String aiResponseSnapshot) {
-    }
-
-    private record ReportContext(
-            AiUsageLog usageLog,
-            AiChatSession chatSession,
-            AiChatMessage chatMessage,
-            String promptSnapshot,
-            String aiResponseSnapshot) {
+        return snapshot(report.getChatMessage().getMessageText());
     }
 }

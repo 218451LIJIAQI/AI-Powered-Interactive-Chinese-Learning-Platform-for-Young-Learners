@@ -3,6 +3,7 @@ package com.example.aichinese.entity;
 import java.time.LocalDateTime;
 
 import com.example.aichinese.entity.base.BaseEntity;
+import com.example.aichinese.entity.enums.AiFeatureKey;
 import com.example.aichinese.entity.enums.AiResponseReportReason;
 import com.example.aichinese.entity.enums.AiResponseReportStatus;
 
@@ -19,18 +20,15 @@ import jakarta.persistence.NamedAttributeNode;
 import jakarta.persistence.NamedEntityGraph;
 import jakarta.persistence.Table;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Getter
 @Setter
-@NoArgsConstructor
 @Entity
 @Table(name = "ai_response_reports", indexes = {
         @Index(name = "idx_ai_response_reports_student_user_id", columnList = "student_user_id"),
         @Index(name = "idx_ai_response_reports_status", columnList = "status"),
         @Index(name = "idx_ai_response_reports_feature_key", columnList = "feature_key"),
-        @Index(name = "idx_ai_response_reports_usage_log_id", columnList = "ai_usage_log_id"),
         @Index(name = "idx_ai_response_reports_chat_session_id", columnList = "chat_session_id"),
         @Index(name = "idx_ai_response_reports_student_created", columnList = "student_user_id,created_at")
 })
@@ -39,7 +37,6 @@ import lombok.Setter;
         attributeNodes = {
                 @NamedAttributeNode("studentUser"),
                 @NamedAttributeNode("reviewerUser"),
-                @NamedAttributeNode("aiUsageLog"),
                 @NamedAttributeNode("chatSession"),
                 @NamedAttributeNode("chatMessage")
         }
@@ -53,10 +50,6 @@ public class AiResponseReport extends BaseEntity {
     private User studentUser;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "ai_usage_log_id", updatable = false)
-    private AiUsageLog aiUsageLog;
-
-    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "chat_session_id", updatable = false)
     private AiChatSession chatSession;
 
@@ -64,8 +57,9 @@ public class AiResponseReport extends BaseEntity {
     @JoinColumn(name = "chat_message_id", updatable = false)
     private AiChatMessage chatMessage;
 
-    @Column(name = "feature_key", nullable = false, updatable = false, length = 100)
-    private String featureKey;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "feature_key", nullable = false, updatable = false, length = 40)
+    private AiFeatureKey featureKey;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "reason_category", nullable = false, updatable = false, length = 40)

@@ -28,7 +28,8 @@ public final class SensitiveDataRedactor {
     private static final Pattern UNSAFE_LOG_CHARACTERS = Pattern.compile("[\\p{Cntrl}&&[^\r\n\t]]|[\u202A-\u202E\u2066-\u2069]");
     private static final Pattern AUTHORIZATION_HEADER_PATTERN = Pattern.compile(
             "(?i)(authorization\\s*(?:[:=])\\s*)(?:bearer\\s+)?\\S+");
-    private static final Pattern BEARER_TOKEN_PATTERN = Pattern.compile("(?i)\\bbearer\\s+[^\\s,;]+");
+    /** "Bearer &lt;token&gt;"; the words "bearer token(s)" in a sentence are not a credential. */
+    private static final Pattern BEARER_TOKEN_PATTERN = Pattern.compile("(?i)\\bbearer\\s+(?!tokens?\\b)[^\\s,;]+");
     private static final Pattern RESET_LINK_ASSIGNMENT_PATTERN = Pattern.compile(
             "(?i)\\b(reset[-_ ]?link)\\b\\s*(?:[:=])\\s*\\S+");
     private static final Pattern SENSITIVE_ASSIGNMENT_PATTERN = Pattern.compile(
@@ -61,10 +62,7 @@ public final class SensitiveDataRedactor {
                 || lower.contains("secret")
                 || lower.contains("api-key")
                 || lower.contains("api_key")
-                || lower.contains("apikey")
-                || lower.contains("client-secret")
-                || lower.contains("client_secret")
-                || lower.contains("set-cookie");
+                || lower.contains("apikey");
     }
 
     public static String redactText(String value) {

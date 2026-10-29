@@ -4,19 +4,8 @@ import java.util.Optional;
 import java.util.regex.Pattern;
 
 /**
- * Shared, side-effect-free helpers for normalising user-supplied text inputs.
- *
- * <p>Centralised here to eliminate the previous duplicated copies of the same
- * {@code trimToNull} / {@code defaultIfBlank} logic that lived inside several
- * services (AuthService, TeacherManagementService,
- * TeacherContentAccessService, AiService, AiAvailabilityService).</p>
- *
- * <h2>Unicode-aware whitespace</h2>
- * <p>The strip-style helpers below use {@link String#strip()} rather than
- * {@link String#trim()} so that ideographic spaces ({@code U+3000}) and
- * other Unicode whitespace characters routinely produced by CJK IMEs are
- * treated as blank — relevant for a Chinese-learning platform where
- * pasted lesson content frequently contains fullwidth whitespace.</p>
+ * Helpers for normalising user-supplied text. They use {@link String#strip()}, not {@link String#trim()}, so the
+ * ideographic space ({@code U+3000}) and other Unicode whitespace that CJK input methods produce count as blank.
  */
 public final class TextUtils {
 
@@ -27,11 +16,7 @@ public final class TextUtils {
     private TextUtils() {
     }
 
-    /**
-     * Returns the stripped value when the input is non-null and non-blank,
-     * otherwise {@code null}. Treats Unicode whitespace as blank (see
-     * class-level Javadoc for the rationale).
-     */
+    /** The stripped value, or {@code null} when it is null or blank. */
     public static String trimToNull(String value) {
         if (value == null) {
             return null;
@@ -40,34 +25,18 @@ public final class TextUtils {
         return stripped.isEmpty() ? null : stripped;
     }
 
-    /**
-     * Optional-returning variant of {@link #trimToNull(String)}, useful when
-     * the caller wants to chain {@code .map} / {@code .orElseThrow}.
-     */
     public static Optional<String> trimToOptional(String value) {
         return Optional.ofNullable(trimToNull(value));
     }
 
-    /**
-     * Returns {@code value} when it is non-null and non-blank; otherwise the
-     * supplied {@code fallback}. {@code value} is returned as-is (whitespace
-     * preserved) so this is appropriate for downstream rendering where the
-     * caller has already normalised the string. Use {@link #trimToNull(String)}
-     * first if the input may contain unwanted leading/trailing whitespace.
-     *
-     * <p>"Blank" is determined via {@link String#isBlank()}, which is itself
-     * Unicode-whitespace-aware so a value consisting only of ideographic
-     * spaces correctly falls back.</p>
-     */
+    /** {@code value} unchanged (not stripped) unless it is null or blank, then {@code fallback}. */
     public static String defaultIfBlank(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value;
     }
 
     /**
-     * Collapses every Unicode whitespace run to one ASCII space, strips the
-     * result, and returns {@code null} when no text remains. This is useful for
-     * log-safe / UI-safe one-line summaries where multi-line input should not
-     * leak layout control into the response.
+     * One line: every whitespace run becomes one space and the result is stripped; {@code null} when no text remains.
+     * For summaries where multi-line input must not carry its layout into a log or a response.
      */
     public static String collapseWhitespaceToNull(String value) {
         if (value == null) {
@@ -78,9 +47,7 @@ public final class TextUtils {
     }
 
     /**
-     * Truncates {@code value} to at most {@code maxLength} UTF-16 code units
-     * without splitting a surrogate pair. A {@code null} value remains
-     * {@code null}.
+     * At most {@code maxLength} UTF-16 code units, never splitting a surrogate pair; {@code null} stays {@code null}.
      *
      * @throws IllegalArgumentException if {@code maxLength} is less than 1
      */
@@ -94,9 +61,8 @@ public final class TextUtils {
     }
 
     /**
-     * Produces a stripped, single-line summary capped at {@code maxLength}
-     * characters including the trailing ellipsis. Returns {@code null} for
-     * {@code null} or blank input.
+     * A one-line summary (see {@link #collapseWhitespaceToNull}) of at most {@code maxLength} characters, the
+     * trailing ellipsis included; {@code null} for null or blank input.
      */
     public static String truncateWithEllipsis(String value, int maxLength) {
         requirePositiveMaxLength(maxLength);

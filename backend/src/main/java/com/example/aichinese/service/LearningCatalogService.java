@@ -1,7 +1,6 @@
 package com.example.aichinese.service;
 
 import java.util.List;
-import java.util.Objects;
 
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
@@ -10,8 +9,6 @@ import org.springframework.transaction.annotation.Transactional;
 import com.example.aichinese.config.CacheConfig;
 import com.example.aichinese.dto.content.LearningCategoryResponse;
 import com.example.aichinese.dto.content.LearningLevelResponse;
-import com.example.aichinese.entity.LearningCategory;
-import com.example.aichinese.entity.LearningLevel;
 import com.example.aichinese.repository.LearningCategoryRepository;
 import com.example.aichinese.repository.LearningLevelRepository;
 
@@ -24,15 +21,15 @@ public class LearningCatalogService {
     public LearningCatalogService(
             LearningLevelRepository learningLevelRepository,
             LearningCategoryRepository learningCategoryRepository) {
-        this.learningLevelRepository = Objects.requireNonNull(learningLevelRepository, "learningLevelRepository");
-        this.learningCategoryRepository = Objects.requireNonNull(learningCategoryRepository, "learningCategoryRepository");
+        this.learningLevelRepository = learningLevelRepository;
+        this.learningCategoryRepository = learningCategoryRepository;
     }
 
     @Transactional(readOnly = true)
     @Cacheable(cacheNames = CacheConfig.PUBLIC_LEVELS)
     public List<LearningLevelResponse> getPublicLevels() {
         return learningLevelRepository.findAllByOrderBySortOrderAscNameAsc().stream()
-                .map(LearningCatalogService::toLevelResponse)
+                .map(level -> new LearningLevelResponse(level.getId(), level.getName(), level.getDescription()))
                 .toList();
     }
 
@@ -40,15 +37,7 @@ public class LearningCatalogService {
     @Cacheable(cacheNames = CacheConfig.PUBLIC_CATEGORIES)
     public List<LearningCategoryResponse> getPublicCategories() {
         return learningCategoryRepository.findAllByOrderBySortOrderAscNameAsc().stream()
-                .map(LearningCatalogService::toCategoryResponse)
+                .map(category -> new LearningCategoryResponse(category.getId(), category.getName(), category.getDescription()))
                 .toList();
-    }
-
-    private static LearningLevelResponse toLevelResponse(LearningLevel level) {
-        return new LearningLevelResponse(level.getId(), level.getName(), level.getDescription());
-    }
-
-    private static LearningCategoryResponse toCategoryResponse(LearningCategory category) {
-        return new LearningCategoryResponse(category.getId(), category.getName(), category.getDescription());
     }
 }

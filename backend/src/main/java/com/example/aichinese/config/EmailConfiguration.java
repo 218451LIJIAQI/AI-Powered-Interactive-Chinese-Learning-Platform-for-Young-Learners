@@ -4,19 +4,17 @@ import org.springframework.beans.factory.InitializingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
-import org.springframework.core.env.Profiles;
 import org.springframework.util.StringUtils;
 
 @Configuration(proxyBeanMethods = false)
 public class EmailConfiguration {
 
     private static final String PROD_CONTEXT = "when app.email.enabled=true and the prod profile is active";
-    private static final Profiles PROD_PROFILES = Profiles.of("prod", "production");
 
     @Bean
     InitializingBean emailConfigurationValidator(Environment environment, EmailProperties emailProperties) {
         return () -> {
-            boolean productionProfileActive = isProductionProfileActive(environment);
+            boolean productionProfileActive = ProductionProfiles.isActive(environment);
             if (productionProfileActive && !emailProperties.enabled()) {
                 throw new IllegalStateException("SMTP_ENABLED must be true when the prod profile is active.");
             }
@@ -60,9 +58,5 @@ public class EmailConfiguration {
 
     private static boolean parseBooleanProperty(String value, boolean defaultValue) {
         return StringUtils.hasText(value) ? Boolean.parseBoolean(value.trim()) : defaultValue;
-    }
-
-    private static boolean isProductionProfileActive(Environment environment) {
-        return environment.acceptsProfiles(PROD_PROFILES);
     }
 }

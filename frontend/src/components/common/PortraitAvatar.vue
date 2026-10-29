@@ -1,238 +1,115 @@
 <template>
-  <div class="portrait-avatar" :class="avatarClass" :style="avatarStyle" role="img" :aria-label="ariaLabel">
-    <span class="portrait-backdrop" />
-    <span class="portrait-shoulders" />
-    <span class="portrait-neck" />
-    <span class="portrait-face" />
-    <span class="portrait-hair" />
-    <span class="portrait-fringe" />
-    <span class="portrait-hijab" />
-    <span class="portrait-eye portrait-eye--left" />
-    <span class="portrait-eye portrait-eye--right" />
-    <span class="portrait-blush portrait-blush--left" />
-    <span class="portrait-blush portrait-blush--right" />
-    <span class="portrait-mouth" />
+  <div class="portrait-avatar" :class="avatarClass" :style="avatarStyle" aria-hidden="true">
+    <span v-if="initials" class="portrait-initials">{{ initials }}</span>
+    <template v-else>
+      <span class="portrait-backdrop" />
+      <span class="portrait-shoulders" />
+      <span class="portrait-head" />
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, type StyleValue } from 'vue'
 
-type AvatarKind = 'female' | 'male' | 'hijab' | 'student'
-type AvatarShape = 'circle' | 'soft'
-
+/**
+ * Neutral user avatar: initials when a name is given, otherwise a neutral silhouette.
+ * It never infers gender, religion or appearance from a name or a list position.
+ * `tone` picks the fill (warning flags a student who needs support); the initials meet WCAG AA contrast on both.
+ * The avatar always sits next to the visible name, so it is decorative (hidden from assistive tech).
+ */
 interface Props {
   size?: number
-  kind?: AvatarKind
-  accent?: string
-  rounded?: AvatarShape
-  ariaLabel?: string
+  name?: string | null
+  tone?: 'primary' | 'warning'
 }
 
 const props = withDefaults(defineProps<Props>(), {
   size: 56,
-  kind: 'student',
-  accent: '#7b57ff',
-  rounded: 'circle',
-  ariaLabel: 'User avatar',
+  name: null,
+  tone: 'primary',
+})
+
+const initials = computed(() => {
+  const parts = (props.name ?? '').trim().split(/\s+/).filter(Boolean)
+  if (!parts.length) return ''
+  const first = Array.from(parts[0])[0]
+  const last = parts.length > 1 ? Array.from(parts[parts.length - 1])[0] : ''
+  return `${first}${last}`.toUpperCase()
 })
 
 const avatarClass = computed(() => ({
-  [`is-${props.kind}`]: true,
-  'is-circle': props.rounded === 'circle',
-  'is-soft': props.rounded === 'soft',
+  'is-tone-warning': props.tone === 'warning',
+  'has-initials': Boolean(initials.value),
 }))
 
 const avatarStyle = computed<StyleValue>(() => ({
-  '--portrait-accent': props.accent,
   '--portrait-size': `${props.size}px`,
 }))
 </script>
 
 <style scoped>
 .portrait-avatar {
+  --portrait-fill: var(--color-primary-500);
+  --portrait-ink: var(--text-on-primary);
   position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
   width: var(--portrait-size);
   height: var(--portrait-size);
   overflow: hidden;
+  border-radius: var(--radius-round);
   contain: layout paint;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.88),
-    0 10px 22px rgba(135, 144, 198, 0.14);
+  background: linear-gradient(180deg, var(--color-primary-50) 0%, var(--surface-card) 100%);
+  box-shadow: var(--shadow-xs);
 }
 
-.portrait-avatar.is-circle {
-  border-radius: 50%;
+.portrait-avatar.is-tone-warning {
+  --portrait-fill: var(--color-warning-strong);
 }
 
-.portrait-avatar.is-soft {
-  border-radius: calc(var(--portrait-size) * 0.28);
+.portrait-avatar.has-initials {
+  background: var(--portrait-fill);
 }
 
-.portrait-avatar span {
+.portrait-initials {
+  color: var(--portrait-ink);
+  /* Never below the overline size, so the initials of the small inline avatars stay legible. */
+  font-size: max(var(--font-size-2xs), calc(var(--portrait-size) * 0.38));
+  font-weight: var(--font-weight-bold);
+  line-height: 1;
+  letter-spacing: 0.02em;
+}
+
+.portrait-backdrop,
+.portrait-shoulders,
+.portrait-head {
   position: absolute;
-  display: block;
 }
 
 .portrait-backdrop {
   inset: 0;
-  background:
-    radial-gradient(circle at 28% 20%, rgba(255, 255, 255, 0.94), transparent 24%),
-    linear-gradient(180deg, #f2f4ff 0%, #ffffff 100%);
+  background: radial-gradient(circle at 28% 20%, var(--surface-card), transparent 24%);
 }
 
 .portrait-shoulders {
-  left: 15%;
-  right: 15%;
-  bottom: -8%;
-  height: 42%;
-  border-radius: 46% 46% 0 0;
-  background: var(--portrait-accent);
-}
-
-.portrait-neck {
-  left: 44%;
-  bottom: 26%;
-  width: 12%;
-  height: 14%;
-  border-radius: 999px;
-  background: #f0c39d;
-}
-
-.portrait-face {
-  left: 30%;
-  top: 18%;
-  width: 40%;
-  height: 44%;
-  border-radius: 46% 46% 44% 44%;
-  background: linear-gradient(180deg, #f9d3ac, #efc39c);
-}
-
-.portrait-hair {
-  left: 22%;
-  top: 12%;
-  width: 56%;
-  height: 42%;
-  border-radius: 48% 48% 34% 34%;
-  background: #342934;
-}
-
-.portrait-fringe {
-  left: 28%;
-  top: 15%;
-  width: 44%;
-  height: 18%;
-  border-radius: 48% 48% 60% 60%;
-  background: #2f2430;
-}
-
-.portrait-eye {
-  top: 35%;
-  width: 6%;
-  height: 6%;
-  border-radius: 50%;
-  background: #241b26;
-}
-
-.portrait-eye--left {
-  left: 41%;
-}
-
-.portrait-eye--right {
-  right: 41%;
-}
-
-.portrait-blush {
-  top: 42%;
-  width: 8%;
-  height: 4%;
-  border-radius: 50%;
-  background: rgba(255, 164, 176, 0.62);
-}
-
-.portrait-blush--left {
-  left: 33%;
-}
-
-.portrait-blush--right {
-  right: 33%;
-}
-
-.portrait-mouth {
-  left: 46%;
-  top: 47%;
-  width: 8%;
-  height: 4%;
-  border-bottom: 2px solid #7c5461;
-  border-radius: 0 0 60% 60%;
-}
-
-.portrait-avatar.is-male .portrait-hair {
-  left: 25%;
-  width: 50%;
-  height: 28%;
-  border-radius: 48% 48% 20% 20%;
-  background: #2d2529;
-}
-
-.portrait-avatar.is-male .portrait-fringe {
-  left: 34%;
-  width: 32%;
-  top: 18%;
-  height: 10%;
-  border-radius: 50%;
-}
-
-.portrait-avatar.is-male .portrait-face {
-  top: 20%;
-  height: 42%;
-}
-
-.portrait-avatar.is-male .portrait-shoulders {
-  background: #2c5ca8;
-}
-
-.portrait-avatar.is-female .portrait-shoulders {
-  background: #253f71;
-}
-
-.portrait-avatar.is-student .portrait-shoulders {
-  background: #ffb54a;
-}
-
-.portrait-avatar.is-student .portrait-hair {
-  background: #2f2430;
-}
-
-.portrait-avatar.is-student .portrait-fringe {
-  left: 31%;
-  width: 38%;
-}
-
-.portrait-avatar.is-hijab .portrait-hijab {
   left: 18%;
   right: 18%;
-  top: 12%;
-  bottom: 0;
-  border-radius: 46% 46% 24% 24%;
-  background: linear-gradient(180deg, #2aa7cb, #1c7dac 70%, #14567a);
+  bottom: -10%;
+  height: 40%;
+  border-radius: 46% 46% 0 0;
+  background: var(--portrait-fill);
+  opacity: 0.85;
 }
 
-.portrait-avatar.is-hijab .portrait-hair,
-.portrait-avatar.is-hijab .portrait-fringe {
-  display: none;
-}
-
-.portrait-avatar.is-hijab .portrait-face {
+.portrait-head {
   left: 32%;
-  top: 22%;
+  top: 18%;
   width: 36%;
   height: 36%;
-}
-
-.portrait-avatar.is-hijab .portrait-shoulders {
-  left: 10%;
-  right: 10%;
-  background: #1e8ab7;
+  border-radius: 50%;
+  background: var(--portrait-fill);
+  opacity: 0.55;
 }
 </style>

@@ -20,21 +20,11 @@ public final class ExceptionLogUtils {
         return exception == null ? "UnknownException" : exception.getClass().getSimpleName();
     }
 
-    private static String safeMessage(Throwable exception) {
-        if (exception == null) {
-            return null;
-        }
-        String message = TextUtils.trimToNull(exception.getMessage());
-        if (message == null) {
-            return null;
-        }
-        String redacted = SensitiveDataRedactor.redactText(message);
-        return TextUtils.truncateWithEllipsis(redacted, MAX_EXCEPTION_SUMMARY_LENGTH);
-    }
-
+    /** The exception type plus its redacted message, if any, cut to a log-friendly length. */
     public static String safeSummary(Throwable exception) {
         String type = exceptionType(exception);
-        String message = safeMessage(exception);
-        return TextUtils.truncateWithEllipsis(message == null ? type : type + ": " + message, MAX_EXCEPTION_SUMMARY_LENGTH);
+        String message = exception == null ? null : TextUtils.trimToNull(exception.getMessage());
+        return TextUtils.truncateWithEllipsis(
+                message == null ? type : type + ": " + SensitiveDataRedactor.redactText(message), MAX_EXCEPTION_SUMMARY_LENGTH);
     }
 }

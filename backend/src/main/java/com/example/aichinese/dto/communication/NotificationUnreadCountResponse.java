@@ -1,8 +1,5 @@
 package com.example.aichinese.dto.communication;
 
-import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-
-@JsonPropertyOrder({ "unreadCount" })
 public record NotificationUnreadCountResponse(
         long unreadCount) {
 

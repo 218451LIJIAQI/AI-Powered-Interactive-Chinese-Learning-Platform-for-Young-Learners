@@ -1,21 +1,22 @@
-.vscode/
-*.log
-*.err
-
-# Generated and runtime artifacts
+# Dependencies, build output and test reports
 node_modules/
-frontend/node_modules/
-frontend/dist/
-frontend/coverage/
-frontend/playwright-report/
-frontend/test-results/
 backend/target/
+frontend/dist/
+frontend/test-results/
+
+# Runtime data
 backend/uploads/
-backend/$tmp
 .local/
+*.log
 
 # Local secrets
 .env
 .env.*
 !backend/.env.example
 !frontend/.env.example
+
+# Editors and OS files
+.vscode/
+.idea/
+*.iml
+.DS_Store

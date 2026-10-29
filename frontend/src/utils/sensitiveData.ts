@@ -1,12 +1,6 @@
-import type { LocationQueryRaw, LocationQueryValue } from 'vue-router'
+import type { LocationQueryRaw, LocationQueryValue, RouteLocationNormalizedLoaded, Router } from 'vue-router'
 
 export const FILTERED = '[Filtered]'
-
-type SanitizedRouteState = {
-  query: LocationQueryRaw
-  hash: string
-  changed: boolean
-}
 
 const MAX_SCRUB_DEPTH = 8
 
@@ -28,19 +22,16 @@ const SENSITIVE_KEY_FRAGMENTS = [
   'api-key',
   'api_key',
   'apikey',
-  'client-secret',
-  'client_secret',
-  'set-cookie',
 ] as const
 
 const SENSITIVE_VALUE_PATTERNS = [
   {
     pattern: /\bbearer\s+[^\s,;]+/gi,
-    replacement: FILTERED,
+    replacement: () => FILTERED,
   },
   {
     pattern: /\bmandarin_spark_refresh=[^;\s]+/gi,
-    replacement: `mandarin_spark_refresh=${FILTERED}`,
+    replacement: () => `mandarin_spark_refresh=${FILTERED}`,
   },
   {
     pattern:
@@ -54,7 +45,7 @@ const SENSITIVE_VALUE_PATTERNS = [
   },
   {
     pattern: /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,
-    replacement: FILTERED,
+    replacement: () => FILTERED,
   },
 ]
 
@@ -64,12 +55,10 @@ export function isSensitiveKey(key: string | null | undefined): boolean {
 }
 
 export function scrubSensitiveValue(value: string): string {
-  return SENSITIVE_VALUE_PATTERNS.reduce((current, { pattern, replacement }) => {
-    if (typeof replacement === 'string') {
-      return current.replace(pattern, replacement)
-    }
-    return current.replace(pattern, replacement)
-  }, value)
+  return SENSITIVE_VALUE_PATTERNS.reduce(
+    (current, { pattern, replacement }) => current.replace(pattern, replacement),
+    value,
+  )
 }
 
 export function firstQueryText(value: unknown): string {
@@ -83,28 +72,26 @@ export function firstQueryText(value: unknown): string {
   return ''
 }
 
-export function removeSensitiveRouteState(
-  queryState: Record<string, LocationQueryValue | LocationQueryValue[]>,
-  hash = '',
-): SanitizedRouteState {
+/**
+ * Once a page has read them, replaces the current history entry so sensitive query or hash values (a reset token,
+ * an email) leave the address bar and history; safe values stay. `name` is the current route's name.
+ */
+export function replaceSensitiveRouteState(
+  router: Pick<Router, 'replace'>,
+  route: Pick<RouteLocationNormalizedLoaded, 'query' | 'hash'>,
+  name: string,
+): void {
   const query: LocationQueryRaw = {}
   let changed = false
 
-  for (const [key, value] of Object.entries(queryState)) {
-    if (isSensitiveKey(key) || queryValueContainsSensitiveData(value)) {
-      changed = true
-      continue
-    }
-    query[key] = value
+  for (const [key, value] of Object.entries(route.query)) {
+    if (isSensitiveKey(key) || queryValueContainsSensitiveData(value)) changed = true
+    else query[key] = value
   }
 
-  const safeHash = hash && (isSensitiveKey(hash) || scrubSensitiveValue(hash) !== hash) ? '' : hash
-  changed ||= safeHash !== hash
-
-  return {
-    query,
-    hash: safeHash,
-    changed,
+  const hashIsSensitive = isSensitiveKey(route.hash) || scrubSensitiveValue(route.hash) !== route.hash
+  if (changed || hashIsSensitive) {
+    void router.replace({ name, query, hash: hashIsSensitive ? '' : route.hash })
   }
 }
 
@@ -114,7 +101,7 @@ export function scrubSensitiveUrl(value: string | null | undefined): string | un
   try {
     const rawValue = value.trim()
     const isAbsoluteUrl = /^[a-z][a-z\d+.-]*:/i.test(rawValue) || rawValue.startsWith('//')
-    const url = new URL(rawValue, typeof window === 'undefined' ? 'https://app.local' : window.location.href)
+    const url = new URL(rawValue, window.location.href)
     for (const key of Array.from(url.searchParams.keys())) {
       if (isSensitiveKey(key)) {
         url.searchParams.set(key, FILTERED)
@@ -149,10 +136,7 @@ function scrubSensitiveUnknownInternal(value: unknown, seen: WeakSet<object>, de
   if (!value || typeof value !== 'object') {
     return value
   }
-  if (depth >= MAX_SCRUB_DEPTH) {
-    return FILTERED
-  }
-  if (seen.has(value)) {
+  if (depth >= MAX_SCRUB_DEPTH || seen.has(value)) {
     return FILTERED
   }
 
@@ -167,10 +151,8 @@ function scrubSensitiveUnknownInternal(value: unknown, seen: WeakSet<object>, de
   if (value instanceof URLSearchParams) {
     return scrubSensitiveValue(value.toString())
   }
-  if (typeof File !== 'undefined' && value instanceof File) {
-    return FILTERED
-  }
-  if (typeof Blob !== 'undefined' && value instanceof Blob) {
+  // Also covers File, a kind of Blob.
+  if (value instanceof Blob) {
     return FILTERED
   }
   if (value instanceof Error) {

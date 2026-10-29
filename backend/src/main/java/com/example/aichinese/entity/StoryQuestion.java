@@ -11,12 +11,10 @@ import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Getter
 @Setter
-@NoArgsConstructor
 @Entity
 @Table(name = "story_questions", indexes = {
         @Index(name = "idx_story_questions_activity_id", columnList = "story_activity_id")
@@ -33,6 +31,10 @@ public class StoryQuestion extends BaseEntity {
     @Lob
     @Column(name = "options_payload", columnDefinition = "TEXT", nullable = false)
     private String optionsPayload;
+
+    /** 0-based index of the correct option in {@code optionsPayload}; never sent to students before they answer. */
+    @Column(name = "correct_option_index")
+    private Integer correctOptionIndex;
 
     @Column(name = "explanation", length = 1000)
     private String explanation;

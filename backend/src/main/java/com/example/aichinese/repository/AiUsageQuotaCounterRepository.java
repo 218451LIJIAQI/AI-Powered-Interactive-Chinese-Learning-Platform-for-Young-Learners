@@ -16,4 +16,6 @@ public interface AiUsageQuotaCounterRepository extends JpaRepository<AiUsageQuot
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select counter from AiUsageQuotaCounter counter where counter.user.id = :userId")
     Optional<AiUsageQuotaCounter> findLockedByUserId(@Param("userId") Long userId);
+
+    Optional<AiUsageQuotaCounter> findByUserId(Long userId);
 }

@@ -2,9 +2,6 @@ package com.example.aichinese.dto.content;
 
 import java.util.Objects;
 
-import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-
-@JsonPropertyOrder({ "id", "name", "description" })
 public record LearningCategoryResponse(
         Long id,
         String name,

@@ -1,7 +1,5 @@
 package com.example.aichinese.security;
 
-import java.util.Objects;
-
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -16,7 +14,7 @@ public class CustomUserDetailsService implements UserDetailsService {
     private final UserRepository userRepository;
 
     public CustomUserDetailsService(UserRepository userRepository) {
-        this.userRepository = Objects.requireNonNull(userRepository, "userRepository");
+        this.userRepository = userRepository;
     }
 
     @Override

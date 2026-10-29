@@ -47,7 +47,6 @@ class RequestIdFilterTests {
 
         filter.doFilter(request, response, chain);
 
-        assertThat(chain.requestIdDuringChain).isNotBlank();
         assertThat(chain.requestIdDuringChain).matches(UUID_PATTERN);
         assertThat(response.getHeader(RequestIdHolder.HEADER_NAME)).isEqualTo(chain.requestIdDuringChain);
         assertRequestContextCleared();

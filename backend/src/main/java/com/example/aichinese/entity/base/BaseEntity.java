@@ -29,10 +29,6 @@ public abstract class BaseEntity {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    public final boolean isNew() {
-        return id == null;
-    }
-
     @PrePersist
     protected void onCreate() {
         final LocalDateTime now = LocalDateTime.now();
@@ -60,7 +56,9 @@ public abstract class BaseEntity {
         if (!Hibernate.getClass(this).equals(Hibernate.getClass(that))) {
             return false;
         }
-        return id != null && id.equals(that.id);
+        // getId(), not the field: an uninitialised Hibernate proxy only returns its identifier through the getter.
+        Long thatId = that.getId();
+        return thatId != null && thatId.equals(getId());
     }
 
     @Override

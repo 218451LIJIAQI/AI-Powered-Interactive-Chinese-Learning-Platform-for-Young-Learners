@@ -1,7 +1,8 @@
-import { AxiosError, type AxiosAdapter, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios'
+import type { AxiosAdapter, AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { AUTH_INVALIDATED_EVENT, getAccessToken, http, setAccessToken } from './http'
+import { AUTH_INVALIDATED_EVENT, getAccessToken, http, refreshAccessToken, setAccessToken } from './http'
+import { axiosHttpError, axiosResponse, restoreAxiosAdapterAfterEach } from '@/test/axiosCapture'
 
 const APP_SESSION_TOKEN = 'app-session-token'
 const BUSINESS_LOGIN_HISTORY_URL = '/students/auth/login-history'
@@ -16,36 +17,12 @@ const ROTATED_TOKEN = 'rotated-token'
 const SECRET_TOKEN = 'secret-token'
 const STALE_TOKEN = 'stale-token'
 
-const originalAdapter = http.defaults.adapter
+restoreAxiosAdapterAfterEach()
 
 const bearer = (token: string) => `Bearer ${token}`
 
-function apiResponse<T>(config: InternalAxiosRequestConfig, status: number, data: T): AxiosResponse<T> {
-  return {
-    data,
-    status,
-    statusText: status >= 400 ? 'Error' : 'OK',
-    headers: {},
-    config,
-  }
-}
-
-function adapterResponse<T>(config: InternalAxiosRequestConfig, status: number, data: T): AxiosResponse<T> {
-  const response = apiResponse(config, status, data)
-  if (status >= 400) {
-    throw new AxiosError(
-      `Request failed with status code ${status}`,
-      status === 401 ? AxiosError.ERR_BAD_REQUEST : undefined,
-      config,
-      undefined,
-      response,
-    )
-  }
-  return response
-}
-
-function authExpired(config: InternalAxiosRequestConfig, message = 'expired') {
-  return adapterResponse(config, 401, { success: false, message })
+function authExpired(config: InternalAxiosRequestConfig, message = 'expired'): never {
+  throw axiosHttpError(config, 401, { success: false, message })
 }
 
 function authorization(config: InternalAxiosRequestConfig): string | null {
@@ -54,14 +31,14 @@ function authorization(config: InternalAxiosRequestConfig): string | null {
 }
 
 function ok<T>(config: InternalAxiosRequestConfig, data: T) {
-  return adapterResponse(config, 200, data)
+  return axiosResponse(config, 200, data)
 }
 
 function tokenResponse(config: InternalAxiosRequestConfig, token: string) {
   return ok(config, { success: true, data: { token } })
 }
 
-async function expectExternalRequestWithoutCredentials(url: string) {
+async function expectExternalRequestWithoutCredentials(url: string, requestConfig?: AxiosRequestConfig) {
   let externalAuthorization: string | null = 'not-called'
   let externalWithCredentials: boolean | undefined
 
@@ -73,7 +50,7 @@ async function expectExternalRequestWithoutCredentials(url: string) {
 
   setAccessToken(SECRET_TOKEN)
 
-  await http.get(url)
+  await http.get(url, requestConfig)
 
   expect(externalAuthorization).toBeNull()
   expect(externalWithCredentials).toBe(false)
@@ -81,9 +58,7 @@ async function expectExternalRequestWithoutCredentials(url: string) {
 
 describe('http auth refresh interceptor', () => {
   afterEach(() => {
-    http.defaults.adapter = originalAdapter
     setAccessToken(null)
-    vi.restoreAllMocks()
   })
 
   it('coalesces concurrent 401 refreshes and retries with the rotated access token', async () => {
@@ -157,21 +132,7 @@ describe('http auth refresh interceptor', () => {
   })
 
   it('does not attach credentials when a relative URL overrides baseURL to an external origin', async () => {
-    let externalAuthorization: string | null = 'not-called'
-    let externalWithCredentials: boolean | undefined
-
-    http.defaults.adapter = (async (config) => {
-      externalAuthorization = authorization(config)
-      externalWithCredentials = config.withCredentials
-      return ok(config, { ok: true })
-    }) satisfies AxiosAdapter
-
-    setAccessToken(SECRET_TOKEN)
-
-    await http.get('/external', { baseURL: EXTERNAL_BASE_URL })
-
-    expect(externalAuthorization).toBeNull()
-    expect(externalWithCredentials).toBe(false)
+    await expectExternalRequestWithoutCredentials('/external', { baseURL: EXTERNAL_BASE_URL })
   })
 
   it('does not refresh or invalidate the app session for an external 401 response', async () => {
@@ -222,5 +183,96 @@ describe('http auth refresh interceptor', () => {
     expect(getAccessToken()).toBeNull()
     expect(dispatchEvent).toHaveBeenCalledTimes(1)
     expect(dispatchEvent.mock.calls[0]?.[0]).toMatchObject({ type: AUTH_INVALIDATED_EVENT })
+  })
+})
+
+describe('refreshAccessToken across tabs (shared refresh cookie)', () => {
+  const REFRESH_MARKER_KEY = 'mandarin-spark.refresh-started'
+
+  /** Answers /auth/refresh with the given statuses in order (200 carries FRESH_TOKEN) and counts the calls. */
+  function answerRefresh(...statuses: number[]): { calls: number } {
+    const counter = { calls: 0 }
+    http.defaults.adapter = (async (config) => {
+      if (config.url !== REFRESH_URL) throw new Error(`Unexpected request ${config.url}`)
+      // The refresh cookie is only ever presented with POST (the backend route is POST /auth/refresh).
+      if (config.method !== 'post') throw new Error(`Unexpected ${config.method} ${config.url}`)
+      const status = statuses[counter.calls] ?? 401
+      counter.calls += 1
+      return status === 200 ? tokenResponse(config, FRESH_TOKEN) : authExpired(config, 'refresh rejected')
+    }) satisfies AxiosAdapter
+    return counter
+  }
+
+  function otherTabStartsRefresh(): void {
+    window.dispatchEvent(new StorageEvent('storage', { key: REFRESH_MARKER_KEY, newValue: `${Date.now()}-other` }))
+  }
+
+  afterEach(() => {
+    setAccessToken(null)
+    Reflect.deleteProperty(navigator, 'locks')
+  })
+
+  it('takes the refresh lock so tabs refresh one after another', async () => {
+    const lockNames: string[] = []
+    Object.defineProperty(navigator, 'locks', {
+      configurable: true,
+      value: {
+        request: (name: string, task: () => Promise<unknown>) => {
+          lockNames.push(name)
+          return task()
+        },
+      },
+    })
+    const refresh = answerRefresh(200)
+
+    await expect(refreshAccessToken()).resolves.toBe(FRESH_TOKEN)
+
+    expect(lockNames).toEqual(['mandarin-spark.auth-refresh'])
+    expect(refresh.calls).toBe(1)
+    expect(getAccessToken()).toBe(FRESH_TOKEN)
+  })
+
+  it('shares one request between calls in the same tab when Web Locks are unavailable', async () => {
+    const refresh = answerRefresh(200)
+
+    const tokens = await Promise.all([refreshAccessToken(), refreshAccessToken()])
+
+    expect(tokens).toEqual([FRESH_TOKEN, FRESH_TOKEN])
+    expect(refresh.calls).toBe(1)
+    // Other tabs learn from the marker that the refresh cookie is about to rotate.
+    expect(window.localStorage.getItem(REFRESH_MARKER_KEY)).not.toBeNull()
+  })
+
+  it('does not repeat a rejected refresh when no other tab is refreshing', async () => {
+    const realNow = Date.now()
+    // Any marker seen by an earlier test is long past.
+    vi.spyOn(Date, 'now').mockReturnValue(realNow + 60_000)
+    window.localStorage.setItem('mandarin-spark.token', 'legacy-local')
+    const refresh = answerRefresh(401)
+
+    await expect(refreshAccessToken()).resolves.toBeNull()
+
+    expect(refresh.calls).toBe(1)
+    expect(getAccessToken()).toBeNull()
+    expect(window.localStorage.getItem('mandarin-spark.token')).toBeNull()
+  })
+
+  it('retries once when the 401 follows a refresh started in another tab', async () => {
+    const refresh = answerRefresh(401, 200)
+    otherTabStartsRefresh()
+
+    await expect(refreshAccessToken()).resolves.toBe(FRESH_TOKEN)
+
+    expect(refresh.calls).toBe(2)
+    expect(getAccessToken()).toBe(FRESH_TOKEN)
+  })
+
+  it('retries only once', async () => {
+    const refresh = answerRefresh(401, 401, 200)
+    otherTabStartsRefresh()
+
+    await expect(refreshAccessToken()).resolves.toBeNull()
+
+    expect(refresh.calls).toBe(2)
   })
 })

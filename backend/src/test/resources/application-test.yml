@@ -3,32 +3,27 @@ spring:
     url: jdbc:h2:mem:aichinese-${random.uuid};MODE=MYSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
     username: sa
     password:
-    driver-class-name: org.h2.Driver
   jpa:
     hibernate:
       # Test profile intentionally uses Hibernate create-drop with isolated H2
       # databases for fast integration tests. Runtime profiles must use
       # Flyway-managed migrations plus ddl-auto=validate.
       ddl-auto: create-drop
-    open-in-view: false
-    show-sql: false
   flyway:
-    # MySQL migrations are validated in runtime profiles; H2 tests use
-    # create-drop schema generation to keep each test context isolated.
     enabled: false
-  sql:
-    init:
-      mode: never
 
 logging:
   level:
     root: warn
 
 app:
+  # Pinned: the live-class tests build "now" in Asia/Singapore, the zone of classes created without one.
+  platform:
+    default-time-zone: Asia/Singapore
   security:
     public-auth-rate-limit:
       # Integration tests create many accounts from MockMvc's shared IP in one JVM.
-      # The limiter's production threshold is covered by dedicated unit tests.
+      # The limiter logic is unit-tested in PublicAuthRequestLimiterTests; the forgot/reset-password default (10) stays active here.
       register-requests: 10000
     jwt:
       secret: RuntimeStyleJwtSecretForTests1234567890AB
@@ -47,3 +42,10 @@ app:
     ai-image-max-file-size: 1KB
     recorded-video-directory: ./target/test-recorded-videos
     max-video-file-size: 1KB
+  # Pinned off so a developer shell with AI_ENABLE_REAL_PROVIDER / SMTP_ENABLED set never makes the test
+  # suite call the paid AI provider or send real e-mail; tests that need them set these properties themselves.
+  ai:
+    enable-real-provider: false
+    api-key: ""
+  email:
+    enabled: false

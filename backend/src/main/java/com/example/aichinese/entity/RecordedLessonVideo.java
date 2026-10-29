@@ -16,12 +16,10 @@ import jakarta.persistence.NamedEntityGraph;
 import jakarta.persistence.NamedSubgraph;
 import jakarta.persistence.Table;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Getter
 @Setter
-@NoArgsConstructor
 @Entity
 @Table(name = "recorded_lesson_videos", indexes = {
         @Index(name = "idx_recorded_videos_lesson_id", columnList = "lesson_id"),
@@ -82,4 +80,8 @@ public class RecordedLessonVideo extends BaseEntity {
 
     @Column(name = "active", nullable = false)
     private boolean active = true;
+
+    /** On a video of a lesson revision: the published video it was copied from. */
+    @Column(name = "revision_source_id")
+    private Long revisionSourceId;
 }

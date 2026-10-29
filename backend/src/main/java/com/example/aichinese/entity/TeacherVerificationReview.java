@@ -15,12 +15,10 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Getter
 @Setter
-@NoArgsConstructor
 @Entity
 @Table(name = "teacher_verification_reviews", indexes = {
         @Index(name = "idx_teacher_verification_reviews_teacher_id", columnList = "teacher_id"),
@@ -50,15 +48,4 @@ public class TeacherVerificationReview extends BaseEntity {
 
     @Column(name = "reviewed_at", nullable = false, updatable = false)
     private LocalDateTime reviewedAt;
-
-    public void setDecisionStatus(TeacherStatus decisionStatus) {
-        if (decisionStatus == null) {
-            throw new IllegalArgumentException("Teacher verification review decision status is required.");
-        }
-        if (decisionStatus == TeacherStatus.PENDING) {
-            throw new IllegalArgumentException(
-                    "Teacher verification review decision status must be APPROVED or REJECTED.");
-        }
-        this.decisionStatus = decisionStatus;
-    }
 }

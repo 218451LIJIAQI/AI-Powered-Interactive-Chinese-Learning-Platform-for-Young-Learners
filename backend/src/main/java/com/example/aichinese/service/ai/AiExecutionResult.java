@@ -1,90 +1,29 @@
 package com.example.aichinese.service.ai;
 
-import java.util.Objects;
+import java.util.Map;
 
 import com.example.aichinese.entity.enums.AiRequestStatus;
 
-public record AiExecutionResult(
-        AiRequestStatus status,
-        String providerName,
-        String modelName,
-        String responseText,
-        Integer tokenCount,
-        String userMessage,
-        String errorSummary) {
+/**
+ * Outcome of one AI request as the feature code needs it: the reply text (and, for a JSON feature, the parsed object)
+ * on success, otherwise the fixed message the student sees. Provider, model, token count and error summary are
+ * recorded in the AI-usage log when the request is made, so they are not carried here.
+ */
+public record AiExecutionResult(AiRequestStatus status, String responseText, Map<String, Object> json, String userMessage) {
 
-    public AiExecutionResult {
-        Objects.requireNonNull(status, "status");
-        switch (status) {
-            case SUCCESS -> {
-                if (responseText == null || responseText.isBlank()) {
-                    throw new IllegalArgumentException(
-                            "SUCCESS execution must carry non-blank response text.");
-                }
-                if (userMessage != null) {
-                    throw new IllegalArgumentException(
-                            "SUCCESS execution must not carry a user message.");
-                }
-            }
-            case UNAVAILABLE, FAILED -> {
-                if (userMessage == null || userMessage.isBlank()) {
-                    throw new IllegalArgumentException(
-                            status + " execution must carry a non-blank user message.");
-                }
-                if (responseText != null) {
-                    throw new IllegalArgumentException(
-                            status + " execution must not carry response text.");
-                }
-                if (tokenCount != null) {
-                    throw new IllegalArgumentException(
-                            status + " execution must not carry a token count.");
-                }
-            }
-        }
+    public static AiExecutionResult success(String responseText, Map<String, Object> json) {
+        return new AiExecutionResult(AiRequestStatus.SUCCESS, responseText, json == null ? Map.of() : json, null);
     }
 
-    public static AiExecutionResult success(
-            String providerName,
-            String modelName,
-            String responseText,
-            Integer tokenCount) {
-        return new AiExecutionResult(
-                AiRequestStatus.SUCCESS,
-                providerName,
-                modelName,
-                responseText,
-                tokenCount,
-                null,
-                null);
+    public static AiExecutionResult unavailable(String userMessage) {
+        return new AiExecutionResult(AiRequestStatus.UNAVAILABLE, null, Map.of(), userMessage);
     }
 
-    public static AiExecutionResult unavailable(
-            String providerName,
-            String modelName,
-            String userMessage,
-            String errorSummary) {
-        return new AiExecutionResult(
-                AiRequestStatus.UNAVAILABLE,
-                providerName,
-                modelName,
-                null,
-                null,
-                userMessage,
-                errorSummary);
+    public static AiExecutionResult failed(String userMessage) {
+        return new AiExecutionResult(AiRequestStatus.FAILED, null, Map.of(), userMessage);
     }
 
-    public static AiExecutionResult failed(
-            String providerName,
-            String modelName,
-            String userMessage,
-            String errorSummary) {
-        return new AiExecutionResult(
-                AiRequestStatus.FAILED,
-                providerName,
-                modelName,
-                null,
-                null,
-                userMessage,
-                errorSummary);
+    public boolean succeeded() {
+        return status == AiRequestStatus.SUCCESS;
     }
 }

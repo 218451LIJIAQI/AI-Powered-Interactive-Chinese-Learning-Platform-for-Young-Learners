@@ -1,21 +1,22 @@
 package com.example.aichinese.entity;
 
 import com.example.aichinese.entity.base.BaseEntity;
+import com.example.aichinese.entity.enums.AiFeatureKey;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Getter
 @Setter
-@NoArgsConstructor
 @Entity
 @Table(name = "ai_usage_logs", indexes = {
         @Index(name = "idx_ai_usage_logs_user_id", columnList = "user_id"),
@@ -29,8 +30,9 @@ public class AiUsageLog extends BaseEntity {
     @JoinColumn(name = "user_id", updatable = false)
     private User user;
 
-    @Column(name = "feature_key", nullable = false, updatable = false, length = 100)
-    private String featureKey;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "feature_key", nullable = false, updatable = false, length = 40)
+    private AiFeatureKey featureKey;
 
     @Column(name = "provider_name", updatable = false, length = 100)
     private String providerName;

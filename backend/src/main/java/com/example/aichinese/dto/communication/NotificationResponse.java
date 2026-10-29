@@ -3,28 +3,12 @@ package com.example.aichinese.dto.communication;
 import java.time.LocalDateTime;
 import java.util.Objects;
 
-import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-
-@JsonPropertyOrder({
-        "id",
-        "title",
-        "message",
-        "type",
-        "status",
-        "targetType",
-        "targetId",
-        "targetPath",
-        "createdAt",
-        "readAt"
-})
 public record NotificationResponse(
         Long id,
         String title,
         String message,
         String type,
         String status,
-        String targetType,
-        Long targetId,
         String targetPath,
         LocalDateTime createdAt,
         LocalDateTime readAt) {

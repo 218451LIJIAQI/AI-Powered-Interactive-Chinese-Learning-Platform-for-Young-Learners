@@ -1,42 +1,39 @@
 package com.example.aichinese.service.ai;
 
+import java.util.Base64;
 import java.util.List;
-import java.util.Objects;
 
+/**
+ * Provider-neutral request passed to an {@link AiProviderClient}.
+ *
+ * @param image optional learner image (for example a handwriting photo); {@code null} for
+ *              text-only requests. Only the OpenAI Responses client sends it; AiAvailabilityService
+ *              offers image analysis for that provider only.
+ */
 public record AiProviderPrompt(
         String featureKey,
         String systemInstruction,
         String userPrompt,
-        String languagePreference,
         int maxOutputTokens,
         boolean expectJson,
-        List<AiMessage> messageHistory) {
+        List<AiMessage> messageHistory,
+        AiImageInput image) {
 
-    public AiProviderPrompt {
-        featureKey = requireNonBlank(featureKey, "featureKey");
-        systemInstruction = requireNonBlank(systemInstruction, "systemInstruction");
-        userPrompt = requireNonBlank(userPrompt, "userPrompt");
-        languagePreference = requireNonBlank(languagePreference, "languagePreference");
-        if (maxOutputTokens <= 0) {
-            throw new IllegalArgumentException("maxOutputTokens must be > 0, got " + maxOutputTokens);
-        }
-        Objects.requireNonNull(messageHistory, "messageHistory");
-        messageHistory = List.copyOf(messageHistory);
-    }
-
-    private static String requireNonBlank(String value, String fieldName) {
-        Objects.requireNonNull(value, fieldName);
-        if (value.isBlank()) {
-            throw new IllegalArgumentException(fieldName + " must not be blank.");
-        }
-        return value;
+    public boolean hasImage() {
+        return image != null;
     }
 
     public record AiMessage(String role, String content) {
+    }
 
-        public AiMessage {
-            role = requireNonBlank(role, "role");
-            Objects.requireNonNull(content, "content");
+    /**
+     * Image bytes plus MIME type ({@code image/png} or {@code image/jpeg}).
+     */
+    public record AiImageInput(byte[] data, String mimeType) {
+
+        /** {@code data:<mime>;base64,<payload>} as accepted by the OpenAI Responses API. */
+        public String toDataUrl() {
+            return "data:" + mimeType + ";base64," + Base64.getEncoder().encodeToString(data);
         }
     }
 }

@@ -1,40 +1,15 @@
-import '@testing-library/jest-dom/vitest'
+import { config } from '@vue/test-utils'
+import { beforeEach } from 'vitest'
 
-function createStorageMock(): Storage {
-  const values = new Map<string, string>()
+import { i18n } from '@/plugins/i18n'
 
-  return {
-    get length() {
-      return values.size
-    },
-    clear(): void {
-      values.clear()
-    },
-    key(index: number): string | null {
-      return Array.from(values.keys())[index] ?? null
-    },
-    removeItem(key: string): void {
-      values.delete(String(key))
-    },
-    setItem(key: string, value: string): void {
-      values.set(String(key), String(value))
-    },
-    getItem(key: string): string | null {
-      return values.get(String(key)) ?? null
-    },
-  }
-}
+// Every mounted component gets the app's i18n plugin (as in main.ts).
+config.global.plugins = [i18n]
 
-function ensureStorage(name: 'localStorage' | 'sessionStorage'): void {
-  if (typeof window === 'undefined') {
-    return
-  }
-
-  Object.defineProperty(window, name, {
-    configurable: true,
-    value: createStorageMock(),
-  })
-}
-
-ensureStorage('localStorage')
-ensureStorage('sessionStorage')
+// Each test starts with empty browser storage and English (document and i18n), whatever an earlier test did.
+beforeEach(() => {
+  window.localStorage.clear()
+  window.sessionStorage.clear()
+  document.documentElement.lang = 'en'
+  i18n.global.locale.value = 'en'
+})

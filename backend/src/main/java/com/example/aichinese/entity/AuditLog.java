@@ -11,12 +11,10 @@ import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Getter
 @Setter
-@NoArgsConstructor
 @Entity
 @Table(name = "audit_logs", indexes = {
         @Index(name = "idx_audit_logs_actor_user_id", columnList = "actor_user_id"),
@@ -44,12 +42,17 @@ public class AuditLog extends BaseEntity {
     @Column(name = "target_id", updatable = false)
     private Long targetId;
 
+    /** What the entry is about in words (a person's name, a lesson title), as it was at the time. */
+    @Column(name = "target_label", updatable = false, length = 255)
+    private String targetLabel;
+
+    /** The reason an admin gave for the decision, when one was required. */
+    @Column(name = "reason", updatable = false, length = 1000)
+    private String reason;
+
     @Lob
     @Column(name = "description", updatable = false, columnDefinition = "LONGTEXT")
     private String description;
-
-    @Column(name = "ip_address", updatable = false, length = 64)
-    private String ipAddress;
 
     @Column(name = "request_id", updatable = false, length = 120)
     private String requestId;

@@ -4,17 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Clock;
 import java.time.Duration;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
 
 /**
- * Unit tests for {@link LoginAttemptLimiter}. The limiter is the new
+ * Unit tests for {@link LoginAttemptLimiter}. The limiter is the
  * brute-force defence in front of the login endpoint, so it has its own
  * dedicated suite that exercises the exact boundary conditions (threshold,
- * lock window expiry, success-clears-counter, sliding window).
+ * lock window expiry, success-clears-counter, attempt window expiry).
  *
  * <p>Lives in the same package as the SUT so the package-private clock-based
  * constructor and constants can be exercised directly without forcing them
@@ -31,14 +28,20 @@ class LoginAttemptLimiterTests {
     private static final String UPPERCASE_EMAIL = "MIXED.CASE@EXAMPLE.COM";
     private static final String LONG_EMAIL_PREFIX = "a".repeat(400);
     private static final String LONG_IP_PREFIX = "1".repeat(100);
-    private static final Instant START_TIME = Instant.parse("2025-01-01T00:00:00Z");
-    private static final ZoneId UTC = ZoneId.of("UTC");
     private static final Duration DEFAULT_ATTEMPT_WINDOW = Duration.ofMinutes(15);
     private static final Duration DEFAULT_LOCK_DURATION = Duration.ofMinutes(15);
     private static final int SMALL_CAPACITY = 3;
     private static final int CUSTOM_CAPACITY = 10;
     private static final int SPRAY_ATTEMPTS = 20;
     private static final int LOCKOUT_SPRAY_ATTEMPTS = 30;
+
+    /** SDD 3.4: five failed sign-in attempts lock sign-in for 15 minutes. */
+    @Test
+    void productionDefaultsMatchTheDocumentedLockoutPolicy() {
+        assertThat(LoginAttemptLimiter.MAX_FAILED_ATTEMPTS).isEqualTo(5);
+        assertThat(LoginAttemptLimiter.ATTEMPT_WINDOW).isEqualTo(DEFAULT_ATTEMPT_WINDOW);
+        assertThat(LoginAttemptLimiter.LOCK_DURATION).isEqualTo(DEFAULT_LOCK_DURATION);
+    }
 
     @Test
     void allowsLoginWhenNoFailuresRecorded() {
@@ -67,7 +70,7 @@ class LoginAttemptLimiterTests {
 
     @Test
     void unlocksOnceLockWindowElapses() {
-        MutableClock clock = mutableClock();
+        MutableClock clock = new MutableClock();
         LoginAttemptLimiter limiter = new LoginAttemptLimiter(clock);
         recordFailuresUntilLocked(limiter, EMAIL, IP);
         assertThat(limiter.isAllowed(EMAIL, IP)).isFalse();
@@ -77,6 +80,33 @@ class LoginAttemptLimiterTests {
 
         assertThat(limiter.isAllowed(EMAIL, IP)).isTrue();
         assertThat(limiter.retryAfter(EMAIL, IP)).isEqualTo(Duration.ZERO);
+    }
+
+    @Test
+    void failuresOlderThanTheAttemptWindowStopCounting() {
+        // Just inside the 15-minute window the earlier failures still count.
+        MutableClock insideClock = new MutableClock();
+        LoginAttemptLimiter insideLimiter = new LoginAttemptLimiter(insideClock);
+        for (int i = 0; i < LoginAttemptLimiter.MAX_FAILED_ATTEMPTS - 1; i++) {
+            insideLimiter.recordFailure(EMAIL, IP);
+        }
+        insideClock.advance(LoginAttemptLimiter.ATTEMPT_WINDOW.minusSeconds(1));
+        assertThat(insideLimiter.recordFailure(EMAIL, IP)).as("fifth failure inside the window").isTrue();
+
+        // The window runs from the first failure: once it has passed, the next failure starts a new count.
+        MutableClock clock = new MutableClock();
+        LoginAttemptLimiter limiter = new LoginAttemptLimiter(clock);
+        for (int i = 0; i < LoginAttemptLimiter.MAX_FAILED_ATTEMPTS - 1; i++) {
+            limiter.recordFailure(EMAIL, IP);
+        }
+        clock.advance(LoginAttemptLimiter.ATTEMPT_WINDOW);
+
+        assertThat(limiter.recordFailure(EMAIL, IP)).as("earlier failures no longer count").isFalse();
+        assertThat(limiter.isAllowed(EMAIL, IP)).isTrue();
+        for (int i = 0; i < LoginAttemptLimiter.MAX_FAILED_ATTEMPTS - 2; i++) {
+            assertThat(limiter.recordFailure(EMAIL, IP)).isFalse();
+        }
+        assertThat(limiter.recordFailure(EMAIL, IP)).as("five failures inside the new window").isTrue();
     }
 
     @Test
@@ -99,8 +129,8 @@ class LoginAttemptLimiterTests {
         LoginAttemptLimiter limiter = limiter();
         recordFailuresUntilLocked(limiter, EMAIL, IP);
 
-        // Both axes (email, IP) need to differ to be independent. Using a
-        // fresh email or fresh IP must not lock the unrelated bucket.
+        // A bucket is keyed by the email and the IP together, so changing
+        // either one alone gives an independent bucket that is not locked.
         assertThat(limiter.isAllowed(OTHER_EMAIL, IP)).isTrue();
         assertThat(limiter.isAllowed(EMAIL, OTHER_IP)).isTrue();
     }
@@ -119,7 +149,7 @@ class LoginAttemptLimiterTests {
 
     @Test
     void trackedAttemptRecordsStayWithinCapacity() {
-        MutableClock clock = mutableClock();
+        MutableClock clock = new MutableClock();
         LoginAttemptLimiter limiter = new LoginAttemptLimiter(clock, SMALL_CAPACITY);
 
         recordFailureSpray(limiter, clock, SPRAY_ATTEMPTS, "203.0.113.");
@@ -165,10 +195,6 @@ class LoginAttemptLimiterTests {
         return new LoginAttemptLimiter(Clock.systemUTC());
     }
 
-    private static MutableClock mutableClock() {
-        return new MutableClock(START_TIME);
-    }
-
     private static void recordFailuresUntilLocked(LoginAttemptLimiter limiter, String email, String ip) {
         for (int i = 0; i < LoginAttemptLimiter.MAX_FAILED_ATTEMPTS; i++) {
             limiter.recordFailure(email, ip);
@@ -185,33 +211,6 @@ class LoginAttemptLimiterTests {
             if (clock != null) {
                 clock.advance(Duration.ofSeconds(1));
             }
-        }
-    }
-
-    private static final class MutableClock extends Clock {
-        private final AtomicReference<Instant> now;
-
-        private MutableClock(Instant initialInstant) {
-            this.now = new AtomicReference<>(initialInstant);
-        }
-
-        @Override
-        public ZoneId getZone() {
-            return UTC;
-        }
-
-        @Override
-        public Clock withZone(ZoneId zone) {
-            return this;
-        }
-
-        @Override
-        public Instant instant() {
-            return now.get();
-        }
-
-        private void advance(Duration duration) {
-            now.updateAndGet(instant -> instant.plus(duration));
         }
     }
 }

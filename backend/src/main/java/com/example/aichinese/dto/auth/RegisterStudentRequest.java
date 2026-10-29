@@ -1,9 +1,7 @@
 package com.example.aichinese.dto.auth;
 
-import java.util.Locale;
-
+import com.example.aichinese.util.LanguageCodes;
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Email;
@@ -11,14 +9,13 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
-@JsonPropertyOrder({ "fullName", "email", "password", "confirmPassword", "preferredLanguage" })
 public record RegisterStudentRequest(
         @NotBlank(message = "Full name is required")
         @Size(max = 120, message = "Full name must be at most 120 characters")
         String fullName,
         @NotBlank(message = "Email is required")
         @Email(message = "Email format is invalid")
-        @Size(max = 320, message = "Email must be at most 320 characters")
+        @Size(max = 150, message = "Email must be at most 150 characters")
         String email,
         @NotBlank(message = "Password is required")
         @Size(min = 8, max = 72, message = "Password must be between 8 and 72 characters")
@@ -26,7 +23,7 @@ public record RegisterStudentRequest(
         @NotBlank(message = "Confirm password is required")
         @Size(max = 72, message = "Confirm password must be at most 72 characters")
         String confirmPassword,
-        @Pattern(regexp = "^(en|ms|zh)?$", message = "Preferred language must be one of en, ms, or zh")
+        @Pattern(regexp = "^(en|ms|zh-CN)?$", message = "Preferred language must be one of en, ms, or zh-CN")
         String preferredLanguage) {
 
     public RegisterStudentRequest {
@@ -36,9 +33,7 @@ public record RegisterStudentRequest(
         if (email != null) {
             email = email.strip();
         }
-        if (preferredLanguage != null) {
-            preferredLanguage = preferredLanguage.strip().toLowerCase(Locale.ROOT);
-        }
+        preferredLanguage = LanguageCodes.normalizeRequested(preferredLanguage);
     }
 
     @JsonIgnore

@@ -1,14 +1,14 @@
 <template>
   <header class="public-nav">
-    <a href="#main-content" class="skip-to-main">{{ t('chrome.skipToMain') }}</a>
-    <AppBrand compact />
+    <AppBrand to="/" />
 
-    <nav class="nav-links public-nav-links" :aria-label="t('chrome.primaryNavigation')">
+    <nav class="public-nav-links" :aria-label="t('chrome.primaryNavigation')">
       <RouterLink v-for="item in items" :key="item.to" :to="item.to" custom v-slot="{ href, navigate }">
         <a
           :href="href"
           class="public-nav-link"
-          :class="{ 'router-link-active': isNavActive(item.to) }"
+          :class="{ 'router-link-active': isNavItemActive(item.to, route) }"
+          :aria-current="isNavItemActive(item.to, route) ? 'page' : undefined"
           @click="navigate"
         >
           {{ item.label }}
@@ -17,74 +17,43 @@
     </nav>
 
     <div class="public-nav-actions">
-      <div class="public-nav-trust hidden-mobile">
-        <span>{{ t('chrome.safeAges') }}</span>
-        <span>{{ t('chrome.designedFor') }}</span>
-      </div>
-      <LanguageSwitcher size="compact" />
-      <button class="btn btn-secondary public-nav-button" type="button" @click="openSignIn">
-        {{ t('chrome.signIn') }}
-      </button>
-      <button class="btn btn-accent public-nav-button public-nav-button--primary" type="button" @click="openSignUp">
-        {{ t('chrome.createAccount') }}
-      </button>
+      <LanguageSwitcher />
+      <RouterLink v-if="auth.isAuthenticated" class="btn btn-primary" :to="homePath">
+        {{ t('shell.openMyHome') }}
+      </RouterLink>
+      <template v-else>
+        <RouterLink class="btn btn-ghost" :to="SIGN_IN_ROUTE">
+          {{ t('shell.signIn') }}
+        </RouterLink>
+        <RouterLink class="btn btn-primary" :to="SIGN_UP_ROUTE">
+          {{ t('shell.createAccount') }}
+        </RouterLink>
+      </template>
     </div>
   </header>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { RouterLink, useRoute, useRouter } from 'vue-router'
-import type { RouteLocationRaw } from 'vue-router'
+import { RouterLink, useRoute, type RouteLocationRaw } from 'vue-router'
 
 import LanguageSwitcher from '@/components/common/LanguageSwitcher.vue'
-import { publicNav } from '@/config/navigation'
+import { useLocalMessages } from '@/composables/useLocalMessages'
+import { isNavItemActive, publicNav } from '@/config/navigation'
+import { publicShellMessages } from '@/plugins/publicShellMessages'
+import { useAuthStore } from '@/stores/auth'
+import { defaultRouteForRole } from '@/utils/role'
 
 import AppBrand from './AppBrand.vue'
 
-interface LocalizedNavItem {
-  readonly label: string
-  readonly to: string
-}
-
-const SIGN_IN_ROUTE = { path: '/auth', query: { tab: 'signin' } } satisfies RouteLocationRaw
+const SIGN_IN_ROUTE = { path: '/auth' } satisfies RouteLocationRaw
 const SIGN_UP_ROUTE = { path: '/auth', query: { tab: 'register', role: 'student' } } satisfies RouteLocationRaw
 
-const router = useRouter()
 const route = useRoute()
-const { t } = useI18n()
+const auth = useAuthStore()
+const { t } = useLocalMessages({ shell: publicShellMessages })
 
-const items = computed<LocalizedNavItem[]>(() => publicNav.map((item) => ({ label: t(item.labelKey), to: item.to })))
+const homePath = computed(() => defaultRouteForRole(auth.activeRole))
 
-function openSignIn(): void {
-  void router.push(SIGN_IN_ROUTE)
-}
-
-function openSignUp(): void {
-  void router.push(SIGN_UP_ROUTE)
-}
-
-function parseNavTarget(to: string): { path: string; hash: string } {
-  const hashIdx = to.indexOf('#')
-
-  return {
-    path: (hashIdx >= 0 ? to.slice(0, hashIdx) : to) || '/',
-    hash: hashIdx >= 0 ? to.slice(hashIdx) : '',
-  }
-}
-
-function isNavActive(to: string): boolean {
-  const { path, hash } = parseNavTarget(to)
-
-  if (hash) {
-    return route.path === path && route.hash === hash
-  }
-
-  if (path === '/') {
-    return route.path === '/' && !route.hash
-  }
-
-  return route.path === path || route.path.startsWith(`${path}/`)
-}
+const items = computed(() => publicNav.map((item) => ({ label: t(item.labelKey), to: item.to })))
 </script>

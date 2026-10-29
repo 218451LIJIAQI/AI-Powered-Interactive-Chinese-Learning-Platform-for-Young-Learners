@@ -1,519 +1,734 @@
 <template>
-  <div class="page-stack student-quiz-page">
-    <section class="student-quiz-header">
-      <button class="student-link-button" type="button" @click="openRecommendedPractice">
-        <IconGlyph name="chevronLeft" :size="16" />
-        {{ t('studentQuiz.back') }}
-      </button>
-      <div class="student-quiz-title-row">
-        <div class="student-quiz-title-badge">你好</div>
-        <div>
-          <h1>{{ quiz.title }}</h1>
-          <p>{{ quizMetaLabel }}</p>
-        </div>
-      </div>
-    </section>
+  <div class="class-focus-page">
+    <FocusTopBar
+      :label="topLabel"
+      :close-label="t('classPlayer.quiz.leaveLabel')"
+      :progress="topProgress"
+      @close="requestLeave"
+    />
 
-    <DataNotice :using-fallback="usingFallback" :error="noticeError" />
+    <div class="class-focus-main page-stack" :class="{ 'is-wide': result }">
+      <!-- Result -->
+      <template v-if="result">
+        <header class="class-focus-header">
+          <span class="page-eyebrow">{{ t('classPlayer.result.eyebrow', { lesson: result.quiz.lessonTitle }) }}</span>
+          <h1 class="class-focus-title">{{ t('classPlayer.quiz.title', { title: result.quiz.title }) }}</h1>
+        </header>
+        <DataNotice :info="timeUpNotice ? t('classPlayer.quiz.timeUp') : null" />
 
-    <ResourceSection :loading="pageLoading" :error="pageError" @retry="reloadAll">
-      <section class="student-quiz-layout">
-        <div class="student-quiz-main">
-          <form v-if="activeQuestion" class="student-quiz-card" @submit.prevent="submitQuiz">
-            <div class="student-quiz-progress-row">
-              <strong>{{
-                t('studentQuiz.questionOf', { current: currentQuestionNumber, total: totalQuestionCount })
-              }}</strong>
-              <div class="student-quiz-progress-track"><span :style="{ width: quizProgressWidth }" /></div>
-              <span><IconGlyph name="history" :size="15" /> {{ quizTimeLabel }}</span>
+        <div class="quiz-result-layout">
+          <section class="quiz-score" aria-labelledby="quiz-score-title" data-testid="quiz-result">
+            <h2 id="quiz-score-title" class="page-eyebrow">{{ t('classPlayer.result.yourResult') }}</h2>
+            <dl class="quiz-score-figures">
+              <div class="quiz-score-figure is-main">
+                <dt>{{ t('classPlayer.result.percentage') }}</dt>
+                <dd class="stat-figure">{{ result.percent }}%</dd>
+              </div>
+              <div class="quiz-score-figure">
+                <dt>{{ t('classPlayer.result.score') }}</dt>
+                <dd>{{ t('classPlayer.result.marks', { score: result.score, max: result.maxScore }) }}</dd>
+              </div>
+              <div class="quiz-score-figure">
+                <dt>{{ t('classPlayer.result.best') }}</dt>
+                <dd>{{ result.bestPercent ?? result.percent }}%</dd>
+              </div>
+            </dl>
+            <p class="type-caption">
+              {{
+                t('classPlayer.result.submitted', {
+                  when: formatDateTime(result.submittedAt),
+                  hints: t('classPlayer.result.hintsUsed', result.hintsUsed),
+                })
+              }}
+            </p>
+            <p class="callout" :class="{ 'is-success': result.lessonStatus === 'MASTERED' }">
+              <IconGlyph :name="result.lessonStatus === 'MASTERED' ? 'check' : 'target'" :size="16" />
+              <span>
+                {{ masteryText }}
+                <span v-if="result.lessonStatus !== 'MASTERED'" class="quiz-score-rule">
+                  <template v-if="result.activitiesLeft">
+                    {{ t('classPlayer.result.activitiesLeft', result.activitiesLeft) }} ·
+                  </template>
+                  {{ t('classPlayer.result.masteryRule') }}
+                </span>
+              </span>
+            </p>
+          </section>
+
+          <aside class="quiz-result-side" aria-labelledby="quiz-next-title">
+            <h2 id="quiz-next-title" class="quiz-section-title">{{ t('classPlayer.result.nextStep') }}</h2>
+            <ol class="quiz-next-steps">
+              <li v-if="result.suggestion" class="quiz-next-step">
+                <span class="page-eyebrow student-classes-pigment">{{ t('classPlayer.result.practise') }}</span>
+                <strong>{{
+                  t('classPlayer.result.practiseSkill', { skill: t(SKILL_KEYS[result.suggestion.skill]) })
+                }}</strong>
+                <p class="type-caption">
+                  {{
+                    result.suggestion.activity
+                      ? t('classPlayer.result.practiseText', {
+                          skill: t(SKILL_KEYS[result.suggestion.skill]),
+                          activity: result.suggestion.activity.title,
+                        })
+                      : t('classPlayer.result.practiseNoActivity', { skill: t(SKILL_KEYS[result.suggestion.skill]) })
+                  }}
+                </p>
+                <RouterLink
+                  class="btn btn-primary btn-sm"
+                  :to="
+                    result.suggestion.activity
+                      ? activityRoute(result.suggestion.activity.type, result.suggestion.activity.id)
+                      : lessonRoute
+                  "
+                >
+                  <IconGlyph name="target" :size="16" />
+                  {{ t('classPlayer.result.practiseSkill', { skill: t(SKILL_KEYS[result.suggestion.skill]) }) }}
+                </RouterLink>
+              </li>
+              <li class="quiz-next-step">
+                <span class="page-eyebrow student-classes-pigment">{{ t('classPlayer.result.retake') }}</span>
+                <strong>{{ t('classPlayer.result.retakeTitle') }}</strong>
+                <p class="type-caption">{{ t('classPlayer.result.retakeText') }}</p>
+                <button
+                  type="button"
+                  class="btn btn-sm"
+                  :class="result.suggestion ? 'btn-secondary' : 'btn-primary'"
+                  :disabled="starting"
+                  :aria-busy="starting"
+                  @click="start"
+                >
+                  <IconGlyph name="retry" :size="16" />{{ t('classPlayer.result.retakeTitle') }}
+                </button>
+              </li>
+            </ol>
+            <RouterLink class="btn btn-ghost btn-block" :to="lessonRoute">
+              <IconGlyph name="chevronLeft" :size="16" />{{ t('classPlayer.result.lessonStep') }}
+            </RouterLink>
+          </aside>
+
+          <section v-if="result.feedback.length" class="quiz-feedback" aria-labelledby="quiz-feedback-title">
+            <h2 id="quiz-feedback-title" class="quiz-section-title">{{ t('classPlayer.result.feedback') }}</h2>
+            <ul class="quiz-feedback-list">
+              <li v-for="item in result.feedback" :key="item.id" class="quiz-feedback-item">
+                <PortraitAvatar :size="40" :name="item.teacherName" />
+                <figure class="quiz-feedback-note">
+                  <blockquote>{{ item.message }}</blockquote>
+                  <figcaption class="type-caption">
+                    {{ item.teacherName }} · {{ formatDateTime(item.createdAt) }}
+                  </figcaption>
+                </figure>
+              </li>
+            </ul>
+          </section>
+
+          <section class="quiz-review" aria-labelledby="quiz-review-title">
+            <div class="quiz-review-head">
+              <div>
+                <h2 id="quiz-review-title" class="quiz-section-title">{{ t('classPlayer.result.review') }}</h2>
+                <p class="type-caption">
+                  {{ t('classPlayer.result.reviewFacts', { wrong: result.wrongCount, correct: result.correctCount }) }}
+                </p>
+              </div>
+              <label class="choice">
+                <input v-model="showAllQuestions" type="checkbox" />
+                {{ t('classPlayer.result.showAll') }}
+              </label>
             </div>
-
-            <div class="student-quiz-question">
-              <span class="student-quiz-audio" aria-hidden="true"><IconGlyph name="live" :size="20" /></span>
-              <h2>{{ activeQuestion.questionText }}</h2>
-              <p>{{ quizDescriptionLabel }}</p>
-            </div>
-
-            <div class="student-quiz-options">
-              <button
-                v-for="(option, index) in activeQuestion.options"
-                :key="option.id"
-                class="student-quiz-option"
-                :class="optionButtonClasses(option.optionText)"
-                :aria-pressed="answers[activeQuestion.id] === option.optionText"
-                :disabled="hasSubmitted"
-                type="button"
-                @click="chooseAnswer(activeQuestion.id, option.optionText)"
+            <p v-if="!reviewed.length" class="callout is-success is-compact">
+              <IconGlyph name="check" :size="16" /><span>{{ t('classPlayer.result.allCorrect') }}</span>
+            </p>
+            <ol class="quiz-review-list">
+              <li
+                v-for="reviewedQuestion in reviewed"
+                :key="reviewedQuestion.questionId"
+                class="quiz-review-item"
+                :class="reviewedQuestion.correct ? 'is-correct' : 'is-wrong'"
               >
-                <span>{{ optionLetter(index) }}</span>
-                <strong>{{ option.optionText }}</strong>
-              </button>
+                <div class="quiz-review-item-head">
+                  <span class="quiz-review-number" aria-hidden="true">{{ reviewedQuestion.number }}</span>
+                  <strong class="quiz-review-question">
+                    <span class="sr-only">{{ reviewedQuestion.number }}. </span>
+                    <CjkText :text="reviewedQuestion.text" />
+                  </strong>
+                  <StatusPill
+                    :label="
+                      reviewedQuestion.correct ? t('classPlayer.result.correct') : t('classPlayer.result.incorrect')
+                    "
+                    :tone="reviewedQuestion.correct ? 'success' : 'danger'"
+                    :icon="reviewedQuestion.correct ? 'check' : 'close'"
+                  />
+                </div>
+                <dl class="quiz-review-answers">
+                  <div>
+                    <dt>{{ t('classPlayer.result.yourAnswer') }}</dt>
+                    <dd>
+                      <CjkText :text="reviewedQuestion.yourAnswer || t('classPlayer.result.noAnswer')" />
+                      <span v-if="reviewedQuestion.hintUsed" class="tag">{{
+                        t('classPlayer.result.hintUsedNote')
+                      }}</span>
+                    </dd>
+                  </div>
+                  <div v-if="!reviewedQuestion.correct && reviewedQuestion.correctAnswer" class="is-correct">
+                    <dt>{{ t('classPlayer.result.correctAnswer') }}</dt>
+                    <dd><CjkText :text="reviewedQuestion.correctAnswer" /></dd>
+                  </div>
+                </dl>
+                <p v-if="reviewedQuestion.explanation" class="quiz-review-explanation">
+                  <strong>{{ t('classPlayer.result.explanation') }}</strong> ·
+                  <CjkText :text="reviewedQuestion.explanation" />
+                </p>
+                <RouterLink
+                  v-if="!reviewedQuestion.correct"
+                  class="btn btn-link"
+                  :to="{
+                    name: 'student-ai',
+                    params: { tab: 'ask' },
+                    query: {
+                      q: t('classPlayer.result.askQuestion', {
+                        question: reviewedQuestion.text,
+                        answer: reviewedQuestion.yourAnswer ?? '',
+                        correct: reviewedQuestion.correctAnswer ?? '',
+                      }),
+                    },
+                  }"
+                >
+                  <IconGlyph name="ai" :size="16" />{{ t('classPlayer.result.askSparkBot') }}
+                </RouterLink>
+              </li>
+            </ol>
+          </section>
+        </div>
+      </template>
+
+      <template v-else-if="currentQuiz">
+        <header class="class-focus-header">
+          <span class="page-eyebrow">
+            {{ t('classPlayer.quiz.eyebrow', { classTitle: currentQuiz.classTitle, lesson: currentQuiz.lessonTitle }) }}
+          </span>
+          <h1 class="class-focus-title">{{ t('classPlayer.quiz.title', { title: currentQuiz.title }) }}</h1>
+          <p class="type-caption">{{ quizFacts(currentQuiz) }}</p>
+        </header>
+        <DataNotice :error="actionError" />
+
+        <!-- An attempt in progress -->
+        <template v-if="session">
+          <section v-if="question" class="quiz-question-panel">
+            <div class="quiz-question-top">
+              <strong class="quiz-question-count">{{
+                t('classPlayer.quiz.question', { number: index + 1, total: session.questions.length })
+              }}</strong>
+              <nav class="quiz-question-dots" :aria-label="t('classPlayer.quiz.questionNav')">
+                <button
+                  v-for="(item, itemIndex) in session.questions"
+                  :key="item.id"
+                  type="button"
+                  class="quiz-question-dot"
+                  :class="{ 'is-current': itemIndex === index, 'is-answered': isAnswered(item.id) }"
+                  :aria-current="itemIndex === index ? 'step' : undefined"
+                  :aria-label="
+                    isAnswered(item.id)
+                      ? t('classPlayer.quiz.goToAnswered', { number: itemIndex + 1 })
+                      : t('classPlayer.quiz.goTo', { number: itemIndex + 1 })
+                  "
+                  @click="goTo(itemIndex)"
+                >
+                  {{ itemIndex + 1 }}
+                </button>
+              </nav>
             </div>
 
-            <div class="student-quiz-tip">
-              <span><IconGlyph name="fun" :size="20" /></span>
-              <p>
-                <strong>{{ t('studentQuiz.tip') }}</strong> {{ t('studentQuiz.tipHint') }}
+            <div class="quiz-question-stage">
+              <h2 class="quiz-question-text"><CjkText :text="question.text" /></h2>
+              <audio
+                v-if="question.audioUrl"
+                class="quiz-question-audio"
+                :src="question.audioUrl"
+                controls
+                :aria-label="t('classPlayer.quiz.audioLabel')"
+              />
+              <img v-if="question.imageUrl" class="quiz-question-image" :src="question.imageUrl" alt="" />
+              <p class="quiz-question-instruction">
+                {{
+                  isTypedQuestion(question.type) ? t('classPlayer.quiz.typeAnswer') : t('classPlayer.quiz.chooseBest')
+                }}
+              </p>
+              <button
+                v-if="question.hasHint && session.quiz.hintsAvailable && !hints[question.id]"
+                type="button"
+                class="btn btn-secondary btn-sm"
+                :disabled="hintBusy"
+                @click="showHint(question.id)"
+              >
+                <IconGlyph name="hint" :size="16" />{{ t('classPlayer.quiz.showHint') }}
+              </button>
+              <p v-if="hints[question.id]" class="callout is-compact quiz-question-hint" role="status">
+                <IconGlyph name="hint" :size="16" /><span>{{
+                  t('classPlayer.quiz.hint', { hint: hints[question.id] })
+                }}</span>
               </p>
             </div>
 
-            <div class="row-between u-wrap u-gap-12">
-              <button
-                class="student-quiz-nav-button"
-                type="button"
-                :disabled="activeQuestionIndex === 0"
-                @click="goToPreviousQuestion"
-              >
-                {{ t('studentQuiz.previous') }}
-              </button>
-              <span class="muted">{{
-                t('studentQuiz.answered', { answered: answeredCount, total: totalQuestionCount })
-              }}</span>
-              <button
-                class="student-quiz-nav-button"
-                type="button"
-                :disabled="isLastQuestion"
-                @click="goToNextQuestion"
-              >
-                {{ t('studentQuiz.next') }}
-              </button>
+            <div v-if="isTypedQuestion(question.type)" class="field">
+              <label class="field-label" :for="`answer-${question.id}`">{{ t('classPlayer.quiz.answerLabel') }}</label>
+              <input
+                :id="`answer-${question.id}`"
+                class="input cjk-text"
+                :value="typed[question.id] ?? ''"
+                maxlength="500"
+                autocomplete="off"
+                @input="typeAnswer(question.id, ($event.target as HTMLInputElement).value)"
+                @blur="saveTyped(question.id)"
+              />
             </div>
-
-            <button
-              class="btn btn-accent student-quiz-submit"
-              :disabled="quizReadOnly || submitting || hasSubmitted || !allQuestionsAnswered"
-              type="submit"
-            >
-              {{ submitButtonLabel }}
-            </button>
-          </form>
-
-          <StatePanel v-else icon="quiz" :title="t('studentQuiz.noQuiz')" :message="quizEmptyMessage" tone="empty">
-            <template #actions>
-              <button class="btn btn-primary" type="button" @click="openLessons">
-                {{ t('studentQuiz.openLessons') }}
-              </button>
-              <button class="btn btn-secondary" type="button" @click="openRecommendedPractice">
-                {{ t('studentQuiz.practiceInstead') }}
-              </button>
-            </template>
-          </StatePanel>
-
-          <article v-if="hasSubmitted" class="student-quiz-review">
-            <div class="row u-mb-12">
-              <span class="student-review-alert"><IconGlyph name="alert" :size="14" /></span>
-              <strong>{{ t('studentQuiz.reviewTitle') }}</strong>
-            </div>
-            <div class="student-quiz-review-grid">
-              <article v-for="answer in result.answers" :key="answer.questionId" class="student-quiz-review-card">
-                <small>{{ answer.correct ? t('studentQuiz.correctAnswer') : t('studentQuiz.yourAnswer') }}</small>
-                <strong>{{ answer.questionText }}</strong>
-                <p>{{ answer.studentAnswer || t('studentQuiz.noAnswer') }}</p>
-                <span :class="answer.correct ? 'is-correct' : 'is-wrong'">
-                  <IconGlyph :name="answer.correct ? 'status' : 'alert'" :size="14" />
-                  {{ answer.correct ? t('studentQuiz.correct') : t('studentQuiz.review') }}
+            <div v-else class="quiz-options" role="radiogroup" :aria-label="question.text">
+              <button
+                v-for="(option, optionIndex) in question.options"
+                :key="option.id"
+                type="button"
+                role="radio"
+                class="quiz-option"
+                :class="{ 'is-selected': chosen[question.id] === option.id }"
+                :aria-checked="chosen[question.id] === option.id"
+                :data-testid="`quiz-option-${option.id}`"
+                @click="choose(question.id, option.id)"
+              >
+                <span class="quiz-option-letter" aria-hidden="true">
+                  <IconGlyph v-if="chosen[question.id] === option.id" name="check" :size="14" />
+                  <template v-else>{{ LETTERS[optionIndex] ?? optionIndex + 1 }}</template>
                 </span>
-              </article>
-            </div>
-          </article>
-
-          <article v-else-if="activeQuestion" class="student-quiz-review student-quiz-review--pending">
-            <div class="row u-mb-12">
-              <span class="student-review-alert"><IconGlyph name="help" :size="14" /></span>
-              <strong>{{ t('studentQuiz.feedbackLocked') }}</strong>
-            </div>
-            <p>
-              {{ t('studentQuiz.feedbackHint') }}
-            </p>
-          </article>
-        </div>
-
-        <aside class="student-quiz-side">
-          <article class="panel student-quiz-side-card">
-            <div class="row-between">
-              <strong>{{ t('studentQuiz.quizProgress') }}</strong>
-              <button class="student-link-button" type="button" @click="openRecommendedPractice">
-                {{ t('studentQuiz.viewAll') }}
+                <CjkText :text="option.text" />
               </button>
             </div>
-            <div class="student-quiz-ring">
-              <span>{{ quizAveragePercent }}%</span>
-            </div>
-            <div class="student-quiz-side-stats">
-              <div>
-                <small>{{ t('studentQuiz.lessonsStarted') }}</small>
-                <strong>{{ startedLessonCount }}</strong>
-              </div>
-              <div>
-                <small>{{ t('studentQuiz.completed') }}</small>
-                <strong>{{ completedLessonCount }}</strong>
-              </div>
-            </div>
-            <ProgressBar :progress="quizAveragePercent" />
-          </article>
 
-          <article class="panel student-quiz-side-card">
-            <div class="row-between">
-              <strong>{{ t('studentQuiz.recentProgress') }}</strong>
-              <button class="student-link-button" type="button" @click="openRecommendedPractice">
-                {{ t('studentQuiz.openPractice') }}
+            <div class="class-player-nav">
+              <button type="button" class="btn btn-outline btn-sm" :disabled="index === 0" @click="goTo(index - 1)">
+                <IconGlyph name="chevronLeft" :size="16" />{{ t('classPlayer.quiz.previous') }}
+              </button>
+              <button
+                type="button"
+                class="btn btn-outline btn-sm"
+                :disabled="index === session.questions.length - 1"
+                @click="goTo(index + 1)"
+              >
+                {{ t('classPlayer.quiz.next') }}<IconGlyph name="chevronRight" :size="16" />
               </button>
             </div>
-            <div v-if="performanceItems.length" class="student-quiz-performance-list">
-              <div v-for="item in performanceItems" :key="item.title" class="student-quiz-performance-item">
-                <span><IconGlyph :name="item.icon" :size="16" /></span>
-                <div>
-                  <strong>{{ item.title }}</strong>
-                  <small>{{ item.when }}</small>
-                </div>
-                <b>{{ item.score }}</b>
-              </div>
-            </div>
-            <p v-else class="muted u-m-0">{{ t('studentQuiz.noProgress') }}</p>
-          </article>
+          </section>
 
-          <article class="student-quiz-help-card">
-            <strong>{{ t('studentQuiz.needHint') }}</strong>
-            <p>{{ t('studentQuiz.hintHelp') }}</p>
-            <button class="btn btn-primary" type="button" @click="openAiHelper">
-              {{ t('studentQuiz.askSparkBot') }}
+          <div class="quiz-submit-row">
+            <div class="quiz-submit-copy">
+              <strong>{{
+                t('classPlayer.quiz.answered', { answered: answeredCount, total: session.questions.length })
+              }}</strong>
+              <span class="type-caption" role="status">
+                <IconGlyph name="check" :size="14" />{{
+                  savingCount ? t('classPlayer.quiz.saving') : t('classPlayer.quiz.autosave')
+                }}
+              </span>
+            </div>
+            <button
+              type="button"
+              class="btn btn-primary btn-lg"
+              :disabled="remaining > 0 || submitting || savingCount > 0"
+              :aria-busy="submitting"
+              data-testid="quiz-submit"
+              @click="submit"
+            >
+              {{ remaining > 0 ? t('classPlayer.quiz.answerMore', remaining) : t('classPlayer.quiz.submit') }}
             </button>
-            <span><IconGlyph name="ai" :size="28" /></span>
-          </article>
-        </aside>
-      </section>
-    </ResourceSection>
+          </div>
+        </template>
+
+        <!-- Before the attempt (`currentQuiz` is the intro here) -->
+        <section v-else class="quiz-intro">
+          <p class="quiz-intro-text">
+            <IconGlyph :name="currentQuiz.timeLimitMinutes ? 'timer' : 'clock'" :size="20" />
+            <span>{{
+              currentQuiz.timeLimitMinutes
+                ? t('classPlayer.quiz.introTimed', { minutes: currentQuiz.timeLimitMinutes })
+                : t('classPlayer.quiz.introUntimed')
+            }}</span>
+          </p>
+          <div class="quiz-intro-foot">
+            <p v-if="currentQuiz.bestPercent !== null" class="quiz-intro-best">
+              <IconGlyph name="trophy" :size="16" />{{
+                t('classPlayer.quiz.bestSoFar', { percent: currentQuiz.bestPercent })
+              }}
+            </p>
+            <div class="quiz-intro-actions">
+              <RouterLink class="btn btn-ghost" :to="lessonRoute">{{ t('classPlayer.quiz.backToLesson') }}</RouterLink>
+              <button
+                type="button"
+                class="btn btn-primary"
+                :disabled="starting"
+                :aria-busy="starting"
+                data-testid="quiz-start"
+                @click="start"
+              >
+                {{ currentQuiz.openAttemptId ? t('classPlayer.quiz.resume') : t('classPlayer.quiz.start') }}
+              </button>
+            </div>
+          </div>
+        </section>
+      </template>
+
+      <template v-else>
+        <h1 class="sr-only">{{ t('classPlayer.quiz.topLabelUntimed') }}</h1>
+        <StatePanel
+          v-if="introResource.loading.value || loadingResult"
+          tone="loading"
+          spacious
+          :title="t('classes.loading')"
+          :message="t('classPlayer.quiz.topLabelUntimed')"
+        />
+        <StatePanel
+          v-else
+          tone="error"
+          icon="alert"
+          spacious
+          :title="t('classPlayer.quiz.loadErrorTitle')"
+          :message="introResource.error.value ?? actionError ?? ''"
+        >
+          <template #actions>
+            <button class="btn btn-secondary" type="button" @click="introResource.reload">
+              {{ t('classes.retry') }}
+            </button>
+            <RouterLink class="btn btn-primary" :to="{ name: 'student-classes' }">{{
+              t('classes.classes')
+            }}</RouterLink>
+          </template>
+        </StatePanel>
+      </template>
+    </div>
+
+    <ConfirmDialog
+      :open="leaveOpen"
+      :title="t('classPlayer.quiz.leaveTitle')"
+      :message="session?.expiresAt ? t('classPlayer.quiz.leaveMessageTimed') : t('classPlayer.quiz.leaveMessage')"
+      tone="leave"
+      :confirm-label="t('classes.leave')"
+      :cancel-label="t('classes.keepGoing')"
+      @confirm="leave"
+      @cancel="leaveOpen = false"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { useRoute, useRouter } from 'vue-router'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 
-import { studentApi } from '@/api/services'
+import { activitySlug, studentClassesApi } from '@/api/classes'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import DataNotice from '@/components/common/DataNotice.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
-import ProgressBar from '@/components/common/ProgressBar.vue'
+import PortraitAvatar from '@/components/common/PortraitAvatar.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
-import ResourceSection from '@/components/dashboard/ResourceSection.vue'
+import StatusPill from '@/components/common/StatusPill.vue'
+import FocusTopBar from '@/components/layout/FocusTopBar.vue'
+import CjkText from '@/components/learning/CjkText.vue'
+import { useActionFeedback } from '@/composables/useActionFeedback'
+import { useLocalMessages } from '@/composables/useLocalMessages'
 import { useResource } from '@/composables/useResource'
-import { studentProgress as studentProgressDemo, studentQuiz } from '@/demo/data'
-import { studentQuizMessages } from '@/plugins/studentQuizMessages'
-import type { QuizAttemptResultResponse, StudentQuizResponse } from '@/types/api'
-import { resolveApiError } from '@/utils/apiError'
-import { clampPercent, formatDate, nonNegativeInteger } from '@/utils/format'
-import { inferPracticeActivityFromText, practiceRoute } from '@/utils/practiceRoute'
+import { classPlayerMessages } from '@/plugins/classPlayerMessages'
+import { classesMessages } from '@/plugins/classesMessages'
+import type { ClassActivityType, QuizIntro, QuizResult, QuizSession } from '@/types/classes'
+import { apiErrorStatus, resolveApiError } from '@/utils/apiError'
+import { SKILL_KEYS, STAGE_KEYS, isTypedQuestion } from '@/utils/classes'
+import { formatClock, formatDateTime, ratioPercent } from '@/utils/format'
+import '@/styles/classes.css'
 
-const { t } = useI18n({
-  messages: {
-    en: { studentQuiz: studentQuizMessages.en },
-    ms: { studentQuiz: studentQuizMessages.ms },
-    zh: { studentQuiz: studentQuizMessages.zh },
-  },
-})
-
-type AnswerTone = '' | 'correct' | 'wrong'
-
+const { t } = useLocalMessages({ classPlayer: classPlayerMessages, classes: classesMessages })
 const route = useRoute()
 const router = useRouter()
-const submitting = ref(false)
-const hasSubmitted = ref(false)
-const actionError = ref<string | null>(null)
-const answers = reactive<Record<number, string>>({})
-const activeQuestionIndex = ref(0)
-const currentQuizId = computed(() => numericParam(route.params.quizId))
-const requestedLessonId = computed(() => numericParam(route.query.lessonId))
+const { actionError, showError, clearFeedback } = useActionFeedback()
 
-const quizResource = useResource(loadQuiz, () => studentQuiz)
-const progressResource = useResource(() => studentApi.progress(), studentProgressDemo)
+const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
+const TYPING_SAVE_DELAY_MS = 700
 
-const emptyQuiz = {
-  id: 0,
-  lessonId: 0,
-  lessonTitle: '',
-  title: t('studentQuiz.chooseQuiz'),
-  description: t('studentQuiz.chooseQuizHint'),
-  timeLimitMinutes: null,
-  totalPoints: 0,
-  questions: [],
-} satisfies StudentQuizResponse
-const emptyResult = {
-  attemptId: 0,
-  quizId: 0,
-  quizTitle: '',
-  score: 0,
-  maxScore: 0,
-  totalQuestions: 0,
-  correctCount: 0,
-  wrongCount: 0,
-  earnedPoints: 0,
-  totalPoints: 0,
-  passed: false,
-  startedAt: '',
-  submittedAt: '',
-  answers: [],
-} satisfies QuizAttemptResultResponse
-const resultData = ref<QuizAttemptResultResponse | null>(null)
-const emptyProgress = {
-  totalLessonsStarted: 0,
-  completedLessons: 0,
-  quizAverage: 0,
-  overallCompletionPercent: 0,
-  weakAreas: [],
-  lastActivitySummary: null,
-  recentLessons: [],
-}
+const quizId = computed(() => Number(route.params.quizId))
+const introResource = useResource(() => studentClassesApi.quiz(quizId.value))
+const intro = computed(() => introResource.data.value)
+const session = ref<QuizSession | null>(null)
+const result = ref<QuizResult | null>(null)
+const loadingResult = ref(false)
+const timeUpNotice = ref(false)
+/** The quiz in the header before and during an attempt. */
+const currentQuiz = computed(() => session.value?.quiz ?? intro.value)
 
-const quiz = computed(() => quizResource.data.value ?? (quizResource.usingFallback.value ? studentQuiz : emptyQuiz))
-const progress = computed(
-  () => progressResource.data.value ?? (progressResource.usingFallback.value ? studentProgressDemo : emptyProgress),
-)
-const quizAveragePercent = computed(() => clampPercent(progress.value.quizAverage))
-const startedLessonCount = computed(() => nonNegativeInteger(progress.value.totalLessonsStarted))
-const completedLessonCount = computed(() => nonNegativeInteger(progress.value.completedLessons))
-const result = computed(() => resultData.value ?? emptyResult)
-const pageLoading = computed(() => quizResource.loading.value || progressResource.loading.value)
-const pageError = computed(() => quizResource.error.value || progressResource.error.value)
-const noticeError = computed(() => actionError.value || pageError.value)
-const usingFallback = computed(() => quizResource.usingFallback.value || progressResource.usingFallback.value)
-const quizReadOnly = computed(() => quizResource.usingFallback.value)
-const hasQuizSelection = computed(() => Boolean(quiz.value.id))
-const orderedQuestions = computed(() =>
-  [...quiz.value.questions].sort((first, second) => first.displayOrder - second.displayOrder),
-)
-const activeQuestion = computed(() => orderedQuestions.value[activeQuestionIndex.value])
-const optionLetters = ['A', 'B', 'C', 'D', 'E', 'F']
-const totalQuestionCount = computed(() => orderedQuestions.value.length)
-const quizMetaLabel = computed(() => {
-  const parts = [
-    quiz.value.lessonTitle || t('studentQuiz.lesson', { id: quiz.value.lessonId }),
-    t('studentQuiz.questions', { count: totalQuestionCount.value }),
-    t('studentQuiz.points', { count: quiz.value.totalPoints }),
-  ]
-  return parts.filter(Boolean).join(' - ')
+const lessonRoute = computed(() => {
+  const quiz = result.value?.quiz ?? currentQuiz.value
+  return quiz
+    ? { name: 'student-class-lesson', params: { classId: quiz.classId, lessonId: quiz.lessonId } }
+    : { name: 'student-classes' }
 })
-const quizDescriptionLabel = computed(() => quiz.value.description || t('studentQuiz.chooseBest'))
-const quizTimeLabel = computed(() =>
-  quiz.value.timeLimitMinutes ? `${quiz.value.timeLimitMinutes}:00` : t('studentQuiz.noTimeLimit'),
-)
-const currentQuestionNumber = computed(() =>
-  Math.min(activeQuestionIndex.value + 1, Math.max(totalQuestionCount.value, 1)),
-)
-const answeredCount = computed(() => orderedQuestions.value.filter((question) => Boolean(answers[question.id])).length)
-const unansweredQuestionCount = computed(() => Math.max(0, totalQuestionCount.value - answeredCount.value))
-const allQuestionsAnswered = computed(
-  () => totalQuestionCount.value > 0 && answeredCount.value === totalQuestionCount.value,
-)
-const isLastQuestion = computed(() => activeQuestionIndex.value >= totalQuestionCount.value - 1)
-const quizProgressWidth = computed(
-  () => `${Math.min(100, Math.max(8, (currentQuestionNumber.value / Math.max(totalQuestionCount.value, 1)) * 100))}%`,
-)
-const submitButtonLabel = computed(() => {
-  if (submitting.value) return t('studentQuiz.submitting')
-  if (hasSubmitted.value) return t('studentQuiz.submitted')
-  if (!allQuestionsAnswered.value) return t('studentQuiz.answerMore', { count: unansweredQuestionCount.value })
-  return t('studentQuiz.submit')
-})
-const quizEmptyMessage = computed(() => {
-  if (hasQuizSelection.value) {
-    return t('studentQuiz.emptyQuestions')
-  }
 
-  if (requestedLessonId.value) {
-    return t('studentQuiz.emptyLesson')
-  }
-
-  return t('studentQuiz.emptyAccount')
-})
-const performanceItems = computed(() =>
-  progress.value.recentLessons.slice(0, 3).map((lesson) => {
-    const completionPercent = clampPercent(lesson.completionPercent)
-
-    return {
-      icon: iconForLessonProgress(completionPercent, lesson.completed),
-      title: lesson.lessonTitle,
-      when: lesson.lastAccessedAt
-        ? formatDate(lesson.lastAccessedAt)
-        : progressStatusLabel(completionPercent, lesson.completed),
-      score: `${completionPercent}%`,
-    }
-  }),
-)
-const recommendedPracticeActivity = computed(() =>
-  inferPracticeActivityFromText(
-    [
-      result.value.answers.find((answer) => !answer.correct)?.questionText,
-      progress.value.weakAreas[0],
-      quiz.value.lessonTitle,
-      quiz.value.description,
-    ].find((item): item is string => Boolean(item?.trim())),
-  ),
-)
-
-function iconForLessonProgress(completionPercent: number, completed: boolean): string {
-  if (completed || completionPercent >= 100) return 'status'
-  if (completionPercent > 0) return 'learn'
-  return 'star'
-}
-
-function progressStatusLabel(completionPercent: number, completed: boolean): string {
-  if (completed || completionPercent >= 100) return t('studentQuiz.completed')
-  if (completionPercent > 0) return t('studentQuiz.inProgress')
-  return t('studentQuiz.notStarted')
-}
-
-function chooseAnswer(questionId: number, optionText: string): void {
-  answers[questionId] = optionText
-  actionError.value = null
-}
-
-function answerTone(optionText: string): AnswerTone {
-  if (!hasSubmitted.value) return ''
-  const selectedAnswer = activeQuestion.value ? answers[activeQuestion.value.id] : ''
-  const matchingResult = result.value.answers.find((answer) => answer.questionId === activeQuestion.value?.id)
-  if (!matchingResult) return ''
-  if (matchingResult.correctAnswer === optionText) return 'correct'
-  if (selectedAnswer === optionText && !matchingResult.correct) return 'wrong'
-  return ''
-}
-
-function optionButtonClasses(optionText: string): Record<string, boolean> {
-  const tone = answerTone(optionText)
+function activityRoute(type: ClassActivityType, activityId: number) {
+  const quiz = result.value!.quiz
   return {
-    'is-selected': activeQuestion.value ? answers[activeQuestion.value.id] === optionText : false,
-    'is-correct': tone === 'correct',
-    'is-wrong': tone === 'wrong',
+    name: 'student-class-activity',
+    params: { classId: quiz.classId, lessonId: quiz.lessonId, activityType: activitySlug(type), activityId },
   }
 }
 
-function optionLetter(index: number): string {
-  return optionLetters[index] ?? String(index + 1)
+function quizFacts(quiz: QuizIntro): string {
+  const parts = [
+    quiz.stage ? t(STAGE_KEYS[quiz.stage]) : null,
+    t('classes.questions', quiz.questionCount),
+    t('classes.marks', quiz.marks),
+    quiz.timeLimitMinutes ? t('classPlayer.quiz.timeLimit', { minutes: quiz.timeLimitMinutes }) : null,
+    quiz.hintsAvailable ? t('classPlayer.quiz.hintsAvailable') : null,
+  ]
+  return parts.filter(Boolean).join(' · ')
 }
 
-function goToQuestion(index: number): void {
-  activeQuestionIndex.value = Math.min(Math.max(index, 0), Math.max(totalQuestionCount.value - 1, 0))
-}
+// ----- a past result (?attempt=) -----
 
-function goToPreviousQuestion(): void {
-  goToQuestion(activeQuestionIndex.value - 1)
-}
-
-function goToNextQuestion(): void {
-  goToQuestion(activeQuestionIndex.value + 1)
-}
-
-function firstUnansweredQuestionIndex(): number {
-  return orderedQuestions.value.findIndex((question) => !answers[question.id])
-}
-
-function numericParam(value: unknown): number | null {
-  const rawValue = Array.isArray(value) ? value[0] : value
-  if (rawValue === null || rawValue === undefined || rawValue === '') return null
-
-  const parsed = Number(rawValue)
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null
-}
-
-async function loadQuiz(): Promise<StudentQuizResponse> {
-  const quizId = currentQuizId.value
-  if (quizId) {
-    return studentApi.quiz(quizId)
+async function showAttempt(attemptId: number): Promise<void> {
+  loadingResult.value = true
+  try {
+    result.value = await studentClassesApi.quizResult(attemptId)
+  } catch (reason) {
+    showError(resolveApiError(reason, t('classPlayer.quiz.loadErrorTitle')))
+  } finally {
+    loadingResult.value = false
   }
-
-  const quizPage = await studentApi.quizzes({
-    lessonId: requestedLessonId.value ?? undefined,
-    size: 20,
-  })
-  const firstQuiz = quizPage.items[0]
-  if (!firstQuiz) {
-    return emptyQuiz
-  }
-
-  return studentApi.quiz(firstQuiz.id)
 }
 
-function reloadAll(): void {
-  void quizResource.reload()
-  void progressResource.reload()
+watch(
+  () => route.query.attempt,
+  (attempt) => {
+    if (typeof attempt === 'string' && /^\d+$/.test(attempt)) void showAttempt(Number(attempt))
+  },
+  { immediate: true },
+)
+
+// ----- the attempt -----
+
+const index = ref(0)
+const chosen = ref<Record<number, number>>({})
+const typed = ref<Record<number, string>>({})
+const savedTyped = ref<Record<number, string>>({})
+const hints = ref<Record<number, string>>({})
+const savingCount = ref(0)
+const starting = ref(false)
+const submitting = ref(false)
+const hintBusy = ref(false)
+const leaveOpen = ref(false)
+const showAllQuestions = ref(false)
+const secondsLeft = ref<number | null>(null)
+let ticker: ReturnType<typeof setInterval> | null = null
+const typingTimers = new Map<number, ReturnType<typeof setTimeout>>()
+
+const question = computed(() => session.value?.questions[index.value] ?? null)
+const answeredCount = computed(() => session.value?.questions.filter((item) => isAnswered(item.id)).length ?? 0)
+const remaining = computed(() => (session.value?.questions.length ?? 0) - answeredCount.value)
+
+function isAnswered(questionId: number): boolean {
+  return chosen.value[questionId] !== undefined || Boolean(savedTyped.value[questionId]?.trim())
 }
 
-function openLessons(): void {
-  void router.push('/student/learn')
+function stopTimers(): void {
+  if (ticker) clearInterval(ticker)
+  ticker = null
+  typingTimers.forEach((timer) => clearTimeout(timer))
+  typingTimers.clear()
 }
+onBeforeUnmount(stopTimers)
 
-function openAiHelper(): void {
-  void router.push('/student/ai-helper')
-}
-
-function openRecommendedPractice(): void {
-  void router.push(practiceRoute(recommendedPracticeActivity.value))
-}
-
-async function submitQuiz(): Promise<void> {
-  if (submitting.value || hasSubmitted.value) return
-  actionError.value = null
-  if (!hasQuizSelection.value) {
-    actionError.value = t('studentQuiz.chooseBeforeSubmit')
-    return
-  }
-
-  if (quizReadOnly.value) {
-    actionError.value = t('studentQuiz.previewSubmit')
-    return
-  }
-
-  if (!allQuestionsAnswered.value) {
-    const firstMissingIndex = firstUnansweredQuestionIndex()
-    if (firstMissingIndex >= 0) {
-      goToQuestion(firstMissingIndex)
+function begin(next: QuizSession): void {
+  stopTimers()
+  session.value = next
+  result.value = null
+  timeUpNotice.value = false
+  index.value = 0
+  chosen.value = {}
+  typed.value = {}
+  savedTyped.value = {}
+  hints.value = {}
+  for (const answer of next.answers) {
+    if (answer.optionId !== null) chosen.value[answer.questionId] = answer.optionId
+    if (
+      answer.answerText !== null &&
+      isTypedQuestion(next.questions.find((q) => q.id === answer.questionId)?.type ?? '')
+    ) {
+      typed.value[answer.questionId] = answer.answerText
+      savedTyped.value[answer.questionId] = answer.answerText
     }
-    actionError.value = t('studentQuiz.answerAll')
+  }
+  secondsLeft.value = next.secondsLeft
+  if (next.secondsLeft !== null) {
+    ticker = setInterval(() => {
+      if (secondsLeft.value === null) return
+      secondsLeft.value = Math.max(0, secondsLeft.value - 1)
+      if (secondsLeft.value === 0) void finishOnTime()
+    }, 1000)
+  }
+}
+
+async function start(): Promise<void> {
+  starting.value = true
+  clearFeedback()
+  try {
+    begin(await studentClassesApi.startQuiz(quizId.value))
+    if (route.query.attempt) void router.replace({ query: {} })
+  } catch (reason) {
+    showError(resolveApiError(reason, t('classPlayer.quiz.loadErrorTitle')))
+  } finally {
+    starting.value = false
+  }
+}
+
+function goTo(next: number): void {
+  if (!session.value) return
+  const current = question.value
+  if (current && isTypedQuestion(current.type)) void saveTyped(current.id)
+  index.value = Math.min(Math.max(0, next), session.value.questions.length - 1)
+}
+
+/** An answer after the time limit makes the server submit the attempt: then the result is shown. */
+async function handleSaveFailure(reason: unknown): Promise<void> {
+  if (apiErrorStatus(reason) === 409 && session.value) {
+    await finishOnTime()
     return
   }
+  showError(resolveApiError(reason, t('classPlayer.quiz.saveError')))
+}
 
+async function choose(questionId: number, optionId: number): Promise<void> {
+  if (!session.value) return
+  const previous = chosen.value[questionId]
+  chosen.value = { ...chosen.value, [questionId]: optionId }
+  savingCount.value++
+  try {
+    await studentClassesApi.saveAnswer(session.value.attemptId, { questionId, optionId })
+  } catch (reason) {
+    const next = { ...chosen.value }
+    if (previous === undefined) delete next[questionId]
+    else next[questionId] = previous
+    chosen.value = next
+    await handleSaveFailure(reason)
+  } finally {
+    savingCount.value--
+  }
+}
+
+function typeAnswer(questionId: number, value: string): void {
+  typed.value = { ...typed.value, [questionId]: value }
+  const timer = typingTimers.get(questionId)
+  if (timer) clearTimeout(timer)
+  typingTimers.set(
+    questionId,
+    setTimeout(() => void saveTyped(questionId), TYPING_SAVE_DELAY_MS),
+  )
+}
+
+async function saveTyped(questionId: number): Promise<void> {
+  const timer = typingTimers.get(questionId)
+  if (timer) clearTimeout(timer)
+  typingTimers.delete(questionId)
+  const value = (typed.value[questionId] ?? '').trim()
+  if (!session.value || !value || value === savedTyped.value[questionId]) return
+  savingCount.value++
+  try {
+    await studentClassesApi.saveAnswer(session.value.attemptId, { questionId, answerText: value })
+    savedTyped.value = { ...savedTyped.value, [questionId]: value }
+  } catch (reason) {
+    await handleSaveFailure(reason)
+  } finally {
+    savingCount.value--
+  }
+}
+
+async function showHint(questionId: number): Promise<void> {
+  if (!session.value) return
+  hintBusy.value = true
+  try {
+    const hint = await studentClassesApi.hint(session.value.attemptId, questionId)
+    hints.value = { ...hints.value, [questionId]: hint.hint }
+  } catch (reason) {
+    await handleSaveFailure(reason)
+  } finally {
+    hintBusy.value = false
+  }
+}
+
+async function submit(): Promise<void> {
+  const current = question.value
+  if (current && isTypedQuestion(current.type)) await saveTyped(current.id)
+  clearFeedback()
+  await submitAttempt(false)
+}
+
+/** The time ran out: the server has submitted (or now submits) the attempt with the saved answers. */
+async function finishOnTime(): Promise<void> {
+  if (submitting.value) return
+  stopTimers()
+  await submitAttempt(true)
+}
+
+/** Submits the attempt and shows its result, with the "time is up" notice when `timeUp`. */
+async function submitAttempt(timeUp: boolean): Promise<void> {
+  if (!session.value) return
   submitting.value = true
   try {
-    resultData.value = await studentApi.submitQuiz(
-      quiz.value.id,
-      orderedQuestions.value.map((question) => ({
-        questionId: question.id,
-        answerText: answers[question.id],
-      })),
-    )
-    hasSubmitted.value = true
+    showResult(await studentClassesApi.submitQuiz(session.value.attemptId))
+    timeUpNotice.value = timeUp
   } catch (reason) {
-    actionError.value = resolveApiError(reason, t('studentQuiz.submitError'))
+    showError(resolveApiError(reason, t('classPlayer.quiz.submitError')))
   } finally {
     submitting.value = false
   }
 }
 
-function resetAttempt(): void {
-  Object.keys(answers).forEach((questionId) => {
-    delete answers[Number(questionId)]
-  })
-  hasSubmitted.value = false
-  resultData.value = null
-  actionError.value = null
+function showResult(next: QuizResult): void {
+  stopTimers()
+  result.value = next
+  session.value = null
+  showAllQuestions.value = false
+  void introResource.reload()
 }
 
-watch(orderedQuestions, (questions) => {
-  if (!questions.length) {
-    activeQuestionIndex.value = 0
-    return
-  }
+// ----- result -----
 
-  if (activeQuestionIndex.value >= questions.length) {
-    activeQuestionIndex.value = questions.length - 1
-  }
+const reviewed = computed(() => {
+  const questions = result.value?.questions ?? []
+  const wrongFirst = [...questions].sort((a, b) => Number(a.correct) - Number(b.correct) || a.number - b.number)
+  return showAllQuestions.value ? wrongFirst : wrongFirst.filter((item) => !item.correct)
 })
 
-watch(
-  () => [route.params.quizId, route.query.lessonId],
-  () => {
-    resetAttempt()
-    void quizResource.reload()
-  },
-)
+const masteryText = computed(() => {
+  const current = result.value
+  if (!current) return ''
+  if (current.lessonStatus === 'MASTERED') return t('classPlayer.result.mastered')
+  if (current.percent >= 80 || (current.bestPercent ?? 0) >= 80) return t('classPlayer.result.masteredNeedsPractice')
+  if (current.lessonStatus === 'COMPLETED') return t('classPlayer.result.completed')
+  return t('classPlayer.result.keepGoing')
+})
+
+// ----- top bar and leaving -----
+
+const topLabel = computed(() => {
+  if (result.value) return t('classPlayer.quiz.topLabelResult')
+  if (session.value && secondsLeft.value !== null)
+    return t('classPlayer.quiz.topLabel', { time: formatClock(secondsLeft.value) })
+  return t('classPlayer.quiz.topLabelUntimed')
+})
+
+const topProgress = computed(() => {
+  if (result.value) return 100
+  if (!session.value) return null
+  return ratioPercent(answeredCount.value, session.value.questions.length)
+})
+
+function requestLeave(): void {
+  if (session.value) leaveOpen.value = true
+  else void router.push(lessonRoute.value)
+}
+
+function leave(): void {
+  leaveOpen.value = false
+  stopTimers()
+  void router.push(lessonRoute.value)
+}
 </script>

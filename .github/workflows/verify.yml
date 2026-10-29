@@ -20,10 +20,22 @@ jobs:
         working-directory: frontend
       - run: npm run format:check
         working-directory: frontend
+      # The build's `vue-tsc -b` type-checks the app and node projects; only the e2e project needs its own step.
+      - run: npx vue-tsc --noEmit -p tsconfig.e2e.json
+        working-directory: frontend
       - run: npm run test:unit
         working-directory: frontend
       - run: npm run build
         working-directory: frontend
+      # The end-to-end tests start the real backend (demo profile), so this job needs Java and the Maven wrapper too.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+      - run: chmod +x mvnw
+        working-directory: backend
       - run: npx playwright install --with-deps chromium
         working-directory: frontend
       - run: npm run test:e2e

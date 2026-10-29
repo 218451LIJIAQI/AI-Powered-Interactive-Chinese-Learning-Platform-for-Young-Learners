@@ -1,10 +1,13 @@
 package com.example.aichinese.repository;
 
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
-
 import com.example.aichinese.entity.Flashcard;
+import java.util.Collection;
+import java.util.List;
 
-public interface FlashcardRepository
-        extends JpaRepository<Flashcard, Long>, JpaSpecificationExecutor<Flashcard> {
+public interface FlashcardRepository extends PracticeActivityRepository<Flashcard> {
+
+    /** The activities of a class lesson, in lesson order. */
+    List<Flashcard> findByLessonIdOrderByLessonPositionAscIdAsc(Long lessonId);
+
+    List<Flashcard> findByLessonIdIn(Collection<Long> lessonIds);
 }

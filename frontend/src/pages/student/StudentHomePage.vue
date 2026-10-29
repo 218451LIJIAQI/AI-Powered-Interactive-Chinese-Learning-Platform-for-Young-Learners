@@ -1,664 +1,411 @@
 <template>
-  <div class="page-stack student-home-page">
-    <DataNotice
-      :using-fallback="usingFallback"
-      :error="pageError"
-      :fallback-title="t('studentHome.previewTitle')"
-      :fallback-message="t('studentHome.previewMessage')"
+  <div class="home-page page-stack">
+    <h1 v-if="!home" class="sr-only">{{ t('studentHome.pageTitle') }}</h1>
+
+    <StatePanel
+      v-if="resource.loading.value"
+      tone="loading"
+      :title="t('studentHome.loading')"
+      :message="t('studentHome.loadingHint')"
+      spacious
     />
+    <StatePanel
+      v-else-if="resource.error.value && !home"
+      tone="error"
+      icon="alert"
+      :title="t('studentHome.loadError')"
+      :message="resource.error.value"
+      spacious
+    >
+      <template #actions>
+        <button class="btn btn-primary" type="button" @click="resource.reload">{{ t('studentHome.retry') }}</button>
+      </template>
+    </StatePanel>
 
-    <ResourceSection :loading="pageLoading" :error="pageError" @retry="reloadAll">
-      <section class="student-home-layout">
-        <div class="student-home-main">
-          <article class="student-hero-card">
-            <div class="student-hero-copy">
-              <div class="chip student-hero-chip">
-                <IconGlyph name="learn" :size="16" />
-                {{ t('studentHome.currentLesson') }}
-              </div>
+    <template v-else-if="home">
+      <div v-if="!home.email.confirmed" class="home-email" role="status" data-testid="home-email">
+        <IconGlyph name="mail" :size="18" />
+        <p>{{ t('studentHome.confirmEmail', { email: home.email.email }) }}</p>
+        <button
+          class="btn btn-ghost btn-sm"
+          type="button"
+          :disabled="sending"
+          :aria-busy="sending"
+          data-testid="send-again"
+          @click="sendAgain"
+        >
+          {{ t('studentHome.sendAgain') }}
+        </button>
+        <p v-if="sendError" class="field-error" role="alert">{{ sendError }}</p>
+      </div>
 
-              <div class="student-hero-progress-strip">
-                <article v-for="metric in heroMetrics" :key="metric.label" class="student-hero-progress-card">
-                  <strong>{{ metric.value }}</strong>
-                  <span>{{ metric.label }}</span>
-                </article>
-              </div>
-
-              <h2>{{ displayLessonTitle }}</h2>
-              <p>{{ displayNextStep }}</p>
-
-              <button class="btn btn-accent student-hero-cta" type="button" @click="continueLearning">
-                {{ t('studentHome.continueLearning') }}
-                <span class="student-hero-cta-arrow"><IconGlyph name="chevronRight" :size="18" /></span>
-              </button>
-            </div>
-
-            <div class="student-hero-side">
-              <article class="student-hero-focus-card">
-                <div class="student-hero-focus-head">
-                  <IconGlyph name="language" :size="16" />
-                  <span>{{ t('studentHome.warmUpWords') }}</span>
-                </div>
-                <div class="student-hero-word-grid">
-                  <span v-for="word in heroWords" :key="word.hanzi" class="student-hero-word-chip">
-                    <strong>{{ word.hanzi }}</strong>
-                    <small>{{ word.pinyin }}</small>
-                  </span>
-                </div>
-              </article>
-
-              <article class="student-hero-mini-goal">
-                <span class="student-hero-mini-icon"><IconGlyph name="trophy" :size="16" /></span>
-                <div>
-                  <strong>{{ t('studentHome.todayFocus') }}</strong>
-                  <small>{{ heroFocusText }}</small>
-                </div>
-              </article>
-
-              <div class="student-hero-tone-lane" aria-hidden="true">
-                <span v-for="tone in heroToneMarks" :key="tone" />
-              </div>
-
-              <div class="student-hero-mascot">
-                <PandaIllustration :size="128" outfit="#7e52ff" accent="#f6d056" pose="wave" />
-              </div>
-
-              <span class="student-hero-character student-hero-character--one" aria-hidden="true">汉</span>
-              <span class="student-hero-character student-hero-character--two" aria-hidden="true">拼</span>
-            </div>
-
-            <div class="student-hero-checklist">
-              <strong>{{ t('studentHome.lessonChecklist') }}</strong>
-              <div
-                v-for="item in checklist"
-                :key="item.title"
-                class="student-hero-check"
-                :class="{ 'student-hero-check--muted': !item.done }"
-              >
-                <IconGlyph :name="completionIcon(item.done)" :size="16" />
-                <span>{{ item.title }}</span>
-              </div>
-            </div>
-          </article>
-
-          <div class="student-home-duo student-home-duo--primary">
-            <article class="panel student-path-card">
-              <div class="row student-home-section-head">
-                <div class="media-badge small"><IconGlyph name="progress" :size="18" /></div>
-                <div class="stack student-home-title-stack">
-                  <strong>{{ t('studentHome.learningPath') }}</strong>
-                </div>
-              </div>
-
-              <div class="student-path-board">
-                <div class="student-path-grid">
-                  <article
-                    v-for="node in pathNodes"
-                    :key="node.id"
-                    class="student-path-node"
-                    :class="{ 'is-complete': node.complete, 'is-current': node.current }"
-                    tabindex="0"
-                    role="button"
-                    :aria-label="pathNodeAriaLabel(node)"
-                    @click="clickNode(node)"
-                    @keydown.enter.prevent="clickNode(node)"
-                    @keydown.space.prevent="clickNode(node)"
-                  >
-                    <span
-                      v-if="node.complete || node.current"
-                      class="student-path-node-badge"
-                      :class="pathNodeBadgeClass(node)"
-                    >
-                      <IconGlyph :name="pathNodeBadgeIcon(node)" :size="14" />
-                    </span>
-                    <div class="student-path-icon" :class="`is-${node.variant}`">
-                      <IconGlyph :name="node.icon" :size="28" />
-                    </div>
-                    <strong>{{ node.id }}. {{ node.title }}</strong>
-                    <div class="student-path-progress"><span :style="{ width: node.progressPercent + '%' }" /></div>
-                    <div class="student-path-status">{{ node.statusLabel }}</div>
-                  </article>
-                </div>
-              </div>
-            </article>
-
-            <article class="panel student-tools-card">
-              <div class="row student-home-section-head">
-                <div class="media-badge small"><IconGlyph name="practice" :size="18" /></div>
-                <div class="stack student-home-title-stack">
-                  <strong>{{ t('studentHome.practiceTools') }}</strong>
-                </div>
-              </div>
-
-              <div class="student-tools-grid">
-                <button
-                  v-for="tool in practiceTools"
-                  :key="tool.title"
-                  class="student-tool-button"
-                  :class="{ 'student-tool-button--wide': tool.wide }"
-                  type="button"
-                  @click="openPracticeTool(tool.to)"
-                >
-                  <span class="student-tool-icon" :style="{ '--tool-color': tool.color }">
-                    <IconGlyph :name="tool.icon" :size="24" />
-                  </span>
-                  <span>{{ tool.title }}</span>
-                </button>
-              </div>
-            </article>
-          </div>
-
-          <div class="student-home-duo student-home-duo--practice">
-            <article class="panel student-class-card">
-              <div class="row-between student-home-section-head student-home-section-head--compact">
-                <div class="row">
-                  <div class="media-badge small"><IconGlyph name="calendar" :size="18" /></div>
-                  <strong>{{ t('studentHome.livePractice') }}</strong>
-                </div>
-              </div>
-              <div class="student-class-body">
-                <div class="student-class-copy">
-                  <div class="stack student-home-copy-stack student-home-copy-stack--wide">
-                    <strong>{{ t('studentHome.liveSpeaking') }}</strong>
-                    <span class="muted">{{ t('studentHome.liveSpeakingHint') }}</span>
-                  </div>
-                  <button class="btn btn-primary student-class-button" type="button" @click="openClasses">
-                    {{ t('studentHome.viewClasses') }}
-                  </button>
-                </div>
-                <div class="student-class-scene">
-                  <div class="student-class-board">Hello!</div>
-                  <div class="student-class-table" />
-                  <PandaIllustration
-                    class="student-class-teacher"
-                    :size="92"
-                    outfit="#7e52ff"
-                    accent="#f6d056"
-                    compact
-                  />
-                </div>
-              </div>
-            </article>
-
-            <article class="panel student-recorded-card">
-              <div class="row-between student-home-section-head student-home-section-head--compact">
-                <div class="row">
-                  <div class="media-badge small"><IconGlyph name="play" :size="18" /></div>
-                  <strong>{{ t('studentHome.recordedLesson') }}</strong>
-                </div>
-              </div>
-              <div class="student-recorded-body">
-                <div class="student-recorded-copy">
-                  <div class="stack student-home-copy-stack">
-                    <strong>{{ displayLessonTitle }}</strong>
-                    <span class="muted">{{ t('studentHome.recordedHint') }}</span>
-                  </div>
-                  <button class="btn btn-secondary student-watch-button" type="button" @click="continueLearning">
-                    {{ t('studentHome.watchNow') }}
-                  </button>
-                </div>
-                <div class="student-recorded-preview">
-                  <PandaIllustration
-                    class="student-recorded-scene"
-                    :size="88"
-                    outfit="#7e52ff"
-                    accent="#f6d056"
-                    compact
-                  />
-                  <div class="student-recorded-duration">{{ nextLessonDuration }}</div>
-                </div>
-              </div>
-            </article>
-          </div>
+      <header class="home-header">
+        <div class="home-greeting">
+          <p class="page-eyebrow">{{ weekdayDate(home.today.date) }}</p>
+          <h1 class="home-title">{{ greeting }}</h1>
         </div>
+        <div class="home-streak" data-testid="home-streak">
+          <p class="home-streak-count" :class="{ 'is-zero': home.today.currentStreak === 0 }">
+            <strong class="stat-figure">{{ home.today.currentStreak }}</strong>
+            <span>{{ home.today.currentStreak > 0 ? t('studentHome.streak') : t('studentHome.streakStart') }}</span>
+          </p>
+          <StreakWeek :week="home.today.week" :today="home.today.date" />
+        </div>
+      </header>
 
-        <aside class="student-home-side">
-          <article class="panel student-side-card">
-            <div class="row student-home-section-head">
-              <div class="media-badge small"><IconGlyph name="progress" :size="18" /></div>
-              <strong>{{ t('studentHome.myProgress') }}</strong>
-            </div>
-            <ProgressRing
-              :progress="overallProgress"
-              :title="t('studentHome.courseProgress')"
-              :subtitle="t('studentHome.progressHint')"
+      <div class="home-desk">
+        <HomeNextTile class="home-desk-next" :next="home.next" :has-plan="plan !== null" :first-time="home.firstTime" />
+
+        <!-- The goal of the learning plan, or the offer to build one. -->
+        <section v-if="plan" class="home-goal home-desk-goal" aria-labelledby="home-goal-title" data-testid="home-goal">
+          <div class="home-goal-head">
+            <h2 id="home-goal-title" class="home-overline">{{ t('studentHome.yourGoal') }}</h2>
+            <RouterLink class="btn btn-link" :to="{ name: 'student-plan' }">
+              {{ t('studentHome.viewPlan') }}<IconGlyph name="chevronRight" :size="14" />
+            </RouterLink>
+          </div>
+          <p class="home-goal-title">
+            <IconGlyph :name="REASONS[plan.reason].icon" :size="18" />
+            <span>{{
+              plan.deadline ? t('studentHome.goalBy', { goal: planTitle, date: shortDate(plan.deadline) }) : planTitle
+            }}</span>
+          </p>
+          <ProgressBar class="is-sm" :progress="plan.percent" :label="t('studentHome.planProgress')" />
+          <p class="type-caption">{{ goalMeta }}</p>
+        </section>
+        <section v-else class="home-build home-desk-goal" aria-labelledby="home-build-title" data-testid="home-build">
+          <h2 id="home-build-title" class="home-build-title">{{ t('studentHome.buildTitle') }}</h2>
+          <p>{{ t('studentHome.buildText') }}</p>
+          <RouterLink class="btn btn-secondary" :to="{ name: 'student-setup' }">
+            <IconGlyph name="magic" :size="16" />{{ t('studentHome.buildPlan') }}
+          </RouterLink>
+        </section>
+
+        <!-- Any other day: today's plan. -->
+        <section
+          v-if="!home.firstTime"
+          class="home-day home-desk-day"
+          aria-labelledby="home-today-title"
+          data-testid="home-today"
+        >
+          <div class="home-day-head">
+            <h2 id="home-today-title" class="home-day-title">{{ t('studentHome.todaysPlan') }}</h2>
+            <span class="home-day-xp">{{
+              t('studentHome.xpOfGoal', { xp: home.today.todayXp, goal: home.today.dailyGoalXp })
+            }}</span>
+          </div>
+          <div class="home-day-goal">
+            <ProgressBar
+              class="is-sm"
+              :progress="Math.round((home.today.todayXp * 100) / Math.max(1, home.today.dailyGoalXp))"
+              :label="t('studentHome.todayXp')"
+              :tone="home.today.goalReached ? 'success' : 'primary'"
             />
-          </article>
+            <p class="type-caption"><IconGlyph v-if="home.today.goalReached" name="check" :size="14" />{{ xpLine }}</p>
+          </div>
+          <HomeTimeline :items="today" :label="t('studentHome.todaysPlan')" />
+        </section>
 
-          <article class="panel student-side-card">
-            <div class="row-between student-home-section-head">
-              <div class="row">
-                <div class="media-badge small"><IconGlyph name="trophy" :size="18" /></div>
-                <strong>{{ t('studentHome.learningGoals') }}</strong>
-              </div>
-              <span class="muted student-goal-reset">{{ t('studentHome.liveProgress') }}</span>
-            </div>
-            <div class="student-goal-list">
-              <div v-for="goal in goals" :key="goal.title" class="student-goal-item">
-                <div class="row">
-                  <span class="student-goal-icon"><IconGlyph :name="goal.icon" :size="18" /></span>
-                  <span>{{ goal.title }}</span>
-                </div>
-                <strong>{{ goal.count }}</strong>
-                <ProgressBar :progress="goal.progress" :tone="goal.tone" />
-                <span class="student-goal-status" :class="{ 'is-done': goal.done }">
-                  <IconGlyph :name="completionIcon(goal.done)" :size="15" />
-                </span>
-              </div>
-            </div>
-          </article>
+        <!-- First day with a plan: this week. -->
+        <section
+          v-else-if="plan"
+          class="home-day home-desk-day"
+          aria-labelledby="home-week-title"
+          data-testid="home-week"
+        >
+          <div class="home-day-head">
+            <h2 id="home-week-title" class="home-day-title">{{ t('studentHome.thisWeek') }}</h2>
+            <span class="type-caption">{{ t('studentHome.dailyGoalXp', { xp: home.today.dailyGoalXp }) }}</span>
+          </div>
+          <HomeTimeline :items="firstWeekWithPlan" :label="t('studentHome.thisWeek')" />
+        </section>
 
-          <article class="panel student-reward-bar">
-            <div v-for="reward in rewards" :key="reward.label" class="student-reward-item">
-              <span class="student-reward-icon"><IconGlyph :name="reward.icon" :size="24" /></span>
-              <div>
-                <strong>{{ reward.value }}</strong>
-                <p>{{ reward.label }}</p>
-              </div>
-            </div>
-          </article>
+        <!-- First day without a plan: the daily goal and a first week. -->
+        <section v-else class="home-day home-desk-day" aria-labelledby="home-first-week" data-testid="home-week">
+          <div class="home-day-head">
+            <h2 id="home-first-week" class="home-day-title">{{ t('studentHome.firstWeek') }}</h2>
+            <span class="type-caption">{{ t('studentHome.dailyGoal') }}</span>
+          </div>
+          <div class="home-day-goal">
+            <SegmentedControl
+              class="home-goal-picker"
+              :model-value="home.today.dailyGoalXp"
+              :label="t('studentHome.dailyGoal')"
+              :options="DAILY_GOALS.map((xp) => ({ value: xp, label: t('studentHome.dailyGoalOption', { xp }) }))"
+              :disabled="savingGoal"
+              @update:model-value="setDailyGoal"
+            />
+            <p class="type-caption">{{ t('studentHome.dailyGoalHint') }}</p>
+            <p v-if="goalError" class="field-error" role="alert">{{ goalError }}</p>
+          </div>
+          <HomeTimeline :items="firstWeekWithoutPlan" :label="t('studentHome.firstWeek')" />
+        </section>
+      </div>
+    </template>
 
-          <article class="student-ai-card">
-            <div class="row student-home-section-head student-home-section-head--compact">
-              <div class="media-badge small student-ai-badge"><IconGlyph name="ai" :size="18" /></div>
-              <strong>{{ t('studentHome.aiHelper') }}</strong>
-            </div>
-            <div class="student-ai-bubble">
-              {{ t('studentHome.aiGreeting', { name: firstName }) }}
-            </div>
-            <button class="btn student-ai-button" type="button" @click="openAiHelper">
-              <IconGlyph name="ai" :size="16" />
-              {{ t('studentHome.chatWithAi') }}
-            </button>
-            <div class="student-ai-fish"><IconGlyph name="fun" :size="28" /></div>
-          </article>
-        </aside>
-      </section>
-    </ResourceSection>
+    <AppToast :message="toast" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useRouter, type RouteLocationRaw } from 'vue-router'
-import { useI18n } from 'vue-i18n'
+import '@/styles/plan.css'
 
-import { studentApi } from '@/api/services'
-import DataNotice from '@/components/common/DataNotice.vue'
+import { computed, ref, watch } from 'vue'
+import { RouterLink, useRouter } from 'vue-router'
+
+import { PRACTICE_TYPE_SLUGS, xpApi } from '@/api/learn'
+import { emailConfirmationApi, planApi } from '@/api/plan'
+import AppToast from '@/components/common/AppToast.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
-import PandaIllustration from '@/components/common/PandaIllustration.vue'
 import ProgressBar from '@/components/common/ProgressBar.vue'
-import ProgressRing from '@/components/common/ProgressRing.vue'
-import ResourceSection from '@/components/dashboard/ResourceSection.vue'
+import SegmentedControl from '@/components/common/SegmentedControl.vue'
+import StatePanel from '@/components/common/StatePanel.vue'
+import HomeNextTile from '@/components/home/HomeNextTile.vue'
+import HomeTimeline, { type TimelineItem } from '@/components/home/HomeTimeline.vue'
+import StreakWeek from '@/components/learn/StreakWeek.vue'
+import { goalTitle, shortDate, weekdayDate } from '@/components/plan/planFormat'
+import { LEVEL_KEYS, PRACTICE_TYPE_KEYS, REASONS, STATUS_KEYS } from '@/components/plan/planLabels'
+import { notifyProgressChanged } from '@/composables/useProgressRefresh'
+import { useLocalMessages } from '@/composables/useLocalMessages'
 import { useResource } from '@/composables/useResource'
-import { studentDashboard, studentProgress } from '@/demo/data'
+import { useToast } from '@/composables/useToast'
+import { planMessages } from '@/plugins/planMessages'
 import { studentHomeMessages } from '@/plugins/studentHomeMessages'
-import type { StudentDashboardResponse, StudentProgressSummaryResponse } from '@/types/api'
-import { clampPercent, nonNegativeInteger, ratioPercent } from '@/utils/format'
-import { inferPracticeActivityFromText, practiceRoute } from '@/utils/practiceRoute'
+import { resolveApiError } from '@/utils/apiError'
+import { formatTime } from '@/utils/format'
+
+/**
+ * The student Home, a desk for today: the date and greeting with the week's streak stamped as seals, the next lesson
+ * as the one big action, the goal of the learning plan (or the offer to build one) under it, and the day's plan as a
+ * timeline beside it (Learn, mistakes to fix, today's live session, Xiaomei). The first day shows the first week
+ * instead. A new student who has not seen the setup yet is sent to it.
+ */
+const DAILY_GOALS = [10, 20, 30] as const
 
 const router = useRouter()
-const { t } = useI18n({
-  messages: {
-    en: { studentHome: studentHomeMessages.en },
-    ms: { studentHome: studentHomeMessages.ms },
-    zh: { studentHome: studentHomeMessages.zh },
-  },
+const { t, locale } = useLocalMessages({ studentHome: studentHomeMessages, plan: planMessages })
+const resource = useResource(() => planApi.home())
+const { toast, showToast } = useToast()
+
+const home = computed(() => resource.data.value ?? null)
+const plan = computed(() => home.value?.plan ?? null)
+const planTitle = computed(() => (plan.value ? goalTitle(t, plan.value.goalTitle, plan.value.reason) : ''))
+const sending = ref(false)
+const sendError = ref<string | null>(null)
+const savingGoal = ref(false)
+const goalError = ref<string | null>(null)
+
+watch(home, (value) => {
+  if (value?.setupState === 'NOT_STARTED') void router.replace({ name: 'student-setup' })
 })
-const dashboardResource = useResource(() => studentApi.dashboard(), studentDashboard)
-const progressResource = useResource(() => studentApi.progress(), studentProgress)
 
-const emptyDashboard: StudentDashboardResponse = {
-  fullName: '',
-  currentLevel: '',
-  learningProgressPercent: 0,
-  dailyStreak: 0,
-  points: 0,
-  badgeCount: 0,
-  recentQuizResults: [],
-  weakAreas: [],
-  unfinishedLessons: [],
-  recentNotifications: [],
-  recommendedNextStep: null,
-}
-const emptyProgress: StudentProgressSummaryResponse = {
-  totalLessonsStarted: 0,
-  completedLessons: 0,
-  quizAverage: 0,
-  overallCompletionPercent: 0,
-  weakAreas: [],
-  lastActivitySummary: null,
-  recentLessons: [],
-}
-
-const dashboard = computed(
-  () => dashboardResource.data.value ?? (dashboardResource.usingFallback.value ? studentDashboard : emptyDashboard),
-)
-const progress = computed(
-  () => progressResource.data.value ?? (progressResource.usingFallback.value ? studentProgress : emptyProgress),
-)
-const pageLoading = computed(() => dashboardResource.loading.value || progressResource.loading.value)
-const pageError = computed(() => dashboardResource.error.value || progressResource.error.value)
-const usingFallback = computed(() => dashboardResource.usingFallback.value || progressResource.usingFallback.value)
-
-type CompletionIcon = 'history' | 'status'
-type LessonVariant = 'family' | 'greeting' | 'listening' | 'numbers' | 'pinyin' | 'tones'
-type PathNodeBadgeClass = 'is-check' | 'is-current'
-type PathNodeBadgeIcon = 'flash' | 'status'
-type ProgressTone = 'info' | 'success' | 'warning'
-
-interface PathNode {
-  id: number
-  title: string
-  icon: string
-  progressPercent: number
-  statusLabel: string
-  complete: boolean
-  current: boolean
-  variant: LessonVariant
-  lessonId: number | null
-}
-
-interface LearningGoal {
-  title: string
-  count: string
-  progress: number
-  tone: ProgressTone
-  icon: string
-  done: boolean
-}
-
-const firstName = computed(() => (dashboard.value.fullName.split(' ')[0] || t('studentHome.learner')).trim())
-const overallProgress = computed(() =>
-  safePercent(progress.value.overallCompletionPercent || dashboard.value.learningProgressPercent),
-)
-const quizAveragePercent = computed(() => safePercent(progress.value.quizAverage))
-const nextLesson = computed(() => {
-  const unfinished = dashboard.value.unfinishedLessons[0]
-  const recent = progress.value.recentLessons[0]
-
-  return {
-    id: unfinished?.lessonId ?? recent?.lessonId ?? null,
-    title: unfinished?.lessonTitle ?? recent?.lessonTitle ?? t('studentHome.fallbackLesson'),
-    completionPercent: safePercent(unfinished?.completionPercent ?? recent?.completionPercent ?? 0),
+const greeting = computed(() => {
+  const value = home.value
+  if (!value) return ''
+  if (value.firstTime) {
+    return value.firstName
+      ? t('studentHome.welcomeFirst', { name: value.firstName })
+      : t('studentHome.welcomeFirstNoName')
   }
+  return value.firstName ? t('studentHome.welcomeBack', { name: value.firstName }) : t('studentHome.welcomeBackNoName')
 })
-const nextStep = computed(() => dashboard.value.recommendedNextStep || t('studentHome.fallbackNextStep'))
-const displayLessonTitle = computed(() => normalizeLessonTitle(nextLesson.value.title))
-const displayNextStep = computed(() => shortenSentence(nextStep.value, 118))
-const nextLessonDuration = computed(() => (nextLesson.value.id ? '18 min' : '--'))
 
-const heroMetrics = computed(() => [
-  { label: t('studentHome.level'), value: dashboard.value.currentLevel || t('studentHome.notSet') },
-  { label: t('studentHome.progress'), value: `${overallProgress.value}%` },
-  { label: t('studentHome.streak'), value: formatDayCount(dashboard.value.dailyStreak) },
-])
-const heroWords = [
-  { hanzi: '你好', pinyin: 'ni hao' },
-  { hanzi: '声调', pinyin: 'tones' },
-  { hanzi: '练习', pinyin: 'practice' },
-]
-const heroToneMarks = [1, 2, 3, 4]
-const heroFocusText = computed(() =>
-  quizAveragePercent.value >= 80 ? t('studentHome.keepRhythm') : t('studentHome.retryQuiz'),
-)
-
-const checklist = computed(() => [
-  { title: t('studentHome.openNextLesson'), done: nextLesson.value.completionPercent > 0 },
-  {
-    title: t('studentHome.reviewPractice'),
-    done: progress.value.recentLessons.some((lesson) => lesson.completionPercent >= 50),
-  },
-  { title: t('studentHome.buildAccuracy'), done: quizAveragePercent.value >= 80 },
-  { title: t('studentHome.keepStreak'), done: nonNegativeInteger(dashboard.value.dailyStreak) > 0 },
-])
-
-const pathNodes = computed<PathNode[]>(() => {
-  const lessons = [
-    ...progress.value.recentLessons,
-    ...dashboard.value.unfinishedLessons.map((lesson) => ({
-      lessonId: lesson.lessonId,
-      lessonTitle: lesson.lessonTitle,
-      completionPercent: lesson.completionPercent,
-      completed: lesson.completionPercent >= 100,
-    })),
-  ]
-  const uniqueLessons = Array.from(new Map(lessons.map((lesson) => [lesson.lessonId, lesson])).values()).slice(0, 4)
-  const source = uniqueLessons.length
-    ? [...uniqueLessons]
-    : [{ lessonId: 0, lessonTitle: t('studentHome.firstLesson'), completionPercent: 0, completed: false }]
-
-  const plannedSteps = [
-    {
-      lessonId: -1,
-      lessonTitle: t('studentHome.reviewCheckpoint'),
-      completionPercent: quizAveragePercent.value,
-      completed: quizAveragePercent.value >= 80,
-    },
-    {
-      lessonId: -2,
-      lessonTitle: t('studentHome.listeningPractice'),
-      completionPercent: nextLesson.value.completionPercent > 0 ? 50 : 0,
-      completed: false,
-    },
-    {
-      lessonId: -3,
-      lessonTitle: t('studentHome.nextQuizGoal'),
-      completionPercent: 0,
-      completed: false,
-    },
-  ]
-
-  for (const step of plannedSteps) {
-    if (source.length >= 4) break
-    source.push(step)
+/** How far the plan is: the week and its status, or on the first day the levels it leads between. */
+const goalMeta = computed(() => {
+  const summary = plan.value
+  if (!summary) return ''
+  if (home.value?.firstTime) {
+    return t('studentHome.goalFirstMeta', {
+      from: t(LEVEL_KEYS[summary.level]),
+      to: t(LEVEL_KEYS[summary.targetLevel]),
+      week: summary.week,
+      total: summary.totalWeeks,
+    })
   }
-
-  return source.slice(0, 4).map((lesson, index) => {
-    const completionPercent = safePercent(lesson.completionPercent)
-    const completed = lesson.completed || completionPercent >= 100
-    const current = lesson.lessonId === nextLesson.value.id && completionPercent < 100
-    return {
-      id: index + 1,
-      title: normalizeLessonTitle(lesson.lessonTitle) || t('studentHome.learningStep'),
-      icon: iconForLesson(lesson.lessonTitle),
-      progressPercent: completionPercent,
-      statusLabel: lessonStatusLabel(completed, current, completionPercent),
-      complete: completed,
-      current,
-      variant: variantForLesson(lesson.lessonTitle),
-      lessonId: lesson.lessonId,
-    }
+  return t('studentHome.stripMeta', {
+    percent: summary.percent,
+    week: summary.week,
+    total: summary.totalWeeks,
+    status: t(STATUS_KEYS[summary.status]).toLowerCase(),
   })
 })
 
-const practiceTools = computed(() => [
-  { title: t('studentHome.flashcards'), icon: 'file', color: '#6bc45c', to: practiceRoute('FLASHCARD') },
-  { title: t('studentHome.quiz'), icon: 'quiz', color: '#9b6aff', to: '/student/quiz' },
-  { title: t('studentHome.listening'), icon: 'live', color: '#2d8cff', to: practiceRoute('LISTENING_EXERCISE') },
-  { title: t('studentHome.speaking'), icon: 'moderation', color: '#ff9c21', to: '/student/ai-helper' },
-  { title: t('studentHome.writing'), icon: 'clip', color: '#8d59ff', to: practiceRoute('TRACING_EXERCISE') },
-  { title: t('studentHome.matching'), icon: 'fun', color: '#ffc530', to: practiceRoute('MATCHING_GAME') },
-  {
-    title: t('studentHome.dragDrop'),
-    icon: 'practice',
-    color: '#00b8d9',
-    to: practiceRoute('DRAG_DROP_ACTIVITY'),
-    wide: true,
-  },
-])
+const xpLine = computed(() => {
+  const today = home.value?.today
+  if (!today) return ''
+  if (today.goalReached) return t('studentHome.goalReached')
+  const remaining = Math.max(0, today.dailyGoalXp - today.todayXp)
+  return today.currentStreak > 0
+    ? t('studentHome.moreXpStreak', { xp: remaining, streak: today.currentStreak })
+    : t('studentHome.moreXp', { xp: remaining })
+})
 
-const goals = computed<LearningGoal[]>(() => {
-  const completedLessons = nonNegativeInteger(progress.value.completedLessons)
-  const started = Math.max(nonNegativeInteger(progress.value.totalLessonsStarted), completedLessons)
-  const completedPercent = ratioPercent(completedLessons, started)
+function xiaomeiItem(when: string, first: boolean): TimelineItem {
+  return {
+    key: 'xiaomei',
+    when,
+    title: first ? t('studentHome.sayHi') : t('studentHome.talkXiaomei'),
+    meta: first ? t('studentHome.sayHiMeta') : t('studentHome.talkMeta'),
+    actions: [{ label: t('studentHome.startTalking'), to: { name: 'student-ai', params: { tab: 'talk' } } }],
+  }
+}
 
+/** Now · next lesson, Next · mistakes to fix, today's live session at its time, Anytime · Xiaomei. */
+const today = computed<TimelineItem[]>(() => {
+  const value = home.value
+  if (!value) return []
+  const items: TimelineItem[] = []
+  if (value.next) {
+    items.push({
+      key: 'learn',
+      when: t('studentHome.now'),
+      title: value.next.title,
+      meta:
+        value.next.kind === 'CHECKPOINT'
+          ? t('studentHome.checkpointMeta', { minutes: value.next.minutes, xp: value.next.xpReward })
+          : t('studentHome.learnMeta', {
+              position: value.next.position,
+              total: value.next.unitLessonCount,
+              minutes: value.next.minutes,
+            }),
+      highlight: true,
+    })
+  }
+  const mistakes = value.today.mistakesWaiting
+  if (mistakes > 0) {
+    items.push({
+      key: 'mistakes',
+      when: t('studentHome.next'),
+      title: t('studentHome.fixMistakes', { count: mistakes }, mistakes),
+      meta: t('studentHome.fixMeta'),
+      actions: [{ label: t('studentHome.startReview'), to: { name: 'student-practice-review' } }],
+    })
+  }
+  const live = value.liveToday
+  if (live) {
+    items.push({
+      key: 'live',
+      when: formatTime(live.startsAt, locale.value),
+      title: t('studentHome.liveTitle', { title: live.title }),
+      meta: t('studentHome.liveMeta', { teacher: live.teacherName, classTitle: live.classTitle }),
+      actions: [
+        { label: t('studentHome.details'), to: { name: 'student-live-sessions' } },
+        { label: t('studentHome.openClass'), to: { name: 'student-class', params: { classId: live.classId } } },
+      ],
+    })
+  }
+  items.push(xiaomeiItem(t('studentHome.anytime'), false))
+  return items
+})
+
+/** First · the first unit, Then · a practice set of the focus, Anytime · Xiaomei, Optional · a class. */
+const firstWeekWithPlan = computed<TimelineItem[]>(() => {
+  const value = home.value
+  const summary = plan.value
+  if (!value || !summary) return []
+  const items: TimelineItem[] = []
+  const first = summary.firstStep
+  if (first && value.next) {
+    items.push({
+      key: 'first',
+      when: t('studentHome.first'),
+      title: first.quickReview
+        ? t('studentHome.reviewTitle', { title: first.title })
+        : t('studentHome.startTitle', { title: first.title }),
+      meta: t('studentHome.learnLessons', { count: first.lessonsLeft, minutes: first.minutesLeft }, first.lessonsLeft),
+      highlight: true,
+    })
+  }
+  const practice = summary.practice
+  if (practice) {
+    items.push({
+      key: 'practice',
+      when: t('studentHome.then'),
+      title: t('plan.practiceType.setTitle', { type: t(PRACTICE_TYPE_KEYS[practice.type]), title: practice.title }),
+      meta: t('studentHome.practiceMeta'),
+      actions: [
+        {
+          label: t('studentHome.practise'),
+          to: {
+            name: 'student-practice',
+            params: { type: PRACTICE_TYPE_SLUGS[practice.type] },
+            query: { set: String(practice.setId) },
+          },
+        },
+      ],
+    })
+  }
+  items.push(xiaomeiItem(t('studentHome.anytime'), true))
+  const optional = summary.optionalClass
+  if (optional) {
+    items.push({
+      key: 'class',
+      when: t('studentHome.optional'),
+      title: optional.title,
+      meta: t('studentHome.classMeta', { week: optional.weekFrom }),
+      actions: [
+        { label: t('studentHome.seeClass'), to: { name: 'student-class', params: { classId: optional.classId } } },
+      ],
+    })
+  }
+  return items
+})
+
+/** First · Unit 1, Then · a practice set, Teacher · a class, Anytime · Xiaomei. */
+const firstWeekWithoutPlan = computed<TimelineItem[]>(() => {
+  const next = home.value?.next
   return [
     {
-      title: t('studentHome.completeStarted'),
-      count: started ? `${completedLessons} / ${started}` : t('studentHome.noLessonsStarted'),
-      progress: completedPercent,
-      tone: 'success',
-      icon: 'learn',
-      done: started > 0 && completedLessons >= started,
+      key: 'first',
+      when: t('studentHome.first'),
+      title: next ? t('studentHome.startUnit', { number: next.unitNumber }) : t('studentHome.tryPractice'),
+      meta: t('studentHome.oneLesson'),
+      highlight: true,
     },
     {
-      title: t('studentHome.continueNext'),
-      count: `${nextLesson.value.completionPercent}%`,
-      progress: nextLesson.value.completionPercent,
-      tone: 'info',
-      icon: 'live',
-      done: nextLesson.value.completionPercent >= 100,
+      key: 'practice',
+      when: t('studentHome.then'),
+      title: t('studentHome.tryPractice'),
+      meta: t('studentHome.tryPracticeMeta'),
+      actions: [{ label: t('studentHome.openPractice'), to: { name: 'student-practice' } }],
     },
     {
-      title: t('studentHome.buildAccuracy'),
-      count: `${quizAveragePercent.value}%`,
-      progress: quizAveragePercent.value,
-      tone: 'warning',
-      icon: 'clip',
-      done: quizAveragePercent.value >= 80,
+      key: 'class',
+      when: t('studentHome.teacher'),
+      title: t('studentHome.joinClass'),
+      meta: t('studentHome.joinClassMeta'),
+      actions: [{ label: t('studentHome.findClass'), to: { name: 'student-classes-find' } }],
     },
+    xiaomeiItem(t('studentHome.anytime'), true),
   ]
 })
 
-const POINTS_PER_GEM = 6.8
-const rewards = computed(() => [
-  { label: t('studentHome.stars'), value: nonNegativeInteger(dashboard.value.points), icon: 'star' },
-  { label: t('studentHome.gems'), value: nonNegativeInteger(dashboard.value.points / POINTS_PER_GEM), icon: 'rewards' },
-  { label: t('studentHome.badges'), value: nonNegativeInteger(dashboard.value.badgeCount), icon: 'shield' },
-])
-
-function safePercent(value: number): number {
-  return clampPercent(value)
-}
-
-function formatDayCount(value: number): string {
-  const days = nonNegativeInteger(value)
-  return `${days} ${t(days === 1 ? 'studentHome.day' : 'studentHome.days')}`
-}
-
-function variantForLesson(title: string): LessonVariant {
-  const normalized = title.toLowerCase()
-  if (normalized.includes('pinyin')) return 'pinyin'
-  if (normalized.includes('tone')) return 'tones'
-  if (normalized.includes('family')) return 'family'
-  if (normalized.includes('number')) return 'numbers'
-  if (normalized.includes('listen')) return 'listening'
-  return 'greeting'
-}
-
-function iconForLesson(title: string): string {
-  const variant = variantForLesson(title)
-  if (variant === 'pinyin' || variant === 'tones') return 'language'
-  if (variant === 'family') return 'students'
-  if (variant === 'numbers') return 'quiz'
-  if (variant === 'listening') return 'live'
-  return 'practice'
-}
-
-function normalizeLessonTitle(title: string): string {
-  return title
-    .replace(/\s+\d{6,}\s*$/u, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 72)
-}
-
-function shortenSentence(value: string, limit: number): string {
-  const normalized = value.replace(/\s+/g, ' ').trim()
-  if (normalized.length <= limit) return normalized
-
-  return `${normalized.slice(0, limit - 1).trim()}...`
-}
-
-function continueLearning(): void {
-  if (!nextLesson.value.id) {
-    openLearn()
-    return
+async function sendAgain(): Promise<void> {
+  sending.value = true
+  sendError.value = null
+  try {
+    const sent = await emailConfirmationApi.resend()
+    showToast(t('studentHome.linkSent', { email: sent.email }))
+  } catch (reason) {
+    sendError.value = resolveApiError(reason, t('studentHome.sendError'))
+  } finally {
+    sending.value = false
   }
-
-  openStudentLearn(nextLesson.value.id)
 }
 
-function clickNode(node: Pick<PathNode, 'lessonId'>): void {
-  if (node.lessonId !== null && node.lessonId > 0) {
-    openStudentLearn(node.lessonId)
-    return
+async function setDailyGoal(xp: number): Promise<void> {
+  if (savingGoal.value || home.value?.today.dailyGoalXp === xp) return
+  savingGoal.value = true
+  goalError.value = null
+  try {
+    await xpApi.setDailyGoal(xp)
+    await resource.reload()
+    notifyProgressChanged()
+    showToast(t('studentHome.dailyGoalSaved', { xp }))
+  } catch (reason) {
+    goalError.value = resolveApiError(reason, t('studentHome.dailyGoalError'))
+  } finally {
+    savingGoal.value = false
   }
-
-  openFallbackNodeRoute(node.lessonId)
-}
-
-function reloadAll(): void {
-  void dashboardResource.reload()
-  void progressResource.reload()
-}
-
-function completionIcon(done: boolean): CompletionIcon {
-  return done ? 'status' : 'history'
-}
-
-function lessonStatusLabel(completed: boolean, current: boolean, completionPercent: number): string {
-  if (completed) return t('studentHome.complete')
-  if (current) return t('studentHome.inProgress', { percent: completionPercent })
-  return completionPercent > 0 ? t('studentHome.started', { percent: completionPercent }) : t('studentHome.upNext')
-}
-
-function pathNodeAriaLabel(node: PathNode): string {
-  const state = node.complete
-    ? t('studentHome.complete')
-    : node.current
-      ? t('studentHome.current')
-      : t('studentHome.locked')
-  return t('studentHome.pathAria', { id: node.id, title: node.title, state })
-}
-
-function pathNodeBadgeClass(node: PathNode): PathNodeBadgeClass {
-  return node.complete ? 'is-check' : 'is-current'
-}
-
-function pathNodeBadgeIcon(node: PathNode): PathNodeBadgeIcon {
-  return node.complete ? 'status' : 'flash'
-}
-
-function openPracticeTool(target: RouteLocationRaw): void {
-  void router.push(target)
-}
-
-function openClasses(): void {
-  void router.push('/student/classes')
-}
-
-function openAiHelper(): void {
-  void router.push('/student/ai-helper')
-}
-
-function openLearn(): void {
-  void router.push('/student/learn')
-}
-
-function openQuiz(): void {
-  void router.push('/student/quiz')
-}
-
-function openStudentLearn(lessonId: number): void {
-  void router.push({
-    name: 'student-learn',
-    query: { lessonId: String(lessonId) },
-  })
-}
-
-function openFallbackNodeRoute(lessonId: number | null): void {
-  if (lessonId === -3) {
-    openQuiz()
-    return
-  }
-
-  if (lessonId === -2) {
-    openPracticeTool(practiceRoute(inferPracticeActivityFromText('listening')))
-    return
-  }
-
-  openLearn()
 }
 </script>

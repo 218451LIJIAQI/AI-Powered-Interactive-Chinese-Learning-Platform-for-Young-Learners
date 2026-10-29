@@ -25,10 +25,6 @@ public enum MeetingPlatform {
     private static final Map<String, MeetingPlatform> LOOKUP =
             buildLookup();
 
-    public static Optional<MeetingPlatform> tryFrom(String value) {
-        return normalizeLookupKey(value).map(LOOKUP::get);
-    }
-
     public static MeetingPlatform fromValue(String value) {
         String key = normalizeLookupKey(value)
                 .orElseThrow(() -> new IllegalArgumentException("Meeting platform is required."));
@@ -39,10 +35,6 @@ public enum MeetingPlatform {
                             + "MICROSOFT_TEAMS, or OTHER.");
         }
         return platform;
-    }
-
-    public static MeetingPlatform fromValueOrOther(String value) {
-        return tryFrom(value).orElse(OTHER);
     }
 
     public boolean allowsHost(String host) {
@@ -62,10 +54,8 @@ public enum MeetingPlatform {
         for (MeetingPlatform platform : values()) {
             lookup.put(normalizeLookupKey(platform.name()).orElseThrow(), platform);
         }
-        lookup.put(normalizeLookupKey("Zoom").orElseThrow(), ZOOM);
-        lookup.put(normalizeLookupKey("Google Meet").orElseThrow(), GOOGLE_MEET);
+        // Display labels "Zoom", "Google Meet" and "Microsoft Teams" already normalize to the constant names.
         lookup.put(normalizeLookupKey("Meet").orElseThrow(), GOOGLE_MEET);
-        lookup.put(normalizeLookupKey("Microsoft Teams").orElseThrow(), MICROSOFT_TEAMS);
         lookup.put(normalizeLookupKey("MS Teams").orElseThrow(), MICROSOFT_TEAMS);
         lookup.put(normalizeLookupKey("Teams").orElseThrow(), MICROSOFT_TEAMS);
         return Map.copyOf(lookup);

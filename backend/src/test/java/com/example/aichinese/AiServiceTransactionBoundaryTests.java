@@ -8,67 +8,38 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
 import com.example.aichinese.dto.ai.AiChatRequest;
-import com.example.aichinese.dto.ai.AiLearningRecommendationRequest;
 import com.example.aichinese.dto.ai.AiQuizGeneratorRequest;
-import com.example.aichinese.dto.ai.AiSentencePracticeRequest;
 import com.example.aichinese.dto.ai.AiStoryGeneratorRequest;
-import com.example.aichinese.dto.ai.AiVocabularyHelperRequest;
-import com.example.aichinese.entity.User;
+import com.example.aichinese.dto.ai.XiaomeiConversationRequest;
+import com.example.aichinese.dto.ai.XiaomeiReplyRequest;
 import com.example.aichinese.security.SecurityUserDetails;
-import com.example.aichinese.service.AiFileStorageService;
+import com.example.aichinese.service.AiPracticeCheckService;
 import com.example.aichinese.service.AiService;
+import com.example.aichinese.service.XiaomeiService;
+import com.example.aichinese.service.ai.AiGateway;
 
+/** A remote AI call (up to the provider timeout) must never hold a database connection and row locks open. */
 class AiServiceTransactionBoundaryTests {
 
     @Test
-    void textProviderEndpointsDoNotWrapRemoteCallsInDatabaseTransactions() throws Exception {
-        assertThat(textProviderEndpoints())
+    void aiRequestsDoNotWrapRemoteCallsInDatabaseTransactions() throws Exception {
+        assertThat(aiRequestMethods())
                 .allSatisfy(AiServiceTransactionBoundaryTests::assertOutsideTransactionBoundary);
     }
 
-    @Test
-    void multipartFeedbackFileCopiesDoNotRunInsideDatabaseTransactions() throws Exception {
-        assertThat(fileCopyingEndpoints())
-                .allSatisfy(AiServiceTransactionBoundaryTests::assertOutsideTransactionBoundary);
-    }
-
-    private static List<Method> textProviderEndpoints() throws NoSuchMethodException {
+    private static List<Method> aiRequestMethods() throws NoSuchMethodException {
         return List.of(
+                method(AiGateway.class, "execute", AiGateway.AiCall.class),
                 method(AiService.class, "chat", SecurityUserDetails.class, AiChatRequest.class),
-                method(AiService.class, "vocabularyHelper", SecurityUserDetails.class, AiVocabularyHelperRequest.class),
-                method(AiService.class, "sentencePractice", SecurityUserDetails.class, AiSentencePracticeRequest.class),
                 method(AiService.class, "quizGenerator", SecurityUserDetails.class, AiQuizGeneratorRequest.class),
                 method(AiService.class, "storyGenerator", SecurityUserDetails.class, AiStoryGeneratorRequest.class),
-                method(
-                        AiService.class,
-                        "learningRecommendation",
-                        SecurityUserDetails.class,
-                        AiLearningRecommendationRequest.class));
-    }
-
-    private static List<Method> fileCopyingEndpoints() throws NoSuchMethodException {
-        return List.of(
-                method(
-                        AiService.class,
-                        "pronunciationFeedback",
-                        SecurityUserDetails.class,
-                        MultipartFile.class,
-                        String.class,
-                        String.class,
-                        String.class,
-                        String.class),
-                method(
-                        AiService.class,
-                        "writingFeedback",
-                        SecurityUserDetails.class,
-                        MultipartFile.class,
-                        String.class,
-                        String.class),
-                method(AiFileStorageService.class, "storePronunciationAudio", MultipartFile.class, User.class),
-                method(AiFileStorageService.class, "storeWritingImage", MultipartFile.class, User.class));
+                method(XiaomeiService.class, "reply", SecurityUserDetails.class, XiaomeiReplyRequest.class),
+                method(XiaomeiService.class, "suggestions", SecurityUserDetails.class, XiaomeiConversationRequest.class),
+                method(XiaomeiService.class, "summary", SecurityUserDetails.class, XiaomeiConversationRequest.class),
+                method(AiPracticeCheckService.class, "check", SecurityUserDetails.class,
+                        AiPracticeCheckService.CheckRequest.class));
     }
 
     private static Method method(Class<?> owner, String name, Class<?>... parameterTypes) throws NoSuchMethodException {
@@ -76,19 +47,11 @@ class AiServiceTransactionBoundaryTests {
     }
 
     private static void assertOutsideTransactionBoundary(Method method) {
-        assertThat(hasTransactionalAnnotation(method))
+        assertThat(AnnotatedElementUtils.hasAnnotation(method, Transactional.class))
                 .as("%s should not be transactional", method)
                 .isFalse();
-        assertThat(hasTransactionalAnnotation(method.getDeclaringClass()))
+        assertThat(AnnotatedElementUtils.hasAnnotation(method.getDeclaringClass(), Transactional.class))
                 .as("%s should not inherit a class-level transaction", method)
                 .isFalse();
-    }
-
-    private static boolean hasTransactionalAnnotation(Method method) {
-        return AnnotatedElementUtils.hasAnnotation(method, Transactional.class);
-    }
-
-    private static boolean hasTransactionalAnnotation(Class<?> type) {
-        return AnnotatedElementUtils.hasAnnotation(type, Transactional.class);
     }
 }

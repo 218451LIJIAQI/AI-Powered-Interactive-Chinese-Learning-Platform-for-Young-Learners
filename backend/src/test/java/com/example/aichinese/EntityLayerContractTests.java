@@ -2,7 +2,6 @@ package com.example.aichinese;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -11,6 +10,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -20,9 +20,7 @@ import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
 
-import com.example.aichinese.entity.TeacherVerificationReview;
 import com.example.aichinese.entity.base.BaseEntity;
-import com.example.aichinese.entity.enums.TeacherStatus;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -47,8 +45,6 @@ class EntityLayerContractTests {
             Pattern.compile("(?m)^\\s*@(lombok\\.)?(Data|EqualsAndHashCode|ToString)\\b");
     private static final Pattern GETTER_ANNOTATION = Pattern.compile("(?m)^\\s*@(lombok\\.)?Getter\\b");
     private static final Pattern SETTER_ANNOTATION = Pattern.compile("(?m)^\\s*@(lombok\\.)?Setter\\b");
-    private static final Pattern NO_ARGS_CONSTRUCTOR_ANNOTATION =
-            Pattern.compile("(?m)^\\s*@(lombok\\.)?NoArgsConstructor\\b");
 
     @Test
     void everyConcreteEntityExtendsBaseEntityAndUsesJpaEntityAnnotation() throws Exception {
@@ -64,9 +60,12 @@ class EntityLayerContractTests {
 
     @Test
     void entitySourcesUseSafeLombokShapeOnly() throws IOException {
-        List<String> violations = concreteEntitySources()
-                .flatMap(source -> sourceContractViolations(source).stream())
-                .toList();
+        List<String> violations;
+        try (Stream<Path> sources = concreteEntitySources()) {
+            violations = sources
+                    .flatMap(source -> sourceContractViolations(source).stream())
+                    .toList();
+        }
 
         assertThat(violations)
                 .as("Entity sources must keep Lombok from generating equality/toString over lazy associations")
@@ -86,62 +85,56 @@ class EntityLayerContractTests {
         }
     }
 
+    /** Enums only declare the lookups the code uses; the ones they declare must behave the same way. */
     @Test
-    void domainEnumsExposeConsistentLookupFactories() throws Exception {
+    void domainEnumLookupFactoriesAreConsistent() throws Exception {
         for (Class<?> enumClass : enumClasses()) {
-            Method tryFrom = enumClass.getMethod("tryFrom", String.class);
-            assertThat(Modifier.isStatic(tryFrom.getModifiers()))
-                    .as(enumClass.getName() + ".tryFrom must be static")
-                    .isTrue();
-            assertThat(tryFrom.getReturnType())
-                    .as(enumClass.getName() + ".tryFrom must return Optional")
-                    .isEqualTo(Optional.class);
-
-            Method fromValue = enumClass.getMethod("fromValue", String.class);
-            assertThat(Modifier.isStatic(fromValue.getModifiers()))
-                    .as(enumClass.getName() + ".fromValue must be static")
-                    .isTrue();
-            assertThat(fromValue.getReturnType())
-                    .as(enumClass.getName() + ".fromValue must return its enum type")
-                    .isEqualTo(enumClass);
-
             Object firstConstant = enumClass.getEnumConstants()[0];
             String lowercaseName = ((Enum<?>) firstConstant).name().toLowerCase(Locale.ROOT);
 
-            assertThat(invokeLookup(tryFrom, null))
-                    .as(enumClass.getName() + ".tryFrom(null)")
-                    .isEqualTo(Optional.empty());
-            assertThat(invokeLookup(tryFrom, "  "))
-                    .as(enumClass.getName() + ".tryFrom(blank)")
-                    .isEqualTo(Optional.empty());
-            assertThat(invokeLookup(tryFrom, "  " + lowercaseName + "  "))
-                    .as(enumClass.getName() + ".tryFrom must be case- and whitespace-insensitive")
-                    .isEqualTo(Optional.of(firstConstant));
-            assertThat(invokeLookup(fromValue, "  " + lowercaseName + "  "))
-                    .as(enumClass.getName() + ".fromValue must share tryFrom normalization")
-                    .isSameAs(firstConstant);
-            assertThatCode(() -> invokeLookup(fromValue, "not_a_" + lowercaseName))
-                    .as(enumClass.getName() + ".fromValue must reject unknown values")
-                    .isInstanceOf(IllegalArgumentException.class);
+            Method tryFrom = lookupMethod(enumClass, "tryFrom");
+            if (tryFrom != null) {
+                assertThat(Modifier.isStatic(tryFrom.getModifiers()))
+                        .as(enumClass.getName() + ".tryFrom must be static")
+                        .isTrue();
+                assertThat(tryFrom.getReturnType())
+                        .as(enumClass.getName() + ".tryFrom must return Optional")
+                        .isEqualTo(Optional.class);
+                assertThat(invokeLookup(tryFrom, null))
+                        .as(enumClass.getName() + ".tryFrom(null)")
+                        .isEqualTo(Optional.empty());
+                assertThat(invokeLookup(tryFrom, "  "))
+                        .as(enumClass.getName() + ".tryFrom(blank)")
+                        .isEqualTo(Optional.empty());
+                assertThat(invokeLookup(tryFrom, "  " + lowercaseName + "  "))
+                        .as(enumClass.getName() + ".tryFrom must be case- and whitespace-insensitive")
+                        .isEqualTo(Optional.of(firstConstant));
+            }
+
+            Method fromValue = lookupMethod(enumClass, "fromValue");
+            if (fromValue != null) {
+                assertThat(Modifier.isStatic(fromValue.getModifiers()))
+                        .as(enumClass.getName() + ".fromValue must be static")
+                        .isTrue();
+                assertThat(fromValue.getReturnType())
+                        .as(enumClass.getName() + ".fromValue must return its enum type")
+                        .isEqualTo(enumClass);
+                assertThat(invokeLookup(fromValue, "  " + lowercaseName + "  "))
+                        .as(enumClass.getName() + ".fromValue must share tryFrom normalization")
+                        .isSameAs(firstConstant);
+                assertThatCode(() -> invokeLookup(fromValue, "not_a_" + lowercaseName))
+                        .as(enumClass.getName() + ".fromValue must reject unknown values")
+                        .isInstanceOf(IllegalArgumentException.class);
+            }
         }
     }
 
-    @Test
-    void teacherVerificationReviewAcceptsOnlyFinalDecisions() {
-        TeacherVerificationReview review = new TeacherVerificationReview();
-
-        review.setDecisionStatus(TeacherStatus.APPROVED);
-        assertThat(review.getDecisionStatus()).isEqualTo(TeacherStatus.APPROVED);
-
-        review.setDecisionStatus(TeacherStatus.REJECTED);
-        assertThat(review.getDecisionStatus()).isEqualTo(TeacherStatus.REJECTED);
-
-        assertThatIllegalArgumentException()
-                .isThrownBy(() -> review.setDecisionStatus(TeacherStatus.PENDING))
-                .withMessage("Teacher verification review decision status must be APPROVED or REJECTED.");
-        assertThatIllegalArgumentException()
-                .isThrownBy(() -> review.setDecisionStatus(null))
-                .withMessage("Teacher verification review decision status is required.");
+    private static Method lookupMethod(Class<?> enumClass, String name) {
+        try {
+            return enumClass.getMethod(name, String.class);
+        } catch (NoSuchMethodException ex) {
+            return null;
+        }
     }
 
     private static List<Class<?>> concreteEntityClasses() throws Exception {
@@ -159,27 +152,16 @@ class EntityLayerContractTests {
 
     private static List<Class<?>> enumClasses() throws Exception {
         try (Stream<Path> sources = Files.list(ENUM_SOURCE_ROOT)) {
-            return loadSortedEnumClasses(sources
+            return loadSortedSourceClasses(sources
                     .filter(path -> path.getFileName().toString().endsWith(".java"))
                     .filter(path -> !"EnumLookups.java".equals(path.getFileName().toString())));
         }
     }
 
     private static List<Class<?>> loadSortedSourceClasses(Stream<Path> sources) {
-        return loadSortedClasses(sources
+        return sources
                 .map(EntityLayerContractTests::sourceToClassName)
-                .map(EntityLayerContractTests::loadClass));
-    }
-
-    private static List<Class<?>> loadSortedEnumClasses(Stream<Path> sources) {
-        return loadSortedClasses(sources
-                .map(EntityLayerContractTests::sourceToClassName)
-                .map(EntityLayerContractTests::loadClass)
-                .filter(Class::isEnum));
-    }
-
-    private static List<Class<?>> loadSortedClasses(Stream<Class<?>> classes) {
-        return classes
+                .<Class<?>>map(EntityLayerContractTests::loadClass)
                 .sorted(Comparator.comparing(Class::getName))
                 .toList();
     }
@@ -193,21 +175,17 @@ class EntityLayerContractTests {
         }
 
         String displayPath = source.toString();
-        return Stream.of(
-                        DANGEROUS_LOMBOK_ANNOTATION.matcher(content).find()
-                                ? displayPath + " uses @Data/@EqualsAndHashCode/@ToString"
-                                : null,
-                        !GETTER_ANNOTATION.matcher(content).find()
-                                ? displayPath + " is missing @Getter"
-                                : null,
-                        !SETTER_ANNOTATION.matcher(content).find()
-                                ? displayPath + " is missing @Setter"
-                                : null,
-                        !NO_ARGS_CONSTRUCTOR_ANNOTATION.matcher(content).find()
-                                ? displayPath + " is missing @NoArgsConstructor"
-                                : null)
-                .filter(message -> message != null)
-                .toList();
+        List<String> violations = new ArrayList<>();
+        if (DANGEROUS_LOMBOK_ANNOTATION.matcher(content).find()) {
+            violations.add(displayPath + " uses @Data/@EqualsAndHashCode/@ToString");
+        }
+        if (!GETTER_ANNOTATION.matcher(content).find()) {
+            violations.add(displayPath + " is missing @Getter");
+        }
+        if (!SETTER_ANNOTATION.matcher(content).find()) {
+            violations.add(displayPath + " is missing @Setter");
+        }
+        return violations;
     }
 
     private static String sourceToClassName(Path source) {

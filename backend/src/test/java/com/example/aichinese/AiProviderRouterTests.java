@@ -8,57 +8,45 @@ import org.junit.jupiter.api.Test;
 
 import com.example.aichinese.config.AiProperties;
 import com.example.aichinese.service.ai.AiProviderRouter;
-import com.example.aichinese.service.ai.NoOpAiProviderClient;
 import com.example.aichinese.service.ai.OpenAiCompatibleAiProviderClient;
+import com.example.aichinese.service.ai.OpenAiResponsesAiProviderClient;
 
 /**
- * Unit coverage for {@code AiProviderRouter} — proves the
- * per-call selection logic: disabled real-provider routes to the
- * fail-safe {@code NoOpAiProviderClient}, supported provider names
- * route to {@code OpenAiCompatibleAiProviderClient}, and unknown
- * provider names raise rather than silently degrading to no-op.
+ * Unit coverage for {@code AiProviderRouter}: the default "openai" provider routes to the OpenAI Responses API
+ * client named in the proposal; alternative Chat Completions providers route to the compatible
+ * client; unknown provider names raise.
  */
 class AiProviderRouterTests {
 
-    @Test
-    void disabledRealProviderUsesNoOpClientForLocalAndTestProfiles() {
-        NoOpAiProviderClient noOpClient = mock(NoOpAiProviderClient.class);
-        AiProviderRouter router = router(properties(false, null), mock(OpenAiCompatibleAiProviderClient.class), noOpClient);
+    private final OpenAiResponsesAiProviderClient responsesClient = mock(OpenAiResponsesAiProviderClient.class);
+    private final OpenAiCompatibleAiProviderClient compatibleClient = mock(OpenAiCompatibleAiProviderClient.class);
 
-        assertThat(router.resolveClient()).isSameAs(noOpClient);
+    @Test
+    void defaultProviderUsesOpenAiResponsesClient() {
+        assertThat(router(properties(null)).resolveClient()).isSameAs(responsesClient);
+        assertThat(router(properties("openai")).resolveClient()).isSameAs(responsesClient);
     }
 
     @Test
-    void enabledRealProviderUsesOpenAiCompatibleClientForSupportedProvider() {
-        OpenAiCompatibleAiProviderClient realClient = mock(OpenAiCompatibleAiProviderClient.class);
-        AiProviderRouter router = router(properties(true, "deepseek"), realClient, mock(NoOpAiProviderClient.class));
-
-        assertThat(router.resolveClient()).isSameAs(realClient);
+    void alternativeProvidersUseOpenAiCompatibleClient() {
+        assertThat(router(properties("deepseek")).resolveClient()).isSameAs(compatibleClient);
+        assertThat(router(properties("openai_compatible")).resolveClient()).isSameAs(compatibleClient);
     }
 
     @Test
-    void enabledRealProviderRejectsUnknownProviderInsteadOfFallingBackToNoOp() {
-        AiProviderRouter router = router(
-                properties(true, "unknown-provider"),
-                mock(OpenAiCompatibleAiProviderClient.class),
-                mock(NoOpAiProviderClient.class));
-
-        assertThatThrownBy(router::resolveClient)
+    void unknownProviderIsRejected() {
+        assertThatThrownBy(router(properties("unknown-provider"))::resolveClient)
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Unsupported AI provider");
     }
 
-    private static AiProperties properties(boolean enableRealProvider, String provider) {
+    private static AiProperties properties(String provider) {
         AiProperties properties = new AiProperties();
-        properties.setEnableRealProvider(enableRealProvider);
         properties.setProvider(provider);
         return properties;
     }
 
-    private static AiProviderRouter router(
-            AiProperties properties,
-            OpenAiCompatibleAiProviderClient realClient,
-            NoOpAiProviderClient noOpClient) {
-        return new AiProviderRouter(properties, realClient, noOpClient);
+    private AiProviderRouter router(AiProperties properties) {
+        return new AiProviderRouter(properties, responsesClient, compatibleClient);
     }
 }

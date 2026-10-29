@@ -1,5 +1,6 @@
 package com.example.aichinese.config;
 
+import static com.example.aichinese.support.ConfigFixtures.environment;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -7,7 +8,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.mock.env.MockEnvironment;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -27,7 +28,7 @@ class CorsConfigTests {
     private static final String LOCALHOST_VITE_ORIGIN = "http://localhost:5173";
     private static final String EXAMPLE_ORIGIN = "https://example.test";
 
-    private final CorsConfig config = new CorsConfig();
+    private final CorsConfig config = new CorsConfig(environment());
 
     @Test
     void registersExactOriginsForApiPath() {
@@ -56,7 +57,7 @@ class CorsConfigTests {
     void fallsBackToLocalDevOriginsWhenAllOriginsAreBlankOrWildcard() {
         CorsConfiguration api = apiCorsConfiguration("  ,  *  ,");
 
-        assertThat(api.getAllowedOrigins()).containsExactlyElementsOf(CorsConfig.defaultLocalDevOrigins());
+        assertThat(api.getAllowedOrigins()).containsExactlyElementsOf(CorsConfig.DEFAULT_LOCAL_DEV_ORIGINS);
     }
 
     @Test
@@ -94,7 +95,7 @@ class CorsConfigTests {
 
     @Test
     void defaultLocalDevOriginsCoverLoopbackAndViteFallbackPorts() {
-        assertThat(CorsConfig.defaultLocalDevOrigins())
+        assertThat(CorsConfig.DEFAULT_LOCAL_DEV_ORIGINS)
                 .containsExactly(
                         "http://localhost:4173",
                         "http://127.0.0.1:4173",
@@ -124,7 +125,7 @@ class CorsConfigTests {
 
     @Test
     void prodProfileRequiresExplicitCorsOrigins() {
-        CorsConfig prodConfig = new CorsConfig(prodEnvironment());
+        CorsConfig prodConfig = new CorsConfig(environment("prod"));
 
         assertThatThrownBy(() -> prodConfig.corsConfigurationSource("  ,  *  ,"))
                 .isInstanceOf(IllegalStateException.class)
@@ -133,7 +134,7 @@ class CorsConfigTests {
 
     @Test
     void prodProfileRequiresPublicHttpsCorsOrigins() {
-        CorsConfig prodConfig = new CorsConfig(prodEnvironment());
+        CorsConfig prodConfig = new CorsConfig(environment("prod"));
 
         assertThatThrownBy(() -> prodConfig.corsConfigurationSource("http://app.example.test"))
                 .isInstanceOf(IllegalStateException.class)
@@ -141,6 +142,20 @@ class CorsConfigTests {
         assertThatThrownBy(() -> prodConfig.corsConfigurationSource("https://localhost:5173"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("non-loopback public host");
+    }
+
+    @Test
+    void springWiredBeanAppliesProdProfileOriginRules() {
+        new ApplicationContextRunner()
+                .withInitializer(context -> context.getEnvironment().setActiveProfiles("prod"))
+                .withPropertyValues("app.cors.allowed-origins=" + LOCALHOST_VITE_ORIGIN)
+                .withUserConfiguration(CorsConfig.class)
+                .run(context -> assertThat(context)
+                        .hasFailed()
+                        .getFailure()
+                        .hasRootCauseInstanceOf(IllegalStateException.class)
+                        .rootCause()
+                        .hasMessageContaining("HTTPS"));
     }
 
     private CorsConfiguration apiCorsConfiguration(String allowedOrigins) {
@@ -157,11 +172,5 @@ class CorsConfigTests {
                 .toList();
         assertThat(matched).hasSize(1);
         return matched.get(0);
-    }
-
-    private static MockEnvironment prodEnvironment() {
-        MockEnvironment environment = new MockEnvironment();
-        environment.setActiveProfiles("prod");
-        return environment;
     }
 }

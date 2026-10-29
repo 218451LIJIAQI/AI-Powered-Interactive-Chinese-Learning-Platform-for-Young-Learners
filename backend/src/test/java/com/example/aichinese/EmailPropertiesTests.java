@@ -3,9 +3,8 @@ package com.example.aichinese;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import org.junit.jupiter.api.Test;
-
 import com.example.aichinese.config.EmailProperties;
+import org.junit.jupiter.api.Test;
 
 /**
  * Unit coverage for {@code EmailProperties} - pins the

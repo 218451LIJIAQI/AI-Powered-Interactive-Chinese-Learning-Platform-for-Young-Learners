@@ -1,10 +1,2 @@
 * text=auto eol=lf
-
-*.gif binary
-*.ico binary
-*.jpeg binary
-*.jpg binary
-*.pdf binary
-*.png binary
-*.webp binary
-*.zip binary
+*.cmd text eol=crlf

@@ -4,12 +4,20 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
-import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -20,28 +28,25 @@ import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.example.aichinese.dto.PageResponse;
-import com.example.aichinese.dto.communication.BulkOperationResponse;
 import com.example.aichinese.dto.communication.NotificationResponse;
 import com.example.aichinese.dto.communication.NotificationUnreadCountResponse;
-import com.example.aichinese.entity.CoursePackage;
 import com.example.aichinese.entity.Lesson;
+import com.example.aichinese.entity.LiveClass;
 import com.example.aichinese.entity.Notification;
 import com.example.aichinese.entity.RecordedLessonVideo;
-import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.entity.TeacherFeedback;
 import com.example.aichinese.entity.User;
-import com.example.aichinese.entity.enums.ContentStatus;
 import com.example.aichinese.entity.enums.NotificationStatus;
 import com.example.aichinese.entity.enums.NotificationType;
 import com.example.aichinese.entity.enums.RoleName;
 import com.example.aichinese.repository.LiveClassRepository;
 import com.example.aichinese.repository.NotificationRepository;
 import com.example.aichinese.repository.RecordedLessonVideoRepository;
-import com.example.aichinese.repository.StudentProfileRepository;
 import com.example.aichinese.repository.TeacherFeedbackRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.util.ExceptionLogUtils;
 import com.example.aichinese.util.PaginationUtils;
+import com.example.aichinese.util.TextUtils;
 
 @Service
 public class NotificationService {
@@ -53,43 +58,25 @@ public class NotificationService {
     private static final int NOTIFICATION_BATCH_SIZE = 250;
 
     private final NotificationRepository notificationRepository;
-    private final CommunicationMapper communicationMapper;
     private final TransactionTemplate notificationTransactionTemplate;
     private final TeacherFeedbackRepository teacherFeedbackRepository;
     private final RecordedLessonVideoRepository recordedLessonVideoRepository;
     private final LiveClassRepository liveClassRepository;
-    private final StudentProfileRepository studentProfileRepository;
-    private final StudentLearningAccessService studentLearningAccessService;
-    private final LiveLearningAccessService liveLearningAccessService;
 
     public NotificationService(
             NotificationRepository notificationRepository,
-            CommunicationMapper communicationMapper,
             PlatformTransactionManager transactionManager,
             TeacherFeedbackRepository teacherFeedbackRepository,
             RecordedLessonVideoRepository recordedLessonVideoRepository,
-            LiveClassRepository liveClassRepository,
-            StudentProfileRepository studentProfileRepository,
-            StudentLearningAccessService studentLearningAccessService,
-            LiveLearningAccessService liveLearningAccessService) {
-        this.notificationRepository = Objects.requireNonNull(notificationRepository, "notificationRepository");
-        this.communicationMapper = Objects.requireNonNull(communicationMapper, "communicationMapper");
-        this.notificationTransactionTemplate = new TransactionTemplate(Objects.requireNonNull(transactionManager, "transactionManager"));
+            LiveClassRepository liveClassRepository) {
+        this.notificationRepository = notificationRepository;
+        this.notificationTransactionTemplate = new TransactionTemplate(transactionManager);
         this.notificationTransactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-        this.teacherFeedbackRepository = Objects.requireNonNull(teacherFeedbackRepository, "teacherFeedbackRepository");
-        this.recordedLessonVideoRepository = Objects.requireNonNull(recordedLessonVideoRepository, "recordedLessonVideoRepository");
-        this.liveClassRepository = Objects.requireNonNull(liveClassRepository, "liveClassRepository");
-        this.studentProfileRepository = Objects.requireNonNull(studentProfileRepository, "studentProfileRepository");
-        this.studentLearningAccessService = Objects.requireNonNull(studentLearningAccessService, "studentLearningAccessService");
-        this.liveLearningAccessService = Objects.requireNonNull(liveLearningAccessService, "liveLearningAccessService");
+        this.teacherFeedbackRepository = teacherFeedbackRepository;
+        this.recordedLessonVideoRepository = recordedLessonVideoRepository;
+        this.liveClassRepository = liveClassRepository;
     }
 
-    @Transactional
-    public void createNotification(User recipient, String title, String message, String targetPath) {
-        createNotification(recipient, NotificationType.SYSTEM, title, message, null, null, targetPath, null);
-    }
-
-    @Transactional
     public Notification createNotification(
             User recipient,
             NotificationType notificationType,
@@ -114,11 +101,10 @@ public class NotificationService {
         notification.setMessage(normalizedMessage);
         notification.setNotificationType(notificationType);
         notification.setNotificationStatus(NotificationStatus.UNREAD);
-        notification.setTargetType(optionalText(targetType));
+        notification.setTargetType(TextUtils.trimToNull(targetType));
         notification.setTargetId(targetId);
-        notification.setTargetPath(optionalText(targetPath));
+        notification.setTargetPath(TextUtils.trimToNull(targetPath));
         notification.setCreatedByUser(createdByUser);
-        notification.setReadAt(null);
         return notificationRepository.save(notification);
     }
 
@@ -126,6 +112,10 @@ public class NotificationService {
         safeCreateNotification(recipient, NotificationType.SYSTEM, title, message, null, null, targetPath, null);
     }
 
+    /**
+     * Best-effort notification: written in a transaction of its own after the caller's transaction commits (at once
+     * when there is none), so a failure is only logged and never fails or rolls back the caller.
+     */
     public void safeCreateNotification(
             User recipient,
             NotificationType notificationType,
@@ -135,15 +125,16 @@ public class NotificationService {
             Long targetId,
             String targetPath,
             User createdByUser) {
-        Runnable committedWrite = () -> createNotificationInIndependentTransaction(
-                recipient,
-                notificationType,
-                title,
-                message,
-                targetType,
-                targetId,
-                targetPath,
-                createdByUser);
+        Runnable committedWrite = () -> {
+            try {
+                notificationTransactionTemplate.executeWithoutResult(status ->
+                        createNotification(recipient, notificationType, title, message, targetType, targetId, targetPath, createdByUser));
+            } catch (Exception exception) {
+                Long recipientId = recipient != null ? recipient.getId() : null;
+                log.warn("Notification creation failed for recipient user id {}: {}", recipientId, ExceptionLogUtils.safeSummary(exception));
+                log.debug("Notification creation stack trace for recipient user id {}.", recipientId, exception);
+            }
+        };
 
         if (TransactionSynchronizationManager.isActualTransactionActive()
                 && TransactionSynchronizationManager.isSynchronizationActive()) {
@@ -159,192 +150,116 @@ public class NotificationService {
         committedWrite.run();
     }
 
-    private void createNotificationInIndependentTransaction(
-            User recipient,
-            NotificationType notificationType,
-            String title,
-            String message,
-            String targetType,
-            Long targetId,
-            String targetPath,
-            User createdByUser) {
-        try {
-            notificationTransactionTemplate.executeWithoutResult(status ->
-                    createNotification(recipient, notificationType, title, message, targetType, targetId, targetPath, createdByUser));
-        } catch (Exception exception) {
-            Long recipientId = recipient != null ? recipient.getId() : null;
-            log.warn("Notification creation failed for recipient user id {}: {}", recipientId, ExceptionLogUtils.safeSummary(exception));
-            log.debug("Notification creation stack trace for recipient user id {}.", recipientId, exception);
-        }
-    }
-
+    /** Notifications page (FRNOTIF02): optional READ / UNREAD filter, newest first. */
     @Transactional(readOnly = true)
-    public PageResponse<NotificationResponse> getCurrentUserNotifications(SecurityUserDetails currentUser, int page, int size) {
+    public PageResponse<NotificationResponse> getCurrentUserNotifications(
+            SecurityUserDetails currentUser,
+            NotificationStatus status,
+            int page,
+            int size) {
         int safePage = PaginationUtils.sanitizePage(page);
         int safeSize = PaginationUtils.sanitizeSize(size);
         long requestedStart = (long) safePage * safeSize;
-        long accessibleCount = 0;
+        AtomicLong accessibleCount = new AtomicLong();
         List<NotificationResponse> items = new ArrayList<>(safeSize);
-        NotificationCursor cursor = NotificationCursor.initial();
-        while (true) {
-            List<Notification> batch = loadNotificationBatch(currentUser.getUserId(), null, cursor);
-            if (batch.isEmpty()) {
-                break;
-            }
-            for (Notification notification : batch) {
-                if (!isNotificationCurrentlyAccessible(currentUser, notification)) {
-                    continue;
+        forEachAccessibleBatch(currentUser, status, accessible -> {
+            for (Notification notification : accessible) {
+                if (accessibleCount.getAndIncrement() >= requestedStart && items.size() < safeSize) {
+                    items.add(toNotificationResponse(notification));
                 }
-                if (accessibleCount >= requestedStart && items.size() < safeSize) {
-                    items.add(communicationMapper.toNotificationResponse(notification));
-                }
-                accessibleCount++;
             }
-            cursor = NotificationCursor.before(batch.get(batch.size() - 1));
-            if (batch.size() < NOTIFICATION_BATCH_SIZE) {
-                break;
-            }
-        }
-        return PageResponse.of(items, safePage, safeSize, accessibleCount);
+        });
+        return PageResponse.of(items, safePage, safeSize, accessibleCount.get());
     }
 
     @Transactional(readOnly = true)
     public NotificationUnreadCountResponse getUnreadCount(SecurityUserDetails currentUser) {
-        return new NotificationUnreadCountResponse(countAccessibleUnreadNotifications(currentUser));
-    }
-
-    public long countAccessibleUnreadNotifications(SecurityUserDetails currentUser) {
-        long count = 0;
-        NotificationCursor cursor = NotificationCursor.initial();
-        while (true) {
-            List<Notification> batch = loadNotificationBatch(
-                    currentUser.getUserId(), NotificationStatus.UNREAD, cursor);
-            if (batch.isEmpty()) {
-                break;
-            }
-            count += batch.stream()
-                    .filter(notification -> isNotificationCurrentlyAccessible(currentUser, notification))
-                    .count();
-            cursor = NotificationCursor.before(batch.get(batch.size() - 1));
-            if (batch.size() < NOTIFICATION_BATCH_SIZE) {
-                break;
-            }
-        }
-        return count;
-    }
-
-    public List<Notification> findRecentAccessibleNotifications(SecurityUserDetails currentUser, int limit) {
-        int safeLimit = Math.min(Math.max(limit, 0), PaginationUtils.DEFAULT_MAX_PAGE_SIZE);
-        if (safeLimit == 0) {
-            return List.of();
-        }
-        List<Notification> result = new ArrayList<>(safeLimit);
-        NotificationCursor cursor = NotificationCursor.initial();
-        while (result.size() < safeLimit) {
-            List<Notification> batch = loadNotificationBatch(currentUser.getUserId(), null, cursor);
-            if (batch.isEmpty()) {
-                break;
-            }
-            for (Notification notification : batch) {
-                if (isNotificationCurrentlyAccessible(currentUser, notification)) {
-                    result.add(notification);
-                    if (result.size() == safeLimit) {
-                        break;
-                    }
-                }
-            }
-            cursor = NotificationCursor.before(batch.get(batch.size() - 1));
-            if (batch.size() < NOTIFICATION_BATCH_SIZE) {
-                break;
-            }
-        }
-        return List.copyOf(result);
+        AtomicLong count = new AtomicLong();
+        forEachAccessibleBatch(currentUser, NotificationStatus.UNREAD, accessible -> count.addAndGet(accessible.size()));
+        return new NotificationUnreadCountResponse(count.get());
     }
 
     public boolean isNotificationCurrentlyAccessible(SecurityUserDetails currentUser, Notification notification) {
-        if (notification.getTargetType() == null || notification.getTargetId() == null) {
-            return true;
+        return accessibilityFilter(currentUser, List.of(notification)).test(notification);
+    }
+
+    /**
+     * Tells which notifications of one batch the user may still open. The content-visibility gate protects
+     * students only: a teacher's notifications about their own class or video (an enrolment, a completed video)
+     * stay visible while the lesson is back in review. The targets of the batch are loaded together, one query
+     * per target type.
+     */
+    private Predicate<Notification> accessibilityFilter(SecurityUserDetails currentUser, List<Notification> batch) {
+        if (!currentUser.getRoleNames().contains(RoleName.STUDENT.name())) {
+            return notification -> true;
         }
-        return switch (notification.getTargetType()) {
-            case TARGET_TEACHER_FEEDBACK -> isTeacherFeedbackNotificationAccessible(currentUser, notification);
-            case TARGET_RECORDED_VIDEO -> isRecordedVideoNotificationAccessible(notification);
-            case TARGET_LIVE_CLASS -> isLiveClassNotificationAccessible(notification);
-            default -> true;
+        Set<Long> visibleVideoIds = visibleTargetIds(
+                batch,
+                TARGET_RECORDED_VIDEO,
+                recordedLessonVideoRepository::findByIdIn,
+                video -> video.isActive() && ContentVisibilityPolicy.isRecordedVideoVisible(video),
+                RecordedLessonVideo::getId);
+        Set<Long> visibleLiveClassIds = visibleTargetIds(
+                batch,
+                TARGET_LIVE_CLASS,
+                liveClassRepository::findByIdIn,
+                ContentVisibilityPolicy::isLiveClassContentVisible,
+                LiveClass::getId);
+        Set<Long> visibleFeedbackIds = visibleTargetIds(
+                batch,
+                TARGET_TEACHER_FEEDBACK,
+                feedbackIds -> teacherFeedbackRepository
+                        .findAll(ownFeedback(feedbackIds, currentUser.getUserId()), Pageable.unpaged())
+                        .getContent(),
+                NotificationService::isStudentFeedbackCurrentlyAccessible,
+                TeacherFeedback::getId);
+        return notification -> {
+            Long targetId = notification.getTargetId();
+            if (notification.getTargetType() == null || targetId == null) {
+                return true;
+            }
+            return switch (notification.getTargetType()) {
+                case TARGET_TEACHER_FEEDBACK -> visibleFeedbackIds.contains(targetId);
+                case TARGET_RECORDED_VIDEO -> visibleVideoIds.contains(targetId);
+                case TARGET_LIVE_CLASS -> visibleLiveClassIds.contains(targetId);
+                default -> true;
+            };
         };
     }
 
-    private boolean isTeacherFeedbackNotificationAccessible(SecurityUserDetails currentUser, Notification notification) {
-        return teacherFeedbackRepository.findByIdAndStudentUserId(notification.getTargetId(), currentUser.getUserId())
-                .map(feedback -> isStudentFeedbackCurrentlyAccessible(currentUser, feedback))
-                .orElse(false);
+    /** Ids of the batch targets of one type that exist and pass {@code visible}; a missing target is not visible. */
+    private static <T> Set<Long> visibleTargetIds(
+            List<Notification> batch,
+            String targetType,
+            Function<Collection<Long>, List<T>> loadAll,
+            Predicate<T> visible,
+            Function<T, Long> idOf) {
+        Set<Long> targetIds = batch.stream()
+                .filter(notification -> targetType.equals(notification.getTargetType()) && notification.getTargetId() != null)
+                .map(Notification::getTargetId)
+                .collect(Collectors.toSet());
+        if (targetIds.isEmpty()) {
+            return Set.of();
+        }
+        return loadAll.apply(targetIds).stream()
+                .filter(visible)
+                .map(idOf)
+                .collect(Collectors.toSet());
     }
 
-    private boolean isStudentFeedbackCurrentlyAccessible(SecurityUserDetails currentUser, TeacherFeedback feedback) {
-        StudentProfile student = studentProfileRepository.findByUserId(currentUser.getUserId()).orElse(null);
-        if (student == null) {
-            return false;
-        }
-        Lesson feedbackLesson = feedback.getLesson();
-        if (feedbackLesson != null) {
-            return hasFeedbackLessonAccess(student, feedbackLesson);
-        }
-        Lesson quizLesson = feedback.getQuizAttempt() == null || feedback.getQuizAttempt().getQuiz() == null
-                ? null
+    /** The given feedback written to the student with this user id; feedback to anyone else is never returned. */
+    private static Specification<TeacherFeedback> ownFeedback(Collection<Long> feedbackIds, Long studentUserId) {
+        return (root, query, cb) -> cb.and(
+                root.get("id").in(feedbackIds),
+                cb.equal(root.get("student").get("user").get("id"), studentUserId));
+    }
+
+    /** The feedback was found by the current student's user id, so the student profile is known to exist. */
+    private static boolean isStudentFeedbackCurrentlyAccessible(TeacherFeedback feedback) {
+        Lesson lesson = feedback.getLesson() != null || feedback.getQuizAttempt() == null
+                ? feedback.getLesson()
                 : feedback.getQuizAttempt().getQuiz().getLesson();
-        if (quizLesson != null) {
-            return hasFeedbackLessonAccess(student, quizLesson);
-        }
-        return true;
-    }
-
-    private boolean isRecordedVideoNotificationAccessible(Notification notification) {
-        StudentProfile student = resolveNotificationStudent(notification);
-        RecordedLessonVideo video = recordedLessonVideoRepository.findByIdAndActiveTrue(notification.getTargetId()).orElse(null);
-        if (student == null || video == null) {
-            return false;
-        }
-        return hasLiveLessonAccess(student, video.getLesson())
-                && hasLivePackageAccess(student, video.getCoursePackage());
-    }
-
-    private boolean isLiveClassNotificationAccessible(Notification notification) {
-        StudentProfile student = resolveNotificationStudent(notification);
-        Long targetId = notification.getTargetId();
-        return student != null && targetId != null && liveClassRepository.findById(targetId)
-                .map(liveClass -> hasLiveLessonAccess(student, liveClass.getLesson())
-                        && hasLivePackageAccess(student, liveClass.getCoursePackage()))
-                .orElse(false);
-    }
-
-    private boolean hasFeedbackLessonAccess(StudentProfile student, Lesson lesson) {
-        return lesson.getContentStatus() == ContentStatus.PUBLISHED
-                && studentLearningAccessService.hasLessonAccess(student, lesson);
-    }
-
-    private boolean hasLiveLessonAccess(StudentProfile student, Lesson lesson) {
-        return lesson == null
-                || (lesson.getContentStatus() == ContentStatus.PUBLISHED
-                        && liveLearningAccessService.hasStudentLessonAccess(student, lesson));
-    }
-
-    private boolean hasLivePackageAccess(StudentProfile student, CoursePackage coursePackage) {
-        return coursePackage == null
-                || (coursePackage.getContentStatus() == ContentStatus.PUBLISHED
-                        && liveLearningAccessService.hasStudentPackageAccess(student, coursePackage));
-    }
-
-    private StudentProfile resolveNotificationStudent(Notification notification) {
-        if (hasRole(notification.getUser(), RoleName.STUDENT)) {
-            return studentProfileRepository.findByUserId(notification.getUser().getId()).orElse(null);
-        }
-        return notification.getCreatedByUser() == null
-                ? null
-                : studentProfileRepository.findByUserId(notification.getCreatedByUser().getId()).orElse(null);
-    }
-
-    private static boolean hasRole(User user, RoleName roleName) {
-        return user != null && user.getRoles().stream()
-                .anyMatch(role -> role.getName() == roleName);
+        return lesson == null || ContentVisibilityPolicy.isLessonVisible(lesson);
     }
 
     @Transactional
@@ -360,35 +275,41 @@ public class NotificationService {
             notification.setReadAt(LocalDateTime.now());
         }
 
-        return communicationMapper.toNotificationResponse(notification);
+        return toNotificationResponse(notification);
     }
 
     @Transactional
-    public BulkOperationResponse markAllAsRead(SecurityUserDetails currentUser) {
+    public void markAllAsRead(SecurityUserDetails currentUser) {
         LocalDateTime readAt = LocalDateTime.now();
-        long updatedCount = 0;
-        NotificationCursor cursor = NotificationCursor.initial();
-        while (true) {
-            List<Notification> batch = loadNotificationBatch(
-                    currentUser.getUserId(), NotificationStatus.UNREAD, cursor);
-            if (batch.isEmpty()) {
-                break;
-            }
-            List<Notification> accessible = batch.stream()
-                    .filter(notification -> isNotificationCurrentlyAccessible(currentUser, notification))
-                    .toList();
+        forEachAccessibleBatch(currentUser, NotificationStatus.UNREAD, accessible -> {
             accessible.forEach(notification -> {
                 notification.setNotificationStatus(NotificationStatus.READ);
                 notification.setReadAt(readAt);
             });
             notificationRepository.saveAll(accessible);
-            updatedCount += accessible.size();
-            cursor = NotificationCursor.before(batch.get(batch.size() - 1));
-            if (batch.size() < NOTIFICATION_BATCH_SIZE) {
-                break;
+        });
+    }
+
+    /**
+     * Walks the user's notifications (of one status, or all when {@code status} is null) newest first, one batch at
+     * a time, and hands each batch's still-accessible notifications to {@code handler}.
+     */
+    private void forEachAccessibleBatch(
+            SecurityUserDetails currentUser,
+            NotificationStatus status,
+            Consumer<List<Notification>> handler) {
+        NotificationCursor cursor = NotificationCursor.initial();
+        while (true) {
+            List<Notification> batch = loadNotificationBatch(currentUser.getUserId(), status, cursor);
+            if (batch.isEmpty()) {
+                return;
             }
+            handler.accept(batch.stream().filter(accessibilityFilter(currentUser, batch)).toList());
+            if (batch.size() < NOTIFICATION_BATCH_SIZE) {
+                return;
+            }
+            cursor = NotificationCursor.before(batch.get(batch.size() - 1));
         }
-        return new BulkOperationResponse(updatedCount);
     }
 
     private List<Notification> loadNotificationBatch(
@@ -412,19 +333,23 @@ public class NotificationService {
         }
     }
 
+    private static NotificationResponse toNotificationResponse(Notification notification) {
+        return new NotificationResponse(
+                notification.getId(),
+                notification.getTitle(),
+                notification.getMessage(),
+                notification.getNotificationType().name(),
+                notification.getNotificationStatus().name(),
+                notification.getTargetPath(),
+                notification.getCreatedAt(),
+                notification.getReadAt());
+    }
+
     private static String requireText(String value, String fieldName) {
-        String stripped = optionalText(value);
+        String stripped = TextUtils.trimToNull(value);
         if (stripped == null) {
             throw new IllegalArgumentException(fieldName + " must not be blank.");
         }
         return stripped;
-    }
-
-    private static String optionalText(String value) {
-        if (value == null) {
-            return null;
-        }
-        String stripped = value.strip();
-        return stripped.isEmpty() ? null : stripped;
     }
 }

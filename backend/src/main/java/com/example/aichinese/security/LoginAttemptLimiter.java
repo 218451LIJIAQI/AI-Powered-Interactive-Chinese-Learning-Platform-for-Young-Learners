@@ -8,7 +8,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.HexFormat;
 import java.util.Locale;
-import java.util.Objects;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -77,7 +76,7 @@ public class LoginAttemptLimiter {
                 || maxTrackedAttemptRecords < 1) {
             throw new IllegalArgumentException("Login rate limit settings must be positive");
         }
-        this.clock = Objects.requireNonNull(clock, "clock");
+        this.clock = clock;
         this.maxFailedAttempts = maxFailedAttempts;
         this.attemptWindow = attemptWindow;
         this.lockDuration = lockDuration;
@@ -104,11 +103,7 @@ public class LoginAttemptLimiter {
         }
 
         AttemptRecord record = attempts.getIfPresent(key);
-        if (record == null) {
-            return true;
-        }
-
-        if (!record.firstFailureAt.plus(attemptWindow).isAfter(now)) {
+        if (record != null && !record.firstFailureAt.plus(attemptWindow).isAfter(now)) {
             attempts.asMap().remove(key, record);
         }
         return true;

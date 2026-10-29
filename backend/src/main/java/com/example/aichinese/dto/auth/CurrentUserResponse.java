@@ -1,21 +1,15 @@
 package com.example.aichinese.dto.auth;
 
-import java.util.LinkedHashSet;
+import static com.example.aichinese.dto.DtoNormalization.normalizeRoles;
+import static com.example.aichinese.dto.DtoNormalization.requireNonBlank;
+
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 
-import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+import com.example.aichinese.dto.teacher.TeacherVerificationState;
 import com.example.aichinese.entity.enums.TeacherStatus;
 
-@JsonPropertyOrder({
-        "id",
-        "fullName",
-        "email",
-        "preferredLanguage",
-        "roles",
-        "studentProfile",
-        "teacherProfile"
-})
 public record CurrentUserResponse(
         Long id,
         String fullName,
@@ -33,59 +27,18 @@ public record CurrentUserResponse(
         roles = normalizeRoles(roles);
     }
 
-    @JsonPropertyOrder({ "id", "displayName", "currentLevel", "totalPoints" })
-    public record StudentProfileSummary(
-            Long id,
-            String displayName,
-            String currentLevel,
-            Integer totalPoints) {
-
-        public StudentProfileSummary {
-            Objects.requireNonNull(id, "id must not be null");
-            displayName = normalizeOptionalText(displayName);
-            currentLevel = normalizeOptionalText(currentLevel);
-        }
+    public record StudentProfileSummary(Integer totalPoints) {
     }
 
-    @JsonPropertyOrder({ "id", "teacherStatus", "bio", "rejectionReason" })
+    /** The teacher status and, derived from it, where the application stands and when it was approved. */
     public record TeacherProfileSummary(
-            Long id,
             TeacherStatus teacherStatus,
-            String bio,
-            String rejectionReason) {
+            TeacherVerificationState verificationState,
+            LocalDateTime approvedAt) {
 
         public TeacherProfileSummary {
-            Objects.requireNonNull(id, "id must not be null");
             Objects.requireNonNull(teacherStatus, "teacherStatus must not be null");
-            bio = normalizeOptionalText(bio);
-            rejectionReason = normalizeOptionalText(rejectionReason);
+            Objects.requireNonNull(verificationState, "verificationState must not be null");
         }
-    }
-
-    private static String requireNonBlank(String value, String fieldName) {
-        String stripped = Objects.requireNonNull(value, fieldName + " must not be null").strip();
-        if (stripped.isEmpty()) {
-            throw new IllegalArgumentException(fieldName + " must not be blank");
-        }
-        return stripped;
-    }
-
-    private static List<String> normalizeRoles(List<String> source) {
-        if (source == null || source.isEmpty()) {
-            return List.of();
-        }
-        LinkedHashSet<String> normalized = new LinkedHashSet<>(source.size());
-        for (String role : source) {
-            normalized.add(requireNonBlank(role, "role"));
-        }
-        return List.copyOf(normalized);
-    }
-
-    private static String normalizeOptionalText(String value) {
-        if (value == null) {
-            return null;
-        }
-        String stripped = value.strip();
-        return stripped.isEmpty() ? null : stripped;
     }
 }

@@ -1,238 +1,231 @@
 <template>
-  <section class="public-page auth-reset-page">
-    <div class="auth-reset-shell">
-      <aside class="auth-reset-art">
-        <AppBrand />
-
-        <div class="auth-reset-art-copy">
-          <span class="auth-reset-kicker">{{ t('recovery.reset.eyebrow') }}</span>
-          <h1>
-            {{ t('recovery.reset.heroStart') }}
-            <span>{{ t('recovery.reset.heroHighlight') }}</span>
-          </h1>
-          <p>{{ t('recovery.reset.heroCopy') }}</p>
-        </div>
-
-        <div class="auth-reset-scene">
-          <span class="auth-reset-cloud auth-reset-cloud--one" />
-          <span class="auth-reset-cloud auth-reset-cloud--two" />
-          <span class="auth-reset-bamboo" />
-          <span class="auth-reset-pagoda" />
-          <PandaIllustration class="auth-reset-panda" :size="190" outfit="#6f4cff" accent="#ffcc2f" />
-        </div>
-
-        <div class="auth-reset-safety-card">
-          <strong><IconGlyph name="shield" :size="18" /> {{ t('recovery.reset.safetyTitle') }}</strong>
-          <span>{{ t('recovery.reset.safetyCopy') }}</span>
-        </div>
-      </aside>
-
-      <div class="surface-card auth-reset-card">
-        <div class="auth-reset-language"><LanguageSwitcher size="compact" /></div>
-        <div class="auth-reset-card-head">
-          <span class="auth-reset-card-icon"><IconGlyph name="safe" :size="24" /></span>
-          <div class="auth-form-title">
-            <h2>{{ t('recovery.reset.title') }}</h2>
-            <p>{{ t('recovery.reset.cardCopy') }}</p>
-          </div>
-        </div>
-
-        <div v-if="error" class="soft-banner auth-alert auth-alert--error" role="alert" aria-live="assertive">
-          <span>{{ error }}</span>
-        </div>
-
-        <div v-if="success" class="soft-banner auth-alert auth-alert--success" role="status" aria-live="polite">
-          <span>{{ success }}</span>
-        </div>
-
-        <form class="auth-reset-form" @submit.prevent="submitReset">
-          <div class="field">
-            <label for="reset-token">{{ t('recovery.reset.token') }}</label>
-            <input
-              id="reset-token"
-              v-model="token"
-              class="input auth-input"
-              autocomplete="one-time-code"
-              :placeholder="t('recovery.reset.tokenPlaceholder')"
-            />
-          </div>
-
-          <div class="field">
-            <label for="reset-password">{{ t('recovery.reset.newPassword') }}</label>
-            <input
-              id="reset-password"
-              v-model="password"
-              class="input auth-input"
-              autocomplete="new-password"
-              type="password"
-              :placeholder="t('recovery.reset.newPasswordPlaceholder')"
-            />
-          </div>
-
-          <div class="auth-reset-strength">
-            <div class="row-between">
-              <span>{{ t('recovery.reset.readiness') }}</span>
-              <strong>{{ passwordStrengthLabel }}</strong>
-            </div>
-            <div class="auth-reset-strength-track">
-              <span :class="passwordStrengthClass" :style="{ width: passwordStrengthWidth }" />
-            </div>
-            <div class="auth-reset-check-grid">
-              <span v-for="check in passwordChecks" :key="check.label" :class="{ 'is-met': check.met }">
-                <IconGlyph :name="passwordCheckIcon(check.met)" :size="14" /> {{ check.label }}
-              </span>
-            </div>
-          </div>
-
-          <div class="field">
-            <label for="reset-confirm-password">{{ t('recovery.reset.confirmPassword') }}</label>
-            <input
-              id="reset-confirm-password"
-              v-model="confirmPassword"
-              class="input auth-input"
-              autocomplete="new-password"
-              type="password"
-              :placeholder="t('recovery.reset.confirmPlaceholder')"
-            />
-          </div>
-
-          <button class="btn btn-accent btn-block auth-submit-button" :disabled="!canSubmit" type="submit">
-            <span>{{ submitLabel }}</span>
-            <span class="auth-submit-arrow"><IconGlyph name="chevronRight" :size="16" /></span>
-          </button>
-        </form>
-
-        <div class="auth-reset-help-row">
-          <span>{{ t('recovery.reset.rememberPassword') }}</span>
-          <RouterLink class="auth-text-button auth-reset-link" to="/auth">{{
-            t('recovery.reset.backSignIn')
-          }}</RouterLink>
-        </div>
-
-        <div class="auth-reset-help-row">
-          <span>{{ t('recovery.reset.needLink') }}</span>
-          <RouterLink class="auth-text-button auth-reset-link" to="/forgot-password">{{
-            t('recovery.reset.requestOne')
-          }}</RouterLink>
-        </div>
+  <AuthShell variant="recovery">
+    <div class="auth-flow">
+      <div v-if="state === 'checking'" class="auth-checking" role="status">
+        <h1 class="sr-only">{{ isInvite ? t('recovery.inviteTitle') : t('recovery.resetTitle') }}</h1>
+        <span class="spinner" aria-hidden="true" />
+        <p>{{ t('recovery.checkingLink') }}</p>
       </div>
+
+      <template v-else-if="state === 'invalid'">
+        <header class="auth-form-head">
+          <h1>{{ isInvite ? t('recovery.inviteExpiredTitle') : t('recovery.expiredTitle') }}</h1>
+          <p v-if="!isInvite">{{ t('recovery.expiredCopy') }}</p>
+        </header>
+        <p class="alert alert-warning" role="alert" data-testid="link-invalid">
+          <IconGlyph name="info" :size="18" />
+          <span>{{ invalidMessage }}</span>
+        </p>
+        <RouterLink v-if="!isInvite" class="btn btn-primary btn-lg btn-block" to="/forgot-password">
+          {{ t('recovery.requestNewLink') }}
+          <IconGlyph name="chevronRight" :size="18" />
+        </RouterLink>
+      </template>
+
+      <form v-else class="auth-form" novalidate @submit.prevent="submit">
+        <header class="auth-form-head">
+          <h1>{{ isInvite ? t('recovery.inviteTitle') : t('recovery.resetTitle') }}</h1>
+          <p data-testid="link-email">
+            {{
+              isInvite ? t('recovery.inviteFor', { email: linkEmail }) : t('recovery.resetFor', { email: linkEmail })
+            }}
+          </p>
+        </header>
+
+        <p v-if="error" id="reset-error" class="alert alert-danger" role="alert">
+          <IconGlyph name="alert" :size="18" />
+          <span>{{ error }}</span>
+        </p>
+
+        <div v-if="isInvite" class="field">
+          <label class="field-label" for="invite-full-name">
+            {{ t('recovery.fullName') }}<span class="required-mark" aria-hidden="true">*</span>
+          </label>
+          <input
+            id="invite-full-name"
+            v-model="fullName"
+            class="input"
+            autocomplete="name"
+            required
+            maxlength="120"
+            :placeholder="t('recovery.fullNamePlaceholder')"
+            :aria-invalid="Boolean(nameError)"
+            :aria-describedby="nameError ? 'invite-name-error' : undefined"
+          />
+          <p v-if="nameError" id="invite-name-error" class="field-error">{{ nameError }}</p>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="reset-password">
+            {{ t('recovery.newPassword') }}<span class="required-mark" aria-hidden="true">*</span>
+          </label>
+          <input
+            id="reset-password"
+            v-model="password"
+            class="input"
+            :type="showPasswords ? 'text' : 'password'"
+            autocomplete="new-password"
+            required
+            :placeholder="t('recovery.newPasswordPlaceholder')"
+            aria-describedby="reset-readiness"
+          />
+        </div>
+        <div class="field">
+          <label class="field-label" for="reset-confirm">
+            {{ t('recovery.confirmNewPassword') }}<span class="required-mark" aria-hidden="true">*</span>
+          </label>
+          <input
+            id="reset-confirm"
+            v-model="confirmPassword"
+            class="input"
+            :type="showPasswords ? 'text' : 'password'"
+            autocomplete="new-password"
+            required
+            :placeholder="t('recovery.confirmPlaceholder')"
+            aria-describedby="reset-readiness"
+          />
+        </div>
+        <label class="choice">
+          <input v-model="showPasswords" type="checkbox" />
+          <span>{{ t('recovery.showPasswords') }}</span>
+        </label>
+
+        <section id="reset-readiness" class="auth-readiness" :aria-label="t('recovery.readiness')">
+          <p class="auth-readiness-head">
+            <span>{{ t('recovery.readiness') }}</span>
+            <StatusPill
+              :label="passwordReady ? t('recovery.ready') : t('recovery.notReady')"
+              :tone="passwordReady ? 'success' : 'neutral'"
+            />
+          </p>
+          <ul class="auth-checks">
+            <li v-for="check in checks" :key="check.label" :class="{ 'is-met': check.met }">
+              <IconGlyph :name="check.met ? 'check' : 'info'" :size="14" />
+              <span>{{ check.label }}</span>
+            </li>
+          </ul>
+        </section>
+
+        <button
+          class="btn btn-primary btn-lg btn-block"
+          type="submit"
+          :disabled="!passwordReady || submitting"
+          :aria-busy="submitting"
+        >
+          <span>{{ submitLabel }}</span>
+          <IconGlyph name="chevronRight" :size="18" />
+        </button>
+      </form>
+
+      <p class="auth-switch">
+        <span>{{ t('recovery.rememberPassword') }}</span>
+        <RouterLink class="btn btn-link" to="/auth">{{ t('recovery.backToSignIn') }}</RouterLink>
+      </p>
+      <p v-if="!isInvite && state === 'ready'" class="auth-switch">
+        <span>{{ t('recovery.needNewLink') }}</span>
+        <RouterLink class="btn btn-link" to="/forgot-password">{{ t('recovery.requestNewLink') }}</RouterLink>
+      </p>
     </div>
-  </section>
+  </AuthShell>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
-import { useI18n } from 'vue-i18n'
 
+import { publicOpsApi } from '@/api/ops'
 import { authApi } from '@/api/services'
 import IconGlyph from '@/components/common/IconGlyph.vue'
-import PandaIllustration from '@/components/common/PandaIllustration.vue'
-import AppBrand from '@/components/layout/AppBrand.vue'
-import LanguageSwitcher from '@/components/common/LanguageSwitcher.vue'
+import StatusPill from '@/components/common/StatusPill.vue'
+import AuthShell from '@/components/public/AuthShell.vue'
+import { useLocalMessages } from '@/composables/useLocalMessages'
 import { recoveryMessages } from '@/plugins/recoveryMessages'
 import { resolveApiError } from '@/utils/apiError'
-import { isPasswordLengthValid } from '@/utils/password'
-import { firstQueryText, removeSensitiveRouteState } from '@/utils/sensitiveData'
+import { isPasswordLengthValid, isWithinPasswordByteLimit } from '@/utils/password'
+import { firstQueryText } from '@/utils/sensitiveData'
+
+type LinkState = 'checking' | 'ready' | 'invalid'
 
 const route = useRoute()
 const router = useRouter()
-const { t } = useI18n({
-  messages: {
-    en: { recovery: recoveryMessages.en },
-    ms: { recovery: recoveryMessages.ms },
-    zh: { recovery: recoveryMessages.zh },
-  },
-})
+const { t } = useLocalMessages({ recovery: recoveryMessages })
 
-const token = ref(firstQueryText(route.query.token))
+// An admin invite opens this page with ?invite=…, a password reset with ?token=…
+const inviteToken = firstQueryText(route.query.invite)
+const token = inviteToken || firstQueryText(route.query.token)
+const isInvite = Boolean(inviteToken)
+
+// The link token leaves the address bar and history once it has been read.
+if (route.query.invite || route.query.token) {
+  const query = { ...route.query }
+  delete query.invite
+  delete query.token
+  void router.replace({ name: 'reset-password', query })
+}
+
+const state = ref<LinkState>('checking')
+const linkEmail = ref('')
+const invalidMessage = ref('')
+const fullName = ref('')
+const nameError = ref<string | null>(null)
 const password = ref('')
 const confirmPassword = ref('')
-const error = ref<string | null>(null)
-const success = ref<string | null>(null)
+const showPasswords = ref(false)
 const submitting = ref(false)
+const error = ref<string | null>(null)
 
-type PasswordCheckIcon = 'close' | 'status'
-const passwordStrengthKeys = ['strengthStart', 'strengthClose', 'strengthAlmost', 'strengthReady'] as const
-
-removeSensitiveQueryFromAddressBar()
-
-const canSubmit = computed(
-  () =>
-    !submitting.value &&
-    token.value.trim().length > 0 &&
-    isPasswordLengthValid(password.value) &&
-    password.value === confirmPassword.value,
-)
-const passwordChecks = computed(() => [
-  { label: t('recovery.reset.atLeastEight'), met: password.value.length >= 8 },
-  { label: t('recovery.reset.withinLimit'), met: isPasswordLengthValid(password.value) },
-  { label: t('recovery.reset.includesNumber'), met: /\d/.test(password.value) },
-  {
-    label: t('recovery.reset.passwordsMatch'),
-    met: Boolean(confirmPassword.value && password.value === confirmPassword.value),
-  },
+const checks = computed(() => [
+  { label: t('recovery.ruleLength'), met: password.value.length >= 8 },
+  { label: t('recovery.ruleLimit'), met: password.value.length > 0 && isWithinPasswordByteLimit(password.value) },
+  { label: t('recovery.ruleMatch'), met: Boolean(confirmPassword.value) && password.value === confirmPassword.value },
 ])
-const passwordStrengthScore = computed(() => passwordChecks.value.filter((check) => check.met).length)
-const passwordStrengthLabel = computed(() =>
-  t(`recovery.reset.${passwordStrengthKeys[Math.min(passwordStrengthScore.value, 3)]}`),
-)
-const passwordStrengthClass = computed(() => `is-${Math.min(passwordStrengthScore.value, 3)}`)
-const passwordStrengthWidth = computed(() => `${(passwordStrengthScore.value / passwordChecks.value.length) * 100}%`)
-const submitLabel = computed(() =>
-  submitting.value ? t('recovery.reset.resetting') : t('recovery.reset.resetPassword'),
-)
+const passwordReady = computed(() => isPasswordLengthValid(password.value) && password.value === confirmPassword.value)
+const submitLabel = computed(() => {
+  if (isInvite) return submitting.value ? t('recovery.inviteCreating') : t('recovery.inviteSubmit')
+  return submitting.value ? t('recovery.resetting') : t('recovery.resetSubmit')
+})
 
-async function submitReset(): Promise<void> {
-  if (submitting.value) return
+onMounted(async () => {
+  if (!token) {
+    state.value = 'invalid'
+    invalidMessage.value = isInvite ? t('recovery.inviteExpiredCopy') : t('recovery.missingLink')
+    return
+  }
+  try {
+    const link = isInvite ? await publicOpsApi.checkAdminInvite(token) : await publicOpsApi.checkResetLink(token)
+    linkEmail.value = link.email
+    state.value = 'ready'
+  } catch (reason) {
+    state.value = 'invalid'
+    invalidMessage.value = isInvite
+      ? t('recovery.inviteExpiredCopy')
+      : resolveApiError(reason, t('recovery.expiredHint'))
+  }
+})
 
+async function submit(): Promise<void> {
+  if (submitting.value || !passwordReady.value) return
   error.value = null
-  success.value = null
-
-  if (!isPasswordLengthValid(password.value)) {
-    error.value = t('recovery.reset.invalidPassword')
-    return
-  }
-
-  if (password.value !== confirmPassword.value) {
-    error.value = t('recovery.reset.mismatch')
-    return
-  }
-
+  nameError.value = isInvite && !fullName.value.trim() ? t('recovery.nameRequired') : null
+  if (nameError.value) return
   submitting.value = true
   try {
-    await authApi.resetPassword({
-      token: token.value.trim(),
-      password: password.value,
-      confirmPassword: confirmPassword.value,
-    })
-    token.value = ''
-    password.value = ''
-    confirmPassword.value = ''
-    success.value = t('recovery.reset.success')
+    if (isInvite) {
+      await publicOpsApi.acceptAdminInvite({
+        token,
+        fullName: fullName.value.trim(),
+        password: password.value,
+        confirmPassword: confirmPassword.value,
+      })
+      await router.push({ name: 'auth', query: { invite: 'done' } })
+    } else {
+      await authApi.resetPassword({ token, password: password.value, confirmPassword: confirmPassword.value })
+      await router.push({ name: 'auth', query: { reset: 'done' } })
+    }
   } catch (reason) {
-    error.value = resolveApiError(reason, t('recovery.reset.error'))
+    error.value = resolveApiError(reason, isInvite ? t('recovery.inviteFailed') : t('recovery.resetFailed'))
   } finally {
     submitting.value = false
   }
 }
-
-function removeSensitiveQueryFromAddressBar(): void {
-  const { changed, query, hash } = removeSensitiveRouteState(route.query, route.hash)
-
-  if (changed) {
-    void router.replace({ name: 'reset-password', query, hash })
-  }
-}
-
-function passwordCheckIcon(met: boolean): PasswordCheckIcon {
-  return met ? 'status' : 'close'
-}
 </script>
-
-<style scoped>
-.auth-reset-language {
-  display: flex;
-  justify-content: flex-end;
-}
-</style>

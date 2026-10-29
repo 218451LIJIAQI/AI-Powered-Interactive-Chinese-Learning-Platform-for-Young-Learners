@@ -1,21 +1,23 @@
 package com.example.aichinese.dto.auth;
 
+import static com.example.aichinese.dto.DtoNormalization.redactLength;
+
+import com.example.aichinese.util.LanguageCodes;
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
-@JsonPropertyOrder({ "fullName", "email", "password", "confirmPassword", "bio" })
 public record RegisterTeacherRequest(
         @NotBlank(message = "Full name is required")
         @Size(max = 120, message = "Full name must be at most 120 characters")
         String fullName,
         @NotBlank(message = "Email is required")
         @Email(message = "Email format is invalid")
-        @Size(max = 320, message = "Email must be at most 320 characters")
+        @Size(max = 150, message = "Email must be at most 150 characters")
         String email,
         @NotBlank(message = "Password is required")
         @Size(min = 8, max = 72, message = "Password must be between 8 and 72 characters")
@@ -23,8 +25,13 @@ public record RegisterTeacherRequest(
         @NotBlank(message = "Confirm password is required")
         @Size(max = 72, message = "Confirm password must be at most 72 characters")
         String confirmPassword,
-        @Size(max = 2000, message = "Bio must be at most 2000 characters")
-        String bio) {
+        // Same rule as the sign-up form: a short teaching bio is required (checked after trimming).
+        @NotBlank(message = "Teacher bio is required")
+        @Size(min = 20, max = 1000, message = "Teacher bio must be between 20 and 1000 characters")
+        String bio,
+        // The interface language at sign-up (optional; English when absent).
+        @Pattern(regexp = "^(en|ms|zh-CN)?$", message = "Preferred language must be one of en, ms, or zh-CN")
+        String preferredLanguage) {
 
     public RegisterTeacherRequest {
         if (fullName != null) {
@@ -39,6 +46,11 @@ public record RegisterTeacherRequest(
                 bio = null;
             }
         }
+        preferredLanguage = LanguageCodes.normalizeRequested(preferredLanguage);
+    }
+
+    public RegisterTeacherRequest(String fullName, String email, String password, String confirmPassword, String bio) {
+        this(fullName, email, password, confirmPassword, bio, null);
     }
 
     @JsonIgnore
@@ -55,9 +67,5 @@ public record RegisterTeacherRequest(
                 + ", password=***REDACTED***"
                 + ", confirmPassword=***REDACTED***"
                 + ", bio=" + redactLength(bio) + "]";
-    }
-
-    private static String redactLength(String value) {
-        return value == null ? "null" : "<redacted:" + value.length() + ">";
     }
 }

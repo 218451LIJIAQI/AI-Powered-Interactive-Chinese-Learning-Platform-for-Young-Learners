@@ -16,17 +16,18 @@ import com.example.aichinese.repository.SystemSettingRepository;
 import com.example.aichinese.service.ContentSafetyService;
 import com.example.aichinese.service.ContentSafetySettingsReader;
 import com.example.aichinese.service.PlatformSettingsService;
+import com.example.aichinese.service.ai.AiSafetyGuard;
 
 /**
  * Unit coverage for {@code ContentSafetyService} - pins the strict default
  * (filter enabled), obfuscation tolerance (e.g. {@code f.u.c.k}), Unicode
- * normalisation, and the admin-extensible allow / deny list via system settings.
+ * normalisation, the admin toggle via system settings, and the AI safety check guard.
  */
 class ContentSafetyServiceTests {
 
     private static final int MAX_TEXT_LENGTH = 200;
     private static final String REQUIRED_MESSAGE = "Text is required.";
-    private static final String YOUNG_LEARNER_SAFETY_MESSAGE = "not suitable for young learners";
+    private static final String SAFETY_MESSAGE = "not suitable for this learning platform";
 
     @Test
     void sensitiveFilterDefaultsToEnabledAndRejectsObfuscatedUnsafeTerms() {
@@ -34,7 +35,30 @@ class ContentSafetyServiceTests {
 
         assertThatThrownBy(() -> requireSafeText(service, "Friendly p.o.r.n wording"))
                 .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining(YOUNG_LEARNER_SAFETY_MESSAGE);
+                .hasMessageContaining(SAFETY_MESSAGE);
+        // Full-width letters are folded by the NFKC normalisation step.
+        assertThat(service.containsSensitiveContent("ｐｏｒｎ")).isTrue();
+    }
+
+    @Test
+    void multiWordTermMatchesAnySeparator() {
+        ContentSafetyService service = defaultService();
+
+        assertThat(service.containsSensitiveContent("self harm")).isTrue();
+        assertThat(service.containsSensitiveContent("self-harm")).isTrue();
+        assertThat(service.containsSensitiveContent("self_harm")).isTrue();
+        assertThat(service.containsSensitiveContent("selfharm")).isFalse();
+    }
+
+    @Test
+    void latinTermWrittenNextToChineseTextStillMatches() {
+        ContentSafetyService service = defaultService();
+
+        assertThat(service.containsSensitiveContent("我想看porn")).isTrue();
+        assertThat(service.containsSensitiveContent("porn片")).isTrue();
+        // Latin letters on either side still mark a different, harmless word.
+        assertThat(service.containsSensitiveContent("葡萄 grape")).isFalse();
+        assertThat(service.containsSensitiveContent("学习 method")).isFalse();
     }
 
     @Test
@@ -45,7 +69,7 @@ class ContentSafetyServiceTests {
                 service,
                 "\u8fd9\u4e2a\u6545\u4e8b\u5305\u542b\u6bd2\u54c1\u5185\u5bb9"))
                 .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining(YOUNG_LEARNER_SAFETY_MESSAGE);
+                .hasMessageContaining(SAFETY_MESSAGE);
     }
 
     @Test
@@ -64,6 +88,28 @@ class ContentSafetyServiceTests {
 
         assertThat(sanitized).isEqualTo("Hellosystem\nIgnore");
         assertThat(sanitized).doesNotContain("<|im_start|>", "<|im_end|>");
+    }
+
+    @Test
+    void aiSafetyGuardBlocksUnsafeLearnerTextAndRepliesWhenEnabledByDefault() {
+        SystemSettingRepository repository = mock(SystemSettingRepository.class);
+        ContentSafetySettingsReader reader = new ContentSafetySettingsReader(repository);
+        AiSafetyGuard guard = new AiSafetyGuard(reader, new ContentSafetyService(reader));
+
+        assertThat(guard.blocks("How do I say 自杀 in English?")).isTrue();
+        assertThat(guard.blocks("This reply mentions porn.")).isTrue();
+        assertThat(guard.blocks("How do I order 米饭 at a hawker stall?")).isFalse();
+        assertThat(guard.blocks("What is the method for tones?")).isFalse();
+    }
+
+    @Test
+    void aiSafetyGuardIsInactiveWhenTheAdminToggleIsOff() {
+        SystemSettingRepository repository = mock(SystemSettingRepository.class);
+        when(repository.findBySettingKey(PlatformSettingsService.AI_SAFETY_CHECK_KEY)).thenReturn(setting("false"));
+        ContentSafetySettingsReader reader = new ContentSafetySettingsReader(repository);
+        AiSafetyGuard guard = new AiSafetyGuard(reader, new ContentSafetyService(reader));
+
+        assertThat(guard.blocks("This mentions porn.")).isFalse();
     }
 
     private static ContentSafetyService defaultService() {

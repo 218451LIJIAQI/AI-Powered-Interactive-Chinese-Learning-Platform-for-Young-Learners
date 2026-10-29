@@ -1,0 +1,47 @@
+/** The brand side and the foot of the sign-in, create-account and recovery pages (AuthShell). Namespace `authShell`. */
+export const authShellMessages = {
+  en: {
+    signInMeaning: 'to return',
+    signInPromise: 'Your path, your streak and your classes are where you left them.',
+    registerMeaning: 'to learn',
+    registerPromise: 'Short lessons, daily practice and verified teachers. Free for learners aged 18–25.',
+    recoveryMeaning: 'key',
+    recoveryPromise: 'Find your way back, safely. A reset link works once, for 60 minutes.',
+    signInSafety: 'Your password is stored encrypted, and AI requests never include your name or email.',
+    recoverySafety: 'We never tell anyone whether an email is registered, and old links stop working.',
+    linksLabel: 'Help and policies',
+    help: 'Help',
+    privacy: 'Privacy',
+    terms: 'Terms',
+  },
+  ms: {
+    signInMeaning: 'kembali',
+    signInPromise: 'Laluan, rentetan dan kelas anda masih di tempat anda tinggalkan.',
+    registerMeaning: 'belajar',
+    registerPromise: 'Pelajaran pendek, latihan harian dan guru yang disahkan. Percuma untuk pelajar berumur 18–25.',
+    recoveryMeaning: 'kunci',
+    recoveryPromise: 'Kembali ke akaun anda dengan selamat. Pautan tetapan semula berfungsi sekali, selama 60 minit.',
+    signInSafety:
+      'Kata laluan anda disimpan secara tersulit, dan permintaan AI tidak pernah mengandungi nama atau e-mel anda.',
+    recoverySafety:
+      'Kami tidak pernah memberitahu sesiapa sama ada e-mel didaftarkan, dan pautan lama berhenti berfungsi.',
+    linksLabel: 'Bantuan dan dasar',
+    help: 'Bantuan',
+    privacy: 'Privasi',
+    terms: 'Terma',
+  },
+  'zh-CN': {
+    signInMeaning: '回来',
+    signInPromise: '你的学习路径、连续记录和课程，都还在原处等你。',
+    registerMeaning: '学习',
+    registerPromise: '简短的课程、每日练习和认证老师。18–25 岁学习者免费使用。',
+    recoveryMeaning: '钥匙',
+    recoveryPromise: '安全地找回你的账号。重置链接只能使用一次，有效期 60 分钟。',
+    signInSafety: '你的密码经过加密存储，AI 请求绝不包含你的姓名或邮箱。',
+    recoverySafety: '我们绝不透露某个邮箱是否已注册，旧链接也会失效。',
+    linksLabel: '帮助与政策',
+    help: '帮助',
+    privacy: '隐私',
+    terms: '条款',
+  },
+}

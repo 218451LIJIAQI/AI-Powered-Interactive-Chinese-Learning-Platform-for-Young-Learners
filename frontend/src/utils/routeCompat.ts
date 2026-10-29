@@ -1,83 +1,50 @@
-type RouteParts = {
-  basePath: string
-  suffix: string
-}
-
-const legacyRouteMap: Record<string, string> = {
-  '/catalog': '/courses',
-  '/student/payments': '/student/profile',
-  '/student/refunds': '/student/profile',
-  '/student/feedback': '/student/profile',
-  '/student/ai-reports': '/student/ai-helper',
-  '/student/live-classes': '/student/classes',
-  '/teacher/live-classes': '/teacher/classes',
-  '/teacher/payouts': '/teacher/earnings',
-  '/teacher/recorded-lessons': '/teacher/classes',
-  '/teacher/moderation-records': '/teacher/feedback',
-  '/teacher/verification-status': '/teacher/profile',
-  '/admin/teacher-approval': '/admin/teacher-verification',
-  '/admin/ai-response-reports': '/admin/moderation',
-}
-
-const exactAppRoutes = new Set([
-  '/',
-  '/auth',
-  '/forgot-password',
-  '/reset-password',
-  '/terms',
-  '/privacy',
-  '/payment/success',
-  '/payment/cancel',
-  '/courses',
-  '/unauthorized',
-  '/student/home',
-  '/student/learn',
-  '/student/practice',
-  '/student/quiz',
-  '/student/classes',
-  '/student/achievements',
-  '/student/rewards',
-  '/student/ai-helper',
-  '/student/profile',
-  '/teacher/dashboard',
-  '/teacher/content',
-  '/teacher/classes',
-  '/teacher/students',
-  '/teacher/feedback',
-  '/teacher/profile',
-  '/teacher/earnings',
-  '/admin/dashboard',
-  '/admin/users',
-  '/admin/teacher-verification',
-  '/admin/content',
-  '/admin/activities',
-  '/admin/moderation',
-  '/admin/finance',
-  '/admin/analytics',
-  '/admin/settings',
-])
-
-const dynamicRoutePrefixes = ['/courses/', '/student/quiz/']
+/**
+ * In-app paths that a redirect query or a stored notification may point to. Old paths (for example /courses or
+ * /student/achievements) are listed too: the router redirects them to their new pages (see `legacyRedirects` in
+ * router/index.ts), so links written before the redesign keep working.
+ */
+const KNOWN_ROUTE_PATTERNS: readonly RegExp[] = [
+  /^\/$/,
+  /^\/(auth|forgot-password|reset-password|confirm-email|terms|privacy|responsible-ai|help|safety|unauthorized)$/,
+  /^\/classes(\/\d+)?$/,
+  /^\/(courses|catalog)(\/[\w-]+)?$/,
+  /^\/student\/(home|setup|learn|ai|classes|progress|support|notifications|account)$/,
+  /^\/student\/learn\/lessons\/\d+$/,
+  /^\/student\/practice(\/(flashcards|quizzes|listening|tracing|drag-drop|matching|story|mistakes|review))?$/,
+  /^\/student\/ai\/(talk|ask|quiz|story|voice)$/,
+  /^\/student\/classes\/(find|live)$/,
+  /^\/student\/classes\/\d+(\/(results|feedback))?$/,
+  /^\/student\/classes\/\d+\/lessons\/\d+(\/activities\/[\w-]+\/\d+)?$/,
+  /^\/student\/quiz\/\d+$/,
+  /^\/student\/progress\/plan(\/level-check)?$/,
+  /^\/student\/support\/\d+$/,
+  /^\/student\/(achievements|rewards|profile|feedback|ai-helper|ai-reports|practice-submissions|live-classes)$/,
+  /^\/student\/practice\/wrong-answers$/,
+  /^\/teacher\/(dashboard|classes|live-sessions|students|profile|locked|support|notifications|account)$/,
+  /^\/teacher\/classes\/\d+(\/(details|history))?$/,
+  /^\/teacher\/classes\/\d+\/lessons\/\d+(\/(activities|quiz|preview))?$/,
+  /^\/teacher\/live-sessions\/past$/,
+  /^\/teacher\/students\/feedback$/,
+  /^\/teacher\/support\/\d+$/,
+  /^\/teacher\/(content|activities|feedback|live-classes|recorded-lessons|moderation-records|verification-status)$/,
+  /^\/admin\/(dashboard|users|content|ai|support|analytics|audit-log|notifications|account)$/,
+  /^\/admin\/users\/applications$/,
+  /^\/admin\/content\/(classes|learning-path|practice)$/,
+  /^\/admin\/ai\/(usage|settings)$/,
+  /^\/admin\/(teacher-verification|teacher-approval|content-review|activities|moderation|ai-response-reports|settings)$/,
+]
 
 const UNSAFE_PATH_SEGMENTS = new Set(['.', '..'])
 
-function splitPathAndSuffix(path: string): RouteParts {
-  const queryStart = path.indexOf('?')
-  const hashStart = path.indexOf('#')
-  const suffixStart = Math.min(queryStart >= 0 ? queryStart : path.length, hashStart >= 0 ? hashStart : path.length)
-
-  return {
-    basePath: path.slice(0, suffixStart),
-    suffix: path.slice(suffixStart),
-  }
+/** The path before its query or hash. */
+function basePathOf(path: string): string {
+  const suffixStart = path.search(/[?#]/)
+  return suffixStart < 0 ? path : path.slice(0, suffixStart)
 }
 
 function containsUnsafePathSegment(basePath: string): boolean {
+  // A segment that cannot be decoded counts as unsafe; `%2e%2e` decodes to `..`.
   return basePath.split('/').some((segment) => {
-    if (UNSAFE_PATH_SEGMENTS.has(segment)) {
-      return true
-    }
-
     try {
       return UNSAFE_PATH_SEGMENTS.has(decodeURIComponent(segment))
     } catch {
@@ -86,45 +53,16 @@ function containsUnsafePathSegment(basePath: string): boolean {
   })
 }
 
-function isSafeRedirectCandidate(path: string, basePath: string): boolean {
-  return !path.includes('\\') && !/[\u0000-\u001f\u007f]/u.test(path) && !containsUnsafePathSegment(basePath)
-}
-
-function isKnownAppRoute(basePath: string): boolean {
-  return exactAppRoutes.has(basePath) || dynamicRoutePrefixes.some((prefix) => basePath.startsWith(prefix))
-}
-
+/**
+ * A safe in-app target for a redirect or a notification link: the trimmed path when it is a first-party route
+ * (no other origin, no traversal, no control characters), otherwise null.
+ */
 export function normalizeAppRoute(path: string | null | undefined): string | null {
-  if (!path) {
-    return null
-  }
+  const trimmed = path?.trim()
+  if (!trimmed || !trimmed.startsWith('/') || trimmed.startsWith('//')) return null
+  if (trimmed.includes('\\') || /[\u0000-\u001f\u007f]/u.test(trimmed)) return null
 
-  const trimmed = path.trim()
-  if (!trimmed.startsWith('/') || trimmed.startsWith('//')) {
-    return null
-  }
-
-  const { basePath, suffix } = splitPathAndSuffix(trimmed)
-  if (!isSafeRedirectCandidate(trimmed, basePath)) {
-    return null
-  }
-
-  const legacyRoute = legacyRouteMap[basePath]
-  if (legacyRoute) {
-    return `${legacyRoute}${suffix}`
-  }
-
-  if (basePath.startsWith('/student/live-classes/')) {
-    return `/student/classes${suffix}`
-  }
-
-  if (basePath.startsWith('/admin/ai-response-reports/')) {
-    return `/admin/moderation${suffix}`
-  }
-
-  if (!isKnownAppRoute(basePath)) {
-    return null
-  }
-
-  return trimmed
+  const basePath = basePathOf(trimmed)
+  if (containsUnsafePathSegment(basePath)) return null
+  return KNOWN_ROUTE_PATTERNS.some((pattern) => pattern.test(basePath)) ? trimmed : null
 }

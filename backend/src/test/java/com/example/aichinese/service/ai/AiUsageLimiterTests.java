@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -110,6 +111,15 @@ class AiUsageLimiterTests {
 
         assertThatCode(() -> springManagedLimiter.checkProviderCallAllowed(user.getId()))
                 .doesNotThrowAnyException();
+    }
+
+    /** SDD 5.6: per-user limits of 10 AI requests per minute and 100 per day. */
+    @Test
+    void springManagedLimiterUsesTheDocumentedQuota() {
+        assertThat(ReflectionTestUtils.getField(springManagedLimiter, "requestsPerMinute"))
+                .isEqualTo(10);
+        assertThat(ReflectionTestUtils.getField(springManagedLimiter, "requestsPerDay"))
+                .isEqualTo(100);
     }
 
     @Test

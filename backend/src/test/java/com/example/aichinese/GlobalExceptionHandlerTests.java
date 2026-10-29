@@ -4,8 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.context.support.DefaultMessageSourceResolvable;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.core.MethodParameter;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpMethod;
@@ -14,21 +17,20 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.BeanPropertyBindingResult;
 import org.springframework.validation.FieldError;
-import org.springframework.validation.method.MethodValidationResult;
-import org.springframework.validation.method.ParameterValidationResult;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
-import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.example.aichinese.dto.ApiResponse;
+import com.example.aichinese.exception.FriendlyErrorMessageResolver;
 import com.example.aichinese.exception.GlobalExceptionHandler;
 import com.example.aichinese.util.RequestIdHolder;
 
@@ -36,10 +38,9 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 
 /**
- * Unit tests for {@link GlobalExceptionHandler} that exercise the null/blank
- * exception-message safety net. These guarantees are not covered by the
- * integration tests because no service throws an unmessaged exception today,
- * but a future caller (or library) easily could.
+ * Unit tests for {@link GlobalExceptionHandler}: safe fallbacks for null/blank messages,
+ * status mapping (400/403/405/409/413/415/429/500), request-id propagation and when
+ * field errors are exposed or suppressed.
  */
 class GlobalExceptionHandlerTests {
 
@@ -52,31 +53,29 @@ class GlobalExceptionHandlerTests {
             "The file is too large. Please choose a smaller file and try again.";
     private static final String VALIDATION_MESSAGE =
             "The information you entered is incomplete or invalid. Please check it and try again.";
+    private static final String TOO_MANY_REQUESTS_MESSAGE =
+            "You are doing that too often. Please wait a moment and try again.";
 
     private final GlobalExceptionHandler handler = new GlobalExceptionHandler();
 
-    @Test
-    void illegalArgumentExceptionWithNullMessageReturnsSafeFallback() {
+    @AfterEach
+    void clearRequestContext() {
+        RequestContextHolder.resetRequestAttributes();
+        RequestIdHolder.unbind();
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = "   ")
+    void illegalArgumentExceptionWithoutMessageReturnsSafeFallback(String message) {
         ResponseEntity<ApiResponse<Void>> response = handler.handleIllegalArgumentException(
-                new IllegalArgumentException((String) null));
+                new IllegalArgumentException(message));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         ApiResponse<Void> body = body(response);
         assertThat(body.success()).isFalse();
-        assertThat(body.message()).isNotBlank();
-        assertThat(body.message()).doesNotContainIgnoringCase("null");
-        assertThat(body.errors()).isNotEmpty();
-        assertThat(body.errors()).noneMatch(item -> item == null || item.isBlank());
-    }
-
-    @Test
-    void illegalArgumentExceptionWithBlankMessageReturnsSafeFallback() {
-        ResponseEntity<ApiResponse<Void>> response = handler.handleIllegalArgumentException(
-                new IllegalArgumentException("   "));
-
-        ApiResponse<Void> body = body(response);
-        assertThat(body.message()).isNotBlank();
-        assertThat(body.errors()).noneMatch(item -> item == null || item.isBlank());
+        assertThat(body.message()).isNotBlank().doesNotContainIgnoringCase("null");
+        assertThat(body.errors()).isNotEmpty().noneMatch(item -> item == null || item.isBlank());
     }
 
     @Test
@@ -90,34 +89,46 @@ class GlobalExceptionHandlerTests {
     }
 
     @Test
-    void accessDeniedExceptionWithNullMessageReturnsForbiddenFallback() {
-        ResponseEntity<ApiResponse<Void>> response = handler.handleAccessDeniedException(
-                new AccessDeniedException(null));
+    void dailyAiLimitMessageReachesTheLearnerWhileOtherRateLimitsStayGeneric() {
+        ResponseEntity<ApiResponse<Void>> daily = handler.handleResponseStatusException(new ResponseStatusException(
+                HttpStatus.TOO_MANY_REQUESTS, "Daily AI request limit reached. Please try again tomorrow."));
+        ResponseEntity<ApiResponse<Void>> minute = handler.handleResponseStatusException(new ResponseStatusException(
+                HttpStatus.TOO_MANY_REQUESTS, "AI request limit reached. Please wait a minute before trying again."));
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
-        ApiResponse<Void> body = body(response);
-        assertThat(body.success()).isFalse();
-        assertThat(body.message()).isNotBlank();
-        assertThat(body.errors()).noneMatch(item -> item == null || item.isBlank());
+        assertThat(daily.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+        assertThat(body(daily).message()).isEqualTo("Daily AI request limit reached. Please try again tomorrow.");
+        assertThat(body(minute).message()).isEqualTo(TOO_MANY_REQUESTS_MESSAGE);
+    }
+
+    @Test
+    void liveClassAccessMessagesReachTheStudentWhileOtherForbiddenMessagesStayGeneric() {
+        for (String message : List.of(
+                "This live class is not available.",
+                "The live class join window is not open yet.")) {
+            ResponseEntity<ApiResponse<Void>> response = handler.handleResponseStatusException(
+                    new ResponseStatusException(HttpStatus.FORBIDDEN, message));
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+            assertThat(body(response).message()).isEqualTo(message);
+        }
+        ResponseEntity<ApiResponse<Void>> other = handler.handleResponseStatusException(
+                new ResponseStatusException(HttpStatus.FORBIDDEN, "Internal ownership check failed for lesson 42."));
+        assertThat(body(other).message()).isEqualTo(FriendlyErrorMessageResolver.permissionDeniedMessage());
     }
 
     @Test
     void errorResponseIncludesCurrentRequestIdWhenAvailable() {
-        RequestIdHolder.set(REQUEST_ID);
-        try {
-            ResponseEntity<ApiResponse<Void>> response = handler.handleIllegalArgumentException(
-                    new IllegalArgumentException("Specific business rule violated."));
+        RequestIdHolder.bind(REQUEST_ID);
 
-            ApiResponse<Void> body = body(response);
-            assertThat(body.requestId()).isEqualTo(REQUEST_ID);
-        } finally {
-            RequestIdHolder.clear();
-        }
+        ResponseEntity<ApiResponse<Void>> response = handler.handleIllegalArgumentException(
+                new IllegalArgumentException("Specific business rule violated."));
+
+        assertThat(body(response).requestId()).isEqualTo(REQUEST_ID);
     }
 
     @Test
     void maxUploadSizeExceededReturnsPayloadTooLarge() {
-        ResponseEntity<ApiResponse<Void>> response = handler.handleMaxUploadSizeExceededException(
+        ResponseEntity<ApiResponse<Void>> response = handler.handleMultipartException(
                 new MaxUploadSizeExceededException(1024L));
 
         assertPayloadTooLarge(response);
@@ -129,6 +140,30 @@ class GlobalExceptionHandlerTests {
                 new MultipartException("multipart failed", new MaxUploadSizeExceededException(1024L)));
 
         assertPayloadTooLarge(response);
+    }
+
+    /** SDD T27: an unexpected server failure returns a generic message without internals. */
+    @Test
+    void unexpectedExceptionReturnsGenericServerErrorWithoutInternals() {
+        ResponseEntity<ApiResponse<Void>> response = handler.handleGenericException(
+                new IllegalStateException("select * from users where password='secret' token=abc"));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        ApiResponse<Void> body = body(response);
+        assertThat(body.success()).isFalse();
+        assertThat(body.message()).isEqualTo(FriendlyErrorMessageResolver.serverUnavailableMessage());
+        assertThat(body.errors()).containsExactly(body.message());
+        assertThat(body.message()).doesNotContain("select", "secret", "token");
+    }
+
+    @Test
+    void missingMultipartFilePartReturnsBadRequestInsteadOfServerError() {
+        ResponseEntity<ApiResponse<Void>> response = handler.handleMissingServletRequestPartException(
+                new MissingServletRequestPartException("file"));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().message()).isEqualTo(FriendlyErrorMessageResolver.uploadFailedMessage());
     }
 
     @Test
@@ -160,88 +195,52 @@ class GlobalExceptionHandlerTests {
         ResponseEntity<ApiResponse<Void>> response = handler.handleDataIntegrityViolationException(
                 new DataIntegrityViolationException("Duplicate entry 'student@example.com' for key 'users.email'"));
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-        ApiResponse<Void> body = body(response);
-        assertThat(body.success()).isFalse();
-        assertThat(body.message()).isEqualTo(CONFLICT_MESSAGE);
-        assertThat(body.message()).doesNotContain("student@example.com", "users.email", "Duplicate entry");
+        assertConflict(response);
+        assertThat(body(response).message()).doesNotContain("student@example.com", "users.email", "Duplicate entry");
     }
 
     @Test
     void optimisticLockingFailureReturnsConflict() {
-        ResponseEntity<ApiResponse<Void>> response = handler.handleOptimisticLockingFailureException(
-                new ObjectOptimisticLockingFailureException("PaymentRecord", 10L));
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-        ApiResponse<Void> body = body(response);
-        assertThat(body.success()).isFalse();
-        assertThat(body.message()).isEqualTo(CONFLICT_MESSAGE);
+        assertConflict(handler.handleOptimisticLockingFailureException(
+                new ObjectOptimisticLockingFailureException("LessonProgress", 10L)));
     }
 
     @Test
     void authenticatedValidationReturnsSafeFieldErrors() throws Exception {
         bindRequestPath("/api/v1/teachers/profile");
-        try {
-            ResponseEntity<ApiResponse<Void>> response = handler.handleMethodArgumentNotValidException(
-                    validationException(
-                            fieldError("displayName", "Display name is required."),
-                            fieldError("email", "Email is required.")));
 
-            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-            ApiResponse<Void> body = body(response);
-            assertThat(body.message()).isEqualTo(VALIDATION_MESSAGE);
-            assertThat(body.fieldErrors()).containsEntry("displayName", List.of("Display name is required."));
-            assertThat(body.fieldErrors().keySet()).containsExactly("displayName", "email");
-        } finally {
-            RequestContextHolder.resetRequestAttributes();
-        }
+        ResponseEntity<ApiResponse<Void>> response = handler.handleMethodArgumentNotValidException(
+                validationException(
+                        fieldError("displayName", "Display name is required."),
+                        fieldError("email", "Email is required.")));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        ApiResponse<Void> body = body(response);
+        assertThat(body.message()).isEqualTo(VALIDATION_MESSAGE);
+        assertThat(body.fieldErrors()).containsEntry("displayName", List.of("Display name is required."));
+        assertThat(body.fieldErrors().keySet()).containsExactly("displayName", "email");
+    }
+
+    @Test
+    void validationDropsOverlongFieldKeys() throws Exception {
+        bindRequestPath("/api/v1/teachers/profile");
+
+        ApiResponse<Void> body = body(handler.handleMethodArgumentNotValidException(validationException(
+                fieldError("a".repeat(81), "Too long."),
+                fieldError("b".repeat(80), "Kept."))));
+
+        assertThat(body.fieldErrors().keySet()).containsExactly("b".repeat(80));
     }
 
     @Test
     void publicAuthValidationSuppressesFieldErrors() throws Exception {
         bindRequestPath("/api/v1/auth/login");
-        try {
-            ResponseEntity<ApiResponse<Void>> response = handler.handleMethodArgumentNotValidException(
-                    validationException(fieldError("email", "Email address is required.")));
 
-            ApiResponse<Void> body = body(response);
-            assertThat(body.fieldErrors()).isEmpty();
-            assertThat(body.errors()).containsExactly(body.message());
-        } finally {
-            RequestContextHolder.resetRequestAttributes();
-        }
-    }
+        ApiResponse<Void> body = body(handler.handleMethodArgumentNotValidException(
+                validationException(fieldError("email", "Email address is required."))));
 
-    @Test
-    void handlerMethodValidationReturnsParameterFieldErrors() throws Exception {
-        bindRequestPath("/api/v1/teachers/classes");
-        try {
-            MethodParameter parameter = new MethodParameter(
-                    GlobalExceptionHandlerTests.class.getDeclaredMethod("sampleQueryEndpoint", Long.class),
-                    0);
-            ParameterValidationResult parameterResult = new ParameterValidationResult(
-                    parameter,
-                    0L,
-                    List.of(new DefaultMessageSourceResolvable(
-                            new String[] { "teacherId" },
-                            "Teacher id must be positive.")),
-                    null,
-                    null,
-                    null,
-                    (error, sourceType) -> null);
-            MethodValidationResult validationResult = MethodValidationResult.create(
-                    this,
-                    GlobalExceptionHandlerTests.class.getDeclaredMethod("sampleQueryEndpoint", Long.class),
-                    List.of(parameterResult));
-
-            ResponseEntity<ApiResponse<Void>> response = handler.handleHandlerMethodValidationException(
-                    new HandlerMethodValidationException(validationResult));
-
-            ApiResponse<Void> body = body(response);
-            assertThat(body.fieldErrors()).containsEntry("teacherId", List.of("Teacher id must be positive."));
-        } finally {
-            RequestContextHolder.resetRequestAttributes();
-        }
+        assertThat(body.fieldErrors()).isEmpty();
+        assertThat(body.errors()).containsExactly(body.message());
     }
 
     private static void bindRequestPath(String path) {
@@ -258,6 +257,12 @@ class GlobalExceptionHandlerTests {
     private static void assertPayloadTooLarge(ResponseEntity<ApiResponse<Void>> response) {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.PAYLOAD_TOO_LARGE);
         assertThat(body(response).message()).isEqualTo(PAYLOAD_TOO_LARGE_MESSAGE);
+    }
+
+    private static void assertConflict(ResponseEntity<ApiResponse<Void>> response) {
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(body(response).success()).isFalse();
+        assertThat(body(response).message()).isEqualTo(CONFLICT_MESSAGE);
     }
 
     private static void assertGenericClientError(ResponseEntity<ApiResponse<Void>> response) {
@@ -285,10 +290,6 @@ class GlobalExceptionHandlerTests {
 
     @SuppressWarnings("unused")
     private static void sampleEndpoint(@Valid SampleRequest request) {
-    }
-
-    @SuppressWarnings("unused")
-    private static void sampleQueryEndpoint(Long teacherId) {
     }
 
     private record SampleRequest(@NotBlank String displayName) {

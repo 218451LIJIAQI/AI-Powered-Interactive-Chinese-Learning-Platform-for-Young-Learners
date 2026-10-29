@@ -1,12 +1,49 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
-import { isUnauthorizedApiError, resolveApiError } from './apiError'
+import { apiFieldError, cleanServerMessage, resolveApiError } from './apiError'
 
-describe('resolveApiError', () => {
-  afterEach(() => {
-    document.documentElement.lang = 'en'
+describe('cleanServerMessage', () => {
+  it('keeps readable text, collapsing spaces and removing control and bidi characters', () => {
+    expect(cleanServerMessage('  Lesson   not\nfound. ')).toBe('Lesson not found.')
+    expect(cleanServerMessage('Bad\u202Einput\u0007')).toBe('Bad input')
+    expect(cleanServerMessage('x'.repeat(300))).toBe(`${'x'.repeat(277)}...`)
   })
 
+  it('drops non-text, empty text and bare transport errors', () => {
+    expect(cleanServerMessage(42)).toBeNull()
+    expect(cleanServerMessage('   ')).toBeNull()
+    expect(cleanServerMessage('Network Error')).toBeNull()
+    expect(cleanServerMessage('Request failed')).toBeNull()
+  })
+})
+
+describe('apiFieldError', () => {
+  const bioRejected = {
+    response: {
+      status: 400,
+      data: {
+        message: 'The information you entered is incomplete or invalid. Please check it and try again.',
+        fieldErrors: { bio: ['Teacher bio must be between 20 and 1000 characters', 'second'] },
+      },
+    },
+  }
+
+  it('returns the first server message for the field, in the interface language', () => {
+    expect(apiFieldError(bioRejected, 'bio')).toBe('Teacher bio must be between 20 and 1000 characters')
+    document.documentElement.lang = 'ms'
+    expect(apiFieldError(bioRejected, 'bio')).toBe('Biografi guru mestilah antara 20 hingga 1000 aksara.')
+  })
+
+  it('returns null when the server sent nothing usable for the field', () => {
+    expect(apiFieldError(bioRejected, 'fullName')).toBeNull()
+    expect(apiFieldError({ response: { status: 400, data: { fieldErrors: { bio: [' '] } } } }, 'bio')).toBeNull()
+    expect(apiFieldError({ response: { status: 400, data: { fieldErrors: { bio: 'text' } } } }, 'bio')).toBeNull()
+    expect(apiFieldError({ request: {} }, 'bio')).toBeNull()
+    expect(apiFieldError(null, 'bio')).toBeNull()
+  })
+})
+
+describe('resolveApiError', () => {
   it('uses sanitized backend messages before generic fallbacks', () => {
     expect(
       resolveApiError({
@@ -69,6 +106,18 @@ describe('resolveApiError', () => {
     expect(resolveApiError({ response: { status: 503, data: {} } })).toContain('having trouble')
   })
 
+  it('explains a missing item and a rate limit when the server sends no readable message (SDD Table 6.3)', () => {
+    expect(resolveApiError({ response: { status: 404, data: {} } })).toBe(
+      'This item is not available any more. Please go back and choose another one.',
+    )
+    expect(resolveApiError({ response: { status: 429, data: {} } }, 'Could not load lessons.')).toBe(
+      'You are doing that too often. Please wait a moment and try again.',
+    )
+    expect(resolveApiError({ response: { status: 418, data: {} } })).toBe(
+      'We could not complete that request. Please try again.',
+    )
+  })
+
   it('localizes generic transport and authorization errors from the active document language', () => {
     document.documentElement.lang = 'zh-CN'
     expect(resolveApiError({ response: { status: 401, data: {} } })).toBe('请重新登录后继续。')
@@ -77,10 +126,5 @@ describe('resolveApiError', () => {
     document.documentElement.lang = 'ms-MY'
     expect(resolveApiError({ response: { status: 403, data: {} } })).toContain('tiada kebenaran')
     expect(resolveApiError({ code: 'ECONNABORTED' })).toContain('terlalu lama')
-  })
-
-  it('detects unauthorized responses', () => {
-    expect(isUnauthorizedApiError({ response: { status: 401 } })).toBe(true)
-    expect(isUnauthorizedApiError({ response: { status: 403 } })).toBe(false)
   })
 })

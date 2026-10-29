@@ -1,51 +1,29 @@
 <template>
-  <section class="public-page legal-page">
-    <button class="btn btn-ghost legal-back-button" type="button" @click="goBack">{{ t('legal.back') }}</button>
-
-    <article class="hero-card light legal-hero">
-      <span class="legal-eyebrow">MandarinSpark</span>
-      <h1>{{ t('legal.terms.title') }}</h1>
-      <p>{{ t('legal.terms.intro') }}</p>
-    </article>
-
-    <section class="legal-grid">
-      <article v-for="section in sections" :key="section.key" class="panel legal-card">
-        <h2>{{ section.title }}</h2>
-        <p>{{ section.copy }}</p>
-      </article>
-    </section>
-  </section>
+  <LegalDocument :title="t('legal.terms.title')" :intro="t('legal.terms.intro')" :sections="sections">
+    <template #links>
+      <RouterLink class="btn btn-link" :to="{ name: 'privacy' }">{{ t('legal.privacyLink') }}</RouterLink>
+      <RouterLink class="btn btn-link" :to="{ name: 'responsible-ai' }">{{ t('legal.responsibleAiLink') }}</RouterLink>
+    </template>
+  </LegalDocument>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useRouter } from 'vue-router'
-import { useI18n } from 'vue-i18n'
+import { RouterLink } from 'vue-router'
 
+import LegalDocument from '@/components/public/LegalDocument.vue'
+import { useLocalMessages } from '@/composables/useLocalMessages'
 import { legalMessages } from '@/plugins/legalMessages'
 
-const router = useRouter()
-const { t } = useI18n({
-  messages: {
-    en: { legal: legalMessages.en },
-    ms: { legal: legalMessages.ms },
-    zh: { legal: legalMessages.zh },
-  },
-})
+const { t } = useLocalMessages({ legal: legalMessages })
 
-function goBack(): void {
-  if (window.history.length > 1) {
-    router.back()
-  } else {
-    void router.push('/')
-  }
-}
+const SECTIONS = [
+  { id: 'terms-accounts', title: 'legal.terms.accountsTitle', copy: 'legal.terms.accountsCopy' },
+  { id: 'terms-learning', title: 'legal.terms.learningTitle', copy: 'legal.terms.learningCopy' },
+  { id: 'terms-free', title: 'legal.terms.freeTitle', copy: 'legal.terms.freeCopy' },
+  { id: 'terms-safety', title: 'legal.terms.safetyTitle', copy: 'legal.terms.safetyCopy' },
+  { id: 'terms-support', title: 'legal.terms.supportTitle', copy: 'legal.terms.supportCopy' },
+] as const
 
-const sections = computed(() =>
-  (['accounts', 'learning', 'payments', 'safety', 'support'] as const).map((key) => ({
-    key,
-    title: t(`legal.terms.${key}Title`),
-    copy: t(`legal.terms.${key}Copy`),
-  })),
-)
+const sections = computed(() => SECTIONS.map(({ id, title, copy }) => ({ id, title: t(title), paragraphs: [t(copy)] })))
 </script>

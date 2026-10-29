@@ -3,33 +3,18 @@ package com.example.aichinese.config;
 import java.util.Locale;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.boot.context.properties.bind.ConstructorBinding;
-import org.springframework.validation.annotation.Validated;
 
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Positive;
-
-@Validated
 @ConfigurationProperties(prefix = "app.security.jwt")
 public record SecurityProperties(
-        @NotBlank(message = "JWT secret must not be blank.")
         String secret,
-        @Positive(message = "JWT expiration must be greater than zero.")
         long expiration,
-        @Positive(message = "Refresh token expiration must be greater than zero.")
         long refreshTokenExpiration,
-        @NotBlank(message = "Refresh token cookie name must not be blank.")
         String refreshTokenCookieName,
         boolean refreshTokenCookieSecure,
-        @NotBlank(message = "Refresh token SameSite policy must not be blank.")
         String refreshTokenSameSite) {
 
-    private static final long DEFAULT_REFRESH_TOKEN_EXPIRATION_MS = 604_800_000L;
-    private static final String DEFAULT_REFRESH_TOKEN_COOKIE_NAME = "mandarin_spark_refresh";
-    private static final String DEFAULT_REFRESH_TOKEN_SAME_SITE = "Strict";
     private static final String SAME_SITE_ERROR = "Refresh token SameSite policy must be Strict, Lax, or None.";
 
-    @ConstructorBinding
     public SecurityProperties {
         secret = normalizeSecret(secret);
         if (expiration <= 0) {
@@ -43,16 +28,6 @@ public record SecurityProperties(
         if ("None".equals(refreshTokenSameSite) && !refreshTokenCookieSecure) {
             throw new IllegalArgumentException("Refresh token cookies with SameSite=None must also set Secure=true.");
         }
-    }
-
-    public SecurityProperties(String secret, long expiration) {
-        this(
-                secret,
-                expiration,
-                DEFAULT_REFRESH_TOKEN_EXPIRATION_MS,
-                DEFAULT_REFRESH_TOKEN_COOKIE_NAME,
-                false,
-                DEFAULT_REFRESH_TOKEN_SAME_SITE);
     }
 
     @Override

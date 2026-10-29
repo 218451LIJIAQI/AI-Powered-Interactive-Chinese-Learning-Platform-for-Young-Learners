@@ -2,38 +2,17 @@ package com.example.aichinese.service.ai;
 
 import java.net.URI;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
+import com.example.aichinese.config.HttpUrlValidation;
 import com.example.aichinese.util.TextUtils;
 
 final class AiProviderSupport {
 
-    static final String DEFAULT_PROVIDER = "deepseek";
-
-    static final String OPENAI_COMPATIBLE = "openai-compatible";
-
-    static final Set<String> SUPPORTED_PROVIDERS = Set.of(DEFAULT_PROVIDER, OPENAI_COMPATIBLE);
-
     private static final Set<String> LOOPBACK_HOSTS = Set.of("localhost", "127.0.0.1", "::1");
 
     private AiProviderSupport() {
-    }
-
-    static String normalizeProvider(String raw) {
-        String stripped = TextUtils.trimToNull(raw);
-        if (stripped == null) {
-            return DEFAULT_PROVIDER;
-        }
-        String lower = stripped.toLowerCase(Locale.ROOT);
-        return "openai_compatible".equals(lower) ? OPENAI_COMPATIBLE : lower;
-    }
-
-    static boolean isSupportedProvider(String normalizedProvider) {
-        return SUPPORTED_PROVIDERS.contains(normalizedProvider);
-    }
-
-    static boolean isValidRuntimeBaseUrl(String value) {
-        return validateAndNormalizeBaseUrl(value) != null;
     }
 
     static String validateAndNormalizeBaseUrl(String value) {
@@ -81,14 +60,15 @@ final class AiProviderSupport {
         if ("https".equals(scheme)) {
             return true;
         }
-        return "http".equals(scheme) && isLoopbackHost(host);
+        return "http".equals(scheme) && LOOPBACK_HOSTS.contains(HttpUrlValidation.normalizeHost(host));
     }
 
-    private static boolean isLoopbackHost(String host) {
-        String normalized = host.trim().toLowerCase(Locale.ROOT);
-        if (normalized.startsWith("[") && normalized.endsWith("]") && normalized.length() > 2) {
-            normalized = normalized.substring(1, normalized.length() - 1);
+    /** The reply's {@code usage.total_tokens}, or null when it is missing, negative or beyond an {@code int}. */
+    static Integer extractTokenCount(Object usageObject) {
+        if (usageObject instanceof Map<?, ?> usageMap && usageMap.get("total_tokens") instanceof Number tokens) {
+            double tokenCount = tokens.doubleValue();
+            return tokenCount >= 0 && tokenCount <= Integer.MAX_VALUE ? tokens.intValue() : null;
         }
-        return LOOPBACK_HOSTS.contains(normalized);
+        return null;
     }
 }

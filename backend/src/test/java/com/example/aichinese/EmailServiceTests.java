@@ -7,9 +7,6 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -20,81 +17,19 @@ import org.springframework.mail.javamail.JavaMailSender;
 
 import com.example.aichinese.config.EmailProperties;
 import com.example.aichinese.entity.User;
-import com.example.aichinese.service.EmailService;
 import com.example.aichinese.service.SmtpEmailService;
 
-/**
- * Unit coverage for the {@code EmailService} default helpers -
- * proves the {@code safe*} wrappers swallow delivery failures and
- * log at {@code WARN} so a transient SMTP outage cannot abort the
- * triggering business transaction (teacher approval, etc.).
- */
+/** Unit coverage for {@code SmtpEmailService}. */
 @ExtendWith(OutputCaptureExtension.class)
 class EmailServiceTests {
 
-    private static final long TEACHER_ID = 99L;
     private static final long STUDENT_ID = 123L;
-    private static final String TEACHER_EMAIL = "teacher@example.com";
     private static final String STUDENT_EMAIL = "student@example.com";
     private static final String FROM_ADDRESS = "no-reply@example.com";
     private static final String SMTP_USERNAME = "smtp-user@example.com";
     private static final String PASSWORD_RESET_BASE_URL = "https://example.com/reset-password";
     private static final String WELCOME_SUBJECT = "Welcome";
     private static final String WELCOME_BODY = "Hello from MandarinSpark";
-    private static final String TEACHER_APPROVAL_FAILURE_LOG =
-            "Teacher approval email delivery failed for user id " + TEACHER_ID + ": RuntimeException";
-    private static final String TEACHER_REJECTION_FAILURE_LOG =
-            "Teacher rejection email delivery failed for user id " + TEACHER_ID + ": RuntimeException";
-
-    @Test
-    void teacherApprovalAndRejectionSafeEmailMethodsDoNotPropagateDeliveryFailures(CapturedOutput output) {
-        EmailService failingEmailService = (recipient, subject, body) -> {
-            throw new RuntimeException("SMTP provider unavailable token=secret-token");
-        };
-        User recipient = user(TEACHER_ID, TEACHER_EMAIL);
-        recipient.setDisplayName("Teacher");
-
-        assertThatCode(() -> failingEmailService.safeSendTeacherApprovalNotice(recipient, "Approved"))
-                .doesNotThrowAnyException();
-        assertThatCode(() -> failingEmailService.safeSendTeacherRejectionNotice(recipient, "Documents incomplete"))
-                .doesNotThrowAnyException();
-
-        assertThat(output).contains(TEACHER_APPROVAL_FAILURE_LOG);
-        assertThat(output).contains(TEACHER_REJECTION_FAILURE_LOG);
-        assertThat(output).contains("token=[REDACTED]");
-        assertThat(output).doesNotContain("secret-token");
-        assertThat(output).doesNotContain("at com.example.aichinese");
-    }
-
-    @Test
-    void teacherDecisionEmailsStripUnicodeWhitespaceFromNotesAndReasons() {
-        CapturingEmailService capturingEmailService = new CapturingEmailService();
-        User recipient = user(42L, TEACHER_EMAIL);
-
-        capturingEmailService.sendTeacherApprovalNotice(recipient, "\u3000Approved after review\u3000");
-        capturingEmailService.sendTeacherRejectionNotice(recipient, "\u3000Missing certificate\u3000");
-
-        assertThat(capturingEmailService.bodies()).hasSize(2);
-        assertThat(capturingEmailService.bodies().get(0))
-                .contains("Note: Approved after review")
-                .doesNotContain("\u3000");
-        assertThat(capturingEmailService.bodies().get(1))
-                .contains("Reason: Missing certificate")
-                .doesNotContain("\u3000");
-    }
-
-    @Test
-    void teacherDecisionEmailsOmitBlankOnlyNotesAndReasons() {
-        CapturingEmailService capturingEmailService = new CapturingEmailService();
-        User recipient = user(43L, TEACHER_EMAIL);
-
-        capturingEmailService.sendTeacherApprovalNotice(recipient, "\u3000");
-        capturingEmailService.sendTeacherRejectionNotice(recipient, "\u3000");
-
-        assertThat(capturingEmailService.bodies()).hasSize(2);
-        assertThat(capturingEmailService.bodies().get(0)).doesNotContain("Note:");
-        assertThat(capturingEmailService.bodies().get(1)).doesNotContain("Reason:");
-    }
 
     @Test
     void smtpEmailServiceSendsPlainTextMessageThroughJavaMailSender() {
@@ -144,18 +79,5 @@ class EmailServiceTests {
         user.setId(id);
         user.setEmail(email);
         return user;
-    }
-
-    private static final class CapturingEmailService implements EmailService {
-        private final List<String> bodies = new ArrayList<>();
-
-        @Override
-        public void sendEmail(User recipient, String subject, String body) {
-            bodies.add(body);
-        }
-
-        private List<String> bodies() {
-            return bodies;
-        }
     }
 }

@@ -1,5 +1,7 @@
 package com.example.aichinese.entity;
 
+import java.time.LocalDateTime;
+
 import com.example.aichinese.entity.base.BaseEntity;
 
 import jakarta.persistence.Column;
@@ -14,18 +16,17 @@ import jakarta.persistence.NamedEntityGraph;
 import jakarta.persistence.NamedSubgraph;
 import jakarta.persistence.Table;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Getter
 @Setter
-@NoArgsConstructor
 @Entity
 @Table(name = "teacher_feedback", indexes = {
         @Index(name = "idx_teacher_feedback_teacher_id", columnList = "teacher_id"),
         @Index(name = "idx_teacher_feedback_student_id", columnList = "student_id"),
         @Index(name = "idx_teacher_feedback_lesson_id", columnList = "lesson_id"),
-        @Index(name = "idx_teacher_feedback_quiz_attempt_id", columnList = "quiz_attempt_id")
+        @Index(name = "idx_teacher_feedback_quiz_attempt_id", columnList = "quiz_attempt_id"),
+        @Index(name = "idx_teacher_feedback_class", columnList = "course_package_id")
 })
 @NamedEntityGraph(
         name = TeacherFeedback.GRAPH_DETAIL,
@@ -78,4 +79,12 @@ public class TeacherFeedback extends BaseEntity {
     @Lob
     @Column(name = "feedback_message", nullable = false, columnDefinition = "LONGTEXT")
     private String feedbackMessage;
+
+    /** The class the student sees the feedback in (its Feedback tab). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "course_package_id", updatable = false)
+    private CoursePackage coursePackage;
+
+    @Column(name = "edited_at")
+    private LocalDateTime editedAt;
 }

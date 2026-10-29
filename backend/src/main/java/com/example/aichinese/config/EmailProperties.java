@@ -1,5 +1,7 @@
 package com.example.aichinese.config;
 
+import java.net.URI;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "app.email")
@@ -29,6 +31,14 @@ public record EmailProperties(
             return validateHttpUrl(passwordResetBaseUrl.trim(), "Password reset base URL");
         }
         return DEFAULT_RESET_URL;
+    }
+
+    /**
+     * A page of the web app next to the reset page (the reset URL is the one configured link to the frontend), e.g.
+     * {@code confirm-email} for the e-mail change link.
+     */
+    public String resolveFrontendUrl(String page) {
+        return URI.create(resolvePasswordResetBaseUrl()).resolve(page).toString();
     }
 
     private static boolean hasText(String value) {

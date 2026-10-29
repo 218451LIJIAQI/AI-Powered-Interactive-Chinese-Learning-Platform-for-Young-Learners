@@ -2,37 +2,23 @@ package com.example.aichinese.dto.teacher;
 
 import static com.example.aichinese.dto.DtoNormalization.strip;
 import static com.example.aichinese.dto.DtoNormalization.stripToNull;
-import static com.example.aichinese.dto.DtoNormalization.strippedStringListOrNull;
-
-import java.util.List;
-
-import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
-@JsonPropertyOrder({ "fullName", "bio", "shortIntroduction", "teachingCategories" })
+/** The public profile students see: the teacher's name and bio. */
 public record UpdateTeacherProfileRequest(
         @NotBlank(message = "Full name is required.")
         @Size(max = 120, message = "Full name must be 120 characters or fewer.")
         String fullName,
 
-        @Size(max = 2000, message = "Bio must be 2000 characters or fewer.")
-        String bio,
-
-        @Size(max = 1000, message = "Short introduction must be 1000 characters or fewer.")
-        String shortIntroduction,
-
-        @Size(max = 12, message = "Teaching categories must not exceed 12 entries.")
-        List<
-                @NotBlank(message = "Teaching category must not be blank.")
-                @Size(max = 60, message = "Each teaching category must be 60 characters or fewer.")
-                String> teachingCategories) {
+        // FRAUTH02: the same rule as the teacher sign-up form, so an approved teacher cannot clear the required bio.
+        @NotBlank(message = "Teacher bio is required")
+        @Size(min = 20, max = 1000, message = "Teacher bio must be between 20 and 1000 characters")
+        String bio) {
 
     public UpdateTeacherProfileRequest {
         fullName = strip(fullName);
         bio = stripToNull(bio);
-        shortIntroduction = stripToNull(shortIntroduction);
-        teachingCategories = strippedStringListOrNull(teachingCategories);
     }
 }

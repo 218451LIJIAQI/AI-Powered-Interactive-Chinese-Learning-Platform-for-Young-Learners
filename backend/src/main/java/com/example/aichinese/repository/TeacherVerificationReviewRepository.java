@@ -1,13 +1,11 @@
 package com.example.aichinese.repository;
 
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -15,41 +13,16 @@ import com.example.aichinese.entity.TeacherVerificationReview;
 
 public interface TeacherVerificationReviewRepository extends JpaRepository<TeacherVerificationReview, Long> {
 
-    @EntityGraph(attributePaths = { "reviewerUser", "document", "document.uploadedFile" })
-    Page<TeacherVerificationReview> findByTeacherIdOrderByReviewedAtDesc(Long teacherId, Pageable pageable);
+    /** Every decision on the application, oldest first (its history). */
+    @EntityGraph(attributePaths = { "reviewerUser" })
+    List<TeacherVerificationReview> findByTeacherIdOrderByReviewedAtAscIdAsc(Long teacherId);
 
-    @EntityGraph(attributePaths = { "reviewerUser", "document", "document.uploadedFile" })
+    /** Decisions keep their record when the teacher deletes the account; only the link to the deleted file goes. */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = "update teacher_verification_reviews set document_id = null where teacher_id = :teacherId",
+            nativeQuery = true)
+    int detachDocuments(@Param("teacherId") Long teacherId);
+
+    @EntityGraph(attributePaths = { "reviewerUser" })
     Optional<TeacherVerificationReview> findTopByTeacherIdOrderByReviewedAtDesc(Long teacherId);
-
-    default List<TeacherVerificationReview> findLatestByTeacherIdIn(Collection<Long> teacherIds) {
-        if (teacherIds == null || teacherIds.isEmpty()) {
-            return List.of();
-        }
-        return findLatestByTeacherIdInInternal(teacherIds);
-    }
-
-    @Query(value = """
-            SELECT
-                ranked.id,
-                ranked.created_at,
-                ranked.updated_at,
-                ranked.teacher_id,
-                ranked.document_id,
-                ranked.reviewer_user_id,
-                ranked.decision_status,
-                ranked.review_note,
-                ranked.reviewed_at
-            FROM (
-                SELECT r.*,
-                       ROW_NUMBER() OVER (
-                           PARTITION BY r.teacher_id
-                           ORDER BY r.reviewed_at DESC, r.id DESC
-                       ) AS rn
-                FROM teacher_verification_reviews r
-                WHERE r.teacher_id IN (:teacherIds)
-            ) ranked
-            WHERE ranked.rn = 1
-            """, nativeQuery = true)
-    List<TeacherVerificationReview> findLatestByTeacherIdInInternal(
-            @Param("teacherIds") Collection<Long> teacherIds);
 }

@@ -1,0 +1,272 @@
+/*
+ * MandarinSpark design tokens. Imported first by main.css; every other stylesheet builds on these.
+ * The brand palette: Spark purple for everything interactive and for the brand's marks (seals, the current item, the
+ * 田字格 lines), sunny yellow for the one hero action and count badges (with ink text), indigo ink on a cool, light page,
+ * and the wordmark's orange. A small set of pigments gives each practice type and module its own colour. Usage guide:
+ * DESIGN_SYSTEM.md. The app is laid out for desktop windows from --page-min-width up; the one width breakpoint is
+ * (max-width: 1200px), for small laptops (breakpoints cannot be custom properties). The only other one
+ * (DESIGN_SYSTEM.md §2.7) is (max-height: 820px).
+ */
+:root {
+  /* Colour: primary = Spark purple (buttons, links, focus, selection, progress, active navigation, seals).
+     500 and darker keep white text >= 5:1. */
+  --color-primary-50: #f6f3ff;
+  --color-primary-100: #ede8ff;
+  --color-primary-200: #dcd2ff;
+  --color-primary-300: #c2b2ff;
+  --color-primary-400: #9d85ff;
+  --color-primary-500: #6f4cff;
+  --color-primary-600: #5a35ec;
+  --color-primary-700: #4a28c9;
+  --color-primary-800: #3a1f9c;
+
+  /* Colour: accent = sunny yellow (the hero action, count badges, small highlights). Always with ink text
+     (--text-on-accent); never as text colour. */
+  --color-accent-50: #fffaeb;
+  --color-accent-100: #fff2c7;
+  --color-accent-200: #ffe696;
+  --color-accent-300: #ffdb66;
+  --color-accent-400: #ffd247;
+  --color-accent-500: #ffcc2f;
+  --color-accent-600: #f0b400;
+  --color-accent-700: #c28d00;
+  --color-accent-800: #8f6700;
+  --color-accent-900: #5f4500;
+
+  /* Colour: neutrals = a cool, indigo-tinted grey ramp from page to ink */
+  --color-white: #ffffff;
+  --color-brand-orange: #f97316; /* "Mandarin" in the wordmark */
+  --color-ink-25: #fafbff;
+  --color-ink-50: #f5f6fc;
+  --color-ink-100: #eceff8;
+  --color-ink-200: #e0e4f1;
+  --color-ink-300: #cbd1e3;
+  --color-ink-400: #a2aac4;
+  --color-ink-500: #626b88;
+  --color-ink-600: #5c6687;
+  --color-ink-700: #434d6d;
+  --color-ink-900: #152042;
+
+  /* Colour: pigments. One per practice type and module; *-soft is its tinted surface (text on it stays ink). */
+  --pigment-cobalt: #3554b5;
+  --pigment-cobalt-soft: #e9edf8;
+  --pigment-cinnabar: #c2410c;
+  --pigment-cinnabar-soft: #fff3ec;
+  --pigment-jade: #2c7a5a;
+  --pigment-jade-soft: #ecf6f0;
+  --pigment-ochre: #98620f;
+  --pigment-ochre-soft: #fbf4e6;
+  --pigment-plum: #7b3f78;
+  --pigment-plum-soft: #f3e8f2;
+  --pigment-teal: #1e6f7d;
+  --pigment-teal-soft: #e8f4f5;
+  --pigment-ink: var(--color-ink-900);
+  --pigment-ink-soft: var(--color-ink-100);
+
+  /* Module identities (one system, several personalities): Learn = the brand purple, Classes = teacher-led teal,
+     AI Helper = Xiaomei's plum, Progress = ochre. */
+  --module-learn: var(--color-primary-500);
+  --module-classes: var(--pigment-teal);
+  --module-classes-soft: var(--pigment-teal-soft);
+  --module-ai: var(--pigment-plum);
+  --module-ai-soft: var(--pigment-plum-soft);
+  --module-progress: var(--pigment-ochre);
+  --module-progress-soft: var(--pigment-ochre-soft);
+
+  /* Colour: semantic. fill = icons, dots, bars; soft = tinted background; text = AA text on soft and white;
+     strong = solid background behind white text. */
+  --color-success: #2f9e44;
+  --color-success-soft: #eaf8ec;
+  --color-success-border: #bfe5c6;
+  --color-success-text: #1e7a34;
+  --color-warning: #f5a524;
+  --color-warning-soft: #fff5e2;
+  --color-warning-border: #fbd99a;
+  --color-warning-text: #8a5100;
+  --color-warning-strong: #a35f00;
+  --color-danger: #e5484d;
+  --color-danger-soft: #fff0f0;
+  --color-danger-border: #f7c3c5;
+  --color-danger-text: #c0262d;
+  --color-danger-strong: var(--color-danger-text);
+  --color-danger-hover: #a51f26;
+  --color-info: #2f8fff;
+  --color-info-soft: #ecf5ff;
+  --color-info-border: #bcd8ff;
+  --color-info-text: #1a5fc0;
+
+  /* Colour: translucent families (composited over the surface underneath) */
+  --color-primary-a04: rgba(111, 76, 255, 0.04);
+  --color-primary-a16: rgba(111, 76, 255, 0.16);
+  --color-primary-a32: rgba(111, 76, 255, 0.32);
+  --color-white-a80: rgba(255, 255, 255, 0.8);
+  --color-ink-a12: rgba(21, 32, 66, 0.12);
+  --color-ink-a16: rgba(21, 32, 66, 0.16);
+  --color-ink-a48: rgba(21, 32, 66, 0.48);
+  --color-danger-a12: rgba(229, 72, 77, 0.12);
+
+  /* Surfaces: content sits on the light page; white sheets are for things you act on. */
+  --surface-page: var(--color-ink-50);
+  --surface-card: var(--color-white);
+  /* Inset areas, callouts and swatches: one step darker than the page, so they show on the page and on a sheet. */
+  --surface-sunken: var(--color-ink-100);
+  --surface-subtle: var(--color-ink-25);
+  --surface-hover: var(--color-primary-50);
+  --surface-selected: var(--color-primary-100);
+  --surface-inverse: var(--color-ink-900);
+  --surface-scrim: var(--color-ink-a48);
+
+  /* Borders: hairlines, like the rules of a notebook */
+  --border-subtle: #e8ebf5;
+  --border-default: var(--color-ink-200);
+  --border-strong: var(--color-ink-300);
+  --border-interactive: var(--color-primary-300);
+  --border-width-thick: 2px;
+  --border-width-focus: 2px;
+  /* The 田字格 practice square: a dashed purple cross, as on practice paper. */
+  --grid-line: rgba(111, 76, 255, 0.3);
+
+  /* Text */
+  --text-primary: var(--color-ink-900);
+  --text-secondary: var(--color-ink-600);
+  --text-disabled: var(--color-ink-400);
+  --text-on-primary: var(--color-white);
+  --text-on-accent: var(--color-ink-900);
+  --text-on-dark: var(--color-white);
+  --text-link: var(--color-primary-600);
+  --text-link-hover: var(--color-primary-700);
+  --text-brand: var(--color-primary-600);
+
+  /* Typography: an editorial serif for display, a crisp humanist sans (designed in Jakarta) for the interface, a
+     Song serif for hanzi that are shown as characters to learn. */
+  --font-display: 'Fraunces', 'Noto Serif SC', Georgia, 'Times New Roman', serif;
+  --font-body: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-cjk: 'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', 'Plus Jakarta Sans', sans-serif;
+  --font-hanzi: 'Noto Serif SC', 'Songti SC', 'STSong', 'SimSun', serif;
+  --font-size-2xs: 0.6875rem; /* 11px */
+  --font-size-xs: 0.75rem; /* 12px */
+  --font-size-sm: 0.8125rem; /* 13px */
+  --font-size-md: 0.875rem; /* 14px */
+  --font-size-base: 1rem; /* 16px */
+  --font-size-lg: 1.125rem; /* 18px */
+  --font-size-xl: 1.25rem; /* 20px */
+  --font-size-2xl: 1.5rem; /* 24px */
+  --font-size-3xl: 1.875rem; /* 30px */
+  --font-size-4xl: 2.25rem; /* 36px */
+  --font-size-5xl: 2.75rem; /* 44px */
+  --font-size-6xl: 3.5rem; /* 56px */
+  --font-size-7xl: 4.25rem; /* 68px */
+  --font-size-8xl: 5.5rem; /* 88px */
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --line-height-tight: 1.1;
+  --line-height-snug: 1.3;
+  --line-height-normal: 1.55;
+  --line-height-relaxed: 1.7;
+  --letter-spacing-display: -0.025em;
+  --letter-spacing-wide: 0.08em;
+
+  /* Typography: semantic roles. Display and page titles are serif; everything you scan is sans. */
+  --type-display-size: clamp(2.75rem, 1.9rem + 3vw, 4.75rem);
+  --type-h1-size: clamp(1.875rem, 1.5rem + 1.2vw, 2.625rem);
+  --type-h2-size: clamp(1.25rem, 1.1rem + 0.4vw, 1.5rem);
+  --type-body-size: var(--font-size-base);
+  --type-label-size: var(--font-size-md);
+  --type-caption-size: var(--font-size-sm);
+  --type-overline-size: var(--font-size-2xs);
+  --type-stat-size: clamp(2rem, 1.6rem + 1.2vw, 2.75rem);
+
+  /* Spacing (4px base). Rhythm: 8 inside a group, 16 between groups, 24-32 between blocks, 48-64 between sections. */
+  --space-0-5: 2px;
+  --space-1: 4px;
+  --space-1-5: 6px;
+  --space-2: 8px;
+  --space-2-5: 10px;
+  --space-3: 12px;
+  --space-3-5: 14px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+
+  /* Layout rhythm (see DESIGN_SYSTEM.md for breakpoint values) */
+  --page-gutter: var(--space-10);
+  --page-gap: var(--space-10);
+  --section-gap: var(--space-5);
+  --card-padding: var(--space-6);
+  --grid-gap: var(--space-5);
+  --page-max: 1440px;
+  --reading-max: 68ch;
+  --sidebar-width: 244px;
+  --topbar-height: 64px;
+  --topbar-control-size: 44px;
+  /* The narrowest window the pages are laid out for; narrower ones scroll sideways. */
+  --page-min-width: 1024px;
+
+  /* Radius: crisp corners; pills only for chips, tags and segmented choices. */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-2xl: 24px;
+  --radius-pill: 999px;
+  --radius-round: 50%;
+
+  /* Shadows: soft, indigo-tinted, used sparingly (things you can pick up or that float). */
+  --shadow-xs: 0 1px 2px rgba(40, 52, 110, 0.06);
+  --shadow-sm: 0 4px 12px rgba(40, 52, 110, 0.06);
+  --shadow-md: 0 10px 24px rgba(40, 52, 110, 0.08);
+  --shadow-overlay: 0 24px 64px rgba(21, 32, 66, 0.22);
+  /* Practice paper: a faint square grid for hero surfaces (never behind body text). */
+  --paper-grid:
+    linear-gradient(var(--border-subtle) 1px, transparent 1px) 0 0 / 28px 28px,
+    linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px) 0 0 / 28px 28px;
+  --focus-ring-color: var(--color-primary-500);
+  --focus-ring-offset: 2px;
+  --focus-halo: 0 0 0 4px var(--color-primary-a16);
+
+  /* Z-index layers */
+  --z-raised: 1;
+  --z-sticky: 20;
+  --z-sidebar: 30;
+  --z-drawer: 60;
+  --z-tooltip: 90;
+  --z-skip-link: 100;
+
+  /* Motion: quick and quiet. */
+  --duration-fast: 140ms;
+  --duration-base: 200ms;
+  --duration-slow: 320ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+
+  /* Control sizes */
+  --control-height-sm: 32px;
+  --control-height-md: 42px;
+  --control-height-lg: 52px;
+}
+
+@media (max-width: 1200px) {
+  :root {
+    --page-gutter: var(--space-8);
+    --page-gap: var(--space-8);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0.01ms;
+    --duration-base: 0.01ms;
+    --duration-slow: 0.01ms;
+  }
+}

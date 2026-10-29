@@ -1,213 +1,149 @@
 <template>
-  <section class="public-page auth-reset-page">
-    <div class="auth-reset-shell">
-      <aside class="auth-reset-art">
-        <AppBrand />
+  <AuthShell variant="recovery">
+    <div class="auth-flow">
+      <header class="auth-form-head">
+        <h1>{{ sentTo ? t('recovery.sentTitle') : t('recovery.forgotTitle') }}</h1>
+        <p v-if="!sentTo">{{ t('recovery.forgotCopy') }}</p>
+      </header>
 
-        <div class="auth-reset-art-copy">
-          <span class="auth-reset-kicker">{{ t('recovery.forgot.eyebrow') }}</span>
-          <h1>
-            {{ t('recovery.forgot.heroStart') }}
-            <span>{{ t('recovery.forgot.heroHighlight') }}</span>
-          </h1>
-          <p>{{ t('recovery.forgot.heroCopy') }}</p>
-        </div>
-
-        <div class="auth-reset-scene">
-          <span class="auth-reset-cloud auth-reset-cloud--one" />
-          <span class="auth-reset-cloud auth-reset-cloud--two" />
-          <span class="auth-reset-bamboo" />
-          <span class="auth-reset-pagoda" />
-          <PandaIllustration class="auth-reset-panda" :size="190" outfit="#ff8a3d" accent="#6f4cff" />
-        </div>
-
-        <div class="auth-reset-safety-card">
-          <strong><IconGlyph name="shield" :size="18" /> {{ t('recovery.forgot.safetyTitle') }}</strong>
-          <span>{{ t('recovery.forgot.safetyCopy') }}</span>
-        </div>
-      </aside>
-
-      <div class="surface-card auth-reset-card">
-        <div class="auth-reset-language"><LanguageSwitcher size="compact" /></div>
-        <div class="auth-reset-card-head">
-          <span class="auth-reset-card-icon"><IconGlyph name="bell" :size="24" /></span>
-          <div class="auth-form-title">
-            <h2>{{ t('recovery.forgot.title') }}</h2>
-            <p>{{ t('recovery.forgot.cardCopy') }}</p>
-          </div>
-        </div>
-
-        <div v-if="error" class="soft-banner auth-alert auth-alert--error" role="alert" aria-live="assertive">
+      <div v-if="sentTo" class="auth-sent" data-testid="forgot-sent">
+        <p class="alert alert-success" role="status">
+          <IconGlyph name="check" :size="18" />
+          <span>{{ t('recovery.sentCopy', { email: sentTo }) }}</span>
+        </p>
+        <p class="field-hint">{{ t('recovery.sentSpam') }}</p>
+        <p v-if="error" class="alert alert-danger" role="alert">
+          <IconGlyph name="alert" :size="18" />
           <span>{{ error }}</span>
-        </div>
-
-        <div v-if="success" class="soft-banner auth-alert auth-alert--success" role="status" aria-live="polite">
-          <span>{{ success }}</span>
-        </div>
-
-        <form v-if="!success" class="auth-reset-form" @submit.prevent="submitForgotPassword">
-          <div class="field">
-            <label for="forgot-email">{{ t('recovery.forgot.accountEmail') }}</label>
-            <input
-              id="forgot-email"
-              v-model="email"
-              class="input auth-input"
-              type="email"
-              autocomplete="email"
-              :placeholder="t('recovery.forgot.emailPlaceholder')"
-              :aria-invalid="Boolean(error)"
-            />
-          </div>
-
-          <div class="auth-reset-strength">
-            <div class="row-between">
-              <span>{{ t('recovery.forgot.recoverySteps') }}</span>
-              <strong>{{ t('recovery.forgot.emailLink') }}</strong>
-            </div>
-            <div class="auth-reset-check-grid">
-              <span class="is-met"><IconGlyph name="status" :size="14" /> {{ t('recovery.forgot.enterEmail') }}</span>
-              <span class="is-met"><IconGlyph name="status" :size="14" /> {{ t('recovery.forgot.openLink') }}</span>
-              <span class="is-met"
-                ><IconGlyph name="status" :size="14" /> {{ t('recovery.forgot.choosePassword') }}</span
-              >
-            </div>
-          </div>
-
-          <button class="btn btn-accent btn-block auth-submit-button" :disabled="!canSubmit" type="submit">
-            <span>{{ submitLabel }}</span>
-            <span class="auth-submit-arrow"><IconGlyph name="chevronRight" :size="16" /></span>
+        </p>
+        <div class="auth-sent-actions">
+          <button
+            class="btn btn-secondary"
+            type="button"
+            :disabled="submitting"
+            :aria-busy="submitting"
+            data-testid="send-again"
+            @click="sendAgain"
+          >
+            <IconGlyph name="refresh" :size="16" />
+            {{ t('recovery.sendAgain') }}
           </button>
-        </form>
-
-        <div v-else class="auth-reset-form">
-          <div class="auth-reset-strength">
-            <div class="row-between">
-              <span>{{ t('recovery.forgot.nextStep') }}</span>
-              <strong>{{ t('recovery.forgot.checkInbox') }}</strong>
-            </div>
-            <div class="auth-reset-check-grid">
-              <span class="is-met"><IconGlyph name="status" :size="14" /> {{ t('recovery.forgot.checkAllMail') }}</span>
-              <span class="is-met"
-                ><IconGlyph name="status" :size="14" /> {{ t('recovery.forgot.openBrandLink') }}</span
-              >
-              <span class="is-met"><IconGlyph name="status" :size="14" /> {{ t('recovery.forgot.secureReset') }}</span>
-            </div>
-          </div>
-
-          <RouterLink class="btn btn-accent btn-block auth-submit-button" to="/auth">
-            <span>{{ t('recovery.forgot.backSignIn') }}</span>
-            <span class="auth-submit-arrow"><IconGlyph name="chevronRight" :size="16" /></span>
-          </RouterLink>
-
-          <button class="auth-text-button auth-reset-link" type="button" @click="requestAnotherEmail">
-            {{ t('recovery.forgot.anotherEmail') }}
+          <button class="btn btn-ghost" type="button" @click="useAnotherEmail">
+            {{ t('recovery.useAnotherEmail') }}
           </button>
-        </div>
-
-        <div class="auth-reset-help-row">
-          <span>{{ t('recovery.forgot.rememberPassword') }}</span>
-          <RouterLink class="auth-text-button auth-reset-link" to="/auth">{{
-            t('recovery.forgot.backSignIn')
-          }}</RouterLink>
-        </div>
-
-        <div class="auth-reset-help-row">
-          <span>{{ t('recovery.forgot.haveToken') }}</span>
-          <RouterLink class="auth-text-button auth-reset-link" to="/reset-password">{{
-            t('recovery.forgot.resetPassword')
-          }}</RouterLink>
         </div>
       </div>
+
+      <form v-else class="auth-form" novalidate @submit.prevent="submit">
+        <p v-if="error" id="forgot-error" class="alert alert-danger" role="alert">
+          <IconGlyph name="alert" :size="18" />
+          <span>{{ error }}</span>
+        </p>
+        <div class="field">
+          <label class="field-label" for="forgot-email">
+            {{ t('recovery.email') }}<span class="required-mark" aria-hidden="true">*</span>
+          </label>
+          <input
+            id="forgot-email"
+            v-model="email"
+            class="input"
+            type="email"
+            autocomplete="email"
+            required
+            :placeholder="t('recovery.emailPlaceholder')"
+            :aria-invalid="Boolean(error)"
+            :aria-describedby="error ? 'forgot-error' : 'forgot-steps'"
+          />
+        </div>
+        <button class="btn btn-primary btn-lg btn-block" type="submit" :disabled="submitting" :aria-busy="submitting">
+          <span>{{ submitting ? t('recovery.sending') : t('recovery.sendLink') }}</span>
+          <IconGlyph name="chevronRight" :size="18" />
+        </button>
+        <ol id="forgot-steps" class="auth-steps" :aria-label="t('recovery.steps')">
+          <li>{{ t('recovery.stepEnter') }}</li>
+          <li>{{ t('recovery.stepOpen') }}</li>
+          <li>{{ t('recovery.stepChoose') }}</li>
+        </ol>
+      </form>
+
+      <p class="auth-switch">
+        <span>{{ t('recovery.rememberPassword') }}</span>
+        <RouterLink class="btn btn-link" to="/auth">{{ t('recovery.backToSignIn') }}</RouterLink>
+      </p>
     </div>
-  </section>
+    <AppToast :message="toast" />
+  </AuthShell>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
-import { useI18n } from 'vue-i18n'
 
 import { authApi } from '@/api/services'
 import IconGlyph from '@/components/common/IconGlyph.vue'
-import PandaIllustration from '@/components/common/PandaIllustration.vue'
-import AppBrand from '@/components/layout/AppBrand.vue'
-import LanguageSwitcher from '@/components/common/LanguageSwitcher.vue'
+import AppToast from '@/components/common/AppToast.vue'
+import AuthShell from '@/components/public/AuthShell.vue'
+import { useLocalMessages } from '@/composables/useLocalMessages'
+import { useToast } from '@/composables/useToast'
 import { recoveryMessages } from '@/plugins/recoveryMessages'
 import { resolveApiError } from '@/utils/apiError'
-import { firstQueryText, removeSensitiveRouteState } from '@/utils/sensitiveData'
+import { isValidEmail } from '@/utils/email'
+import { replaceSensitiveRouteState } from '@/utils/sensitiveData'
 import { getSessionStorage, safeGetItem, safeRemoveItem, storageKeys } from '@/utils/storage'
 
 const route = useRoute()
 const router = useRouter()
-const { t } = useI18n({
-  messages: {
-    en: { recovery: recoveryMessages.en },
-    ms: { recovery: recoveryMessages.ms },
-    zh: { recovery: recoveryMessages.zh },
-  },
-})
+const { t } = useLocalMessages({ recovery: recoveryMessages })
+const { toast, showToast } = useToast()
 
-const email = ref(readInitialRecoveryEmail())
-const error = ref<string | null>(null)
-const success = ref<string | null>(null)
+replaceSensitiveRouteState(router, route, 'forgot-password')
+
+const email = ref(readRememberedEmail())
+const sentTo = ref<string | null>(null)
 const submitting = ref(false)
+const error = ref<string | null>(null)
 
-removeSensitiveQueryFromAddressBar()
+/** The sign-in page hands over the address typed there (session storage, read once). */
+function readRememberedEmail(): string {
+  const storage = getSessionStorage()
+  const remembered = safeGetItem(storageKeys.recoveryEmail, storage)?.trim() ?? ''
+  safeRemoveItem(storageKeys.recoveryEmail, storage)
+  return remembered
+}
 
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const normalizedEmail = computed(() => email.value.trim().toLowerCase())
-const emailValid = computed(() => emailPattern.test(normalizedEmail.value))
-const canSubmit = computed(() => emailValid.value && !submitting.value)
-const submitLabel = computed(() => (submitting.value ? t('recovery.forgot.sending') : t('recovery.forgot.send')))
-
-async function submitForgotPassword(): Promise<void> {
-  if (submitting.value) return
-
-  error.value = null
-  success.value = null
-
-  if (!emailValid.value) {
-    error.value = t('recovery.forgot.invalidEmail')
-    return
-  }
-
+async function requestLink(address: string): Promise<boolean> {
   submitting.value = true
+  error.value = null
   try {
-    await authApi.forgotPassword(normalizedEmail.value)
-    success.value = t('recovery.forgot.sent', { email: normalizedEmail.value })
+    await authApi.forgotPassword(address)
+    return true
   } catch (reason) {
-    error.value = resolveApiError(reason, t('recovery.forgot.error'))
+    error.value = resolveApiError(reason, t('recovery.sendFailed'))
+    return false
   } finally {
     submitting.value = false
   }
 }
 
-function requestAnotherEmail(): void {
-  success.value = null
+async function submit(): Promise<void> {
+  if (submitting.value) return
+  const address = email.value.trim().toLowerCase()
+  if (!isValidEmail(address)) {
+    error.value = t('recovery.emailInvalid')
+    return
+  }
+  if (await requestLink(address)) sentTo.value = address
+}
+
+async function sendAgain(): Promise<void> {
+  if (sentTo.value && !submitting.value && (await requestLink(sentTo.value))) {
+    showToast(t('recovery.sentAgain'))
+  }
+}
+
+function useAnotherEmail(): void {
+  sentTo.value = null
   error.value = null
   email.value = ''
 }
-
-function readInitialRecoveryEmail(): string {
-  const queryEmail = firstQueryText(route.query.email)
-  const storage = getSessionStorage()
-  const storedEmail = safeGetItem(storageKeys.recoveryEmail, storage)?.trim() ?? ''
-  safeRemoveItem(storageKeys.recoveryEmail, storage)
-  return queryEmail || storedEmail
-}
-
-function removeSensitiveQueryFromAddressBar(): void {
-  const { changed, query, hash } = removeSensitiveRouteState(route.query, route.hash)
-
-  if (changed) {
-    void router.replace({ name: 'forgot-password', query, hash })
-  }
-}
 </script>
-
-<style scoped>
-.auth-reset-language {
-  display: flex;
-  justify-content: flex-end;
-}
-</style>

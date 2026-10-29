@@ -1,10 +1,8 @@
 package com.example.aichinese.entity;
 
-import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
-import com.example.aichinese.entity.base.BaseEntity;
-import com.example.aichinese.entity.enums.AccessType;
-import com.example.aichinese.entity.enums.ContentStatus;
+import com.example.aichinese.entity.base.TeacherArchivableContent;
 import com.example.aichinese.entity.enums.LearningType;
 
 import jakarta.persistence.Column;
@@ -14,24 +12,24 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.NamedAttributeNode;
 import jakarta.persistence.NamedEntityGraph;
 import jakarta.persistence.NamedSubgraph;
 import jakarta.persistence.Table;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Getter
 @Setter
-@NoArgsConstructor
 @Entity
 @Table(name = "lessons", indexes = {
         @Index(name = "idx_lessons_module_id", columnList = "module_id"),
         @Index(name = "idx_lessons_teacher_id", columnList = "teacher_id"),
-        @Index(name = "idx_lessons_status", columnList = "content_status")
+        @Index(name = "idx_lessons_status", columnList = "content_status"),
+        @Index(name = "idx_lessons_status_updated", columnList = "content_status,updated_at"),
+        @Index(name = "idx_lessons_revision_of", columnList = "revision_of_lesson_id"),
+        @Index(name = "idx_lessons_module_position", columnList = "module_id,unit_position")
 })
 @NamedEntityGraph(
         name = Lesson.GRAPH_DETAIL,
@@ -46,7 +44,7 @@ import lombok.Setter;
                 attributeNodes = @NamedAttributeNode("user")
         )
 )
-public class Lesson extends BaseEntity {
+public class Lesson extends TeacherArchivableContent {
 
     public static final String GRAPH_DETAIL = "Lesson.detail";
 
@@ -54,8 +52,8 @@ public class Lesson extends BaseEntity {
     @JoinColumn(name = "module_id")
     private LearningModule module;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "teacher_id")
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "teacher_id", nullable = false)
     private TeacherProfile teacher;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -66,37 +64,29 @@ public class Lesson extends BaseEntity {
     @JoinColumn(name = "level_id")
     private LearningLevel level;
 
-    @Column(name = "title", nullable = false, length = 200)
-    private String title;
-
     @Column(name = "summary", length = 1000)
     private String summary;
-
-    @Lob
-    @Column(name = "lesson_content", columnDefinition = "LONGTEXT")
-    private String lessonContent;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "content_status", nullable = false, length = 30)
-    private ContentStatus contentStatus = ContentStatus.DRAFT;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "access_type", nullable = false, length = 20)
-    private AccessType accessType = AccessType.FREE;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "learning_type", nullable = false, length = 20)
     private LearningType learningType = LearningType.RECORDED;
 
-    @Column(name = "price", precision = 10, scale = 2)
-    private BigDecimal price;
-
-    @Column(name = "cover_image_url", length = 255)
-    private String coverImageUrl;
-
-    @Column(name = "rejection_reason", length = 1000)
-    private String rejectionReason;
-
     @Column(name = "estimated_duration_minutes")
     private Integer estimatedDurationMinutes;
+
+    /** Order of the lesson inside its unit. */
+    @Column(name = "unit_position", nullable = false)
+    private Integer unitPosition = 0;
+
+    /** When the lesson (or this revision) was last sent for review. */
+    @Column(name = "submitted_at")
+    private LocalDateTime submittedAt;
+
+    /**
+     * Set on a working copy of a published lesson: the teacher edits the copy while students keep the published
+     * lesson, and approval applies the copy to it (see LessonRevisionService). Never set on a lesson students see.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "revision_of_lesson_id")
+    private Lesson revisionOf;
 }

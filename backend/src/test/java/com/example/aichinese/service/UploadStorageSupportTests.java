@@ -14,13 +14,17 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.example.aichinese.entity.UploadedFile;
 
+@ExtendWith(OutputCaptureExtension.class)
 class UploadStorageSupportTests {
 
     private static final String ORIGINAL_FILE_NAME = "lesson.pdf";
@@ -29,10 +33,13 @@ class UploadStorageSupportTests {
     private static final String STORED_FILE_NAME = "stored.pdf";
     private static final String ESCAPING_FILE_NAME = "../outside.pdf";
     private static final String BLANK_STORED_FILE_NAME = " ";
-    private static final String INVALID_TARGET_MESSAGE = "Invalid target.";
     private static final String STORAGE_FAILED_MESSAGE = "Storage failed.";
     private static final String FILE_NOT_FOUND_MESSAGE = "File not found.";
-    private static final String INVALID_FILE_NAME_MESSAGE = "Invalid file name.";
+    private static final String SENSITIVE_DIRECTORY = "sensitive-server-root";
+    private static final String NESTED_FILE_NAME = "nested.txt";
+    private static final String NESTED_FILE_CONTENT = "keeps the directory non-empty";
+    private static final String SAFE_ROLLBACK_LOG =
+            "Failed to delete stored object during upload rollback for name " + STORED_FILE_NAME;
 
     @TempDir
     Path tempDir;
@@ -45,7 +52,6 @@ class UploadStorageSupportTests {
                 multipartFile,
                 tempDir,
                 STORED_FILE_NAME,
-                INVALID_TARGET_MESSAGE,
                 STORAGE_FAILED_MESSAGE);
 
         assertThat(Files.readString(storedPath, StandardCharsets.UTF_8)).isEqualTo(CONTENT);
@@ -61,12 +67,28 @@ class UploadStorageSupportTests {
                 multipartFile,
                 tempDir,
                 ESCAPING_FILE_NAME,
-                INVALID_TARGET_MESSAGE,
                 STORAGE_FAILED_MESSAGE))
                 .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining(INVALID_TARGET_MESSAGE);
+                .hasMessageContaining(UploadStorageSupport.INVALID_UPLOAD_TARGET_MESSAGE);
 
         assertThat(multipartFile.openedStreams()).isEmpty();
+    }
+
+    @Test
+    void deleteQuietlyDoesNotExposeAbsolutePathWhenCleanupFails(CapturedOutput output) throws Exception {
+        Path managedDirectory = tempDir.resolve(SENSITIVE_DIRECTORY).resolve(STORED_FILE_NAME);
+        Files.createDirectories(managedDirectory);
+        Files.writeString(managedDirectory.resolve(NESTED_FILE_NAME), NESTED_FILE_CONTENT);
+
+        UploadStorageSupport.deleteQuietly(managedDirectory);
+
+        assertThat(output)
+                .contains(SAFE_ROLLBACK_LOG)
+                .contains("Exception")
+                .doesNotContain(tempDir.toString())
+                .doesNotContain(SENSITIVE_DIRECTORY)
+                .doesNotContain(NESTED_FILE_NAME)
+                .doesNotContain("at com.example.aichinese");
     }
 
     @Test
@@ -89,35 +111,38 @@ class UploadStorageSupportTests {
 
     @Test
     void extractSafeOriginalFileNameNormalizesPathSegmentsAcrossPlatforms() {
-        assertThat(UploadStorageSupport.extractSafeOriginalFileName(
-                "C:\\fakepath\\certificate.pdf",
-                INVALID_FILE_NAME_MESSAGE))
+        assertThat(UploadStorageSupport.extractSafeOriginalFileName("C:\\fakepath\\certificate.pdf"))
                 .isEqualTo("certificate.pdf");
-        assertThat(UploadStorageSupport.extractSafeOriginalFileName(
-                "/tmp/uploads/lesson notes.pdf",
-                INVALID_FILE_NAME_MESSAGE))
+        assertThat(UploadStorageSupport.extractSafeOriginalFileName("/tmp/uploads/lesson notes.pdf"))
                 .isEqualTo("lesson notes.pdf");
     }
 
     @Test
     void extractSafeOriginalFileNameRemovesDangerousCharactersAndLeadingDots() {
-        assertThat(UploadStorageSupport.extractSafeOriginalFileName(
-                "folder\\\u202eevil:report?.pdf",
-                INVALID_FILE_NAME_MESSAGE))
+        assertThat(UploadStorageSupport.extractSafeOriginalFileName("folder\\\u202eevil:report?.pdf"))
                 .isEqualTo("_evil_report_.pdf");
-        assertThat(UploadStorageSupport.extractSafeOriginalFileName(
-                "../.env",
-                INVALID_FILE_NAME_MESSAGE))
+        assertThat(UploadStorageSupport.extractSafeOriginalFileName("../.env"))
                 .isEqualTo("env");
     }
 
     @Test
     void extractSafeOriginalFileNameRejectsBlankPathSegments() {
-        assertThatThrownBy(() -> UploadStorageSupport.extractSafeOriginalFileName(
-                "folder\\",
-                INVALID_FILE_NAME_MESSAGE))
+        assertThatThrownBy(() -> UploadStorageSupport.extractSafeOriginalFileName("folder\\"))
                 .isInstanceOf(ResponseStatusException.class)
-                .hasMessageContaining(INVALID_FILE_NAME_MESSAGE);
+                .hasMessageContaining(UploadStorageSupport.INVALID_FILE_NAME_MESSAGE);
+    }
+
+    @Test
+    void extractSafeOriginalFileNameRejectsNamesLongerThanTheStoredColumn() {
+        String longestStorableName = "a".repeat(251) + ".pdf";
+
+        assertThat(UploadStorageSupport.extractSafeOriginalFileName(longestStorableName))
+                .isEqualTo(longestStorableName);
+        assertThatThrownBy(() -> UploadStorageSupport.extractSafeOriginalFileName("a" + longestStorableName))
+                .isInstanceOfSatisfying(ResponseStatusException.class, exception -> {
+                    assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                    assertThat(exception.getReason()).isEqualTo(UploadStorageSupport.INVALID_FILE_NAME_MESSAGE);
+                });
     }
 
     private void assertNotFoundWhenLoading(UploadedFile uploadedFile) {

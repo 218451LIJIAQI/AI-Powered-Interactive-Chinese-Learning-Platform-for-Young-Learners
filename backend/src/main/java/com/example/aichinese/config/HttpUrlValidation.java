@@ -5,10 +5,10 @@ import java.net.URISyntaxException;
 import java.util.Locale;
 
 /**
- * Package-local URL validation helpers shared by startup guards and
- * configuration-property records.
+ * URL validation helpers shared by startup guards and configuration-property
+ * records; {@link #normalizeHost(String)} is also used by the client-IP resolver.
  */
-final class HttpUrlValidation {
+public final class HttpUrlValidation {
 
     private HttpUrlValidation() {
     }
@@ -43,7 +43,7 @@ final class HttpUrlValidation {
         if (!"https".equals(scheme)) {
             throw new IllegalStateException(label + " must use HTTPS " + productionContext + ".");
         }
-        if (host.isBlank() || isLoopbackOrLinkLocalHost(host)) {
+        if (isLoopbackOrLinkLocalHost(host)) {
             throw new IllegalStateException(label + " must target a non-loopback public host " + productionContext + ".");
         }
         return uri;
@@ -51,17 +51,26 @@ final class HttpUrlValidation {
 
     static URI parseStrict(String value, String label) {
         try {
-            return new URI(value == null ? "" : value.strip());
+            return new URI(value.strip());
         } catch (URISyntaxException | IllegalArgumentException exception) {
             throw new IllegalArgumentException(label + " must be a valid URL.", exception);
         }
+    }
+
+    /** {@code scheme://host[:port]} with a lower-case scheme and host; an IPv6 host is put in brackets. */
+    static String originOf(URI uri) {
+        String scheme = normalizeScheme(uri.getScheme());
+        String host = normalizeHost(uri.getHost());
+        String port = uri.getPort() >= 0 ? ":" + uri.getPort() : "";
+        String hostPart = host.contains(":") ? "[" + host + "]" : host;
+        return scheme + "://" + hostPart + port;
     }
 
     static String normalizeScheme(String value) {
         return value == null ? "" : value.strip().toLowerCase(Locale.ROOT);
     }
 
-    static String normalizeHost(String value) {
+    public static String normalizeHost(String value) {
         if (value == null || value.isBlank()) {
             return "";
         }
@@ -73,15 +82,14 @@ final class HttpUrlValidation {
     }
 
     static boolean isLoopbackOrLinkLocalHost(String host) {
-        String normalized = normalizeHost(host);
-        return "localhost".equals(normalized)
-                || "0.0.0.0".equals(normalized)
-                || "::".equals(normalized)
-                || "::1".equals(normalized)
-                || normalized.startsWith("127.")
-                || normalized.startsWith("169.254.")
-                || normalized.startsWith("fe80:")
-                || normalized.startsWith("::ffff:127.")
-                || normalized.startsWith("::ffff:0.");
+        return "localhost".equals(host)
+                || "0.0.0.0".equals(host)
+                || "::".equals(host)
+                || "::1".equals(host)
+                || host.startsWith("127.")
+                || host.startsWith("169.254.")
+                || host.startsWith("fe80:")
+                || host.startsWith("::ffff:127.")
+                || host.startsWith("::ffff:0.");
     }
 }

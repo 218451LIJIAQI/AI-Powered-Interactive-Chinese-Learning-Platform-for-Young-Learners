@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { sanitizeDownloadFileName, saveBlobDownload } from './download'
+import { saveBlobDownload } from './download'
 
 function installObjectUrlMocks(): {
   createObjectURL: ReturnType<typeof vi.fn>
@@ -19,45 +19,54 @@ function installObjectUrlMocks(): {
   return { createObjectURL, revokeObjectURL }
 }
 
+/** The name the browser is asked to save the download as, read from the link that is clicked. */
+function savedName(fileName: string, fallbackName: string): string {
+  vi.useFakeTimers()
+  installObjectUrlMocks()
+  let name = ''
+  vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+    name = this.download
+  })
+  saveBlobDownload({ blob: new Blob(['hello']), fileName }, fallbackName)
+  return name
+}
+
 afterEach(() => {
   vi.useRealTimers()
-  vi.restoreAllMocks()
   document.body.innerHTML = ''
 })
 
-describe('sanitizeDownloadFileName', () => {
+describe('download file name', () => {
   it('uses a clean provided filename before the fallback', () => {
-    expect(sanitizeDownloadFileName(' lesson-notes.pdf ', 'fallback.pdf')).toBe('lesson-notes.pdf')
+    expect(savedName(' lesson-notes.pdf ', 'fallback.pdf')).toBe('lesson-notes.pdf')
   })
 
   it('removes path separators, reserved filename characters, controls, and bidi format controls', () => {
-    expect(sanitizeDownloadFileName('../invoice\u0000\u202ereport:1?.pdf', 'fallback.pdf')).toBe(
-      '_invoice_report_1_.pdf',
-    )
+    expect(savedName('../notes\u0000\u202ereport:1?.pdf', 'fallback.pdf')).toBe('_notes_report_1_.pdf')
   })
 
   it('strips leading dots and falls back for empty or traversal-only names', () => {
-    expect(sanitizeDownloadFileName('.env', 'fallback.txt')).toBe('env')
-    expect(sanitizeDownloadFileName('..', 'fallback.txt')).toBe('download')
-    expect(sanitizeDownloadFileName('', ' .hidden-fallback ')).toBe('hidden-fallback')
+    expect(savedName('.env', 'fallback.txt')).toBe('env')
+    expect(savedName('..', 'fallback.txt')).toBe('download')
+    expect(savedName('', ' .hidden-fallback ')).toBe('hidden-fallback')
   })
 
   it('removes trailing dots/spaces and rejects Windows reserved device names', () => {
-    expect(sanitizeDownloadFileName('lesson-notes. ', 'fallback.txt')).toBe('lesson-notes')
-    expect(sanitizeDownloadFileName('CON.txt', 'fallback.txt')).toBe('download')
-    expect(sanitizeDownloadFileName('lpt1', 'fallback.txt')).toBe('download')
+    expect(savedName('lesson-notes. ', 'fallback.txt')).toBe('lesson-notes')
+    expect(savedName('CON.txt', 'fallback.txt')).toBe('download')
+    expect(savedName('lpt1', 'fallback.txt')).toBe('download')
   })
 
   it('limits very long names while preserving a short extension', () => {
     const fileName = `${'a'.repeat(240)}.pdf`
-    const sanitized = sanitizeDownloadFileName(fileName, 'fallback.txt')
+    const sanitized = savedName(fileName, 'fallback.txt')
 
     expect(sanitized).toHaveLength(180)
     expect(sanitized.endsWith('.pdf')).toBe(true)
   })
 
   it('falls back to a generic download name when both inputs are blank', () => {
-    expect(sanitizeDownloadFileName('   ', '   ')).toBe('download')
+    expect(savedName('   ', '   ')).toBe('download')
   })
 })
 

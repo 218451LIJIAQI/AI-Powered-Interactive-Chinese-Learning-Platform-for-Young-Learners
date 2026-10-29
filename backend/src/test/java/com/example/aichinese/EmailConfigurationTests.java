@@ -71,59 +71,39 @@ class EmailConfigurationTests {
 
     @Test
     void enablesSmtpEmailServiceWithoutCredentialsWhenSmtpAuthIsDisabled() {
-        contextRunner.withPropertyValues(
-                APP_EMAIL_ENABLED,
-                SMTP_HOST,
-                SMTP_PORT_25,
-                SMTP_AUTH_DISABLED)
+        contextRunner.withPropertyValues(APP_EMAIL_ENABLED, SMTP_HOST, SMTP_PORT_25, SMTP_AUTH_DISABLED)
                 .run(EmailConfigurationTests::assertSmtpEmailService);
     }
 
     @Test
     void failsFastWhenSmtpIsEnabledWithoutMailHost() {
-        contextRunner.withPropertyValues(
-                APP_EMAIL_ENABLED,
-                SMTP_USERNAME,
-                SMTP_PASSWORD)
-                .run(context -> assertStartupFailure(
-                        context,
-                        HOST_REQUIRED_MESSAGE));
+        contextRunner.withPropertyValues(APP_EMAIL_ENABLED, SMTP_USERNAME, SMTP_PASSWORD)
+                .run(context -> assertStartupFailure(context, HOST_REQUIRED_MESSAGE));
     }
 
     @Test
     void failsFastWhenSmtpAuthIsEnabledWithoutCredentials() {
-        contextRunner.withPropertyValues(
-                APP_EMAIL_ENABLED,
-                SMTP_HOST,
-                SMTP_AUTH_ENABLED)
-                .run(context -> assertStartupFailure(
-                        context,
-                        USERNAME_REQUIRED_MESSAGE));
+        contextRunner.withPropertyValues(APP_EMAIL_ENABLED, SMTP_HOST, SMTP_AUTH_ENABLED)
+                .run(context -> assertStartupFailure(context, USERNAME_REQUIRED_MESSAGE));
     }
 
     @Test
     void prodProfileRequiresSmtpToBeEnabled() {
-        contextRunner.withPropertyValues(
-                PROD_PROFILE,
-                APP_EMAIL_DISABLED)
-                .run(context -> assertStartupFailure(
-                        context,
-                        PROD_SMTP_REQUIRED_MESSAGE));
+        contextRunner.withPropertyValues(PROD_PROFILE, APP_EMAIL_DISABLED)
+                .run(context -> assertStartupFailure(context, PROD_SMTP_REQUIRED_MESSAGE));
     }
 
     @Test
     void prodProfileRequiresPublicHttpsPasswordResetBaseUrlWhenEmailIsEnabled() {
-        contextRunner.withPropertyValues(
-                withProperties(PROD_PROFILE, LOCAL_PASSWORD_RESET_BASE_URL, authenticatedSmtpProperties()))
-                .run(context -> assertStartupFailure(
-                        context,
-                        PROD_PASSWORD_RESET_URL_REQUIRED_MESSAGE));
+        contextRunner.withPropertyValues(authenticatedSmtpProperties())
+                .withPropertyValues(PROD_PROFILE, LOCAL_PASSWORD_RESET_BASE_URL)
+                .run(context -> assertStartupFailure(context, PROD_PASSWORD_RESET_URL_REQUIRED_MESSAGE));
     }
 
     @Test
     void prodProfileAllowsPublicHttpsPasswordResetBaseUrlWhenEmailIsEnabled() {
-        contextRunner.withPropertyValues(
-                withProperties(PROD_PROFILE, PUBLIC_PASSWORD_RESET_BASE_URL, authenticatedSmtpProperties()))
+        contextRunner.withPropertyValues(authenticatedSmtpProperties())
+                .withPropertyValues(PROD_PROFILE, PUBLIC_PASSWORD_RESET_BASE_URL)
                 .run(EmailConfigurationTests::assertSmtpEmailService);
     }
 
@@ -136,14 +116,6 @@ class EmailConfigurationTests {
                 SMTP_PASSWORD,
                 SMTP_AUTH_ENABLED
         };
-    }
-
-    private static String[] withProperties(String first, String second, String... rest) {
-        String[] properties = new String[rest.length + 2];
-        properties[0] = first;
-        properties[1] = second;
-        System.arraycopy(rest, 0, properties, 2, rest.length);
-        return properties;
     }
 
     private static void assertSmtpEmailService(AssertableApplicationContext context) {

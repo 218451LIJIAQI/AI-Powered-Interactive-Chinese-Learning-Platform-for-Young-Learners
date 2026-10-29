@@ -1,35 +1,38 @@
 <template>
-  <section class="page-header">
+  <header class="page-header">
+    <div v-if="$slots.before" class="page-header-before">
+      <slot name="before" />
+    </div>
     <div class="page-title">
-      <div class="page-title-icon">
-        <IconGlyph :name="icon" :size="28" />
-      </div>
       <div class="page-title-copy">
         <span v-if="eyebrow" class="page-eyebrow">{{ eyebrow }}</span>
         <h1>{{ title }}</h1>
-        <p>{{ description }}</p>
+        <p v-if="description">{{ description }}</p>
+        <div v-if="$slots.meta" class="page-header-meta">
+          <slot name="meta" />
+        </div>
       </div>
     </div>
-    <div v-if="hasActions" class="page-header-actions">
+    <div v-if="$slots.actions" class="page-header-actions">
       <slot name="actions" />
     </div>
-  </section>
+  </header>
 </template>
 
 <script setup lang="ts">
-import { useSlots } from 'vue'
-
-import IconGlyph from '@/components/common/IconGlyph.vue'
-
+/**
+ * Shared page header: optional eyebrow (overline), the page's only h1, a short description,
+ * optional meta (status pills, dates) and the page's primary/secondary actions. The `before` slot holds context
+ * shown above the title row, such as a breadcrumb.
+ */
 interface Props {
   title: string
-  description: string
-  icon: string
+  description?: string
   eyebrow?: string
 }
 
-defineProps<Props>()
-
-const slots = useSlots()
-const hasActions = Boolean(slots.actions)
+withDefaults(defineProps<Props>(), {
+  description: '',
+  eyebrow: '',
+})
 </script>

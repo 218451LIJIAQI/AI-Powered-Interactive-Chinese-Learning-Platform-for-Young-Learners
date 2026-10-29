@@ -1,0 +1,62 @@
+/** Teacher AI-assisted quiz drafts (FRAI05): drafts fill forms and are never saved automatically. */
+export const teacherAiDraftMessages = {
+  en: {
+    title: 'AI-assisted draft',
+    quizHint:
+      'Generate a draft quiz title and questions. The draft fills the quiz form and the question builder for you to check and edit. Nothing is saved until you save it yourself.',
+    topic: 'Topic',
+    topicPlaceholder: 'e.g. ordering food at a mamak stall',
+    level: 'Level',
+    levelHsk1: 'HSK 1 (absolute beginner)',
+    levelHsk2: 'HSK 2 (beginner)',
+    questionCount: 'Number of questions',
+    generate: 'Generate draft',
+    generating: 'Generating...',
+    checking: 'Checking AI availability...',
+    unavailable: 'AI drafts are not available right now.',
+    topicRequired: 'Enter a topic before generating a draft.',
+    error: 'Unable to generate an AI draft.',
+    filledQuiz:
+      'AI draft "{title}" filled the quiz form and added {count} draft question(s) below. Check every answer before saving.',
+    notSaved: 'Not saved: review the draft, then save it through the normal form.',
+  },
+  ms: {
+    title: 'Draf berbantukan AI',
+    quizHint:
+      'Jana draf tajuk kuiz dan soalan. Draf ini mengisi borang kuiz dan pembina soalan untuk anda semak dan edit. Tiada apa-apa disimpan sehingga anda menyimpannya sendiri.',
+    topic: 'Topik',
+    topicPlaceholder: 'cth. memesan makanan di gerai mamak',
+    level: 'Tahap',
+    levelHsk1: 'HSK 1 (pemula mutlak)',
+    levelHsk2: 'HSK 2 (pemula)',
+    questionCount: 'Bilangan soalan',
+    generate: 'Jana draf',
+    generating: 'Sedang menjana...',
+    checking: 'Menyemak ketersediaan AI...',
+    unavailable: 'Draf AI tidak tersedia buat masa ini.',
+    topicRequired: 'Masukkan topik sebelum menjana draf.',
+    error: 'Draf AI tidak dapat dijana.',
+    filledQuiz:
+      'Draf AI "{title}" telah mengisi borang kuiz dan menambah {count} draf soalan di bawah. Semak setiap jawapan sebelum menyimpan.',
+    notSaved: 'Belum disimpan: semak draf, kemudian simpan melalui borang biasa.',
+  },
+  'zh-CN': {
+    title: 'AI 辅助草稿',
+    quizHint:
+      '生成测验标题和题目草稿。草稿会填入测验表单和题目编辑器，供你检查和修改。在你自己保存之前，不会保存任何内容。',
+    topic: '主题',
+    topicPlaceholder: '例如：在嘛嘛档点餐',
+    level: '级别',
+    levelHsk1: 'HSK 1（零基础）',
+    levelHsk2: 'HSK 2（初学者）',
+    questionCount: '题目数量',
+    generate: '生成草稿',
+    generating: '正在生成…',
+    checking: '正在检查 AI 可用性…',
+    unavailable: 'AI 草稿目前不可用。',
+    topicRequired: '请先输入主题再生成草稿。',
+    error: '无法生成 AI 草稿。',
+    filledQuiz: 'AI 草稿“{title}”已填入测验表单，并在下方添加了 {count} 道草稿题目。保存前请检查每个答案。',
+    notSaved: '尚未保存：请检查草稿，然后通过正常表单保存。',
+  },
+} as const

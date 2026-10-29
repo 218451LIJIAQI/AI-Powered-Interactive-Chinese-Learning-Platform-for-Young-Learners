@@ -12,139 +12,48 @@ public final class FriendlyErrorMessageResolver {
 
     private static final int MAX_VERBATIM_LENGTH = 400;
 
-    private static final int DEFAULT_STATUS = HttpStatus.INTERNAL_SERVER_ERROR.value();
-
-    private static final List<String> ROLE_MISMATCH_HINTS = List.of(
+    /**
+     * Specific, user-actionable messages that must reach the user verbatim, whatever their status: role mismatches,
+     * account state, hints, the daily AI quota and live-class access.
+     */
+    private static final List<String> EXPLICIT_PASSTHROUGH_HINTS = List.of(
             "only approved teachers can create or submit learning content",
-            "only approved teachers can use the teacher assistant",
-            "students can only request learning recommendations for their own account",
-            "students can only request progress insight for their own account",
-            "teacher assistant requires a teacher or admin account",
-            "pronunciation feedback requires a student account",
-            "writing feedback requires a student account");
+            "only approved teachers can use this teaching feature",
+            "account is currently unavailable",
+            "hints are not available for independent practice",
+            "daily ai request limit reached",
+            "this live class is not available",
+            "join window is not open yet");
 
     private static final List<String> RATE_LIMIT_HINTS = List.of(
             "too many requests",
             "too many failed login attempts",
             "rate limit");
 
-    private static final List<String> EMAIL_ALREADY_REGISTERED_HINTS = List.of(
-            "email is already registered",
-            "email already registered");
-
-    private static final List<String> PASSWORD_MISMATCH_HINTS = List.of(
-            "confirm password does not match",
-            "password mismatch",
-            "passwords do not match");
-
     private static final List<String> BAD_CREDENTIALS_HINTS = List.of(
-            "invalid email or password",
-            "bad credentials");
-
-    private static final List<String> OPERATION_FAILED_HINTS = List.of(
-            "already in your cart",
-            "already enrolled",
-            "already archived",
-            "already full",
-            "cart is empty",
-            "free items do not need",
-            "locked until payment is completed",
-            "not available to join",
-            "cannot receive requester replies",
-            "resubmit verification");
-
-    private static final List<String> FORBIDDEN_DETAIL_HINTS = List.of(
-            "permission to access this resource",
-            "access this resource");
+            "invalid email or password");
 
     private static final List<String> NOT_FOUND_HINTS = List.of(
             "not found",
             "could not be found",
             "was not found");
 
-    private static final List<String> UPLOAD_TOO_LARGE_HINTS = List.of(
-            "uploaded file exceeds the maximum allowed file size",
-            "file is too large",
-            "max upload");
-
-    private static final List<String> UPLOAD_INVALID_TYPE_HINTS = List.of(
-            "file type is not supported",
-            "unsupported file type",
-            "allowed file types",
-            "permitted file format",
-            "invalid file extension",
-            "supported format");
-
-    private static final List<String> UPLOAD_FAILED_HINTS = List.of(
-            "uploaded file could not be processed",
-            "verification document file is required",
-            "uploaded file is required",
-            "file upload");
-
-    private static final List<String> PERMISSION_HINTS = List.of(
-            "permission",
-            "forbidden",
-            "access denied",
-            "can only",
-            "only approved",
-            "requires a student account",
-            "requires a teacher or admin account",
-            "requires an admin account",
-            "do not have access");
-
-    private static final List<String> MALFORMED_REQUEST_HINTS = List.of(
-            "request body",
-            "malformed",
-            "json payload",
-            "query parameter",
-            "route or query parameter",
-            "invalid value for parameter",
-            "invalid numeric",
-            "invalid content status filter",
-            "invalid teacher status filter",
-            "invalid user role filter",
-            "invalid moderation target type",
-            "invalid feedback type");
-
-    private static final List<String> VALIDATION_HINTS = List.of(
-            "validation failed",
-            "required",
-            "must not",
-            "must be",
-            "at least one",
-            "exactly one",
-            "does not match",
-            "do not match",
-            "not be blank",
-            "invalid email",
-            "invalid password",
-            "missing a correct option",
-            "selected learning level does not exist",
-            "selected learning category does not exist",
-            "between 0 and 100");
-
     private FriendlyErrorMessageResolver() {
     }
 
     public static String resolve(HttpStatusCode statusCode, String rawMessage) {
-        int status = statusCode == null ? DEFAULT_STATUS : statusCode.value();
+        int status = statusCode.value();
         String normalized = normalize(rawMessage);
 
         if (normalized.isBlank()) {
             return status >= 500 ? serverUnavailableMessage() : operationFailedMessage();
         }
 
-        if (containsAny(normalized, ROLE_MISMATCH_HINTS)) {
+        if (containsAny(normalized, EXPLICIT_PASSTHROUGH_HINTS)) {
             return passthrough(rawMessage);
         }
         if (containsAny(normalized, RATE_LIMIT_HINTS)) {
             return tooManyRequestsMessage();
-        }
-        if (containsAny(normalized, EMAIL_ALREADY_REGISTERED_HINTS)) {
-            return passthrough(rawMessage);
-        }
-        if (containsAny(normalized, PASSWORD_MISMATCH_HINTS)) {
-            return passthrough(rawMessage);
         }
 
         if (status == HttpStatus.UNAUTHORIZED.value()) {
@@ -154,12 +63,6 @@ public final class FriendlyErrorMessageResolver {
         }
 
         if (status == HttpStatus.FORBIDDEN.value()) {
-            if (containsAny(normalized, OPERATION_FAILED_HINTS)) {
-                return operationFailedMessage();
-            }
-            if (containsAny(normalized, FORBIDDEN_DETAIL_HINTS)) {
-                return passthrough(rawMessage);
-            }
             return permissionDeniedMessage();
         }
 
@@ -174,41 +77,21 @@ public final class FriendlyErrorMessageResolver {
         if (status == HttpStatus.PAYLOAD_TOO_LARGE.value()) {
             return uploadTooLargeMessage();
         }
-        if (status == HttpStatus.UNPROCESSABLE_ENTITY.value()) {
-            return validationFailedMessage();
-        }
         if (status == HttpStatus.TOO_MANY_REQUESTS.value()) {
             return tooManyRequestsMessage();
         }
 
-        if (containsAny(normalized, UPLOAD_TOO_LARGE_HINTS)) {
-            return passthrough(rawMessage);
-        }
-        if (containsAny(normalized, UPLOAD_INVALID_TYPE_HINTS)) {
-            return passthrough(rawMessage);
-        }
-        if (containsAny(normalized, UPLOAD_FAILED_HINTS)) {
-            return passthrough(rawMessage);
-        }
-
-        if (containsAny(normalized, PERMISSION_HINTS)) {
-            return permissionDeniedMessage();
-        }
-        if (containsAny(normalized, MALFORMED_REQUEST_HINTS)) {
-            return passthrough(rawMessage);
-        }
-        if (containsAny(normalized, VALIDATION_HINTS)) {
-            return passthrough(rawMessage);
-        }
-        if (containsAny(normalized, OPERATION_FAILED_HINTS)) {
-            return operationFailedMessage();
-        }
-
+        // Other 4xx messages (validation, uploads, conflicts) are written for users and shown as they are.
         return passthrough(rawMessage);
     }
 
     public static String sessionExpiredMessage() {
         return "Your session has expired. Please sign in again to continue.";
+    }
+
+    /** A request that carries no credentials at all (nothing expired). */
+    public static String signInRequiredMessage() {
+        return "Please sign in to continue.";
     }
 
     public static String permissionDeniedMessage() {
@@ -270,13 +153,9 @@ public final class FriendlyErrorMessageResolver {
 
     private static String passthrough(String rawMessage) {
         String collapsed = TextUtils.collapseWhitespaceToNull(rawMessage);
-        if (collapsed == null) {
-            return operationFailedMessage();
-        }
         if (collapsed.length() <= MAX_VERBATIM_LENGTH) {
             return collapsed;
         }
-        String truncated = TextUtils.safeTruncate(collapsed, MAX_VERBATIM_LENGTH).stripTrailing();
-        return truncated.isEmpty() ? operationFailedMessage() : truncated;
+        return TextUtils.safeTruncate(collapsed, MAX_VERBATIM_LENGTH).stripTrailing();
     }
 }

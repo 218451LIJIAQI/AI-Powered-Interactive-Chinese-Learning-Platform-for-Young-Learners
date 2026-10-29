@@ -13,12 +13,10 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Getter
 @Setter
-@NoArgsConstructor
 @Entity
 @Table(name = "password_reset_tokens", indexes = {
         @Index(name = "idx_password_reset_tokens_user_id", columnList = "user_id")
@@ -41,6 +39,10 @@ public class PasswordResetToken extends BaseEntity {
     @Column(name = "used_at")
     private LocalDateTime usedAt;
 
-    @Column(name = "active_token_user_id", insertable = false, updatable = false)
+    // Database-generated, as in the V1 baseline, so the unique key above also works on a newly created H2
+    // schema (demo and test profiles, a new desktop database). An existing desktop H2 file (ddl-auto: update)
+    // keeps its old columns until its data folder is recreated. Flyway owns the MySQL column.
+    @Column(name = "active_token_user_id", insertable = false, updatable = false,
+            columnDefinition = "bigint generated always as (case when used_at is null then user_id else null end)")
     private Long activeTokenUserId;
 }

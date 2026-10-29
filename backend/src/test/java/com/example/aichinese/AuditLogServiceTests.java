@@ -12,6 +12,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.springframework.transaction.PlatformTransactionManager;
 
 import com.example.aichinese.entity.AuditLog;
 import com.example.aichinese.entity.User;
@@ -19,7 +20,6 @@ import com.example.aichinese.repository.AuditLogRepository;
 import com.example.aichinese.repository.UserRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.AuditLogService;
-import com.example.aichinese.service.CommunicationMapper;
 
 /**
  * Unit coverage for {@code AuditLogService}: pins the secret-redaction
@@ -51,7 +51,7 @@ class AuditLogServiceTests {
                 .contains("token=[REDACTED]")
                 .contains("api_key=[REDACTED]")
                 .contains("Authorization: [REDACTED]")
-                .doesNotContain("SuperSecret123", "abc123", "bearer-token", "reset-token")
+                .doesNotContain("SuperSecret123", "abc123", "sk-live", "bearer-token", "reset-token")
                 .hasSizeLessThanOrEqualTo(MAX_AUDIT_DESCRIPTION_LENGTH);
     }
 
@@ -88,8 +88,7 @@ class AuditLogServiceTests {
                 ACTION_TYPE,
                 TARGET_TYPE,
                 TARGET_ID,
-                "description",
-                "127.0.0.1"))
+                "description"))
                 .doesNotThrowAnyException();
 
         assertThat(output)
@@ -109,7 +108,8 @@ class AuditLogServiceTests {
     }
 
     private static AuditLogService service(AuditLogRepository auditLogRepository, UserRepository userRepository) {
-        return new AuditLogService(auditLogRepository, mock(CommunicationMapper.class), userRepository);
+        return new AuditLogService(
+                auditLogRepository, userRepository, mock(PlatformTransactionManager.class));
     }
 
     private static AuditLog savedAuditLog(AuditLogRepository auditLogRepository) {

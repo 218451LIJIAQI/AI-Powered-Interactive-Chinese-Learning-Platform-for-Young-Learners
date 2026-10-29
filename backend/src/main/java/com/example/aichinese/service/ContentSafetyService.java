@@ -5,7 +5,6 @@ import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import java.text.Normalizer;
 import java.util.List;
 import java.util.Locale;
-import java.util.Objects;
 import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
@@ -20,7 +19,7 @@ public class ContentSafetyService {
 
     private static final Logger log = LoggerFactory.getLogger(ContentSafetyService.class);
 
-    private static final String UNSAFE_CONTENT_MESSAGE = "Content contains language that is not suitable for young learners.";
+    private static final String UNSAFE_CONTENT_MESSAGE = "Content contains language that is not suitable for this learning platform.";
     private static final String SEPARATORS = "[\\p{Z}\\p{Punct}\\p{S}_]*";
     private static final String REQUIRED_SEPARATOR = "[\\p{Z}\\p{Punct}\\p{S}_]+";
     private static final List<Pattern> SENSITIVE_PATTERNS = List.of(
@@ -36,7 +35,6 @@ public class ContentSafetyService {
             sensitivePattern("rapist"),
             sensitivePattern("suicide"),
             sensitivePattern("self harm"),
-            sensitivePattern("self-harm"),
             sensitivePattern("kill yourself"),
             sensitivePattern("cocaine"),
             sensitivePattern("heroin"),
@@ -62,7 +60,7 @@ public class ContentSafetyService {
     private final ContentSafetySettingsReader contentSafetySettingsReader;
 
     public ContentSafetyService(ContentSafetySettingsReader contentSafetySettingsReader) {
-        this.contentSafetySettingsReader = Objects.requireNonNull(contentSafetySettingsReader, "contentSafetySettingsReader");
+        this.contentSafetySettingsReader = contentSafetySettingsReader;
     }
 
     public String requireSafeText(String value, int maxLength, String requiredMessage) {
@@ -82,23 +80,39 @@ public class ContentSafetyService {
         return sanitized;
     }
 
+    /**
+     * Screens free text that is stored as entered (for example practice-activity fields) with the
+     * same sensitive-word rule used for lessons and quizzes; blank values are ignored.
+     */
+    public void screenText(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                requireSafeContent(value);
+            }
+        }
+    }
+
     private void requireSafeContent(String value) {
-        if (value == null || !contentSafetySettingsReader.sensitiveWordFilterEnabled()) {
+        if (!contentSafetySettingsReader.sensitiveWordFilterEnabled()) {
             return;
         }
+        if (containsSensitiveContent(value)) {
+            log.warn("Content safety: sensitive content rejected (length={})", value.length());
+            throw new ResponseStatusException(BAD_REQUEST, UNSAFE_CONTENT_MESSAGE);
+        }
+    }
+
+    /**
+     * Checks the text against the sensitive-word list (English, Bahasa Melayu and Chinese)
+     * regardless of the admin toggles. Callers decide which toggle applies.
+     */
+    public boolean containsSensitiveContent(String value) {
+        if (value == null || value.isBlank()) {
+            return false;
+        }
         String normalized = normalize(value);
-        for (String sensitiveSubstring : SENSITIVE_SUBSTRINGS) {
-            if (normalized.contains(sensitiveSubstring)) {
-                log.warn("Content safety: substring match rejected (length={})", value.length());
-                throw new ResponseStatusException(BAD_REQUEST, UNSAFE_CONTENT_MESSAGE);
-            }
-        }
-        for (Pattern pattern : SENSITIVE_PATTERNS) {
-            if (pattern.matcher(normalized).find()) {
-                log.warn("Content safety: pattern match rejected (length={})", value.length());
-                throw new ResponseStatusException(BAD_REQUEST, UNSAFE_CONTENT_MESSAGE);
-            }
-        }
+        return SENSITIVE_SUBSTRINGS.stream().anyMatch(normalized::contains)
+                || SENSITIVE_PATTERNS.stream().anyMatch(pattern -> pattern.matcher(normalized).find());
     }
 
     private static String normalize(String value) {
@@ -107,7 +121,9 @@ public class ContentSafetyService {
 
     private static Pattern sensitivePattern(String term) {
         String normalizedTerm = normalize(term);
-        StringBuilder pattern = new StringBuilder("(?iu)(?<![\\p{L}\\p{N}])");
+        // Word boundaries only against Latin letters and digits: a term written next to Chinese text
+        // (for example "我想看porn") must still match, while "class" must not match "ass".
+        StringBuilder pattern = new StringBuilder("(?iu)(?<![\\p{IsLatin}\\p{N}])");
         int[] codePoints = normalizedTerm.codePoints().toArray();
         for (int index = 0; index < codePoints.length; index++) {
             int codePoint = codePoints[index];
@@ -121,7 +137,7 @@ public class ContentSafetyService {
                 pattern.append(REQUIRED_SEPARATOR);
             }
         }
-        pattern.append("(?![\\p{L}\\p{N}])");
+        pattern.append("(?![\\p{IsLatin}\\p{N}])");
         return Pattern.compile(pattern.toString());
     }
 }

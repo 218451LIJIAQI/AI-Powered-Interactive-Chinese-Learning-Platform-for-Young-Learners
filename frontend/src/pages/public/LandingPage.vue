@@ -1,397 +1,338 @@
 <template>
-  <div class="public-page public-landing-page">
-    <section class="public-hero-card">
-      <div class="public-hero-skyline public-hero-skyline--left" />
-      <div class="public-hero-skyline public-hero-skyline--right" />
-      <div class="public-hero-bamboo public-hero-bamboo--left" />
-      <div class="public-hero-bamboo public-hero-bamboo--right" />
-      <div class="public-hero-cloud public-hero-cloud--1" />
-      <div class="public-hero-cloud public-hero-cloud--2" />
-      <div class="public-hero-cloud public-hero-cloud--3" />
+  <div class="landing-page">
+    <div v-if="accountDeleted" class="landing-notice" role="status" data-testid="account-deleted-notice">
+      <IconGlyph name="check" :size="18" />
+      <p>
+        <strong>{{ t('landing.accountDeletedTitle') }}</strong>
+        <span>{{ t('landing.accountDeleted') }}</span>
+      </p>
+      <button
+        class="btn btn-ghost btn-icon btn-sm"
+        type="button"
+        :aria-label="t('landing.dismiss')"
+        @click="dismissNotice"
+      >
+        <IconGlyph name="close" :size="16" />
+      </button>
+    </div>
 
-      <div class="public-hero-grid">
-        <div class="public-hero-copy">
-          <div class="public-hero-chip">
-            <span>{{ t('landing.youngLearners') }}</span>
-            <span>{{ t('landing.ageLine') }}</span>
+    <section class="landing-hero" aria-labelledby="landing-title">
+      <div class="landing-hero-copy">
+        <p class="page-eyebrow landing-audience">{{ t('landing.audience') }}</p>
+        <h1 id="landing-title" class="landing-title">{{ t('landing.heroTitle') }}</h1>
+        <p class="landing-lead">{{ t('landing.heroLead') }}</p>
+        <div class="landing-actions">
+          <RouterLink class="btn btn-accent btn-lg" :to="startRoute">
+            {{ auth.isAuthenticated ? t('landing.openMyHome') : t('landing.startLearning') }}
+            <IconGlyph name="chevronRight" :size="18" />
+          </RouterLink>
+          <RouterLink class="btn btn-ghost btn-lg" to="/classes">{{ t('landing.exploreClasses') }}</RouterLink>
+        </div>
+        <ul class="landing-facts" :aria-label="t('landing.highlights')">
+          <li v-for="chip in CHIPS" :key="chip">{{ t(chip) }}</li>
+        </ul>
+      </div>
+
+      <!-- A real lesson moment built from the product's own primitives: 你好 in 田字格 tiles, pinyin, tone, listen. -->
+      <figure class="landing-moment">
+        <div class="landing-moment-sheet">
+          <div class="landing-moment-top">
+            <span class="page-eyebrow">{{ t('landing.momentLesson') }}</span>
+            <span class="landing-moment-steps" aria-hidden="true">
+              <span v-for="step in 6" :key="step" :class="{ 'is-done': step <= 2 }" />
+            </span>
           </div>
-
-          <h1>
-            {{ t('landing.heroPrefixOne') }} <span class="accent-purple">{{ t('landing.heroEmphasisOne') }}</span
-            >{{ t('landing.heroSuffixOne') }}<br />
-            {{ t('landing.heroPrefixTwo') }} <span class="accent-orange">{{ t('landing.heroEmphasisTwo') }}</span
-            >{{ t('landing.heroSuffixTwo') }}
-          </h1>
-
-          <p>{{ t('landing.heroDescription') }}</p>
-
-          <div class="public-hero-actions">
-            <button class="btn btn-primary public-hero-button" type="button" @click="openCatalog">
-              <span>{{ t('landing.exploreCourses') }}</span>
+          <div class="landing-moment-word">
+            <span v-for="syllable in GREETING" :key="syllable.hanzi" class="landing-moment-syllable">
+              <span class="hanzi-tile landing-moment-tile" lang="zh-CN">{{ syllable.hanzi }}</span>
+              <span class="landing-moment-pinyin" lang="zh-Latn-pinyin">{{ syllable.pinyin }}</span>
+              <span class="landing-moment-tone">{{ t('landing.tone3') }}</span>
+            </span>
+          </div>
+          <div class="landing-moment-meaning">
+            <strong>{{ t('landing.momentMeaning') }}</strong>
+            <button
+              v-if="speechAvailable"
+              class="btn btn-secondary btn-sm"
+              type="button"
+              :aria-label="t('landing.listenLabel')"
+              :aria-pressed="speaking"
+              @click="listen"
+            >
+              <IconGlyph name="audio" :size="16" />
+              {{ t('landing.listen') }}
             </button>
-            <button class="btn btn-accent public-hero-button public-hero-button--gold" type="button" @click="openAuth">
-              <span>{{ t('landing.startLearning') }}</span>
-            </button>
           </div>
-
-          <div class="public-hero-checks">
-            <span>{{ t('landing.ages') }}</span>
-            <span>{{ t('landing.beginnerFriendly') }}</span>
-            <span>{{ t('landing.confidence') }}</span>
-          </div>
-
-          <div class="public-hero-proof">
-            <article v-for="item in heroProof" :key="item.label">
-              <strong>{{ item.value }}</strong>
-              <span>{{ item.label }}</span>
-            </article>
-          </div>
+          <p class="landing-moment-xiaomei">
+            <span class="landing-xiaomei-mark hanzi" aria-hidden="true">美</span>
+            <span>
+              <strong>{{ t('landing.xiaomeiName') }}</strong>
+              {{ t('landing.xiaomeiLine') }}
+            </span>
+          </p>
         </div>
-
-        <div class="public-hero-visual">
-          <div class="public-hero-speech">
-            <span>Ni hao!</span>
-            <small>{{ t('landing.hello') }}</small>
-          </div>
-          <PandaIllustration class="public-hero-panda" :size="228" outfit="#6d47ff" accent="#f6c44f" />
-        </div>
-      </div>
+        <figcaption class="landing-moment-caption">{{ t('landing.momentCaption') }}</figcaption>
+      </figure>
     </section>
 
-    <section class="public-feature-strip">
-      <PublicFeatureCard
-        v-for="feature in featureStrip"
-        :key="feature.title"
-        :icon="feature.icon"
-        :title="feature.title"
-        :description="feature.description"
-        :tone="feature.tone"
-      />
-    </section>
+    <section id="how-it-works" class="landing-ways" aria-labelledby="landing-ways-title">
+      <header class="landing-section-head">
+        <p class="page-eyebrow">{{ t('landing.howEyebrow') }}</p>
+        <h2 id="landing-ways-title" class="landing-h2">{{ t('landing.howTitle') }}</h2>
+        <p>{{ t('landing.howLead') }}</p>
+      </header>
 
-    <section id="how-it-works" class="public-journey-strip" :aria-label="t('landing.howItWorks')">
-      <article v-for="step in familyJourney" :key="step.title" class="public-journey-card">
-        <span class="public-journey-step">{{ step.step }}</span>
-        <strong>{{ step.title }}</strong>
-        <p>{{ step.copy }}</p>
-      </article>
-    </section>
-
-    <section class="public-home-content">
-      <div class="public-home-main">
-        <DataNotice
-          :using-fallback="featuredCoursesResource.usingFallback.value"
-          :error="featuredCoursesResource.error.value"
-          :fallback-title="t('landing.previewTitle')"
-          :fallback-message="t('landing.previewMessage')"
-          :error-title="t('landing.unavailableTitle')"
-        />
-
-        <section class="panel public-home-panel">
-          <div class="public-section-head">
-            <h2>{{ t('landing.featuredCourses') }}</h2>
-            <button class="public-link-button" type="button" @click="openCatalog">{{ t('landing.viewAll') }}</button>
+      <ol class="landing-way-list">
+        <li class="landing-way is-learn">
+          <div class="landing-way-copy">
+            <span class="landing-way-number" aria-hidden="true">01</span>
+            <h3>{{ t('landing.learnTitle') }}</h3>
+            <p>{{ t('landing.learnCopy') }}</p>
+            <p class="landing-xp is-earning">{{ t('landing.earnsXp') }}</p>
           </div>
-
-          <div v-if="featuredCourses.length" class="public-featured-grid">
-            <article v-for="(course, index) in featuredCourses" :key="course.id" class="public-featured-card">
-              <button
-                class="public-featured-card-button"
-                type="button"
-                :aria-label="t('landing.openCourse', { title: course.title })"
-                @click="viewCourse(course.id)"
-              >
-                <div class="public-featured-thumb">
-                  <CourseSceneThumb :size="158" :variant="featuredThumb(index)" />
-                  <span class="public-featured-level">{{ course.level.name }}</span>
-                </div>
-
-                <div class="public-featured-copy">
-                  <h3>{{ course.title }}</h3>
-                  <p>{{ featuredCopy(course) }}</p>
-                </div>
-
-                <div class="public-featured-meta">
-                  <span>{{ course.category.name }}</span>
-                  <span>{{ course.teacher.displayName }}</span>
-                </div>
-              </button>
-            </article>
+          <div class="landing-render landing-path" role="img" :aria-label="t('landing.learnPathLabel')">
+            <span v-for="stop in PATH" :key="stop.hanzi" class="landing-path-stop" :class="`is-${stop.state}`">
+              <span class="seal landing-path-seal" :class="SEAL_CLASS[stop.state]" lang="zh-CN">
+                {{ stop.hanzi[0] }}
+              </span>
+              <span class="landing-path-word" lang="zh-CN">{{ stop.hanzi }}</span>
+              <span class="landing-path-pinyin" lang="zh-Latn-pinyin">{{ stop.pinyin }}</span>
+              <span v-if="stop.state === 'current'" class="landing-path-next">
+                {{ t('landing.upNext') }}
+              </span>
+              <IconGlyph v-else-if="stop.state === 'locked'" class="landing-path-lock" name="lock" :size="14" />
+            </span>
           </div>
-          <div v-else class="public-featured-empty">{{ t('landing.noCourses') }}</div>
+        </li>
 
-          <div class="public-carousel-dots">
-            <span class="is-active" />
-            <span />
-            <span />
+        <li class="landing-way is-practice">
+          <div class="landing-way-copy">
+            <span class="landing-way-number" aria-hidden="true">02</span>
+            <h3>{{ t('landing.practiceTitle') }}</h3>
+            <p>{{ t('landing.practiceCopy') }}</p>
+            <p class="landing-xp is-earning">{{ t('landing.earnsXp') }}</p>
           </div>
-        </section>
-      </div>
+          <div class="landing-render landing-practice" role="img" :aria-label="t('landing.practiceRenderLabel')">
+            <div class="landing-flashcard">
+              <span class="landing-flashcard-tiles" lang="zh-CN">
+                <span class="hanzi-tile landing-flashcard-tile">谢</span>
+                <span class="hanzi-tile landing-flashcard-tile">谢</span>
+              </span>
+              <span class="landing-flashcard-copy">
+                <strong lang="zh-Latn-pinyin">xièxie</strong>
+                <span>{{ t('landing.practiceMeaning') }}</span>
+              </span>
+              <span class="landing-flashcard-count">{{ t('landing.practiceCard') }}</span>
+            </div>
+            <ul class="landing-practice-types">
+              <li v-for="type in PRACTICE_TYPES" :key="type.label" :class="`is-${type.pigment}`">
+                <IconGlyph :name="type.icon" :size="16" />
+                {{ t(type.label) }}
+              </li>
+            </ul>
+          </div>
+        </li>
 
-      <aside class="public-home-side">
-        <PublicInfoBanner
-          icon="shield"
-          :title="t('landing.safetyCardTitle')"
-          :description="t('landing.safetyCardCopy')"
-          :badge="t('landing.safetyCardBadge')"
-          tone="green"
-        />
-        <PublicInfoBanner
-          icon="verified"
-          :title="t('landing.teacherCardTitle')"
-          :description="t('landing.teacherCardCopy')"
-          :badge="t('landing.teacherCardBadge')"
-          tone="purple"
-        />
-        <PublicInfoBanner
-          icon="globe"
-          :title="t('landing.webCardTitle')"
-          :description="t('landing.webCardCopy')"
-          :badge="t('landing.webCardBadge')"
-          tone="blue"
-        />
-      </aside>
+        <li class="landing-way is-ai">
+          <div class="landing-way-copy">
+            <span class="landing-way-number" aria-hidden="true">03</span>
+            <h3>{{ t('landing.aiTitle') }}</h3>
+            <p>{{ t('landing.aiCopy') }}</p>
+            <p class="landing-xp">{{ t('landing.optionalNoXp') }}</p>
+          </div>
+          <div class="landing-render landing-chat" role="img" :aria-label="t('landing.aiRenderLabel')">
+            <p class="landing-chat-line is-xiaomei">
+              <span class="landing-xiaomei-mark hanzi">美</span>
+              <span class="landing-chat-bubble">
+                <span class="landing-chat-name">{{ t('landing.xiaomeiName') }}</span>
+                <span class="landing-chat-hanzi" lang="zh-CN">你今天好吗？</span>
+                <span class="landing-chat-pinyin" lang="zh-Latn-pinyin">Nǐ jīntiān hǎo ma?</span>
+              </span>
+            </p>
+            <p class="landing-chat-line is-you">
+              <span class="landing-chat-bubble">
+                <span class="landing-chat-name">{{ t('landing.chatYou') }}</span>
+                <span class="landing-chat-hanzi" lang="zh-CN">我很好，谢谢！</span>
+                <span class="landing-chat-pinyin" lang="zh-Latn-pinyin">Wǒ hěn hǎo, xièxie!</span>
+              </span>
+            </p>
+            <p class="landing-chat-line is-xiaomei">
+              <span class="landing-xiaomei-mark hanzi">美</span>
+              <span class="landing-chat-bubble">
+                <span class="landing-chat-hanzi" lang="zh-CN">很好！你的声调很清楚。</span>
+                <span class="landing-chat-pinyin" lang="zh-Latn-pinyin">Hěn hǎo! Nǐ de shēngdiào hěn qīngchu.</span>
+              </span>
+            </p>
+          </div>
+        </li>
+
+        <li class="landing-way is-classes">
+          <div class="landing-way-copy">
+            <span class="landing-way-number" aria-hidden="true">04</span>
+            <h3>{{ t('landing.classesTitle') }}</h3>
+            <p>{{ t('landing.classesCopy') }}</p>
+            <p class="landing-xp">{{ t('landing.freeNoXp') }}</p>
+          </div>
+          <FeaturedClasses class="landing-render" />
+        </li>
+      </ol>
     </section>
 
-    <section id="safety" class="public-safety-banner">
-      <div class="public-safety-icon">
-        <IconGlyph name="shield" :size="32" />
+    <section id="about" class="landing-about" aria-labelledby="landing-about-title">
+      <div class="landing-about-copy">
+        <p class="page-eyebrow">{{ t('landing.aboutEyebrow') }}</p>
+        <h2 id="landing-about-title" class="landing-h2">{{ t('landing.aboutTitle') }}</h2>
+        <p>{{ t('landing.aboutCopy') }}</p>
+        <RouterLink class="btn btn-link" to="/responsible-ai">
+          {{ t('landing.aboutLink') }}
+          <IconGlyph name="chevronRight" :size="16" />
+        </RouterLink>
       </div>
-      <div class="public-safety-copy">
-        <strong>{{ t('landing.safetyBannerTitle') }}</strong>
-        <p>{{ t('landing.safetyBannerCopy') }}</p>
-      </div>
-      <div class="public-safety-scene">
-        <div class="public-safety-hill" />
-        <div class="public-safety-pagoda" />
-      </div>
+      <dl class="landing-roles">
+        <div v-for="role in ROLES" :key="role.title" class="landing-role">
+          <dt>{{ t(role.title) }}</dt>
+          <dd>
+            {{ t(role.copy) }}
+            <RouterLink v-if="role.title === 'landing.roleTeachers'" class="btn btn-link" :to="TEACH_ROUTE">
+              {{ t('landing.teachWithUs') }}
+              <IconGlyph name="chevronRight" :size="16" />
+            </RouterLink>
+          </dd>
+        </div>
+      </dl>
     </section>
 
-    <section id="support" class="panel public-support-panel">
-      <div class="public-section-head">
-        <div>
-          <span class="legal-eyebrow">{{ t('landing.support') }}</span>
-          <h2>{{ t('landing.supportTitle') }}</h2>
-        </div>
-        <button class="btn btn-primary" type="button" @click="openSupportSignIn">
-          {{ t('landing.signInSupport') }}
-        </button>
+    <section class="landing-faq" aria-labelledby="landing-faq-title">
+      <div class="landing-faq-head">
+        <h2 id="landing-faq-title" class="landing-h2">{{ t('landing.faqTitle') }}</h2>
+        <RouterLink class="btn btn-link" to="/help">
+          {{ t('landing.allQuestions') }}
+          <IconGlyph name="chevronRight" :size="16" />
+        </RouterLink>
       </div>
-      <div class="public-support-grid">
-        <article v-for="item in supportOptions" :key="item.title" class="public-support-card">
-          <strong>{{ item.title }}</strong>
-          <p>{{ item.copy }}</p>
-        </article>
+      <div class="landing-faq-list">
+        <details v-for="question in QUESTIONS" :key="question.question" class="public-qa landing-faq-item">
+          <summary>
+            <span>{{ t(question.question) }}</span>
+            <IconGlyph class="public-qa-chevron" name="chevronDown" :size="18" />
+          </summary>
+          <div class="landing-faq-answer">
+            <p>{{ t(question.answer) }}</p>
+            <RouterLink class="btn btn-link" :to="question.to">
+              {{ t(question.more) }}
+              <IconGlyph name="chevronRight" :size="16" />
+            </RouterLink>
+          </div>
+        </details>
       </div>
     </section>
-
-    <footer id="about" class="public-footer">
-      <div class="public-footer-brand">
-        <AppBrand />
-        <div class="public-footer-fish"><IconGlyph name="language" :size="20" /></div>
-      </div>
-
-      <div class="public-footer-links">
-        <div class="public-footer-column">
-          <strong>{{ t('landing.explore') }}</strong>
-          <a href="/courses" @click.prevent="openCatalog">{{ t('landing.courses') }}</a>
-          <a href="#how-it-works">{{ t('landing.howItWorksLink') }}</a>
-        </div>
-        <div class="public-footer-column">
-          <strong>{{ t('landing.company') }}</strong>
-          <a href="#about">{{ t('landing.aboutUs') }}</a>
-          <a href="#support">{{ t('landing.contactUs') }}</a>
-        </div>
-        <div class="public-footer-column">
-          <strong>{{ t('landing.safety') }}</strong>
-          <a href="#safety">{{ t('landing.childSafety') }}</a>
-          <a href="/privacy" @click.prevent="openPrivacy">{{ t('landing.privacy') }}</a>
-          <a href="/terms" @click.prevent="openTerms">{{ t('landing.terms') }}</a>
-        </div>
-        <div class="public-footer-column">
-          <strong>{{ t('landing.support') }}</strong>
-          <a href="#support">{{ t('landing.helpCenter') }}</a>
-          <a href="#support">{{ t('landing.contactSupport') }}</a>
-        </div>
-      </div>
-
-      <div class="public-footer-meta">
-        <div class="public-footer-copy">
-          <span>&copy; {{ copyrightYear }} MandarinSpark. {{ t('landing.rights') }}</span>
-          <span>{{ t('landing.madeForLearners') }}</span>
-        </div>
-      </div>
-    </footer>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useRouter } from 'vue-router'
-import { useI18n } from 'vue-i18n'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { RouterLink, useRoute, useRouter, type RouteLocationRaw } from 'vue-router'
 
-import { publicApi } from '@/api/services'
-import CourseSceneThumb from '@/components/common/CourseSceneThumb.vue'
-import DataNotice from '@/components/common/DataNotice.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
-import PandaIllustration from '@/components/common/PandaIllustration.vue'
-import AppBrand from '@/components/layout/AppBrand.vue'
-import PublicFeatureCard from '@/components/public/PublicFeatureCard.vue'
-import PublicInfoBanner from '@/components/public/PublicInfoBanner.vue'
-import { useResource } from '@/composables/useResource'
-import { publicCourses } from '@/demo/data'
+import FeaturedClasses from '@/components/public/FeaturedClasses.vue'
+import { useLocalMessages } from '@/composables/useLocalMessages'
 import { landingMessages } from '@/plugins/landingMessages'
-import '@/styles/landing.css'
-import type { PublicCourseSummary } from '@/types/api'
+import { useAuthStore } from '@/stores/auth'
+import { defaultRouteForRole } from '@/utils/role'
+import { canSpeak, speakChinese, stopSpeaking } from '@/utils/speech'
 
-type CourseSceneVariant = 'panda' | 'family' | 'pagoda' | 'travel' | 'general'
-type FeatureTone = 'blue' | 'gold' | 'green' | 'orange' | 'pink' | 'purple'
+/** After an account is deleted, the Account page brings the user here with this notice. */
+const ACCOUNT_DELETED_NOTICE = 'account-deleted'
 
+const CHIPS = ['landing.chipFree', 'landing.chipBeginner', 'landing.chipVerified', 'landing.chipPlan'] as const
+
+const GREETING = [
+  { hanzi: '你', pinyin: 'nǐ' },
+  { hanzi: '好', pinyin: 'hǎo' },
+] as const
+
+type PathState = 'done' | 'current' | 'locked'
+
+const PATH: readonly { hanzi: string; pinyin: string; state: PathState }[] = [
+  { hanzi: '你好', pinyin: 'nǐ hǎo', state: 'done' },
+  { hanzi: '谢谢', pinyin: 'xièxie', state: 'done' },
+  { hanzi: '再见', pinyin: 'zàijiàn', state: 'current' },
+  { hanzi: '朋友', pinyin: 'péngyou', state: 'locked' },
+]
+
+/** Finished lessons are stamped, the next one is an outline seal, locked ones are muted. */
+const SEAL_CLASS: Record<PathState, string> = { done: '', current: 'is-outline', locked: 'is-muted' }
+
+const PRACTICE_TYPES = [
+  { icon: 'layers', label: 'landing.typeFlashcards', pigment: 'cobalt' },
+  { icon: 'listening', label: 'landing.typeListening', pigment: 'teal' },
+  { icon: 'puzzle', label: 'landing.typeMatching', pigment: 'jade' },
+  { icon: 'brush', label: 'landing.typeTracing', pigment: 'cinnabar' },
+  { icon: 'quiz', label: 'landing.typeQuizzes', pigment: 'ochre' },
+  { icon: 'story', label: 'landing.typeStory', pigment: 'plum' },
+] as const
+
+const ROLES = [
+  { title: 'landing.roleStudents', copy: 'landing.roleStudentsCopy' },
+  { title: 'landing.roleTeachers', copy: 'landing.roleTeachersCopy' },
+  { title: 'landing.roleAdmins', copy: 'landing.roleAdminsCopy' },
+] as const
+
+const TEACH_ROUTE = { path: '/auth', query: { tab: 'register', role: 'teacher' } } satisfies RouteLocationRaw
+
+const QUESTIONS = [
+  {
+    question: 'landing.faqStartQuestion',
+    answer: 'landing.faqStartAnswer',
+    more: 'landing.faqStartMore',
+    to: '/help#getting-started',
+  },
+  {
+    question: 'landing.faqTeachersQuestion',
+    answer: 'landing.faqTeachersAnswer',
+    more: 'landing.faqTeachersMore',
+    to: '/help#for-teachers',
+  },
+  {
+    question: 'landing.faqAiQuestion',
+    answer: 'landing.faqAiAnswer',
+    more: 'landing.faqAiMore',
+    to: '/help#ai-and-safety',
+  },
+] as const
+
+const route = useRoute()
 const router = useRouter()
-const { t } = useI18n({
-  messages: {
-    en: { landing: landingMessages.en },
-    ms: { landing: landingMessages.ms },
-    zh: { landing: landingMessages.zh },
-  },
-})
-const copyrightYear = new Date().getFullYear()
+const auth = useAuthStore()
+const { t } = useLocalMessages({ landing: landingMessages })
 
-const previewFeaturedCourses = publicCourses.slice(0, 3)
-const featuredCoursesResource = useResource(() => publicApi.listCourses({ size: 3, sort: 'newest' }), {
-  items: previewFeaturedCourses,
-  page: 0,
-  size: 3,
-  totalItems: previewFeaturedCourses.length,
-  totalPages: 1,
-})
-const liveFeaturedCourses = computed(() => featuredCoursesResource.data.value?.items ?? [])
-const featuredCourses = computed<PublicCourseSummary[]>(() =>
-  liveFeaturedCourses.value.length
-    ? liveFeaturedCourses.value
-    : featuredCoursesResource.usingFallback.value
-      ? previewFeaturedCourses
-      : [],
+const startRoute = computed<RouteLocationRaw>(() =>
+  auth.isAuthenticated
+    ? defaultRouteForRole(auth.activeRole)
+    : { path: '/auth', query: { tab: 'register', role: 'student' } },
 )
+const accountDeleted = computed(() => route.query.notice === ACCOUNT_DELETED_NOTICE)
 
-const featureStrip = computed(
-  () =>
-    [
-      {
-        icon: 'status',
-        title: t('landing.featureBasicsTitle'),
-        description: t('landing.featureBasicsCopy'),
-        tone: 'purple',
-      },
-      {
-        icon: 'play',
-        title: t('landing.featureActivitiesTitle'),
-        description: t('landing.featureActivitiesCopy'),
-        tone: 'green',
-      },
-      {
-        icon: 'ai',
-        title: t('landing.featureAiTitle'),
-        description: t('landing.featureAiCopy'),
-        tone: 'blue',
-      },
-      {
-        icon: 'live',
-        title: t('landing.featureLiveTitle'),
-        description: t('landing.featureLiveCopy'),
-        tone: 'orange',
-      },
-      {
-        icon: 'trophy',
-        title: t('landing.featureRewardsTitle'),
-        description: t('landing.featureRewardsCopy'),
-        tone: 'gold',
-      },
-      {
-        icon: 'teacher',
-        title: t('landing.featureTeacherTitle'),
-        description: t('landing.featureTeacherCopy'),
-        tone: 'pink',
-      },
-    ] satisfies Array<{ icon: string; title: string; description: string; tone: FeatureTone }>,
-)
+// The Listen button reads 你好 aloud with the browser's own speech (hidden where there is none).
+const speechAvailable = ref(false)
+const speaking = ref(false)
 
-const heroProof = computed(() => [
-  { value: t('landing.proofPathValue'), label: t('landing.proofPathLabel') },
-  { value: t('landing.proofAiValue'), label: t('landing.proofAiLabel') },
-  { value: t('landing.proofRewardsValue'), label: t('landing.proofRewardsLabel') },
-])
+onMounted(() => {
+  speechAvailable.value = canSpeak()
+})
+onBeforeUnmount(() => {
+  if (speaking.value) stopSpeaking()
+})
 
-const familyJourney = computed(() => [
-  {
-    step: '1',
-    title: t('landing.journeyExploreTitle'),
-    copy: t('landing.journeyExploreCopy'),
-  },
-  {
-    step: '2',
-    title: t('landing.journeyLearnTitle'),
-    copy: t('landing.journeyLearnCopy'),
-  },
-  {
-    step: '3',
-    title: t('landing.journeySupportTitle'),
-    copy: t('landing.journeySupportCopy'),
-  },
-])
-
-const supportOptions = computed(() => [
-  {
-    title: t('landing.supportFamiliesTitle'),
-    copy: t('landing.supportFamiliesCopy'),
-  },
-  {
-    title: t('landing.supportTeachersTitle'),
-    copy: t('landing.supportTeachersCopy'),
-  },
-  {
-    title: t('landing.supportAdminsTitle'),
-    copy: t('landing.supportAdminsCopy'),
-  },
-])
-
-function viewCourse(id: string): void {
-  void router.push(`/courses/${id}`)
+function listen(): void {
+  speakChinese('你好', false, (value) => {
+    speaking.value = value
+  })
 }
 
-const featuredThumbs = ['panda', 'family', 'pagoda'] as const
-
-function featuredThumb(index: number): CourseSceneVariant {
-  return featuredThumbs[index % featuredThumbs.length]
-}
-
-function featuredCopy(course: PublicCourseSummary): string {
-  return (
-    course.shortDescription?.trim() ||
-    t('landing.courseFallback', {
-      teacher: course.teacher.displayName,
-      category: course.category.name.toLowerCase(),
-    })
-  )
-}
-
-function openCatalog(): void {
-  void router.push('/courses')
-}
-
-function openAuth(): void {
-  void router.push('/auth')
-}
-
-function openSupportSignIn(): void {
-  void router.push({ path: '/auth', query: { tab: 'signin' } })
-}
-
-function openPrivacy(): void {
-  void router.push('/privacy')
-}
-
-function openTerms(): void {
-  void router.push('/terms')
+function dismissNotice(): void {
+  const query = { ...route.query }
+  delete query.notice
+  void router.replace({ query })
 }
 </script>

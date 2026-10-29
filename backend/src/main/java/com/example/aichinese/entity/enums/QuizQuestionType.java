@@ -1,7 +1,6 @@
 package com.example.aichinese.entity.enums;
 
 import java.util.EnumSet;
-import java.util.Map;
 import java.util.Optional;
 
 public enum QuizQuestionType {
@@ -36,16 +35,13 @@ public enum QuizQuestionType {
             CHOOSE_TONE,
             CHARACTER_MEANING);
 
-    private static final Map<String, QuizQuestionType> LOOKUP =
-            EnumLookups.indexByName(QuizQuestionType.class);
-
     public static Optional<QuizQuestionType> tryFrom(String value) {
-        return EnumLookups.tryFrom(LOOKUP, value);
+        return EnumLookups.tryFrom(QuizQuestionType.class, value);
     }
 
     public static QuizQuestionType fromValue(String value) {
         return EnumLookups.fromValue(
-                LOOKUP,
+                QuizQuestionType.class,
                 value,
                 "Question type is required.",
                 () -> "Invalid question type. Allowed values are MULTIPLE_CHOICE, TRUE_FALSE, "
@@ -55,5 +51,15 @@ public enum QuizQuestionType {
 
     public boolean isOptionBased() {
         return OPTION_BASED_TYPES.contains(this);
+    }
+
+    /** A listen-and-choose question needs a recording to play. */
+    public boolean needsAudio() {
+        return this == LISTEN_CHOOSE;
+    }
+
+    /** A word-image matching question needs a picture to show. */
+    public boolean needsImage() {
+        return this == MATCH_WORD_IMAGE;
     }
 }

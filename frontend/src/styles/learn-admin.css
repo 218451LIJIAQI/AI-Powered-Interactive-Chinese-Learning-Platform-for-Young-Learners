@@ -1,0 +1,228 @@
+/* Admin Learning path and Practice library pages, and their drawers. Page-prefixed classes (`.admin-path-*`,
+   `.admin-learning-*`). The sheet, table, reader and timeline patterns are in the Admin console block of main.css. */
+
+/* ----- Learning path: the units on the left, the chosen unit on the right ----- */
+
+.admin-path {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1.1fr);
+  gap: var(--grid-gap);
+  align-items: start;
+}
+
+.admin-path-level + .admin-path-level {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.admin-path-level-title {
+  margin: 0;
+  padding: var(--space-3) var(--space-5) var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--type-overline-size);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-wide);
+  text-transform: uppercase;
+}
+
+.admin-path-unit {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+/* The unit number: a solid ink square when students see the unit, a dashed outline while it is a draft. */
+.admin-path-mark {
+  display: grid;
+  place-items: center;
+  width: var(--space-8);
+  height: var(--space-8);
+  border: 1px solid var(--color-ink-900);
+  border-radius: var(--radius-xs);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-path-mark.is-draft {
+  border-style: dashed;
+  border-color: var(--border-interactive);
+  color: var(--text-secondary);
+}
+
+.admin-path-zh {
+  font-family: var(--font-cjk);
+  font-weight: var(--font-weight-semibold);
+}
+
+.admin-path-detail {
+  position: sticky;
+  top: calc(var(--topbar-height) + var(--space-4));
+  min-width: 0;
+  scroll-margin-top: calc(var(--topbar-height) + var(--space-4));
+}
+
+.admin-path-detail:focus {
+  outline: none;
+}
+
+/* Published / draft, said in words next to the pill. */
+.admin-path-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.admin-timeline-mark.is-numbered {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-learning-question-cell {
+  min-width: 260px;
+  white-space: normal;
+}
+
+/* ----- Practice library ----- */
+
+/* "Supported · HSK 2" stays on one line. */
+.admin-learning-stage-cell {
+  white-space: nowrap;
+}
+
+.admin-learning-title-cell {
+  min-width: 160px;
+  font-weight: var(--font-weight-semibold);
+  white-space: normal;
+}
+
+/* The preview of a set in its drawer: the first items on the page colour, the way a student meets them. */
+.admin-learning-preview {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-page);
+}
+
+.admin-learning-preview p {
+  margin: 0;
+}
+
+.admin-learning-preview ul {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-learning-preview li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.admin-learning-preview li:last-child {
+  border-bottom: 0;
+}
+
+.admin-learning-preview-hanzi {
+  font-family: var(--font-hanzi);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+}
+
+.admin-learning-preview-meaning {
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+}
+
+/* ----- Editor forms (practice set and level check question drawers) ----- */
+
+.admin-learning-form {
+  gap: var(--space-5);
+}
+
+.admin-learning-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+/* One item of a set: a numbered sheet with its fields. */
+.admin-learning-item {
+  display: grid;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-subtle);
+}
+
+.admin-learning-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.admin-learning-item-head strong {
+  color: var(--text-primary);
+}
+
+.admin-learning-item-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.admin-learning-item-row.is-two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.admin-learning-options,
+.admin-learning-answers {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+}
+
+.admin-learning-options > .btn,
+.admin-learning-answers > .btn {
+  align-self: flex-start;
+}
+
+.admin-learning-answer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.admin-learning-answer .input {
+  flex: 1 1 0;
+}
+
+.admin-learning-answer .choice {
+  align-items: center;
+}
+
+@media (max-width: 1200px) {
+  .admin-path {
+    grid-template-columns: minmax(260px, 0.9fr) minmax(0, 1.1fr);
+  }
+}

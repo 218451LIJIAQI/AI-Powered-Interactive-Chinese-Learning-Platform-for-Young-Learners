@@ -11,12 +11,10 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Getter
 @Setter
-@NoArgsConstructor
 @Entity
 @Table(name = "points_transactions", indexes = {
         @Index(name = "idx_points_transactions_student_id", columnList = "student_id"),
@@ -42,6 +40,11 @@ public class PointsTransaction extends BaseEntity {
     @Column(name = "source_id", updatable = false)
     private Long sourceId;
 
-    @Column(name = "source_key", insertable = false, updatable = false, length = 220)
+    // Database-generated, as in the V1 baseline, so the unique key above also works on a newly created H2
+    // schema (demo and test profiles, a new desktop database). An existing desktop H2 file (ddl-auto: update)
+    // keeps its old columns until its data folder is recreated. Flyway owns the MySQL column.
+    @Column(name = "source_key", insertable = false, updatable = false, length = 220,
+            columnDefinition = "varchar(220) generated always as (case when source_type is not null"
+                    + " and source_id is not null then concat(source_type, '#', source_id) else null end)")
     private String sourceKey;
 }

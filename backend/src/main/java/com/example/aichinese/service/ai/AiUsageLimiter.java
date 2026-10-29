@@ -5,7 +5,6 @@ import static org.springframework.http.HttpStatus.TOO_MANY_REQUESTS;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Objects;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,8 +20,8 @@ import com.example.aichinese.repository.UserRepository;
 
 /**
  * Per-student cost guard applied immediately before a real text-provider call.
- * Quota state is stored in the database and updated inside a short transaction,
- * so multiple backend instances share the same minute/day budget.
+ * Quota state is stored in the database and updated under a row lock in a short transaction,
+ * so concurrent requests cannot overspend the minute/day budget and a restart does not reset it.
  */
 @Component
 public class AiUsageLimiter {
@@ -45,7 +44,7 @@ public class AiUsageLimiter {
             @Value("${app.ai.rate-limit.requests-per-day:100}") int requestsPerDay,
             UserRepository userRepository,
             AiUsageQuotaCounterRepository quotaCounterRepository) {
-        this(Clock.systemUTC(), requestsPerMinute, requestsPerDay, userRepository, quotaCounterRepository);
+        this(Clock.systemDefaultZone(), requestsPerMinute, requestsPerDay, userRepository, quotaCounterRepository);
     }
 
     AiUsageLimiter(
@@ -57,34 +56,45 @@ public class AiUsageLimiter {
         if (requestsPerMinute < 1 || requestsPerDay < 1) {
             throw new IllegalArgumentException("AI rate limits must be positive.");
         }
-        this.clock = Objects.requireNonNull(clock, "clock");
+        this.clock = clock;
         this.requestsPerMinute = requestsPerMinute;
         this.requestsPerDay = requestsPerDay;
-        this.userRepository = Objects.requireNonNull(userRepository, "userRepository");
-        this.quotaCounterRepository = Objects.requireNonNull(quotaCounterRepository, "quotaCounterRepository");
+        this.userRepository = userRepository;
+        this.quotaCounterRepository = quotaCounterRepository;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void checkProviderCallAllowed(Long userId) {
-        if (userId == null) {
-            throw new ResponseStatusException(TOO_MANY_REQUESTS, QUOTA_VERIFICATION_FAILED);
-        }
-
         User user = userRepository.findLockedById(userId)
                 .orElseThrow(() -> new ResponseStatusException(TOO_MANY_REQUESTS, QUOTA_VERIFICATION_FAILED));
         LocalDateTime now = LocalDateTime.now(clock);
         LocalDate today = now.toLocalDate();
-        AiUsageQuotaCounter counter = findOrCreateCounter(user, userId, now, today);
+        AiUsageQuotaCounter counter = quotaCounterRepository.findLockedByUserId(userId)
+                .orElseGet(() -> createCounter(user, now, today));
 
         rollForward(counter, now, today);
         enforceLimits(counter);
-        increment(counter);
+        counter.setMinuteCount(counter.getMinuteCount() + 1);
+        counter.setDayCount(counter.getDayCount() + 1);
         quotaCounterRepository.save(counter);
     }
 
-    private AiUsageQuotaCounter findOrCreateCounter(User user, Long userId, LocalDateTime now, LocalDate today) {
-        return quotaCounterRepository.findLockedByUserId(userId)
-                .orElseGet(() -> createCounter(user, now, today));
+    /** Requests this user has sent to the provider today (blocked and unavailable requests do not count). */
+    @Transactional(readOnly = true)
+    public int usedToday(Long userId) {
+        LocalDate today = LocalDate.now(clock);
+        return quotaCounterRepository.findByUserId(userId)
+                .filter(counter -> today.equals(counter.getUsageDay()))
+                .map(AiUsageQuotaCounter::getDayCount)
+                .orElse(0);
+    }
+
+    public int requestsPerDay() {
+        return requestsPerDay;
+    }
+
+    public int requestsPerMinute() {
+        return requestsPerMinute;
     }
 
     private void enforceLimits(AiUsageQuotaCounter counter) {
@@ -94,11 +104,6 @@ public class AiUsageLimiter {
         if (counter.getDayCount() >= requestsPerDay) {
             throw new ResponseStatusException(TOO_MANY_REQUESTS, DAILY_LIMIT_REACHED);
         }
-    }
-
-    private static void increment(AiUsageQuotaCounter counter) {
-        counter.setMinuteCount(counter.getMinuteCount() + 1);
-        counter.setDayCount(counter.getDayCount() + 1);
     }
 
     private AiUsageQuotaCounter createCounter(User user, LocalDateTime now, LocalDate today) {

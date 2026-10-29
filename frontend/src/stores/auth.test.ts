@@ -1,7 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { AuthResponse, CurrentUserResponse } from '@/types/api'
+import type { CurrentUserResponse } from '@/types/api'
 
 const studentUser: CurrentUserResponse = {
   id: 1,
@@ -10,79 +10,32 @@ const studentUser: CurrentUserResponse = {
   roles: ['STUDENT'],
 }
 
-const teacherPreviewUser: CurrentUserResponse = {
-  id: 2,
-  email: 'preview.teacher@example.com',
-  fullName: 'Preview Teacher',
-  roles: ['TEACHER'],
-}
-
-function authSessionFor(user: CurrentUserResponse, token: string): AuthResponse {
-  return {
-    token,
-    user: {
-      id: user.id,
-      email: user.email,
-      fullName: user.fullName,
-      roles: user.roles,
-    },
-  }
-}
-
 const mocks = vi.hoisted(() => ({
   setAccessToken: vi.fn(),
   refresh: vi.fn(),
   me: vi.fn(),
   login: vi.fn(),
   logout: vi.fn(),
-  appEnv: {
-    useDemoData: false,
-    enablePreviewMode: false,
-  },
-  teacherPreviewUser: {
-    id: 2,
-    email: 'preview.teacher@example.com',
-    fullName: 'Preview Teacher',
-    roles: ['TEACHER'] as const,
-  },
 }))
 
-vi.mock('@/api/http', () => ({
-  setAccessToken: (token: string | null) => mocks.setAccessToken(token),
-}))
-
-vi.mock('@/config/env', () => ({
-  appEnv: mocks.appEnv,
-}))
-
-vi.mock('@/demo/users', () => ({
-  demoUsers: {
-    STUDENT: {
-      id: 1,
-      email: 'preview.student@example.com',
-      fullName: 'Preview Student',
-      roles: ['STUDENT'] as const,
+vi.mock('@/api/http', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/api/http')>()
+  return {
+    // Spies on the real function, which also removes bearer tokens stored by older builds.
+    setAccessToken: (token: string | null) => {
+      mocks.setAccessToken(token)
+      actual.setAccessToken(token)
     },
-    TEACHER: mocks.teacherPreviewUser,
-    ADMIN: {
-      id: 3,
-      email: 'preview.admin@example.com',
-      fullName: 'Preview Admin',
-      roles: ['ADMIN'] as const,
-    },
-  },
-}))
-
-vi.mock('@/plugins/pwa', () => ({
-  clearOfflineCaches: vi.fn().mockResolvedValue(undefined),
-}))
+    // The cross-tab refresh itself is covered in api/http.test.ts; it resolves to the new token or null.
+    refreshAccessToken: mocks.refresh,
+  }
+})
 
 vi.mock('@/api/services', () => ({
   authApi: {
-    refresh: (...args: unknown[]) => mocks.refresh(...args),
-    me: (...args: unknown[]) => mocks.me(...args),
-    login: (...args: unknown[]) => mocks.login(...args),
-    logout: (...args: unknown[]) => mocks.logout(...args),
+    me: mocks.me,
+    login: mocks.login,
+    logout: mocks.logout,
   },
 }))
 
@@ -91,16 +44,11 @@ import { useAuthStore } from './auth'
 describe('auth store token storage', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    window.localStorage.clear()
-    window.sessionStorage.clear()
-    mocks.setAccessToken.mockClear()
     mocks.refresh.mockReset()
-    mocks.refresh.mockRejectedValue(new Error('no refresh cookie'))
+    mocks.refresh.mockResolvedValue(null)
     mocks.me.mockReset()
     mocks.login.mockReset()
     mocks.logout.mockReset()
-    mocks.appEnv.useDemoData = false
-    mocks.appEnv.enablePreviewMode = false
   })
 
   it('clears legacy persisted bearer tokens and keeps the access token in memory only', () => {
@@ -108,7 +56,7 @@ describe('auth store token storage', () => {
     window.sessionStorage.setItem('mandarin-spark.token', 'legacy-session')
 
     const auth = useAuthStore()
-    auth.token = 'fresh-access-token'
+    auth.hasSession = true
     auth.clearSession()
 
     expect(window.localStorage.getItem('mandarin-spark.token')).toBeNull()
@@ -116,155 +64,140 @@ describe('auth store token storage', () => {
     expect(mocks.setAccessToken).toHaveBeenLastCalledWith(null)
   })
 
-  it('removes legacy tokens during anonymous bootstrap refresh failure', async () => {
-    window.localStorage.setItem('mandarin-spark.token', 'legacy-local')
-    window.sessionStorage.setItem('mandarin-spark.token', 'legacy-session')
-
+  it('stays signed out when the refresh cookie does not restore a session', async () => {
     const auth = useAuthStore()
     await auth.bootstrap()
 
-    expect(auth.token).toBeNull()
+    expect(mocks.refresh).toHaveBeenCalledTimes(1)
+    expect(auth.hasSession).toBe(false)
+    expect(auth.isAuthenticated).toBe(false)
     expect(auth.currentUser).toBeNull()
-    expect(window.localStorage.getItem('mandarin-spark.token')).toBeNull()
-    expect(window.sessionStorage.getItem('mandarin-spark.token')).toBeNull()
-    expect(mocks.setAccessToken).toHaveBeenLastCalledWith(null)
+    expect(mocks.me).not.toHaveBeenCalled()
   })
 
   it('clears the refreshed access token when current-user hydration fails', async () => {
-    const session = authSessionFor(studentUser, 'rotated-access-token')
-    mocks.refresh.mockResolvedValue(session)
+    mocks.refresh.mockResolvedValue('rotated-access-token')
     mocks.me.mockRejectedValue(new Error('me failed'))
 
     const auth = useAuthStore()
     await auth.bootstrap()
 
-    expect(auth.token).toBeNull()
+    expect(auth.hasSession).toBe(false)
     expect(auth.currentUser).toBeNull()
-    expect(auth.previewRole).toBeNull()
     expect(auth.isAuthenticated).toBe(false)
-    expect(mocks.setAccessToken).toHaveBeenCalledWith('rotated-access-token')
     expect(mocks.setAccessToken).toHaveBeenLastCalledWith(null)
     expect(window.localStorage.getItem('mandarin-spark.token')).toBeNull()
     expect(window.sessionStorage.getItem('mandarin-spark.token')).toBeNull()
   })
 
   it('hydrates the current user after a successful cookie refresh', async () => {
-    const session = authSessionFor(studentUser, 'rotated-access-token')
-    mocks.refresh.mockResolvedValue(session)
+    mocks.refresh.mockResolvedValue('rotated-access-token')
     mocks.me.mockResolvedValue(studentUser)
 
     const auth = useAuthStore()
     await auth.bootstrap()
 
-    expect(auth.token).toBe('rotated-access-token')
+    expect(auth.hasSession).toBe(true)
     expect(auth.currentUser).toEqual(studentUser)
     expect(auth.activeRole).toBe('STUDENT')
     expect(auth.isAuthenticated).toBe(true)
-    expect(mocks.setAccessToken).toHaveBeenLastCalledWith('rotated-access-token')
+    // The refreshed token stays in http.ts memory: the store never clears it on the success path.
+    expect(mocks.setAccessToken).not.toHaveBeenCalledWith(null)
     expect(window.localStorage.getItem('mandarin-spark.token')).toBeNull()
     expect(window.sessionStorage.getItem('mandarin-spark.token')).toBeNull()
   })
 
-  it('skips cookie refresh during anonymous preview bootstrap to avoid preview startup network failures', async () => {
-    mocks.appEnv.useDemoData = true
-    mocks.appEnv.enablePreviewMode = true
-
-    const auth = useAuthStore()
-    await auth.bootstrap()
-
-    expect(mocks.refresh).not.toHaveBeenCalled()
-    expect(auth.token).toBeNull()
-    expect(auth.currentUser).toBeNull()
-    expect(mocks.setAccessToken).toHaveBeenLastCalledWith(null)
-  })
-
-  it('uses an explicit preview role without calling refresh', async () => {
-    mocks.appEnv.useDemoData = true
-    mocks.appEnv.enablePreviewMode = true
-    window.sessionStorage.setItem('mandarin-spark.preview-role', 'TEACHER')
-
-    const auth = useAuthStore()
-    await auth.bootstrap()
-
-    expect(mocks.refresh).not.toHaveBeenCalled()
-    expect(auth.token).toBeNull()
-    expect(auth.previewRole).toBe('TEACHER')
-    expect(auth.currentUser).toEqual(teacherPreviewUser)
-  })
-
-  it('refuses preview role selection when preview mode is not explicitly enabled', () => {
-    const auth = useAuthStore()
-
-    auth.setPreviewRole('TEACHER')
-
-    expect(auth.previewRole).toBeNull()
-    expect(auth.currentUser).toBeNull()
-    expect(window.localStorage.getItem('mandarin-spark.preview-role')).toBeNull()
-    expect(window.sessionStorage.getItem('mandarin-spark.preview-role')).toBeNull()
-  })
-
-  it('removes invalid persisted preview roles from every browser storage area', () => {
-    mocks.appEnv.useDemoData = true
-    mocks.appEnv.enablePreviewMode = true
-    window.localStorage.setItem('mandarin-spark.preview-role', 'ADMIN')
-    window.sessionStorage.setItem('mandarin-spark.preview-role', 'OWNER')
-
-    const auth = useAuthStore()
-
-    expect(auth.previewRole).toBeNull()
-    expect(window.localStorage.getItem('mandarin-spark.preview-role')).toBeNull()
-    expect(window.sessionStorage.getItem('mandarin-spark.preview-role')).toBeNull()
-  })
-
-  it('keeps preview role in session storage only and never alongside a real token', async () => {
-    mocks.appEnv.useDemoData = true
-    mocks.appEnv.enablePreviewMode = true
-
-    const auth = useAuthStore()
-    auth.setPreviewRole('TEACHER')
-
-    expect(auth.previewRole).toBe('TEACHER')
-    expect(auth.currentUser).toEqual(teacherPreviewUser)
-    expect(window.localStorage.getItem('mandarin-spark.preview-role')).toBeNull()
-    expect(window.sessionStorage.getItem('mandarin-spark.preview-role')).toBe('TEACHER')
-
-    const session = authSessionFor(studentUser, 'real-access-token')
-    mocks.login.mockResolvedValue(session)
+  it('presents the refresh cookie once when two navigations bootstrap at the same time', async () => {
+    mocks.refresh.mockResolvedValue('rotated-access-token')
     mocks.me.mockResolvedValue(studentUser)
 
-    await auth.login('student@example.com', 'Password123!')
+    const auth = useAuthStore()
+    await Promise.all([auth.bootstrap(), auth.bootstrap()])
 
-    expect(auth.previewRole).toBeNull()
+    // The second navigation reuses the first restore: one refresh and one /auth/me request.
+    expect(mocks.refresh).toHaveBeenCalledTimes(1)
+    expect(mocks.me).toHaveBeenCalledTimes(1)
     expect(auth.currentUser).toEqual(studentUser)
-    expect(window.localStorage.getItem('mandarin-spark.preview-role')).toBeNull()
-    expect(window.sessionStorage.getItem('mandarin-spark.preview-role')).toBeNull()
-    expect(window.localStorage.getItem('mandarin-spark.token')).toBeNull()
-    expect(window.sessionStorage.getItem('mandarin-spark.token')).toBeNull()
-    expect(mocks.setAccessToken).toHaveBeenLastCalledWith('real-access-token')
   })
 
-  it('clears preview state and local bearer token even when backend logout fails', async () => {
-    mocks.appEnv.useDemoData = true
-    mocks.appEnv.enablePreviewMode = true
+  it('clears the session and any legacy bearer token even when backend logout fails', async () => {
     mocks.logout.mockRejectedValue(new Error('logout endpoint unavailable'))
     window.localStorage.setItem('mandarin-spark.token', 'legacy-local')
     window.sessionStorage.setItem('mandarin-spark.token', 'legacy-session')
 
     const auth = useAuthStore()
-    auth.setPreviewRole('ADMIN')
-    auth.token = 'real-access-token'
+    auth.hasSession = true
     auth.currentUser = studentUser
 
     await auth.logout()
 
     expect(mocks.logout).toHaveBeenCalledOnce()
-    expect(auth.token).toBeNull()
+    expect(auth.hasSession).toBe(false)
     expect(auth.currentUser).toBeNull()
-    expect(auth.previewRole).toBeNull()
     expect(window.localStorage.getItem('mandarin-spark.token')).toBeNull()
     expect(window.sessionStorage.getItem('mandarin-spark.token')).toBeNull()
-    expect(window.localStorage.getItem('mandarin-spark.preview-role')).toBeNull()
-    expect(window.sessionStorage.getItem('mandarin-spark.preview-role')).toBeNull()
     expect(mocks.setAccessToken).toHaveBeenLastCalledWith(null)
+  })
+})
+
+describe('auth store account management (FRAUTH07, FRAUTH08)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('replaces the in-memory access token after a password change', () => {
+    const auth = useAuthStore()
+    auth.hasSession = true
+    auth.currentUser = studentUser
+
+    auth.replaceAccessToken('new-access-token')
+
+    expect(auth.hasSession).toBe(true)
+    expect(mocks.setAccessToken).toHaveBeenLastCalledWith('new-access-token')
+    expect(auth.currentUser).toEqual(studentUser)
+  })
+
+  it('ignores a token replacement without a signed-in session', () => {
+    const auth = useAuthStore()
+    auth.replaceAccessToken('new-access-token')
+    expect(auth.hasSession).toBe(false)
+    expect(mocks.setAccessToken).not.toHaveBeenCalled()
+  })
+
+  it('re-reads a pending teacher so an approval given during the session unlocks the teaching pages', async () => {
+    const pendingTeacher: CurrentUserResponse = {
+      ...studentUser,
+      roles: ['TEACHER'],
+      teacherProfile: { teacherStatus: 'PENDING', verificationState: 'IN_REVIEW' },
+    }
+    const approvedTeacher = {
+      ...pendingTeacher,
+      teacherProfile: { teacherStatus: 'APPROVED', verificationState: 'APPROVED' },
+    }
+    mocks.me.mockReset()
+    mocks.me.mockResolvedValue(approvedTeacher)
+    const auth = useAuthStore()
+    auth.hasSession = true
+    auth.currentUser = pendingTeacher
+
+    await auth.refreshTeacherApproval()
+    expect(auth.currentUser).toEqual(approvedTeacher)
+
+    // An approved teacher (and any other account) is not re-read.
+    await auth.refreshTeacherApproval()
+    auth.currentUser = studentUser
+    await auth.refreshTeacherApproval()
+    expect(mocks.me).toHaveBeenCalledTimes(1)
+  })
+
+  it('applies a profile update to the current user and switches the interface language', () => {
+    const auth = useAuthStore()
+    auth.hasSession = true
+    auth.currentUser = studentUser
+
+    auth.applyProfileUpdate({ ...studentUser, fullName: 'Aina Rahman', preferredLanguage: 'ms' })
+
+    expect(auth.currentUser?.fullName).toBe('Aina Rahman')
+    expect(document.documentElement.lang).toBe('ms')
   })
 })

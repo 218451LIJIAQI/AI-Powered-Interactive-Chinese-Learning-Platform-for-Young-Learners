@@ -19,6 +19,3 @@ app:
       # without requiring an extra shell export step. Override JWT_SECRET to
       # test custom secrets or token-rotation behavior locally.
       secret: ${JWT_SECRET:LocalComposeOnlyJwtSecret1234567890AB}
-  payment:
-    provider: ${PAYMENT_PROVIDER:no-op}
-    stripe-api-key: ${STRIPE_API_KEY:}

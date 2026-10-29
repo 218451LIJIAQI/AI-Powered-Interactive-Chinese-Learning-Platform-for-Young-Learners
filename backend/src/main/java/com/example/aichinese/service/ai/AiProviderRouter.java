@@ -1,7 +1,5 @@
 package com.example.aichinese.service.ai;
 
-import java.util.Objects;
-
 import org.springframework.stereotype.Component;
 
 import com.example.aichinese.config.AiProperties;
@@ -10,32 +8,29 @@ import com.example.aichinese.config.AiProperties;
 public class AiProviderRouter {
 
     private final AiProperties aiProperties;
-    private final OpenAiCompatibleAiProviderClient openAiClient;
-    private final NoOpAiProviderClient noOpClient;
+    private final OpenAiResponsesAiProviderClient responsesClient;
+    private final OpenAiCompatibleAiProviderClient openAiCompatibleClient;
 
     public AiProviderRouter(
             AiProperties aiProperties,
-            OpenAiCompatibleAiProviderClient openAiClient,
-            NoOpAiProviderClient noOpClient) {
-        this.aiProperties = Objects.requireNonNull(aiProperties, "aiProperties");
-        this.openAiClient = Objects.requireNonNull(openAiClient, "openAiClient");
-        this.noOpClient = Objects.requireNonNull(noOpClient, "noOpClient");
+            OpenAiResponsesAiProviderClient responsesClient,
+            OpenAiCompatibleAiProviderClient openAiCompatibleClient) {
+        this.aiProperties = aiProperties;
+        this.responsesClient = responsesClient;
+        this.openAiCompatibleClient = openAiCompatibleClient;
     }
 
     public AiProviderClient resolveClient() {
-        if (!aiProperties.isEnableRealProvider()) {
-            return noOpClient;
-        }
-
-        String provider = AiProviderSupport.normalizeProvider(aiProperties.getProvider());
+        String provider = aiProperties.normalizedProvider();
 
         return switch (provider) {
-            case AiProviderSupport.DEFAULT_PROVIDER,
-                 AiProviderSupport.OPENAI_COMPATIBLE -> openAiClient;
+            case AiProperties.OPENAI -> responsesClient;
+            case AiProperties.DEEPSEEK,
+                 AiProperties.OPENAI_COMPATIBLE -> openAiCompatibleClient;
             default -> throw new IllegalStateException(
                     "Unsupported AI provider '" + provider
                             + "' while AI_ENABLE_REAL_PROVIDER=true. Supported: "
-                            + AiProviderSupport.SUPPORTED_PROVIDERS);
+                            + AiProperties.SUPPORTED_PROVIDERS);
         };
     }
 }

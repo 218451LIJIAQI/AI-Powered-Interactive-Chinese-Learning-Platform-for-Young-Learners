@@ -12,12 +12,10 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Getter
 @Setter
-@NoArgsConstructor
 @Entity
 @Table(name = "quiz_attempts", indexes = {
         @Index(name = "idx_quiz_attempts_quiz_id", columnList = "quiz_id"),
@@ -48,4 +46,8 @@ public class QuizAttempt extends BaseEntity {
 
     @Column(name = "completed_at")
     private LocalDateTime completedAt;
+
+    /** End of a timed attempt; an open attempt past it is submitted with the answers saved so far. */
+    @Column(name = "expires_at")
+    private LocalDateTime expiresAt;
 }

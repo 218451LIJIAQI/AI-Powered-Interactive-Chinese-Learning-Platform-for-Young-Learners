@@ -1,0 +1,1665 @@
+/* Practice: the room (hub), a type's sets and players, Mistakes and the Mistakes review. Page-prefixed classes
+   (`.practice-*`). Each type wears its own pigment; a row, a page or a tile sets it with `.practice-pigment-*`. */
+
+.practice-pigment-cobalt {
+  --practice-pigment: var(--pigment-cobalt);
+  --practice-pigment-soft: var(--pigment-cobalt-soft);
+}
+
+.practice-pigment-cinnabar {
+  --practice-pigment: var(--pigment-cinnabar);
+  --practice-pigment-soft: var(--pigment-cinnabar-soft);
+}
+
+.practice-pigment-teal {
+  --practice-pigment: var(--pigment-teal);
+  --practice-pigment-soft: var(--pigment-teal-soft);
+}
+
+.practice-pigment-ink {
+  --practice-pigment: var(--pigment-ink);
+  --practice-pigment-soft: var(--pigment-ink-soft);
+}
+
+.practice-pigment-plum {
+  --practice-pigment: var(--pigment-plum);
+  --practice-pigment-soft: var(--pigment-plum-soft);
+}
+
+.practice-pigment-jade {
+  --practice-pigment: var(--pigment-jade);
+  --practice-pigment-soft: var(--pigment-jade-soft);
+}
+
+.practice-pigment-ochre {
+  --practice-pigment: var(--pigment-ochre);
+  --practice-pigment-soft: var(--pigment-ochre-soft);
+}
+
+/* A type's glyph: the 田字格 tile drawn in the type's pigment. */
+.practice-glyph {
+  --practice-glyph-size: 52px;
+  --practice-glyph-line: color-mix(in srgb, var(--practice-pigment) 34%, transparent);
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: var(--practice-glyph-size);
+  height: var(--practice-glyph-size);
+  border: 1.5px solid var(--practice-pigment);
+  border-radius: var(--radius-xs);
+  background:
+    repeating-linear-gradient(to right, var(--practice-glyph-line) 0 4px, transparent 4px 8px) center / 100% 1px
+      no-repeat,
+    repeating-linear-gradient(to bottom, var(--practice-glyph-line) 0 4px, transparent 4px 8px) center / 1px 100%
+      no-repeat,
+    var(--practice-pigment-soft);
+  color: var(--practice-pigment);
+  font-family: var(--font-hanzi);
+  font-size: calc(var(--practice-glyph-size) * 0.56);
+  font-weight: var(--font-weight-bold);
+  line-height: 1;
+}
+
+.practice-glyph.is-lg {
+  --practice-glyph-size: 72px;
+}
+
+/* The room (hub)
+   -------------------------------------------------------------------------- */
+.practice-hub {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 248px;
+  grid-template-areas:
+    'head head'
+    'main rail';
+  gap: var(--page-gap) var(--space-12);
+  align-items: start;
+}
+
+.practice-hub-head {
+  grid-area: head;
+}
+
+.practice-hub-main {
+  grid-area: main;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-10);
+  min-width: 0;
+}
+
+.practice-hub-rail {
+  grid-area: rail;
+}
+
+/* Mistakes waiting: the first call of the room. */
+.practice-call {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-4) var(--space-6);
+  padding: var(--space-6) var(--space-8);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-sm);
+}
+
+.practice-call-seal {
+  --seal-size: 64px;
+}
+
+.practice-call-copy {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.practice-call-title,
+.practice-mistakes-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--space-2);
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--type-h2-size);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+}
+
+.practice-call-title .stat-figure,
+.practice-mistakes-title .stat-figure {
+  color: var(--text-brand);
+}
+
+.practice-call-text {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+}
+
+.practice-call-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* The seven activities: one row each, told apart by pigment and glyph. The name is the row's link. */
+.practice-room {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.practice-room-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-4);
+}
+
+.practice-room-total {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.practice-room-list {
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--border-subtle);
+  list-style: none;
+}
+
+.practice-room-row {
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.practice-room-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-2) var(--space-5);
+  margin: var(--space-1) calc(-1 * var(--space-3));
+  padding: var(--space-4) var(--space-3);
+  border-radius: var(--radius-md);
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.practice-room-item:hover,
+.practice-room-row.is-open .practice-room-item {
+  background: var(--surface-card);
+}
+
+.practice-room-copy {
+  display: grid;
+  gap: var(--space-0-5);
+  min-width: 0;
+}
+
+.practice-room-copy p {
+  margin: 0;
+}
+
+.practice-room-name {
+  justify-self: start;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+  text-decoration: none;
+}
+
+/* The whole row opens the type; the toggle sits above the stretched link. */
+.practice-room-name::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.practice-room-item:hover .practice-room-name {
+  color: var(--practice-pigment);
+}
+
+.practice-room-name:focus-visible {
+  outline: none;
+}
+
+.practice-room-name:focus-visible::after {
+  outline: var(--border-width-focus) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.practice-room-trains {
+  font-size: var(--font-size-md);
+}
+
+.practice-room-meta {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.practice-room-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-1-5);
+  min-width: 120px;
+}
+
+.practice-room-squares {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-1);
+  max-width: 132px;
+}
+
+.practice-room-square {
+  width: 10px;
+  height: 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: calc(var(--radius-xs) / 2);
+}
+
+.practice-room-square.is-done {
+  border-color: var(--practice-pigment);
+  background: var(--practice-pigment);
+}
+
+.practice-room-square.is-next {
+  border-color: var(--practice-pigment);
+}
+
+.practice-room-count {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+}
+
+.practice-room-seal {
+  --seal-size: 20px;
+}
+
+.practice-room-toggle {
+  position: relative;
+  z-index: var(--z-raised);
+}
+
+.practice-room-toggle {
+  color: var(--text-secondary);
+}
+
+.practice-room-toggle svg {
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+
+.practice-room-toggle[aria-expanded='true'] svg {
+  transform: rotate(180deg);
+}
+
+/* A type's sets, opened from its row. */
+.practice-room-sets {
+  display: grid;
+  gap: var(--space-0-5);
+  margin: 0 0 var(--space-4);
+  padding: 0 0 0 calc(52px + var(--space-5));
+  list-style: none;
+}
+
+.practice-room-set {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
+  text-decoration: none;
+}
+
+.practice-room-set:hover {
+  background: var(--surface-card);
+}
+
+.practice-room-set-title {
+  min-width: 0;
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.practice-room-set-next {
+  color: var(--practice-pigment);
+  font-size: var(--type-overline-size);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-wide);
+  text-transform: uppercase;
+}
+
+.practice-room-set-meta {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+}
+
+/* A set's tick: empty ring, filled in the type's pigment once done (the set's name says so in words). */
+.practice-room-set-mark,
+.practice-set-mark {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-round);
+  color: var(--text-on-primary);
+}
+
+.practice-room-set.is-done .practice-room-set-mark,
+.practice-set.is-done .practice-set-mark {
+  border-color: var(--practice-pigment);
+  background: var(--practice-pigment);
+}
+
+/* Today rail: a slim column beside the activities. */
+.practice-today {
+  position: sticky;
+  top: calc(var(--topbar-height) + var(--space-6));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding-left: var(--space-6);
+  border-left: 1px solid var(--border-subtle);
+}
+
+.practice-today p {
+  margin: 0;
+}
+
+.practice-today-block {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.practice-today-figure {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--space-1-5);
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+}
+
+.practice-today-figure .stat-figure {
+  color: var(--text-primary);
+}
+
+.practice-today-figure.is-quiet {
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: var(--font-size-lg);
+}
+
+.practice-today-caption {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.practice-today-lines {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-4) 0 0;
+  border-top: 1px solid var(--border-subtle);
+  font-size: var(--font-size-md);
+  list-style: none;
+}
+
+.practice-today-lines li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* A room's header (a type, Mistakes): back to all activities, the room's mark, the h1 and a lede.
+   -------------------------------------------------------------------------- */
+.practice-head {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+}
+
+.practice-head-back {
+  margin-left: calc(-1 * var(--space-0-5));
+}
+
+.practice-head-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.practice-head-copy {
+  display: grid;
+  gap: var(--space-1-5);
+  min-width: 0;
+}
+
+.practice-head h1,
+.practice-head p {
+  margin: 0;
+}
+
+.practice-head h1 {
+  font-family: var(--font-display);
+  font-size: var(--type-h1-size);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+  letter-spacing: var(--letter-spacing-display);
+}
+
+.practice-head p {
+  color: var(--text-secondary);
+}
+
+/* A type: the stage with the chosen set, and the type's sets beside it
+   -------------------------------------------------------------------------- */
+.practice-type {
+  --progress-color: var(--practice-pigment);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.practice-run {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-8) var(--space-10);
+  align-items: start;
+}
+
+.practice-run.has-sets {
+  grid-template-columns: minmax(0, 1fr) 240px;
+}
+
+.practice-stage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  min-width: 0;
+  min-height: 520px;
+  padding: var(--space-8);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-sm);
+}
+
+.practice-stage-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-bottom: var(--space-5);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.practice-stage-copy {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.practice-stage-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--type-h2-size);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+}
+
+.practice-stage-meta {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+/* In a practice card the question uses the card's width, like its header and footer. */
+.practice-stage .learn-question {
+  max-width: none;
+}
+
+.practice-sets {
+  position: sticky;
+  top: calc(var(--topbar-height) + var(--space-6));
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.practice-sets-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0 var(--space-3) var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.practice-sets-count {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.practice-sets-list {
+  display: grid;
+  gap: var(--space-0-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.practice-set {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    'mark title'
+    '. meta';
+  align-items: center;
+  gap: 0 var(--space-2-5);
+  padding: var(--space-2-5) var(--space-3);
+  border-left: var(--border-width-thick) solid transparent;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  color: var(--text-primary);
+  text-decoration: none;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.practice-set:hover {
+  background: var(--surface-card);
+}
+
+.practice-set.is-current {
+  border-left-color: var(--practice-pigment);
+  background: var(--surface-card);
+}
+
+.practice-set-mark {
+  grid-area: mark;
+}
+
+.practice-set.is-current:not(.is-done) .practice-set-mark {
+  border-color: var(--practice-pigment);
+}
+
+.practice-set-title {
+  grid-area: title;
+  min-width: 0;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.practice-set.is-current .practice-set-title {
+  font-weight: var(--font-weight-bold);
+}
+
+.practice-set-meta {
+  grid-area: meta;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+/* Players: one chrome (a meter, a calm stage, a footer of actions)
+   -------------------------------------------------------------------------- */
+.practice-player {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+.practice-meter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+}
+
+.practice-meter-bar {
+  flex: 1 1 160px;
+}
+
+.practice-counter {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--font-weight-bold);
+  white-space: nowrap;
+}
+
+.practice-hint {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.practice-feedback {
+  margin: 0;
+  font-weight: var(--font-weight-bold);
+}
+
+.practice-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.practice-footer > :only-child {
+  margin-left: auto;
+}
+
+.practice-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.practice-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-0-5) var(--space-2-5);
+  border-radius: var(--radius-pill);
+  background: var(--color-ink-100);
+  color: var(--color-ink-700);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+}
+
+.practice-pill.is-hot {
+  background: var(--color-accent-100);
+  color: var(--color-accent-800);
+}
+
+.practice-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--font-weight-bold);
+}
+
+.practice-inline-tools {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: calc(-1 * var(--space-3));
+}
+
+/* Flashcards: dots for the cards seen, the word in 田字格 tiles, the meaning on the back. */
+.practice-dots {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-1-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.practice-dots li {
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  transition:
+    width var(--duration-base) var(--ease-standard),
+    background-color var(--duration-base) var(--ease-standard);
+}
+
+.practice-dots li.is-seen {
+  border-color: var(--practice-pigment);
+  background: var(--practice-pigment-soft);
+}
+
+.practice-dots li.is-current {
+  width: 24px;
+  border-color: var(--practice-pigment);
+  background: var(--practice-pigment);
+}
+
+.practice-card-frame {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.practice-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  width: 100%;
+  max-width: 560px;
+  min-height: 320px;
+  padding: var(--space-10) var(--space-6);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  background: var(--surface-subtle);
+  box-shadow: var(--shadow-sm);
+  text-align: center;
+}
+
+.practice-card.is-flipped {
+  border-color: var(--practice-pigment);
+  background: var(--practice-pigment-soft);
+}
+
+.practice-card p {
+  margin: 0;
+}
+
+.practice-card-label {
+  color: var(--practice-pigment);
+  font-size: var(--type-overline-size);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-wide);
+  text-transform: uppercase;
+}
+
+.practice-card-tiles {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-block: var(--space-1);
+}
+
+.practice-card-tiles .hanzi-tile {
+  --hanzi-tile-size: 128px;
+}
+
+.practice-card-tiles.is-long .hanzi-tile {
+  --hanzi-tile-size: 96px;
+}
+
+.practice-card-hanzi {
+  font-size: var(--font-size-6xl);
+  overflow-wrap: anywhere;
+}
+
+.practice-card-pinyin {
+  color: var(--text-secondary);
+  font-size: var(--font-size-xl);
+}
+
+.practice-card-meaning {
+  font-family: var(--font-display);
+  font-size: var(--font-size-4xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+}
+
+.practice-card-word {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: baseline;
+  gap: var(--space-2);
+  color: var(--text-secondary);
+}
+
+.practice-card-word .hanzi {
+  color: var(--text-primary);
+  font-size: var(--font-size-2xl);
+}
+
+.practice-card-example {
+  max-width: 48ch;
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+}
+
+.practice-card-tools {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+/* Turning a card: a quick quarter turn out and back in. */
+.practice-flip-enter-active,
+.practice-flip-leave-active {
+  transition:
+    transform var(--duration-fast) var(--ease-standard),
+    opacity var(--duration-fast) var(--ease-standard);
+}
+
+.practice-flip-enter-from,
+.practice-flip-leave-to {
+  opacity: 0;
+  transform: perspective(900px) rotateY(70deg);
+}
+
+/* Tracing: the word to write, then a 田字格 pad (purple guides, ink strokes). */
+.practice-trace-target {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+}
+
+.practice-trace-glyph {
+  font-size: var(--font-size-5xl);
+  line-height: var(--line-height-tight);
+}
+
+.practice-trace-meaning {
+  display: grid;
+  flex: 1 1 auto;
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+}
+
+.practice-trace-pinyin {
+  color: var(--text-primary);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+}
+
+.practice-trace-pad {
+  width: 100%;
+  margin: 0 auto;
+  overflow: hidden;
+  border: 1.5px solid var(--color-primary-300);
+  border-radius: var(--radius-xs);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-sm);
+}
+
+.practice-trace-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.practice-trace-tools {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+/* Matching: words on the left, meanings on the right; pairs carry a number, so they read without colour. */
+.practice-match-hint {
+  margin-top: calc(-1 * var(--space-3));
+}
+
+.practice-match {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4) var(--space-6);
+}
+
+/* Both columns stretch to the same height and share it into equal rows, so a two-line word never puts the two
+   columns out of step; each tile fills its row. */
+.practice-match-column {
+  display: grid;
+  grid-auto-rows: 1fr;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.practice-match-column > li {
+  display: grid;
+}
+
+.practice-match-tile {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 64px;
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-xs);
+  color: var(--text-primary);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  text-align: left;
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    background-color var(--duration-fast) var(--ease-standard);
+}
+
+.practice-match-tile:hover:not(:disabled) {
+  border-color: var(--border-interactive);
+  background: var(--surface-subtle);
+}
+
+.practice-match-tile:disabled {
+  cursor: default;
+}
+
+.practice-match-tile.is-meaning:disabled:not(.is-paired, .is-correct, .is-wrong) {
+  color: var(--text-secondary);
+}
+
+.practice-match-tile.is-paired {
+  border-color: var(--practice-pigment);
+}
+
+.practice-match-tile.is-selected {
+  border-color: var(--practice-pigment);
+  background: var(--practice-pigment-soft);
+  box-shadow: inset 0 0 0 1px var(--practice-pigment);
+}
+
+.practice-match-tile.is-correct {
+  border-color: var(--color-success);
+  background: var(--color-success-soft);
+  color: var(--color-success-text);
+}
+
+.practice-match-tile.is-wrong {
+  border-color: var(--color-danger);
+  background: var(--color-danger-soft);
+  color: var(--color-danger-text);
+}
+
+.practice-match-index {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  min-width: 24px;
+  height: 24px;
+  border-radius: var(--radius-round);
+  background: var(--practice-pigment);
+  color: var(--text-on-primary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+}
+
+.practice-match-index:empty {
+  border: 1.5px dashed var(--border-strong);
+  background: transparent;
+}
+
+.practice-match-hanzi {
+  font-size: var(--font-size-2xl);
+}
+
+.practice-match-pinyin {
+  flex: 1 1 auto;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+/* Story: the text on its own sheet with pinyin / translation switches, then the questions. */
+.practice-story-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-5);
+}
+
+.practice-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+}
+
+.practice-story-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin: 0;
+  padding: var(--space-6) var(--space-8);
+  border: 1px solid var(--border-subtle);
+  border-left: var(--border-width-thick) solid var(--practice-pigment);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  background: var(--surface-subtle);
+  list-style: none;
+}
+
+.practice-story-line p {
+  margin: 0;
+}
+
+.practice-story-hanzi {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-medium);
+}
+
+.practice-story-pinyin {
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+}
+
+.practice-story-translation {
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+  font-style: italic;
+}
+
+.practice-story-question {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.practice-story-question legend {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  padding: 0;
+  font-weight: var(--font-weight-bold);
+}
+
+.practice-story-number {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1.5px solid var(--practice-pigment);
+  border-radius: var(--radius-round);
+  color: var(--practice-pigment);
+  font-size: var(--font-size-xs);
+}
+
+.practice-story-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.practice-story-option {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  min-height: var(--control-height-md);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-pill);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font-weight: var(--font-weight-semibold);
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    background-color var(--duration-fast) var(--ease-standard);
+}
+
+.practice-story-option:hover:not(:disabled) {
+  border-color: var(--border-interactive);
+  background: var(--surface-subtle);
+}
+
+.practice-story-option:disabled {
+  cursor: default;
+}
+
+.practice-story-option.is-selected {
+  border-color: var(--practice-pigment);
+  background: var(--practice-pigment-soft);
+  box-shadow: inset 0 0 0 1px var(--practice-pigment);
+}
+
+.practice-story-option.is-correct {
+  border-color: var(--color-success);
+  background: var(--color-success-soft);
+  color: var(--color-success-text);
+}
+
+.practice-story-option.is-wrong {
+  border-color: var(--color-danger);
+  background: var(--color-danger-soft);
+  color: var(--color-danger-text);
+}
+
+.practice-story-explanation {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+}
+
+/* A finished set: the type's tile stamped with a seal, the result, XP and what next. */
+.practice-done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-6) 0 var(--space-2);
+  text-align: center;
+}
+
+.practice-done p {
+  margin: 0;
+}
+
+.practice-done-stamp {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.practice-done-marks {
+  position: relative;
+  display: inline-grid;
+  padding: 0 var(--space-10) var(--space-5) 0;
+}
+
+.practice-done-seal {
+  --seal-size: 52px;
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  transform: rotate(-8deg);
+  animation: practice-stamp var(--duration-slow) var(--ease-spring) both;
+}
+
+.practice-done-seal.is-outline {
+  background: var(--surface-card);
+}
+
+@keyframes practice-stamp {
+  from {
+    opacity: 0;
+    transform: rotate(-8deg) scale(1.6);
+  }
+
+  to {
+    opacity: 1;
+    transform: rotate(-8deg) scale(1);
+  }
+}
+
+.practice-done-caption {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.practice-done-copy {
+  display: grid;
+  gap: var(--space-1-5);
+}
+
+.practice-done-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--type-h1-size);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+  letter-spacing: var(--letter-spacing-display);
+}
+
+.practice-done-sub,
+.practice-done-note {
+  color: var(--text-secondary);
+}
+
+.practice-done-reward {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-8);
+  border-block: 1px solid var(--border-subtle);
+}
+
+.practice-done-xp {
+  color: var(--text-brand);
+}
+
+.practice-done-goal {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+}
+
+.practice-done-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+/* Mistakes
+   -------------------------------------------------------------------------- */
+.practice-mistakes-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+/* The same size as an activity's mark (.practice-glyph.is-lg), so every room's title starts at the same x. */
+.practice-mistakes-seal {
+  --seal-size: 72px;
+}
+
+/* The list on the left, the count and its one action in a sticky card on the right. */
+.practice-mistakes {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 288px;
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    'filter summary'
+    'body summary';
+  gap: var(--space-5) var(--space-10);
+  align-items: start;
+}
+
+.practice-mistakes.is-clear {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto;
+  row-gap: 0;
+  grid-template-areas:
+    'summary'
+    'body';
+}
+
+.practice-mistakes-summary {
+  position: sticky;
+  top: calc(var(--topbar-height) + var(--space-6));
+  grid-area: summary;
+  display: grid;
+  gap: var(--space-5);
+  padding: var(--space-6);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-sm);
+}
+
+.practice-mistakes.is-clear .practice-mistakes-summary {
+  position: static;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.practice-mistakes-body {
+  grid-area: body;
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.practice-mistakes-count {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.practice-mistakes-title {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.practice-mistakes-title .stat-figure {
+  font-size: var(--font-size-7xl);
+  line-height: 0.9;
+}
+
+.practice-mistakes-text {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+}
+
+.practice-mistakes-actions {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-2);
+}
+
+.practice-mistakes-filter {
+  grid-area: filter;
+  justify-self: start;
+}
+
+.practice-mistake-list {
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--border-subtle);
+  list-style: none;
+}
+
+.practice-mistake {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.practice-mistake p {
+  margin: 0;
+}
+
+.practice-mistake-copy {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.practice-mistake-question {
+  font-weight: var(--font-weight-bold);
+  overflow-wrap: anywhere;
+}
+
+.practice-mistake-answers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.practice-mistake-yours,
+.practice-mistake-right {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.practice-mistake-yours svg {
+  color: var(--color-danger);
+}
+
+.practice-mistake-right {
+  color: var(--color-success-text);
+  font-weight: var(--font-weight-semibold);
+}
+
+.practice-mistake-source {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+}
+
+/* Mistakes review (focus mode): a tally that counts down, then "All fixed" or what is left
+   -------------------------------------------------------------------------- */
+.practice-review-track {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-6);
+  max-width: 720px;
+  margin: 0 auto var(--space-6);
+}
+
+.practice-review-tally {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.practice-review-tally li {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1.5px solid var(--border-default);
+  border-radius: var(--radius-xs);
+  background: var(--surface-card);
+  transition:
+    background-color var(--duration-base) var(--ease-standard),
+    border-color var(--duration-base) var(--ease-standard);
+}
+
+.practice-review-tally li.is-now {
+  border-color: var(--color-primary-500);
+  box-shadow: inset 0 0 0 1px var(--color-primary-500);
+}
+
+.practice-review-tally li.is-right {
+  border-color: var(--color-success);
+  background: var(--color-success);
+  color: var(--text-on-primary);
+}
+
+.practice-review-tally li.is-wrong {
+  border-color: var(--color-danger-border);
+  background: var(--color-danger-soft);
+  color: var(--color-danger-text);
+}
+
+.practice-review-left {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--font-size-xl);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--font-weight-semibold);
+}
+
+.practice-review-done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  max-width: 600px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.practice-review-done p {
+  margin: 0;
+}
+
+.practice-review-stamp {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.practice-review-seal {
+  --seal-size: 88px;
+  transform: rotate(-6deg);
+  animation: practice-review-stamp var(--duration-slow) var(--ease-spring) both;
+}
+
+@keyframes practice-review-stamp {
+  from {
+    opacity: 0;
+    transform: rotate(-6deg) scale(1.6);
+  }
+
+  to {
+    opacity: 1;
+    transform: rotate(-6deg) scale(1);
+  }
+}
+
+.practice-review-caption {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.practice-review-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--type-display-size);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+  letter-spacing: var(--letter-spacing-display);
+}
+
+.practice-review-sub,
+.practice-review-note {
+  color: var(--text-secondary);
+}
+
+.practice-review-note {
+  font-size: var(--font-size-md);
+}
+
+.practice-review-done .practice-review-tally {
+  justify-content: center;
+  margin-block: var(--space-2);
+}
+
+.practice-review-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100%;
+  margin: 0;
+  border-block: 1px solid var(--border-subtle);
+}
+
+.practice-review-stats > div {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: var(--space-1);
+  padding: var(--space-4) var(--space-2);
+}
+
+.practice-review-stats > div + div {
+  border-left: 1px solid var(--border-subtle);
+}
+
+.practice-review-stats dt {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.practice-review-stats dd {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--font-size-3xl);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--font-weight-semibold);
+  line-height: 1;
+}
+
+.practice-review-stats dd.is-xp {
+  color: var(--text-brand);
+}
+
+.practice-review-streak {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  color: var(--color-primary-600);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+}
+
+.practice-review-later {
+  display: grid;
+  gap: var(--space-0-5);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-warning-border);
+  border-radius: var(--radius-md);
+  background: var(--color-warning-soft);
+  color: var(--color-warning-text);
+  font-size: var(--font-size-md);
+}
+
+/* Responsive
+   -------------------------------------------------------------------------- */
+@media (max-width: 1200px) {
+  .practice-hub {
+    grid-template-columns: minmax(0, 1fr) 220px;
+    column-gap: var(--space-8);
+  }
+
+  /* The actions drop under the copy, so the title keeps its line in the narrower column. */
+  .practice-call {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .practice-call-actions {
+    grid-column: 2;
+    flex-direction: row;
+    gap: var(--space-4);
+  }
+
+  .practice-run.has-sets {
+    grid-template-columns: minmax(0, 1fr) 210px;
+    column-gap: var(--space-6);
+  }
+
+  /* Below 1200px the summary becomes a row above the list (a narrow column would break its lines). */
+  .practice-mistakes,
+  .practice-mistakes.is-clear {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
+    grid-template-areas:
+      'summary'
+      'filter'
+      'body';
+  }
+
+  .practice-mistakes-summary {
+    position: static;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .practice-mistakes-title {
+    flex-direction: row;
+    align-items: baseline;
+  }
+
+  .practice-mistakes-title .stat-figure {
+    font-size: var(--font-size-5xl);
+  }
+}

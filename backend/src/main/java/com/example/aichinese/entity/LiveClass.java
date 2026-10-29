@@ -20,12 +20,10 @@ import jakarta.persistence.NamedSubgraph;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Getter
 @Setter
-@NoArgsConstructor
 @Entity
 @Table(name = "live_classes", indexes = {
         @Index(name = "idx_live_classes_teacher_id", columnList = "teacher_id"),
@@ -56,8 +54,8 @@ public class LiveClass extends BaseEntity {
 
     public static final String GRAPH_DETAIL = "LiveClass.detail";
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "teacher_id")
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "teacher_id", nullable = false)
     private TeacherProfile teacher;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -100,4 +98,15 @@ public class LiveClass extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "live_class_status", nullable = false, length = 30)
     private LiveClassStatus liveClassStatus = LiveClassStatus.SCHEDULED;
+
+    /** Recording of a past session; only students who booked it can open it. */
+    @Column(name = "recording_url", length = 500)
+    private String recordingUrl;
+
+    /** The start before the latest reschedule ("Moved from 2:00 PM"). */
+    @Column(name = "rescheduled_from_start_at")
+    private LocalDateTime rescheduledFromStartAt;
+
+    @Column(name = "cancelled_at")
+    private LocalDateTime cancelledAt;
 }

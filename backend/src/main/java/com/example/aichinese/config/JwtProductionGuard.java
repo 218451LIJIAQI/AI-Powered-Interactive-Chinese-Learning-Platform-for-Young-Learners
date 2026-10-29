@@ -1,45 +1,32 @@
 package com.example.aichinese.config;
 
-import java.util.Locale;
-import java.util.Objects;
-
 import org.springframework.core.env.Environment;
-import org.springframework.core.env.Profiles;
 import org.springframework.stereotype.Component;
 
 /**
- * Rejects documented placeholder JWT signing secrets in production.
+ * Rejects documented placeholder JWT signing secrets and an insecure refresh-token cookie in production.
  *
  * <p>Length validation alone cannot identify a copied example value: a
  * predictable 32-character placeholder signs attacker-forgeable tokens just
- * as successfully as a random key. This guard keeps local examples usable
- * while making an unchanged production template fail closed.</p>
+ * as successfully as a random key. A refresh cookie without the {@code Secure}
+ * attribute would let the long-lived refresh token travel over clear text (NFRSEC07).
+ * Local and demo runs keep the examples and the plain-HTTP default
+ * {@code JWT_REFRESH_COOKIE_SECURE=false}; an unchanged production template fails closed.</p>
  */
 @Component
 public class JwtProductionGuard {
 
-    private static final Profiles PROD_PROFILES = Profiles.of("prod", "production");
-
     public JwtProductionGuard(Environment environment, SecurityProperties securityProperties) {
-        Objects.requireNonNull(environment, "environment");
-        Objects.requireNonNull(securityProperties, "securityProperties");
-        if (usesPlaceholderSecretInProduction(environment, securityProperties)) {
+        if (!ProductionProfiles.isActive(environment)) {
+            return;
+        }
+        if (ProductionProfiles.isPlaceholder(securityProperties.secret())) {
             throw new IllegalStateException(
                     "JWT_SECRET must not use a placeholder value when the prod profile is active.");
         }
-    }
-
-    private static boolean usesPlaceholderSecretInProduction(
-            Environment environment,
-            SecurityProperties securityProperties) {
-        return environment.acceptsProfiles(PROD_PROFILES) && isPlaceholder(securityProperties.secret());
-    }
-
-    private static boolean isPlaceholder(String value) {
-        String normalized = value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
-        return normalized.startsWith("replace-with-")
-                || normalized.equals("changeme")
-                || normalized.equals("change-me")
-                || normalized.equals("todo");
+        if (!securityProperties.refreshTokenCookieSecure()) {
+            throw new IllegalStateException(
+                    "JWT_REFRESH_COOKIE_SECURE must be true when the prod profile is active.");
+        }
     }
 }

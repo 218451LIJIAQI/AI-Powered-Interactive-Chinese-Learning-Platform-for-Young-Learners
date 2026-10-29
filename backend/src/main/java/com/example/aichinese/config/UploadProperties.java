@@ -10,7 +10,7 @@ public class UploadProperties {
     private static final long MAX_CONFIGURED_FILE_SIZE_BYTES = MAX_CONFIGURED_FILE_SIZE.toBytes();
 
     private String directory = "./uploads";
-    private DataSize maxFileSize = DataSize.ofMegabytes(5);
+    private DataSize maxFileSize = DataSize.ofMegabytes(10);
     private DataSize verificationDocumentMaxFileSize = DataSize.ofMegabytes(5);
     private DataSize aiAudioMaxFileSize = DataSize.ofMegabytes(10);
     private DataSize aiImageMaxFileSize = DataSize.ofMegabytes(10);

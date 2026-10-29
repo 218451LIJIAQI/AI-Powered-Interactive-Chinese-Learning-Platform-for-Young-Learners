@@ -1,194 +1,161 @@
 package com.example.aichinese.service;
 
-import static org.springframework.http.HttpStatus.BAD_REQUEST;
+import java.util.List;
 
-import java.util.Objects;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
+import com.example.aichinese.config.AiProperties;
 import com.example.aichinese.config.CacheConfig;
-import com.example.aichinese.dto.system.AdminPlatformSettingsResponse;
-import com.example.aichinese.dto.system.AdminPlatformSettingsUpdateRequest;
+import com.example.aichinese.dto.ai.AdminAiSettingsResponse;
+import com.example.aichinese.dto.ai.AdminAiSettingsUpdateRequest;
 import com.example.aichinese.dto.system.PublicPlatformSettingsResponse;
+import com.example.aichinese.entity.AuditLog;
 import com.example.aichinese.entity.SystemSetting;
+import com.example.aichinese.repository.AuditLogRepository;
 import com.example.aichinese.repository.SystemSettingRepository;
 import com.example.aichinese.security.SecurityUserDetails;
+import com.example.aichinese.service.ai.AiUsageLimiter;
 import com.example.aichinese.util.TextUtils;
 
+/**
+ * Platform settings that take effect at runtime, edited on the admin AI Settings page:
+ * <ul>
+ *   <li>{@code ai_disclaimer_text} &ndash; the AI notice shown with every AI answer and on the Responsible AI page;</li>
+ *   <li>{@code sensitive_word_filter_enabled} &ndash; enforced by {@link ContentSafetyService} for teacher content;</li>
+ *   <li>{@code ai_safety_check_enabled} &ndash; enforced by {@code AiSafetyGuard} for student AI requests and replies.</li>
+ * </ul>
+ * The AI request limits are shown with them but come from the server configuration.
+ */
 @Service
 public class PlatformSettingsService {
 
-    private static final Logger log = LoggerFactory.getLogger(PlatformSettingsService.class);
-
-    public static final String PLATFORM_NAME_KEY = "platform_name";
     public static final String AI_DISCLAIMER_TEXT_KEY = "ai_disclaimer_text";
-    public static final String EMAIL_NOTIFICATIONS_KEY = "admin_email_notifications_enabled";
-    public static final String IN_APP_NOTIFICATIONS_KEY = "admin_in_app_notifications_enabled";
-    public static final String DAILY_SUMMARY_KEY = "admin_daily_summary_enabled";
-    public static final String STRICT_CONTENT_FILTERING_KEY = "strict_content_filtering_enabled";
     public static final String SENSITIVE_WORD_FILTER_KEY = "sensitive_word_filter_enabled";
     public static final String AI_SAFETY_CHECK_KEY = "ai_safety_check_enabled";
+    /** The audit action of a settings change; the latest one is the settings' "last changed". */
+    public static final String SETTINGS_UPDATED_ACTION = "ADMIN_PLATFORM_SETTINGS_UPDATED";
 
-    private static final String DEFAULT_PLATFORM_NAME = "AI-Powered Interactive Chinese Learning Platform for Young Learners";
-    private static final String DEFAULT_AI_DISCLAIMER_TEXT = "AI-generated content may not always be accurate. Please review before use.";
+    public static final String DEFAULT_AI_DISCLAIMER_TEXT =
+            "AI responses may contain errors and do not replace your teacher.";
+
+    /** Every platform setting (all editable) with its default value and description, in seeding order. */
+    public static final List<SettingDefinition> SETTING_DEFINITIONS = List.of(
+            new SettingDefinition(
+                    AI_DISCLAIMER_TEXT_KEY,
+                    DEFAULT_AI_DISCLAIMER_TEXT,
+                    "Shown with every AI answer and on the Responsible AI page."),
+            new SettingDefinition(
+                    SENSITIVE_WORD_FILTER_KEY,
+                    "true",
+                    "Block unsafe words in teacher-authored content."),
+            new SettingDefinition(
+                    AI_SAFETY_CHECK_KEY,
+                    "true",
+                    "Screen student AI requests and AI replies for unsafe content."));
 
     private final SystemSettingRepository systemSettingRepository;
+    private final AuditLogRepository auditLogRepository;
     private final AuditLogService auditLogService;
+    private final AiProperties aiProperties;
+    private final AiUsageLimiter aiUsageLimiter;
 
     public PlatformSettingsService(
             SystemSettingRepository systemSettingRepository,
-            AuditLogService auditLogService) {
-        this.systemSettingRepository = Objects.requireNonNull(systemSettingRepository, "systemSettingRepository");
-        this.auditLogService = Objects.requireNonNull(auditLogService, "auditLogService");
+            AuditLogRepository auditLogRepository,
+            AuditLogService auditLogService,
+            AiProperties aiProperties,
+            AiUsageLimiter aiUsageLimiter) {
+        this.systemSettingRepository = systemSettingRepository;
+        this.auditLogRepository = auditLogRepository;
+        this.auditLogService = auditLogService;
+        this.aiProperties = aiProperties;
+        this.aiUsageLimiter = aiUsageLimiter;
     }
 
     @Transactional(readOnly = true)
-    @Cacheable(cacheNames = CacheConfig.ADMIN_PLATFORM_SETTINGS)
-    public AdminPlatformSettingsResponse getAdminPlatformSettings() {
-        return new AdminPlatformSettingsResponse(
-                stringSetting(PLATFORM_NAME_KEY),
+    public AdminAiSettingsResponse getAiSettings() {
+        AuditLog lastChange = auditLogRepository.findAll(
+                (root, query, cb) -> cb.equal(root.get("actionType"), SETTINGS_UPDATED_ACTION),
+                PageRequest.of(0, 1, Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"))))
+                .stream().findFirst().orElse(null);
+        return new AdminAiSettingsResponse(
                 stringSetting(AI_DISCLAIMER_TEXT_KEY),
-                booleanSetting(EMAIL_NOTIFICATIONS_KEY),
-                booleanSetting(IN_APP_NOTIFICATIONS_KEY),
-                booleanSetting(DAILY_SUMMARY_KEY),
-                booleanSetting(STRICT_CONTENT_FILTERING_KEY),
                 booleanSetting(SENSITIVE_WORD_FILTER_KEY),
-                booleanSetting(AI_SAFETY_CHECK_KEY));
+                booleanSetting(AI_SAFETY_CHECK_KEY),
+                aiUsageLimiter.requestsPerMinute(),
+                aiUsageLimiter.requestsPerDay(),
+                lastChange == null ? null : lastChange.getCreatedAt(),
+                lastChange == null ? null : actorName(lastChange));
     }
 
     @Transactional(readOnly = true)
     @Cacheable(cacheNames = CacheConfig.PUBLIC_PLATFORM_SETTINGS)
     public PublicPlatformSettingsResponse getPublicPlatformSettings() {
         return new PublicPlatformSettingsResponse(
-                stringSetting(PLATFORM_NAME_KEY),
                 stringSetting(AI_DISCLAIMER_TEXT_KEY),
-                booleanSetting(STRICT_CONTENT_FILTERING_KEY),
-                booleanSetting(SENSITIVE_WORD_FILTER_KEY),
-                booleanSetting(AI_SAFETY_CHECK_KEY));
+                TextUtils.trimToNull(aiProperties.getModelName()));
     }
 
     @Transactional
     @Caching(evict = {
-            @CacheEvict(cacheNames = CacheConfig.ADMIN_PLATFORM_SETTINGS, allEntries = true),
             @CacheEvict(cacheNames = CacheConfig.PUBLIC_PLATFORM_SETTINGS, allEntries = true),
-            @CacheEvict(cacheNames = CacheConfig.SENSITIVE_WORD_FILTER_ENABLED, allEntries = true)
+            @CacheEvict(cacheNames = CacheConfig.SENSITIVE_WORD_FILTER_ENABLED, allEntries = true),
+            @CacheEvict(cacheNames = CacheConfig.AI_SAFETY_CHECK_ENABLED, allEntries = true)
     })
-    public AdminPlatformSettingsResponse updateAdminPlatformSettings(
-            SecurityUserDetails currentUser,
-            AdminPlatformSettingsUpdateRequest request) {
-        if (request == null) {
-            throw new ResponseStatusException(BAD_REQUEST, "Platform settings update request is required.");
-        }
-        String platformName = stringSetting(PLATFORM_NAME_KEY);
-        String normalizedDisclaimerText = TextUtils.trimToNull(request.aiDisclaimerText());
-        if (normalizedDisclaimerText == null) {
-            throw new ResponseStatusException(BAD_REQUEST, "AI disclaimer text is required.");
-        }
-
-        upsertSetting(AI_DISCLAIMER_TEXT_KEY, normalizedDisclaimerText);
-        upsertSetting(EMAIL_NOTIFICATIONS_KEY, Boolean.toString(request.emailNotifications()));
-        upsertSetting(IN_APP_NOTIFICATIONS_KEY, Boolean.toString(request.inAppNotifications()));
-        upsertSetting(DAILY_SUMMARY_KEY, Boolean.toString(request.dailySummary()));
-        upsertSetting(STRICT_CONTENT_FILTERING_KEY, Boolean.toString(request.strictContentFiltering()));
+    public AdminAiSettingsResponse updateAiSettings(SecurityUserDetails currentUser, AdminAiSettingsUpdateRequest request) {
+        upsertSetting(AI_DISCLAIMER_TEXT_KEY, request.aiNoticeText());
         upsertSetting(SENSITIVE_WORD_FILTER_KEY, Boolean.toString(request.sensitiveWordFilter()));
         upsertSetting(AI_SAFETY_CHECK_KEY, Boolean.toString(request.aiSafetyCheck()));
 
-        log.info("Platform settings updated by adminUserId={}", currentUser.getUserId());
-        auditLogService.record(
-                currentUser,
-                "ADMIN_PLATFORM_SETTINGS_UPDATED",
-                "SYSTEM_SETTING",
-                null,
-                "Admin updated platform AI, notification, and safety settings.");
+        auditLogService.record(currentUser, SETTINGS_UPDATED_ACTION, "SYSTEM_SETTING", null,
+                "Admin updated the AI notice, sensitive-word filter and AI safety check settings.");
+        return getAiSettings();
+    }
 
-        return new AdminPlatformSettingsResponse(
-                platformName,
-                normalizedDisclaimerText,
-                request.emailNotifications(),
-                request.inAppNotifications(),
-                request.dailySummary(),
-                request.strictContentFiltering(),
-                request.sensitiveWordFilter(),
-                request.aiSafetyCheck());
+    private static String actorName(AuditLog entry) {
+        return entry.getActorUser() != null ? entry.getActorUser().getDisplayName() : entry.getActorEmail();
     }
 
     private void upsertSetting(String key, String value) {
         SystemSetting setting = systemSettingRepository.findBySettingKey(key)
-                .orElseGet(() -> newSetting(key));
+                .orElseGet(() -> definitionFor(key).newSetting());
         setting.setSettingValue(value);
         systemSettingRepository.save(setting);
-    }
-
-    private SystemSetting newSetting(String key) {
-        SettingDefinition definition = definitionFor(key);
-        SystemSetting setting = new SystemSetting();
-        setting.setSettingKey(key);
-        setting.setSettingValue(definition.defaultValue());
-        setting.setDescription(definition.description());
-        setting.setEditable(definition.editable());
-        return setting;
     }
 
     private String stringSetting(String key) {
         return systemSettingRepository.findBySettingKey(key)
                 .map(SystemSetting::getSettingValue)
                 .map(TextUtils::trimToNull)
-                .filter(Objects::nonNull)
                 .orElseGet(() -> definitionFor(key).defaultValue());
     }
 
+    /** On unless explicitly "false", the rule ContentSafetySettingsReader enforces. */
     private boolean booleanSetting(String key) {
-        return Boolean.parseBoolean(stringSetting(key));
+        return !"false".equalsIgnoreCase(stringSetting(key));
     }
 
     private SettingDefinition definitionFor(String key) {
-        return switch (key) {
-            case PLATFORM_NAME_KEY -> new SettingDefinition(
-                    DEFAULT_PLATFORM_NAME,
-                    "Displayed platform name.",
-                    false);
-            case AI_DISCLAIMER_TEXT_KEY -> new SettingDefinition(
-                    DEFAULT_AI_DISCLAIMER_TEXT,
-                    "Shown on AI-powered learning experiences.",
-                    true);
-            case EMAIL_NOTIFICATIONS_KEY -> new SettingDefinition(
-                    "true",
-                    "Enable email notifications for admin workflows.",
-                    true);
-            case IN_APP_NOTIFICATIONS_KEY -> new SettingDefinition(
-                    "true",
-                    "Enable in-app notifications for admin workflows.",
-                    true);
-            case DAILY_SUMMARY_KEY -> new SettingDefinition(
-                    "false",
-                    "Enable daily admin summary delivery.",
-                    true);
-            case STRICT_CONTENT_FILTERING_KEY -> new SettingDefinition(
-                    "true",
-                    "Enable strict content filtering for safety-sensitive flows.",
-                    true);
-            case SENSITIVE_WORD_FILTER_KEY -> new SettingDefinition(
-                    "true",
-                    "Enable profanity and sensitive word filtering.",
-                    true);
-            case AI_SAFETY_CHECK_KEY -> new SettingDefinition(
-                    "true",
-                    "Enable AI safety checks before AI guidance is shown.",
-                    true);
-            default -> throw new IllegalArgumentException("Unsupported system setting key: " + key);
-        };
+        return SETTING_DEFINITIONS.stream()
+                .filter(definition -> definition.key().equals(key))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Unsupported system setting key: " + key));
     }
 
-    private record SettingDefinition(
-            String defaultValue,
-            String description,
-            boolean editable) {
+    public record SettingDefinition(String key, String defaultValue, String description) {
+
+        public SystemSetting newSetting() {
+            SystemSetting setting = new SystemSetting();
+            setting.setSettingKey(key);
+            setting.setSettingValue(defaultValue);
+            setting.setDescription(description);
+            return setting;
+        }
     }
 }

@@ -1,1958 +1,650 @@
 <template>
-  <div class="page-stack admin-users-page">
-    <PageHeaderBlock
-      :title="t('adminUsers.title')"
-      :description="t('adminUsers.description')"
-      icon="users"
-      :eyebrow="t('adminUsers.eyebrow')"
-    />
+  <div class="admin-users page-stack">
+    <div class="admin-head">
+      <PageHeaderBlock :title="t('adminUsers.pageTitle')" :description="t('adminUsers.lede')">
+        <template #actions>
+          <button class="btn btn-primary" type="button" data-testid="admin-users-invite" @click="openInvite">
+            <IconGlyph name="mail" :size="16" />
+            <span>{{ t('adminUsers.inviteAdmin') }}</span>
+          </button>
+        </template>
+      </PageHeaderBlock>
+
+      <AdminUsersTabs />
+    </div>
 
     <DataNotice
-      :using-fallback="usingFallback"
-      :error="noticeError"
+      :error="actionError"
       :success="actionSuccess"
-      :fallback-title="t('adminUsers.previewTitle')"
-      :fallback-message="t('adminUsers.previewMessage')"
-      :error-title="t('adminUsers.unavailableTitle')"
-      :detail="directoryNoticeDetail"
+      :detail="noticeDetail"
+      :success-title="t('adminUsers.noticeDone')"
+      :error-title="t('adminUsers.noticeFailed')"
     />
 
-    <ResourceSection :loading="pageLoading" :error="pageError" @retry="reloadAll">
-      <section class="admin-users-layout">
-        <article class="panel admin-users-table-card">
-          <div class="admin-users-tabs">
-            <button
-              v-for="tab in tabs"
-              :key="tab.value"
-              class="admin-users-tab"
-              :class="{ 'is-active': activeTab === tab.value }"
-              type="button"
-              @click="setActiveTab(tab.value)"
-            >
-              {{ tab.label }}
-            </button>
-          </div>
+    <section class="admin-sheet" aria-labelledby="admin-users-list-title">
+      <h2 id="admin-users-list-title" class="sr-only">{{ t('adminUsers.tableLabel') }}</h2>
+      <form class="admin-toolbar" role="search" @submit.prevent>
+        <div class="field admin-toolbar-search">
+          <label class="field-label" for="admin-users-search">{{ t('adminUsers.searchLabel') }}</label>
+          <span class="input-with-icon">
+            <IconGlyph class="input-icon" name="search" :size="16" />
+            <input
+              id="admin-users-search"
+              v-model="searchTerm"
+              class="input"
+              type="search"
+              autocomplete="off"
+              :placeholder="t('adminUsers.searchPlaceholder')"
+              data-testid="admin-users-search"
+            />
+          </span>
+        </div>
+        <div class="field">
+          <label class="field-label" for="admin-users-role">{{ t('adminUsers.roleLabel') }}</label>
+          <select id="admin-users-role" v-model="role" class="select" data-testid="admin-users-role">
+            <option value="">{{ t('adminUsers.roleAll') }}</option>
+            <option v-for="option in ROLE_OPTIONS" :key="option" :value="option">{{ t(roleKey(option)) }}</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="field-label" for="admin-users-account">{{ t('adminUsers.accountLabel') }}</label>
+          <select id="admin-users-account" v-model="account" class="select" data-testid="admin-users-account">
+            <option value="">{{ t('adminUsers.accountAll') }}</option>
+            <option value="ACTIVE">{{ t('adminUsers.accountActive') }}</option>
+            <option value="DEACTIVATED">{{ t('adminUsers.accountDeactivated') }}</option>
+          </select>
+        </div>
+      </form>
 
-          <div class="admin-users-toolbar">
-            <div class="admin-users-toolbar-top">
-              <label class="admin-users-search">
-                <IconGlyph name="search" :size="18" />
-                <input v-model="searchTerm" class="admin-users-search-input" :placeholder="t('adminUsers.search')" />
-              </label>
-
-              <button
-                class="teacher-outline-button admin-users-compact-button is-icon"
-                type="button"
-                @click="cycleSortMode"
-              >
-                <IconGlyph name="filter" :size="16" />
-                <span>{{ sortModeLabel }}</span>
-              </button>
-
-              <button
-                class="teacher-outline-button admin-users-compact-button is-icon"
-                type="button"
-                @click="openAnalytics"
-              >
-                <IconGlyph name="chart" :size="16" />
-                <span>{{ t('adminUsers.analytics') }}</span>
-              </button>
-            </div>
-
-            <div class="admin-users-toolbar-bottom">
-              <div class="admin-users-toolbar-filters">
-                <button
-                  class="teacher-outline-button admin-users-compact-button"
-                  type="button"
-                  @click="cycleRoleFilter"
-                >
-                  {{ roleFilterLabel }}
-                </button>
-                <button
-                  class="teacher-outline-button admin-users-compact-button"
-                  type="button"
-                  @click="cycleStatusFilter"
-                >
-                  {{ statusFilterLabel }}
-                </button>
-                <button
-                  class="teacher-outline-button admin-users-compact-button"
-                  type="button"
-                  @click="cycleAccountFilter"
-                >
-                  {{ accountFilterLabel }}
-                </button>
-                <button
-                  class="teacher-outline-button admin-users-compact-button"
-                  type="button"
-                  @click="cycleClassFilter"
-                >
-                  {{ classFilterLabel }}
-                </button>
-                <button
-                  class="teacher-outline-button admin-users-compact-button is-icon"
-                  type="button"
-                  @click="cycleExtraFilter"
-                >
-                  <IconGlyph name="filter" :size="16" />
-                  <span>{{ extraFilterLabel }}</span>
-                </button>
-              </div>
-
-              <button class="student-link-button admin-users-clear" type="button" @click="clearFilters">
-                {{ t('adminUsers.clear') }}
-              </button>
-            </div>
-          </div>
-
-          <div class="admin-users-table-meta">
-            <span>{{ t('adminUsers.totalUsers', { count: filteredUsers.length }) }}</span>
-            <span>{{ selectedUserMetaLabel }}</span>
-          </div>
-
-          <div class="admin-users-table-shell">
-            <template v-if="pagedUsers.length">
-              <div class="admin-users-table-header">
-                <span />
-                <span>{{ t('adminUsers.user') }}</span>
-                <span>{{ t('adminUsers.role') }}</span>
-                <span>{{ t('adminUsers.status') }}</span>
-                <span>{{ t('adminUsers.accountState') }}</span>
-                <span>{{ t('adminUsers.lastActive') }}</span>
-                <span>{{ t('adminUsers.joinedDate') }}</span>
-                <span>{{ t('adminUsers.actions') }}</span>
-              </div>
-
-              <article
-                v-for="user in pagedUsers"
-                :key="user.userId"
-                class="admin-users-table-row"
-                :class="{ 'is-active': selectedUser?.userId === user.userId }"
-                tabindex="0"
-                role="button"
-                :aria-label="t('adminUsers.openDetailsAria', { name: user.fullName })"
-                @click="selectUser(user.userId)"
-                @keydown.enter.prevent="selectUser(user.userId)"
-                @keydown.space.prevent="selectUser(user.userId)"
-              >
-                <label class="admin-users-check">
-                  <input type="checkbox" :checked="selectedUser?.userId === user.userId" />
-                  <span />
-                </label>
-
-                <div class="admin-users-user-cell">
-                  <PortraitAvatar :size="52" rounded="soft" :kind="user.avatarKind" />
-                  <div class="admin-users-user-copy">
-                    <strong>{{ user.fullName }}</strong>
-                    <span>{{ user.email }}</span>
-                    <small>{{ user.internalId }}</small>
-                  </div>
-                </div>
-
-                <span class="admin-users-role-pill" :class="`is-${user.roleTone}`">{{ user.roleLabel }}</span>
-
-                <span class="admin-users-status-pill" :class="`is-${user.statusTone}`">
-                  <i />
-                  {{ user.statusLabel }}
-                </span>
-
-                <span class="admin-users-account-pill" :class="`is-${user.accountTone}`">
-                  <i />
-                  {{ user.accountLabel }}
-                </span>
-
-                <span>{{ user.lastActiveLabel }}</span>
-                <span>{{ user.joinedLabel }}</span>
-
-                <button
-                  class="admin-users-more"
-                  type="button"
-                  :aria-label="t('adminUsers.openDetailsAria', { name: user.fullName })"
-                  @click.stop="selectUser(user.userId)"
-                >
-                  <IconGlyph name="more" :size="18" />
-                </button>
-              </article>
-            </template>
-            <StatePanel
-              v-else
-              class="admin-users-empty-state"
-              icon="search"
-              :eyebrow="t('adminUsers.noMatches')"
-              :title="t('adminUsers.noUsers')"
-              :message="hasActiveFilters ? t('adminUsers.adjustFilters') : t('adminUsers.recordsPending')"
-            >
-              <template v-if="hasActiveFilters" #actions>
-                <button class="btn btn-secondary" type="button" @click="clearFilters">
-                  {{ t('adminUsers.clearFilters') }}
-                </button>
-              </template>
-            </StatePanel>
-          </div>
-
-          <div class="admin-users-pagination">
-            <div class="row admin-users-pagination-left">
-              <span>{{ t('adminUsers.rowsPerPage') }}</span>
-              <span class="teacher-outline-button admin-users-page-size" aria-hidden="true">10</span>
-            </div>
-
-            <span>{{ paginationLabel }}</span>
-
-            <div class="row admin-users-pagination-right">
-              <button
-                class="admin-users-page-button"
-                type="button"
-                :aria-label="t('adminUsers.previousPage')"
-                :disabled="currentPage === 1"
-                @click="goToPreviousPage"
-              >
-                <IconGlyph name="chevronLeft" :size="16" />
-              </button>
-
-              <button
-                v-for="page in totalPages"
-                :key="page"
-                class="admin-users-page-button"
-                :class="{ 'is-active': currentPage === page }"
-                type="button"
-                @click="goToPage(page)"
-              >
-                {{ page }}
-              </button>
-
-              <button
-                class="admin-users-page-button"
-                type="button"
-                :aria-label="t('adminUsers.nextPage')"
-                :disabled="currentPage === totalPages"
-                @click="goToNextPage"
-              >
-                <IconGlyph name="chevronRight" :size="16" />
-              </button>
-            </div>
-          </div>
-        </article>
-
-        <aside class="admin-users-sidebar">
-          <template v-if="selectedUser">
-            <article class="panel admin-users-profile-card">
-              <div class="admin-users-profile-head">
-                <div class="admin-users-profile-main">
-                  <PortraitAvatar :size="82" rounded="soft" :kind="selectedUser.avatarKind" />
-
-                  <div class="stack admin-users-profile-copy">
-                    <div class="row admin-users-profile-title">
-                      <strong>{{ selectedUser.fullName }}</strong>
-                      <span class="admin-users-status-pill" :class="`is-${selectedUser.statusTone}`">
-                        <i />
-                        {{ selectedUser.statusLabel }}
-                      </span>
-                    </div>
-
-                    <div class="row admin-users-profile-meta">
-                      <span>{{ selectedUser.email }}</span>
-                      <small>{{ selectedUser.internalId }}</small>
-                    </div>
-
-                    <span class="admin-users-role-pill" :class="`is-${selectedUser.roleTone}`">
-                      {{ selectedUser.roleLabel }}
-                    </span>
-                  </div>
-                </div>
-
-                <button
-                  class="admin-users-close"
-                  type="button"
-                  :aria-label="t('adminUsers.closePanel')"
-                  @click="clearSelection"
-                >
-                  <IconGlyph name="close" :size="20" />
-                </button>
-              </div>
-            </article>
-
-            <article class="panel admin-users-info-card">
-              <div class="student-section-heading">
-                <strong>{{ t('adminUsers.accountInfo') }}</strong>
-              </div>
-
-              <div class="admin-users-info-grid">
-                <div>
-                  <span>{{ t('adminUsers.joinedDate') }}</span
-                  ><strong>{{ selectedUser.joinedLabel }}</strong>
-                </div>
-                <div>
-                  <span>{{ t('adminUsers.lastActive') }}</span
-                  ><strong>{{ selectedUser.lastActiveLabel }}</strong>
-                </div>
-                <div>
-                  <span>{{ t('adminUsers.accountState') }}</span
-                  ><strong>{{ selectedUser.accountLabel }}</strong>
-                </div>
-                <div>
-                  <span>{{ t('adminUsers.profileStatus') }}</span
-                  ><strong>{{ selectedUser.statusLabel }}</strong>
-                </div>
-              </div>
-            </article>
-
-            <article class="panel admin-users-progress-card">
-              <div class="row-between">
-                <div class="student-section-heading">
-                  <strong>{{ t('adminUsers.directoryContext') }}</strong>
-                </div>
-                <button class="student-link-button" type="button" @click="openProgressTarget">
-                  {{ t('adminUsers.openRelevant') }}
-                </button>
-              </div>
-
-              <div class="admin-users-progress-wrap admin-users-progress-wrap--context">
-                <div class="admin-users-progress-copy">
-                  <div>
-                    <span>{{ t('adminUsers.role') }}</span
-                    ><strong>{{ selectedUser.roleLabel }}</strong>
-                  </div>
-                  <div>
-                    <span>{{ t('adminUsers.accountState') }}</span
-                    ><strong>{{ selectedUser.accountLabel }}</strong>
-                  </div>
-                  <div>
-                    <span>{{ t('adminUsers.profileStatus') }}</span
-                    ><strong>{{ selectedUser.statusLabel }}</strong>
-                  </div>
-                </div>
-              </div>
-            </article>
-
-            <article class="panel admin-users-activity-card">
-              <div class="row-between">
-                <div class="student-section-heading">
-                  <strong>{{ t('adminUsers.followupRoutes') }}</strong>
-                </div>
-                <button class="student-link-button" type="button" @click="openActivityTarget">
-                  {{ t('adminUsers.openRoute') }}
-                </button>
-              </div>
-
-              <div class="admin-users-activity-list">
-                <article v-for="item in selectedFollowUpRoutes" :key="item.title" class="admin-users-activity-item">
-                  <span class="admin-users-activity-icon" :class="`is-${item.tone}`"
-                    ><IconGlyph :name="item.icon" :size="18"
-                  /></span>
-                  <div class="admin-users-activity-copy">
-                    <strong>{{ item.title }}</strong>
-                    <span>{{ item.copy }}</span>
-                  </div>
-                  <button class="student-link-button" type="button" @click="openAdminRoute(item.path)">
-                    {{ t('adminUsers.open') }}
-                  </button>
-                </article>
-              </div>
-            </article>
-
-            <article class="panel admin-users-audit-card">
-              <div class="row-between">
-                <div class="student-section-heading">
-                  <strong>{{ t('adminUsers.auditLatest') }}</strong>
-                </div>
-                <button class="student-link-button" type="button" @click="openSettings">
-                  {{ t('adminUsers.viewAll') }}
-                </button>
-              </div>
-
-              <div class="admin-users-audit-list">
-                <article v-for="item in selectedAudit" :key="item.id" class="admin-users-audit-item">
-                  <div class="admin-users-audit-copy">
-                    <strong>{{ item.title }}</strong>
-                    <span>{{ item.time }}</span>
-                  </div>
-                  <small>{{ item.meta }}</small>
-                </article>
-              </div>
-            </article>
-
-            <article class="panel admin-users-actions-card">
-              <div class="student-section-heading">
-                <strong>{{ t('adminUsers.accountActions') }}</strong>
-              </div>
-
-              <div class="admin-users-actions-grid">
-                <button
-                  class="teacher-outline-button"
-                  type="button"
-                  :disabled="userStatusActionDisabled"
-                  @click="toggleSelectedUserStatus"
-                >
-                  {{ selectedUserStatusActionLabel }}
-                </button>
-                <button class="teacher-outline-button" type="button" @click="openPrimaryAction">
-                  {{ primaryActionLabel }}
-                </button>
-                <button class="teacher-outline-button" type="button" @click="openSecondaryAction">
-                  {{ secondaryActionLabel }}
-                </button>
-                <button
-                  v-if="selectedUser.roleKey === 'TEACHER'"
-                  class="admin-users-action-safe"
-                  type="button"
-                  @click="openTeacherVerification"
-                >
-                  {{ t('adminUsers.reviewTeacher') }}
-                </button>
-                <button class="admin-users-action-safe" type="button" @click="openRecoveryAction">
-                  {{ t('adminUsers.openSettingsAudit') }}
-                </button>
-              </div>
-
-              <small class="admin-users-actions-note">
-                {{ t('adminUsers.actionsHint') }}
-              </small>
-            </article>
+      <div v-if="users.loading.value" class="admin-sheet-body">
+        <StatePanel tone="loading" :title="t('adminUsers.loadingTitle')" :message="t('adminUsers.loadingHint')" />
+      </div>
+      <div v-else-if="users.error.value && !items.length" class="admin-sheet-body">
+        <StatePanel tone="error" icon="alert" :title="t('adminUsers.loadErrorTitle')" :message="users.error.value">
+          <template #actions>
+            <button class="btn btn-primary" type="button" @click="users.reload">{{ t('adminUsers.retry') }}</button>
           </template>
-          <StatePanel
-            v-else
-            class="admin-users-empty-sidebar"
-            icon="users"
-            :eyebrow="t('adminUsers.selection')"
-            :title="t('adminUsers.pickUser')"
-            :message="filteredUsers.length ? t('adminUsers.chooseUserHint') : t('adminUsers.broadenFilters')"
+        </StatePanel>
+      </div>
+      <template v-else-if="items.length">
+        <div class="data-table-wrap" role="region" :aria-label="t('adminUsers.tableLabel')" tabindex="0">
+          <table class="data-table admin-table">
+            <thead>
+              <tr>
+                <th scope="col">{{ t('adminUsers.colUser') }}</th>
+                <th scope="col">{{ t('adminUsers.colRole') }}</th>
+                <th scope="col">{{ t('adminUsers.colAccount') }}</th>
+                <th scope="col">{{ t('adminUsers.colVerification') }}</th>
+                <th scope="col" class="col-numeric">{{ t('adminUsers.colJoined') }}</th>
+                <th scope="col" class="col-actions">
+                  <span class="sr-only">{{ t('adminUsers.detailHeading') }}</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="user in items"
+                :key="user.id"
+                :class="{ 'is-selected': user.id === selectedId }"
+                data-testid="admin-users-row"
+                @click="selectUser(user.id)"
+              >
+                <td>
+                  <span class="admin-cell-person">
+                    <PortraitAvatar :size="32" :name="user.fullName" />
+                    <span class="admin-cell-title">
+                      <strong>{{ user.fullName }}</strong>
+                      <span>{{ user.email }}</span>
+                    </span>
+                  </span>
+                </td>
+                <td>
+                  <span class="tag">{{ t(roleKey(user.role)) }}</span>
+                </td>
+                <!-- Active is the norm and reads as plain text; only a deactivated account is flagged. -->
+                <td class="admin-users-account">
+                  <span v-if="user.active">{{ t('adminUsers.accountActive') }}</span>
+                  <StatusPill v-else v-bind="accountPill(false)" />
+                </td>
+                <td>
+                  <StatusPill
+                    v-if="user.verificationState"
+                    :label="t(verificationStateKey(user.verificationState))"
+                    :tone="verificationTone(user.verificationState)"
+                  />
+                  <template v-else>
+                    <span aria-hidden="true">—</span>
+                    <span class="sr-only">{{ t('adminUsers.notApplicable') }}</span>
+                  </template>
+                </td>
+                <td class="col-numeric admin-cell-date">
+                  {{ formatDate(user.joinedAt) }}
+                </td>
+                <td class="col-actions">
+                  <button
+                    class="btn btn-ghost btn-icon btn-sm"
+                    type="button"
+                    :aria-label="t('adminUsers.openUser', { name: user.fullName })"
+                    :aria-current="user.id === selectedId ? 'true' : undefined"
+                    @click.stop="selectUser(user.id)"
+                  >
+                    <IconGlyph name="chevronRight" :size="16" />
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="admin-sheet-foot">
+          <PaginationBar
+            :current-page="page + 1"
+            :total-pages="totalPages"
+            :info="t('adminUsers.showing', showingRange)"
+            :label="t('adminUsers.pagination')"
+            icon-only
+            test-id-prefix="admin-users"
+            @update:current-page="goToPage($event - 1)"
           />
-        </aside>
-      </section>
-    </ResourceSection>
+        </div>
+      </template>
+      <div v-else class="admin-sheet-body">
+        <StatePanel tone="empty" icon="search" :title="t('adminUsers.emptyTitle')" :message="t('adminUsers.emptyHint')">
+          <template #actions>
+            <button class="btn btn-secondary" type="button" @click="clearFilters">
+              {{ t('adminUsers.clearFilters') }}
+            </button>
+          </template>
+        </StatePanel>
+      </div>
+    </section>
+
+    <section
+      v-if="pendingInvites.length"
+      class="admin-users-invites"
+      aria-labelledby="admin-users-invites-title"
+      data-testid="admin-users-invites"
+    >
+      <h2 id="admin-users-invites-title" class="admin-users-invites-title">
+        {{ t('adminUsers.invitesPending') }}
+        <span class="chip">{{ t('adminUsers.invitesPendingCount', { count: pendingInvites.length }) }}</span>
+      </h2>
+      <ul class="admin-users-invite-list">
+        <li v-for="invite in pendingInvites" :key="invite.id">
+          <IconGlyph name="mail" :size="16" />
+          <strong>{{ invite.email }}</strong>
+          <span>
+            {{
+              t('adminUsers.inviteRow', { sent: formatDateTime(invite.sentAt), expires: formatDate(invite.expiresAt) })
+            }}
+          </span>
+        </li>
+      </ul>
+    </section>
+
+    <AppOverlay
+      :open="selectedId !== null"
+      variant="drawer"
+      :title="selectedUser?.fullName ?? t('adminUsers.detailHeading')"
+      :subtitle="selectedUser?.email ?? ''"
+      test-id="admin-users-detail"
+      @close="closeUser"
+    >
+      <StatePanel
+        v-if="detail.loading.value"
+        tone="loading"
+        :title="t('adminUsers.detailLoading')"
+        :message="t('adminUsers.detailLoadingHint')"
+      />
+      <StatePanel
+        v-else-if="detail.error.value || !selectedUser"
+        tone="error"
+        icon="alert"
+        :title="t('adminUsers.detailError')"
+        :message="detail.error.value ?? ''"
+      >
+        <template #actions>
+          <button class="btn btn-primary" type="button" @click="detail.reload">{{ t('adminUsers.retry') }}</button>
+        </template>
+      </StatePanel>
+      <template v-else>
+        <div class="admin-users-profile">
+          <PortraitAvatar :size="56" :name="selectedUser.fullName" />
+          <div class="admin-users-profile-tags">
+            <span class="tag">{{ t(roleKey(selectedUser.role)) }}</span>
+            <StatusPill v-bind="accountPill(selectedUser.active)" />
+            <StatusPill
+              v-if="selectedUser.verificationState"
+              :label="t(verificationStateKey(selectedUser.verificationState))"
+              :tone="verificationTone(selectedUser.verificationState)"
+            />
+          </div>
+        </div>
+
+        <dl class="kv-list">
+          <dt>{{ t('adminUsers.kvJoined') }}</dt>
+          <dd>{{ formatDate(selectedUser.joinedAt) }}</dd>
+          <template v-if="selectedUser.approvedAt">
+            <dt>{{ t('adminUsers.kvApproved') }}</dt>
+            <dd>{{ formatDate(selectedUser.approvedAt) }}</dd>
+          </template>
+        </dl>
+
+        <div v-if="selectedUser.deactivation" class="callout is-warning" data-testid="admin-users-deactivation">
+          <IconGlyph name="lock" :size="18" />
+          <div>
+            <p>
+              {{
+                selectedUser.deactivation.actorName
+                  ? t('adminUsers.deactivatedBy', {
+                      date: formatDateTime(selectedUser.deactivation.at),
+                      actor: selectedUser.deactivation.actorName,
+                    })
+                  : t('adminUsers.deactivatedOn', { date: formatDateTime(selectedUser.deactivation.at) })
+              }}
+            </p>
+            <p v-if="selectedUser.deactivation.reason">
+              {{ t('adminUsers.reasonLine', { reason: selectedUser.deactivation.reason }) }}
+            </p>
+          </div>
+        </div>
+
+        <section class="admin-drawer-section" aria-labelledby="admin-users-audit-title">
+          <div class="admin-drawer-head">
+            <h3 id="admin-users-audit-title" class="admin-reader-label">{{ t('adminUsers.recentAudit') }}</h3>
+            <RouterLink
+              class="btn btn-link"
+              :to="{ name: 'admin-audit-log', query: { q: selectedUser.fullName } }"
+              :aria-label="t('adminUsers.viewAllAudit', { name: selectedUser.fullName })"
+            >
+              {{ t('adminUsers.viewAll') }}
+              <IconGlyph name="chevronRight" :size="14" />
+            </RouterLink>
+          </div>
+          <ol v-if="selectedUser.recentAudit.length" class="admin-users-audit">
+            <li v-for="entry in selectedUser.recentAudit" :key="entry.id">
+              <RouterLink class="admin-users-audit-entry" :to="{ name: 'admin-audit-log', query: { entry: entry.id } }">
+                <strong>{{ actionLabel(entry.actionType) }}</strong>
+                <span v-if="entry.targetLabel">{{ entry.targetLabel }}</span>
+                <span
+                  >{{ formatDateTime(entry.createdAt)
+                  }}<template v-if="entry.actorEmail"> · {{ entry.actorEmail }}</template></span
+                >
+              </RouterLink>
+            </li>
+          </ol>
+          <p v-else class="type-caption">{{ t('adminUsers.noAudit') }}</p>
+        </section>
+
+        <section class="admin-drawer-section" aria-labelledby="admin-users-access-title">
+          <h3 id="admin-users-access-title" class="admin-reader-label">{{ t('adminUsers.access') }}</h3>
+          <p class="type-caption">
+            {{
+              selectedUser.self
+                ? t('adminUsers.selfNote')
+                : selectedUser.active
+                  ? t('adminUsers.deactivateHint')
+                  : t('adminUsers.reactivateHint')
+            }}
+          </p>
+        </section>
+      </template>
+      <template v-if="selectedUser && !selectedUser.self && !detail.loading.value" #footer>
+        <button
+          v-if="selectedUser.active"
+          class="btn btn-danger-soft"
+          type="button"
+          data-testid="admin-users-deactivate"
+          @click="openStatusDialog('deactivate')"
+        >
+          <IconGlyph name="lock" :size="16" />
+          <span>{{ t('adminUsers.deactivate') }}</span>
+        </button>
+        <button
+          v-else
+          class="btn btn-secondary"
+          type="button"
+          data-testid="admin-users-reactivate"
+          @click="openStatusDialog('reactivate')"
+        >
+          <IconGlyph name="unlock" :size="16" />
+          <span>{{ t('adminUsers.reactivate') }}</span>
+        </button>
+      </template>
+    </AppOverlay>
+
+    <ConfirmDialog
+      :open="statusDialog !== null"
+      :title="statusDialogTitle"
+      :message="statusDialogMessage"
+      :confirm-label="statusDialog === 'deactivate' ? t('adminUsers.deactivate') : t('adminUsers.reactivate')"
+      :tone="statusDialog === 'deactivate' ? 'danger' : 'primary'"
+      :busy="saving"
+      :error="dialogError"
+      test-id="admin-users-status-dialog"
+      @cancel="closeStatusDialog"
+      @confirm="confirmStatus"
+    >
+      <div v-if="statusDialog === 'deactivate' && selectedUser" class="callout is-warning">
+        <IconGlyph name="alert" :size="18" />
+        <ul data-testid="admin-users-impact">
+          <li>
+            <strong>{{ t('adminUsers.impactSignedOut', { name: selectedUser.fullName }) }}</strong>
+          </li>
+          <li v-for="line in impactLines" :key="line">{{ line }}</li>
+        </ul>
+      </div>
+      <p v-else-if="statusDialog === 'reactivate' && selectedUser" class="callout">
+        <IconGlyph name="unlock" :size="18" />
+        <span>{{ t('adminUsers.reactivateCopy', { name: selectedUser.fullName }) }}</span>
+      </p>
+      <div class="field">
+        <label class="field-label" for="admin-users-reason">
+          {{ t('adminUsers.reasonLabel') }}<span class="required-mark" aria-hidden="true">*</span>
+        </label>
+        <textarea
+          id="admin-users-reason"
+          v-model="reason"
+          class="textarea"
+          rows="3"
+          maxlength="500"
+          required
+          :aria-invalid="Boolean(reasonError)"
+          :aria-describedby="reasonError ? 'admin-users-reason-error' : 'admin-users-reason-hint'"
+          data-testid="admin-users-reason"
+        />
+        <p id="admin-users-reason-hint" class="field-hint">{{ t('adminUsers.reasonHint') }}</p>
+        <p v-if="reasonError" id="admin-users-reason-error" class="field-error" role="alert">{{ reasonError }}</p>
+      </div>
+    </ConfirmDialog>
+
+    <AppOverlay
+      :open="inviteOpen"
+      variant="drawer"
+      :title="t('adminUsers.inviteTitle')"
+      :subtitle="t('adminUsers.inviteIntro')"
+      test-id="admin-users-invite-drawer"
+      @close="inviteOpen = false"
+    >
+      <form id="admin-users-invite-form" class="form-grid" novalidate @submit.prevent="sendInvite">
+        <div class="field">
+          <label class="field-label" for="admin-users-invite-email">
+            {{ t('adminUsers.inviteEmail') }}<span class="required-mark" aria-hidden="true">*</span>
+          </label>
+          <input
+            id="admin-users-invite-email"
+            v-model="inviteEmail"
+            class="input"
+            type="email"
+            autocomplete="off"
+            required
+            placeholder="name@example.com"
+            :aria-invalid="Boolean(inviteError)"
+            :aria-describedby="inviteError ? 'admin-users-invite-error' : 'admin-users-invite-hint'"
+            data-testid="admin-users-invite-email"
+          />
+          <p id="admin-users-invite-hint" class="field-hint">{{ t('adminUsers.inviteEmailHint') }}</p>
+          <p v-if="inviteError" id="admin-users-invite-error" class="field-error" role="alert">{{ inviteError }}</p>
+        </div>
+        <p class="callout">
+          <IconGlyph name="info" :size="18" />
+          <span>{{ t('adminUsers.inviteListNote') }}</span>
+        </p>
+      </form>
+      <template #footer>
+        <button class="btn btn-ghost" type="button" @click="inviteOpen = false">{{ t('adminUsers.cancel') }}</button>
+        <button
+          class="btn btn-primary"
+          type="submit"
+          form="admin-users-invite-form"
+          :disabled="inviting"
+          :aria-busy="inviting"
+          data-testid="admin-users-send-invite"
+        >
+          <IconGlyph name="send" :size="16" />
+          <span>{{ t('adminUsers.sendInvite') }}</span>
+        </button>
+      </template>
+    </AppOverlay>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 
-import { adminApi } from '@/api/services'
-import IconGlyph from '@/components/common/IconGlyph.vue'
+import { adminUsersApi } from '@/api/ops'
+import AdminUsersTabs from '@/components/admin/AdminUsersTabs.vue'
 import DataNotice from '@/components/common/DataNotice.vue'
+import IconGlyph from '@/components/common/IconGlyph.vue'
+import PaginationBar from '@/components/common/PaginationBar.vue'
 import PortraitAvatar from '@/components/common/PortraitAvatar.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
-import ResourceSection from '@/components/dashboard/ResourceSection.vue'
+import StatusPill from '@/components/common/StatusPill.vue'
+import AppOverlay from '@/components/common/AppOverlay.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
-import { useResource } from '@/composables/useResource'
-import { adminAuditLogs, adminStudents, adminTeachers, adminUsers } from '@/demo/data'
+import { useActionFeedback } from '@/composables/useActionFeedback'
+import { useAuditLabels } from '@/composables/useAuditLabels'
+import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
+import { useLocalMessages } from '@/composables/useLocalMessages'
+import { useResource, useServerPage } from '@/composables/useResource'
 import { adminUsersMessages } from '@/plugins/adminUsersMessages'
+import { auditActionMessages } from '@/plugins/auditActionMessages'
+import { opsLabelMessages } from '@/plugins/opsLabelMessages'
+import type { UserRole } from '@/types/api'
+import type { AdminUserDetail, AdminUserQuery } from '@/types/ops'
 import { resolveApiError } from '@/utils/apiError'
+import { isValidEmail } from '@/utils/email'
 import { formatDate, formatDateTime } from '@/utils/format'
+import { roleKey, verificationStateKey, verificationTone } from '@/utils/opsLabels'
+import '@/styles/ops-admin.css'
 
+const PAGE_SIZE = 10
+const ROLE_OPTIONS: readonly UserRole[] = ['STUDENT', 'TEACHER', 'ADMIN']
+
+type AccountFilter = '' | 'ACTIVE' | 'DEACTIVATED'
+type StatusDialog = 'deactivate' | 'reactivate'
+
+const route = useRoute()
 const router = useRouter()
-const { t } = useI18n({
-  messages: {
-    en: { adminUsers: adminUsersMessages.en },
-    ms: { adminUsers: adminUsersMessages.ms },
-    zh: { adminUsers: adminUsersMessages.zh },
-  },
+const { t } = useLocalMessages({
+  adminUsers: adminUsersMessages,
+  opsLabels: opsLabelMessages,
+  auditActions: auditActionMessages,
 })
+const { actionLabel } = useAuditLabels(t)
+const { actionError, actionSuccess, clearFeedback, showSuccess } = useActionFeedback()
+const noticeDetail = ref<string | null>(null)
 
-type TabKey = 'ALL' | 'STUDENTS' | 'TEACHERS' | 'ADMINS'
-type RoleFilter = 'ALL' | 'STUDENT' | 'TEACHER' | 'ADMIN'
-type StatusFilter = 'ALL' | 'ACTIVE' | 'PENDING' | 'INACTIVE'
-type AccountFilter = 'ALL' | 'VERIFIED' | 'VERIFICATION' | 'SUSPENDED'
-type ClassFilter = 'ALL' | 'ENROLLED' | 'PUBLISHED' | 'ADMIN'
-type SortMode = 'joined' | 'name'
-type ExtraFilter = 'filters' | 'recent' | 'verified'
-type PrimaryRole = Exclude<RoleFilter, 'ALL'>
-type RoleTone = 'green' | 'blue' | 'purple'
-type StatusTone = 'active' | 'pending' | 'inactive'
-type AccountTone = 'verified' | 'warning'
-type AvatarKind = 'student' | 'female' | 'male' | 'hijab'
-type FollowUpTone = 'green' | 'blue' | 'purple'
-type AdminUserRoute =
-  | '/admin/analytics'
-  | '/admin/content'
-  | '/admin/moderation'
-  | '/admin/settings'
-  | '/admin/teacher-verification'
+// ----- list -----
 
-const roleFilterOrder: readonly RoleFilter[] = ['ALL', 'STUDENT', 'TEACHER', 'ADMIN']
-const statusFilterOrder: readonly StatusFilter[] = ['ALL', 'ACTIVE', 'PENDING', 'INACTIVE']
-const accountFilterOrder: readonly AccountFilter[] = ['ALL', 'VERIFIED', 'VERIFICATION', 'SUSPENDED']
-const classFilterOrder: readonly ClassFilter[] = ['ALL', 'ENROLLED', 'PUBLISHED', 'ADMIN']
-const extraFilterOrder: readonly ExtraFilter[] = ['filters', 'recent', 'verified']
-const roleTones: Record<PrimaryRole, RoleTone> = {
-  ADMIN: 'purple',
-  TEACHER: 'blue',
-  STUDENT: 'green',
-}
-const roleIdPrefixes: Record<PrimaryRole, string> = {
-  ADMIN: 'A',
-  TEACHER: 'T',
-  STUDENT: 'S',
+const { searchTerm, keyword, clear: clearSearch } = useDebouncedSearch()
+const role = ref<UserRole | ''>('')
+const account = ref<AccountFilter>('')
+const page = ref(0)
+
+function usersQuery(): AdminUserQuery {
+  const query: AdminUserQuery = {}
+  if (keyword.value) query.keyword = keyword.value
+  if (role.value) query.role = role.value
+  if (account.value) query.active = account.value === 'ACTIVE'
+  return { ...query, page: page.value, size: PAGE_SIZE }
 }
 
-const usersResource = useResource(() => adminApi.users(), adminUsers)
-const teachersResource = useResource(() => adminApi.teachers(), adminTeachers)
-const studentsResource = useResource(() => adminApi.students(), adminStudents)
-const auditResource = useResource(() => adminApi.auditLogs(), adminAuditLogs)
+const users = useResource(() => adminUsersApi.list(usersQuery()))
+const { items, totalPages, range: showingRange, goToPage } = useServerPage(users, page)
 
-const emptyUserPage = {
-  items: [],
-  page: 0,
-  size: 0,
-  totalItems: 0,
-  totalPages: 0,
-}
-
-const users = computed(
-  () => usersResource.data.value ?? (usersResource.usingFallback.value ? adminUsers : emptyUserPage),
-)
-const teachers = computed(
-  () => teachersResource.data.value ?? (teachersResource.usingFallback.value ? adminTeachers : emptyUserPage),
-)
-const students = computed(
-  () => studentsResource.data.value ?? (studentsResource.usingFallback.value ? adminStudents : emptyUserPage),
-)
-const auditLogs = computed(() => auditResource.data.value ?? (auditResource.usingFallback.value ? adminAuditLogs : []))
-
-const pageLoading = computed(
-  () =>
-    usersResource.loading.value ||
-    teachersResource.loading.value ||
-    studentsResource.loading.value ||
-    auditResource.loading.value,
-)
-const pageError = computed(
-  () =>
-    usersResource.error.value ||
-    teachersResource.error.value ||
-    studentsResource.error.value ||
-    auditResource.error.value,
-)
-const usingFallback = computed(
-  () =>
-    usersResource.usingFallback.value ||
-    teachersResource.usingFallback.value ||
-    studentsResource.usingFallback.value ||
-    auditResource.usingFallback.value,
-)
-const actionError = ref<string | null>(null)
-const actionSuccess = ref<string | null>(null)
-const submittingUserStatus = ref(false)
-const userStatusActionDisabled = computed(() => usingFallback.value || submittingUserStatus.value)
-const noticeError = computed(() => actionError.value || pageError.value)
-const directoryNoticeDetail = computed(() =>
-  pageError.value ? t('adminUsers.errorContext') : usingFallback.value ? t('adminUsers.previewContext') : null,
-)
-
-const tabs = computed<Array<{ label: string; value: TabKey }>>(() => [
-  { label: t('adminUsers.allUsers'), value: 'ALL' },
-  { label: t('adminUsers.students'), value: 'STUDENTS' },
-  { label: t('adminUsers.teachers'), value: 'TEACHERS' },
-  { label: t('adminUsers.admins'), value: 'ADMINS' },
-])
-
-const searchTerm = ref('')
-const activeTab = ref<TabKey>('ALL')
-const roleFilter = ref<RoleFilter>('ALL')
-const statusFilter = ref<StatusFilter>('ALL')
-const accountFilter = ref<AccountFilter>('ALL')
-const classFilter = ref<ClassFilter>('ALL')
-const sortMode = ref<SortMode>('joined')
-const extraFilter = ref<ExtraFilter>('filters')
-const currentPage = ref(1)
-const pageSize = 10
-
-type CombinedUser = {
-  userId: number
-  fullName: string
-  email: string
-  active: boolean
-  roleLabel: string
-  roleKey: PrimaryRole
-  roleTone: RoleTone
-  statusLabel: string
-  statusKey: Exclude<StatusFilter, 'ALL'>
-  statusTone: StatusTone
-  accountLabel: string
-  accountKey: Exclude<AccountFilter, 'ALL'>
-  accountTone: AccountTone
-  lastActiveLabel: string
-  lastActiveAt: string
-  joinedLabel: string
-  internalId: string
-  avatarKind: AvatarKind
-  classKey: ClassFilter
-  displayOrder: number
-}
-
-interface FollowUpRoute {
-  title: string
-  copy: string
-  icon: string
-  tone: FollowUpTone
-  path: AdminUserRoute
-}
-
-const combinedUsers = computed<CombinedUser[]>(() => {
-  const teacherByUserId = new Map(teachers.value.items.map((item) => [item.userId, item]))
-  const studentUserIds = new Set(students.value.items.map((item) => item.userId))
-
-  return users.value.items.map((item) => {
-    const primaryRole = getPrimaryRole(item.roles)
-    const teacher = teacherByUserId.get(item.userId)
-    const teacherStatus = teacher?.teacherStatus ?? item.teacherStatus ?? null
-    const isStudent = studentUserIds.has(item.userId)
-    const statusKey = getStatusKey(item.active, primaryRole, teacherStatus)
-    const accountKey = getAccountKey(item.active, primaryRole, teacherStatus)
-
-    return {
-      userId: item.userId,
-      fullName: item.fullName,
-      email: item.email,
-      active: item.active,
-      roleLabel: roleLabel(primaryRole),
-      roleKey: primaryRole,
-      roleTone: roleTones[primaryRole],
-      statusLabel: statusLabel(statusKey),
-      statusKey,
-      statusTone: getStatusTone(statusKey),
-      accountLabel: accountLabel(accountKey),
-      accountKey,
-      accountTone: getAccountTone(accountKey),
-      lastActiveLabel: formatDate(item.updatedAt),
-      lastActiveAt: item.updatedAt,
-      joinedLabel: formatDate(item.createdAt),
-      internalId: `${roleIdPrefixes[primaryRole]}-${String(item.userId).padStart(6, '0')}`,
-      avatarKind: getAvatarKind(primaryRole, item.fullName),
-      classKey: getClassKey(primaryRole, isStudent),
-      displayOrder: -new Date(item.createdAt).getTime(),
-    }
-  })
+watch([keyword, role, account], () => {
+  page.value = 0
+  void users.reload()
 })
-
-const filteredUsers = computed(() => {
-  const keyword = searchTerm.value.trim().toLowerCase()
-
-  const result = combinedUsers.value.filter((item) => {
-    if (activeTab.value === 'STUDENTS' && item.roleKey !== 'STUDENT') return false
-    if (activeTab.value === 'TEACHERS' && item.roleKey !== 'TEACHER') return false
-    if (activeTab.value === 'ADMINS' && item.roleKey !== 'ADMIN') return false
-
-    if (roleFilter.value !== 'ALL' && item.roleKey !== roleFilter.value) return false
-    if (statusFilter.value !== 'ALL' && item.statusKey !== statusFilter.value) return false
-    if (accountFilter.value !== 'ALL' && item.accountKey !== accountFilter.value) return false
-    if (classFilter.value !== 'ALL' && item.classKey !== classFilter.value) return false
-
-    if (extraFilter.value === 'recent' && !isToday(item.lastActiveAt)) return false
-    if (extraFilter.value === 'verified' && item.accountKey !== 'VERIFIED') return false
-
-    if (!keyword) return true
-    return (
-      item.fullName.toLowerCase().includes(keyword) ||
-      item.email.toLowerCase().includes(keyword) ||
-      item.internalId.toLowerCase().includes(keyword)
-    )
-  })
-
-  result.sort((a, b) => {
-    if (sortMode.value === 'name') return a.fullName.localeCompare(b.fullName)
-    return a.displayOrder - b.displayOrder
-  })
-
-  return result
-})
-
-const hasActiveFilters = computed(
-  () =>
-    Boolean(searchTerm.value.trim()) ||
-    activeTab.value !== 'ALL' ||
-    roleFilter.value !== 'ALL' ||
-    statusFilter.value !== 'ALL' ||
-    accountFilter.value !== 'ALL' ||
-    classFilter.value !== 'ALL' ||
-    sortMode.value !== 'joined' ||
-    extraFilter.value !== 'filters',
-)
-const totalPages = computed(() => Math.max(1, Math.ceil(filteredUsers.value.length / pageSize)))
-const pagedUsers = computed(() => {
-  const start = (currentPage.value - 1) * pageSize
-  return filteredUsers.value.slice(start, start + pageSize)
-})
-
-const selectedUserId = ref<number | null>(null)
-const selectedUser = computed(() => {
-  if (selectedUserId.value === null) return null
-  return filteredUsers.value.find((item) => item.userId === selectedUserId.value) ?? null
-})
-
-watch(
-  filteredUsers,
-  (items, previousItems) => {
-    if (currentPage.value > totalPages.value) currentPage.value = 1
-
-    if (!items.length) {
-      selectedUserId.value = null
-      return
-    }
-
-    if (selectedUserId.value === null) {
-      if (!(previousItems?.length ?? 0)) {
-        selectedUserId.value = items[0]?.userId ?? null
-      }
-      return
-    }
-
-    if (!items.some((item) => item.userId === selectedUserId.value)) {
-      selectedUserId.value = items[0]?.userId ?? null
-    }
-  },
-  { immediate: true, deep: true },
-)
-
-const roleFilterLabel = computed(() =>
-  roleFilter.value === 'ALL' ? t('adminUsers.allRoles') : roleLabel(roleFilter.value),
-)
-const statusFilterLabel = computed(() =>
-  statusFilter.value === 'ALL' ? t('adminUsers.allStatus') : statusLabel(statusFilter.value),
-)
-const accountFilterLabel = computed(() =>
-  accountFilter.value === 'ALL' ? t('adminUsers.allAccounts') : accountLabel(accountFilter.value),
-)
-const classFilterLabel = computed(() => {
-  if (classFilter.value === 'ALL') return t('adminUsers.allClasses')
-  if (classFilter.value === 'ENROLLED') return t('adminUsers.enrolled')
-  if (classFilter.value === 'PUBLISHED') return t('adminUsers.published')
-  return t('adminUsers.adminAccess')
-})
-const sortModeLabel = computed(() => (sortMode.value === 'joined' ? t('adminUsers.filters') : 'A-Z'))
-const selectedUserStatusActionLabel = computed(() => {
-  if (!selectedUser.value) return t('adminUsers.updateAccount')
-  if (submittingUserStatus.value) {
-    return selectedUser.value.active ? t('adminUsers.suspending') : t('adminUsers.reactivating')
-  }
-  return selectedUser.value.active ? t('adminUsers.suspend') : t('adminUsers.reactivate')
-})
-const extraFilterLabel = computed(() => {
-  if (extraFilter.value === 'recent') return t('adminUsers.recent')
-  if (extraFilter.value === 'verified') return t('adminUsers.verified')
-  return t('adminUsers.moreFilters')
-})
-const selectedUserMetaLabel = computed(() => {
-  if (selectedUser.value) return t('adminUsers.focusedOn', { name: selectedUser.value.fullName })
-  if (!filteredUsers.value.length) {
-    return hasActiveFilters.value ? t('adminUsers.noFilterMatch') : t('adminUsers.recordsPending')
-  }
-  return t('adminUsers.chooseContext')
-})
-const paginationLabel = computed(() => {
-  const start = filteredUsers.value.length ? (currentPage.value - 1) * pageSize + 1 : 0
-  const end = Math.min(filteredUsers.value.length, currentPage.value * pageSize)
-  return t('adminUsers.pagination', { start, end, total: filteredUsers.value.length })
-})
-const selectedFollowUpRoutes = computed<FollowUpRoute[]>(() => {
-  if (selectedUser.value?.roleKey === 'TEACHER') {
-    return [
-      {
-        title: t('adminUsers.teacherVerification'),
-        copy: t('adminUsers.teacherVerificationHint'),
-        icon: 'status',
-        tone: 'green',
-        path: '/admin/teacher-verification',
-      },
-      {
-        title: t('adminUsers.contentReview'),
-        copy: t('adminUsers.contentReviewHint'),
-        icon: 'content',
-        tone: 'blue',
-        path: '/admin/content',
-      },
-      {
-        title: t('adminUsers.auditTrail'),
-        copy: t('adminUsers.auditTrailHint'),
-        icon: 'history',
-        tone: 'purple',
-        path: '/admin/settings',
-      },
-    ]
-  }
-
-  if (selectedUser.value?.roleKey === 'ADMIN') {
-    return [
-      {
-        title: t('adminUsers.auditLogs'),
-        copy: t('adminUsers.auditLogsHint'),
-        icon: 'status',
-        tone: 'green',
-        path: '/admin/settings',
-      },
-      {
-        title: t('adminUsers.platformAnalytics'),
-        copy: t('adminUsers.platformAnalyticsHint'),
-        icon: 'analytics',
-        tone: 'blue',
-        path: '/admin/analytics',
-      },
-      {
-        title: t('adminUsers.moderation'),
-        copy: t('adminUsers.moderationHint'),
-        icon: 'moderation',
-        tone: 'purple',
-        path: '/admin/moderation',
-      },
-    ]
-  }
-
-  return [
-    {
-      title: t('adminUsers.learnerAnalytics'),
-      copy: t('adminUsers.learnerAnalyticsHint'),
-      icon: 'analytics',
-      tone: 'green',
-      path: '/admin/analytics',
-    },
-    {
-      title: t('adminUsers.auditLogs'),
-      copy: t('adminUsers.accountAuditHint'),
-      icon: 'history',
-      tone: 'blue',
-      path: '/admin/settings',
-    },
-    {
-      title: t('adminUsers.supportSettings'),
-      copy: t('adminUsers.supportSettingsHint'),
-      icon: 'settings',
-      tone: 'purple',
-      path: '/admin/settings',
-    },
-  ]
-})
-
-const primaryActionLabel = computed(() => {
-  if (selectedUser.value?.roleKey === 'TEACHER') return t('adminUsers.openTeacherReview')
-  if (selectedUser.value?.roleKey === 'STUDENT') return t('adminUsers.openAnalytics')
-  return t('adminUsers.openAuditLogs')
-})
-
-const secondaryActionLabel = computed(() => {
-  if (selectedUser.value?.roleKey === 'TEACHER') return t('adminUsers.openContentReview')
-  if (selectedUser.value?.roleKey === 'STUDENT') return t('adminUsers.openSupport')
-  return t('adminUsers.openPlatformAnalytics')
-})
-
-const selectedAudit = computed(() =>
-  auditLogs.value.slice(0, 5).map((item) => ({
-    id: item.id,
-    title: auditActionLabel(item.actionType),
-    time: formatDateTime(item.createdAt),
-    meta: item.actorEmail || t('adminUsers.system'),
-  })),
-)
-
-function cycleRoleFilter(): void {
-  roleFilter.value = getNextOption(roleFilterOrder, roleFilter.value)
-}
-
-function cycleStatusFilter(): void {
-  statusFilter.value = getNextOption(statusFilterOrder, statusFilter.value)
-}
-
-function cycleAccountFilter(): void {
-  accountFilter.value = getNextOption(accountFilterOrder, accountFilter.value)
-}
-
-function cycleClassFilter(): void {
-  classFilter.value = getNextOption(classFilterOrder, classFilter.value)
-}
-
-function cycleSortMode(): void {
-  sortMode.value = sortMode.value === 'joined' ? 'name' : 'joined'
-}
-
-function cycleExtraFilter(): void {
-  extraFilter.value = getNextOption(extraFilterOrder, extraFilter.value)
-}
 
 function clearFilters(): void {
-  searchTerm.value = ''
-  roleFilter.value = 'ALL'
-  statusFilter.value = 'ALL'
-  accountFilter.value = 'ALL'
-  classFilter.value = 'ALL'
-  sortMode.value = 'joined'
-  extraFilter.value = 'filters'
-  activeTab.value = 'ALL'
-  currentPage.value = 1
+  clearSearch()
+  role.value = ''
+  account.value = ''
 }
 
-function setActiveTab(tab: TabKey): void {
-  activeTab.value = tab
+function accountPill(active: boolean) {
+  return active
+    ? { label: t('adminUsers.accountActive'), tone: 'success' as const }
+    : { label: t('adminUsers.accountDeactivated'), tone: 'neutral' as const, icon: 'lock' }
 }
 
-function goToPage(page: number): void {
-  currentPage.value = page
+// ----- selected user (`?user=<id>`) -----
+
+const selectedId = computed<number | null>(() => {
+  const id = Number(route.query.user)
+  return Number.isInteger(id) && id > 0 ? id : null
+})
+
+const detail = useResource<AdminUserDetail | null>(
+  () => (selectedId.value ? adminUsersApi.get(selectedId.value) : Promise.resolve(null)),
+  false,
+)
+const selectedUser = computed(() => detail.data.value)
+
+watch(
+  selectedId,
+  (id, previous) => {
+    if (id !== previous) detail.data.value = null
+    void detail.reload()
+  },
+  { immediate: true },
+)
+
+function selectUser(id: number): void {
+  void router.replace({ query: { ...route.query, user: String(id) } })
 }
 
-function goToPreviousPage(): void {
-  currentPage.value = Math.max(1, currentPage.value - 1)
+function closeUser(): void {
+  if (statusDialog.value) return
+  const query = { ...route.query }
+  delete query.user
+  void router.replace({ query })
 }
 
-function goToNextPage(): void {
-  currentPage.value = Math.min(totalPages.value, currentPage.value + 1)
-}
+// ----- deactivate / reactivate -----
 
-function selectUser(userId: number): void {
-  selectedUserId.value = userId
-}
+const statusDialog = ref<StatusDialog | null>(null)
+const reason = ref('')
+const reasonError = ref<string | null>(null)
+const dialogError = ref<string | null>(null)
+const saving = ref(false)
 
-function openAdminRoute(path: AdminUserRoute): void {
-  void router.push(path)
-}
+const statusDialogTitle = computed(() => {
+  const name = selectedUser.value?.fullName ?? ''
+  return statusDialog.value === 'reactivate'
+    ? t('adminUsers.reactivateTitle', { name })
+    : t('adminUsers.deactivateTitle', { name })
+})
+const statusDialogMessage = computed(() =>
+  selectedUser.value
+    ? t('adminUsers.dialogSubtitle', { email: selectedUser.value.email, role: t(roleKey(selectedUser.value.role)) })
+    : '',
+)
 
-function openAnalytics(): void {
-  openAdminRoute('/admin/analytics')
-}
-
-function openSettings(): void {
-  openAdminRoute('/admin/settings')
-}
-
-function openProgressTarget(): void {
-  if (selectedUser.value?.roleKey === 'TEACHER') {
-    openAdminRoute('/admin/teacher-verification')
-    return
+/** The consequences listed in the Deactivate dialog; lines with nothing to say are left out. */
+const impactLines = computed<string[]>(() => {
+  const impact = selectedUser.value?.deactivationImpact
+  if (!impact) return []
+  const lines: string[] = []
+  if (impact.publishedClasses.length) {
+    lines.push(
+      t('adminUsers.impactClasses', { titles: impact.publishedClasses.map((title) => `“${title}”`).join(', ') }),
+    )
   }
-
-  openAdminRoute('/admin/analytics')
-}
-
-function openActivityTarget(): void {
-  if (selectedUser.value?.roleKey === 'TEACHER') {
-    openAdminRoute('/admin/teacher-verification')
-    return
+  if (impact.upcomingSessions > 0) {
+    lines.push(t('adminUsers.impactSessions', { sessions: impact.upcomingSessions, bookings: impact.bookings }))
   }
+  if (impact.reviewItems > 0) lines.push(t('adminUsers.impactReview', { count: impact.reviewItems }))
+  return lines
+})
 
-  openSettings()
+function openStatusDialog(kind: StatusDialog): void {
+  reason.value = ''
+  reasonError.value = null
+  dialogError.value = null
+  statusDialog.value = kind
 }
 
-function openPrimaryAction(): void {
-  if (selectedUser.value?.roleKey === 'TEACHER') {
-    openAdminRoute('/admin/teacher-verification')
-    return
-  }
-
-  openSettings()
+function closeStatusDialog(): void {
+  if (!saving.value) statusDialog.value = null
 }
 
-function openSecondaryAction(): void {
-  if (selectedUser.value?.roleKey === 'TEACHER') {
-    openAdminRoute('/admin/content')
-    return
-  }
+async function confirmStatus(): Promise<void> {
+  const user = selectedUser.value
+  const kind = statusDialog.value
+  if (!user || !kind) return
+  const text = reason.value.trim()
+  reasonError.value = text ? null : t('adminUsers.reasonMissing')
+  if (!text) return
 
-  openSettings()
-}
-
-function openTeacherVerification(): void {
-  openAdminRoute('/admin/teacher-verification')
-}
-
-function openRecoveryAction(): void {
-  openSettings()
-}
-
-function clearSelection(): void {
-  selectedUserId.value = null
-}
-
-async function toggleSelectedUserStatus(): Promise<void> {
-  if (submittingUserStatus.value) return
-  if (!selectedUser.value) return
-
-  if (usingFallback.value) {
-    actionSuccess.value = null
-    actionError.value = t('adminUsers.previewMutation')
-    return
-  }
-
-  actionError.value = null
-  actionSuccess.value = null
-  submittingUserStatus.value = true
-  const nextActive = !selectedUser.value.active
-
+  saving.value = true
+  dialogError.value = null
   try {
-    await adminApi.updateUserStatus(selectedUser.value.userId, { active: nextActive })
-    await usersResource.reload()
-    await teachersResource.reload()
-    await studentsResource.reload()
-    actionSuccess.value = nextActive ? t('adminUsers.reactivated') : t('adminUsers.suspended')
-  } catch (reason) {
-    actionError.value = resolveApiError(reason, t('adminUsers.updateError'))
+    if (kind === 'deactivate') {
+      const result = await adminUsersApi.deactivate(user.id, text)
+      detail.data.value = result.user
+      showSuccess(
+        t('adminUsers.deactivated', {
+          name: user.fullName,
+          sessions: result.cancelledSessions,
+          bookings: result.endedBookings,
+          items: result.itemsBackToDraft,
+        }),
+      )
+    } else {
+      detail.data.value = await adminUsersApi.reactivate(user.id, text)
+      showSuccess(t('adminUsers.reactivated', { name: user.fullName }))
+    }
+    noticeDetail.value = t('adminUsers.reasonLine', { reason: text })
+    statusDialog.value = null
+    void users.reload()
+  } catch (failure) {
+    dialogError.value = resolveApiError(
+      failure,
+      kind === 'deactivate' ? t('adminUsers.deactivateFailed') : t('adminUsers.reactivateFailed'),
+    )
   } finally {
-    submittingUserStatus.value = false
+    saving.value = false
   }
 }
 
-function reloadAll(): void {
-  void usersResource.reload()
-  void teachersResource.reload()
-  void studentsResource.reload()
-  void auditResource.reload()
+// ----- invite admin -----
+
+const invites = useResource(() => adminUsersApi.invites())
+const pendingInvites = computed(() => invites.data.value ?? [])
+const inviteOpen = ref(false)
+const inviteEmail = ref('')
+const inviteError = ref<string | null>(null)
+const inviting = ref(false)
+
+function openInvite(): void {
+  inviteEmail.value = ''
+  inviteError.value = null
+  inviteOpen.value = true
 }
 
-function getNextOption<T>(options: readonly T[], current: T): T {
-  return options[(options.indexOf(current) + 1) % options.length]
-}
-
-function getPrimaryRole(roles: readonly string[]): PrimaryRole {
-  if (roles.includes('ADMIN')) return 'ADMIN'
-  if (roles.includes('TEACHER')) return 'TEACHER'
-  return 'STUDENT'
-}
-
-function roleLabel(role: PrimaryRole): string {
-  const keys: Record<PrimaryRole, string> = {
-    ADMIN: 'admin',
-    TEACHER: 'teacher',
-    STUDENT: 'student',
+async function sendInvite(): Promise<void> {
+  const email = inviteEmail.value.trim().toLowerCase()
+  if (!isValidEmail(email)) {
+    inviteError.value = t('adminUsers.inviteEmailInvalid')
+    return
   }
-  return t(`adminUsers.${keys[role]}`)
-}
-
-function getStatusKey(active: boolean, role: PrimaryRole, teacherStatus: string | null): Exclude<StatusFilter, 'ALL'> {
-  if (!active) return 'INACTIVE'
-  if (role !== 'TEACHER') return 'ACTIVE'
-  if (teacherStatus === 'PENDING') return 'PENDING'
-  return teacherStatus === 'REJECTED' ? 'INACTIVE' : 'ACTIVE'
-}
-
-function statusLabel(status: Exclude<StatusFilter, 'ALL'>): string {
-  const keys: Record<Exclude<StatusFilter, 'ALL'>, string> = {
-    ACTIVE: 'statusActive',
-    PENDING: 'statusPending',
-    INACTIVE: 'statusInactive',
+  inviting.value = true
+  inviteError.value = null
+  try {
+    await adminUsersApi.invite(email)
+    clearFeedback()
+    noticeDetail.value = null
+    showSuccess(t('adminUsers.inviteSent', { email }))
+    inviteOpen.value = false
+    void invites.reload()
+  } catch (failure) {
+    inviteError.value = resolveApiError(failure, t('adminUsers.inviteFailed'))
+  } finally {
+    inviting.value = false
   }
-  return t(`adminUsers.${keys[status]}`)
-}
-
-function getStatusTone(status: Exclude<StatusFilter, 'ALL'>): StatusTone {
-  if (status === 'ACTIVE') return 'active'
-  return status === 'PENDING' ? 'pending' : 'inactive'
-}
-
-function getAccountKey(
-  active: boolean,
-  role: PrimaryRole,
-  teacherStatus: string | null,
-): Exclude<AccountFilter, 'ALL'> {
-  if (!active) return 'SUSPENDED'
-  return role === 'TEACHER' && teacherStatus !== 'APPROVED' ? 'VERIFICATION' : 'VERIFIED'
-}
-
-function accountLabel(account: Exclude<AccountFilter, 'ALL'>): string {
-  const keys: Record<Exclude<AccountFilter, 'ALL'>, string> = {
-    VERIFIED: 'accountVerified',
-    VERIFICATION: 'accountVerification',
-    SUSPENDED: 'accountSuspended',
-  }
-  return t(`adminUsers.${keys[account]}`)
-}
-
-function getAccountTone(account: Exclude<AccountFilter, 'ALL'>): AccountTone {
-  return account === 'VERIFIED' ? 'verified' : 'warning'
-}
-
-function isToday(value: string): boolean {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return false
-  const now = new Date()
-  return (
-    date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth() && date.getDate() === now.getDate()
-  )
-}
-
-function auditActionLabel(action: string): string {
-  const keys: Record<string, string> = {
-    TEACHER_APPROVED: 'auditTeacherApproved',
-    CONTENT_ARCHIVED: 'auditContentArchived',
-    APPLICATION_SUBMITTED: 'auditApplicationSubmitted',
-    ADMIN_LOGIN: 'auditAdminLogin',
-  }
-  const key = keys[action]
-  return key ? t(`adminUsers.${key}`) : action.replaceAll('_', ' ')
-}
-
-function getClassKey(role: PrimaryRole, isStudent: boolean): ClassFilter {
-  if (role === 'ADMIN') return 'ADMIN'
-  return isStudent ? 'ENROLLED' : 'PUBLISHED'
-}
-
-function getAvatarKind(role: PrimaryRole, fullName: string): AvatarKind {
-  if (role === 'ADMIN') return 'female'
-  if (role !== 'TEACHER') return 'student'
-
-  const normalizedName = fullName.toLowerCase()
-  if (normalizedName.includes('siti')) return 'hijab'
-  return normalizedName.includes('li') ? 'female' : 'male'
 }
 </script>
-
-<style scoped>
-.admin-users-page {
-  position: relative;
-}
-
-.admin-users-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1.6fr) 354px;
-  gap: 12px;
-  align-items: start;
-}
-
-.admin-users-sidebar {
-  min-width: 0;
-  display: grid;
-  gap: 16px;
-}
-
-.admin-users-profile-copy {
-  gap: 6px;
-}
-
-.admin-users-table-card,
-.admin-users-profile-card,
-.admin-users-info-card,
-.admin-users-progress-card,
-.admin-users-activity-card,
-.admin-users-audit-card,
-.admin-users-actions-card {
-  border-radius: 28px;
-}
-
-.teacher-outline-button {
-  border: 1px solid rgba(223, 227, 243, 0.96);
-  background: rgba(255, 255, 255, 0.98);
-  color: var(--text);
-  border-radius: 14px;
-  padding: 10px 15px;
-  font-weight: 700;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86);
-}
-
-.admin-users-tabs {
-  display: flex;
-  align-items: center;
-  gap: 28px;
-  padding-bottom: 11px;
-  border-bottom: 1px solid rgba(236, 239, 247, 0.96);
-}
-
-.admin-users-tab {
-  padding: 0 2px 13px;
-  border: 0;
-  background: transparent;
-  color: #6b7795;
-  font-weight: 700;
-}
-
-.admin-users-tab.is-active {
-  color: var(--primary);
-  border-bottom: 3px solid var(--primary);
-}
-
-.admin-users-toolbar {
-  display: grid;
-  gap: 12px;
-  margin-top: 14px;
-}
-
-.admin-users-toolbar-top,
-.admin-users-toolbar-bottom,
-.admin-users-toolbar-filters {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.admin-users-toolbar-top {
-  justify-content: flex-end;
-}
-
-.admin-users-toolbar-bottom {
-  justify-content: space-between;
-}
-
-.admin-users-toolbar-filters {
-  flex: 1;
-}
-
-.admin-users-search {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 10px;
-  align-items: center;
-  min-width: 300px;
-  flex: 1 1 360px;
-  padding: 0 15px;
-  min-height: 44px;
-  border-radius: 15px;
-  border: 1px solid rgba(229, 233, 245, 0.96);
-  background: rgba(255, 255, 255, 0.98);
-  color: #8a95b0;
-}
-
-.admin-users-search-input {
-  min-height: 36px;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-}
-
-.admin-users-compact-button {
-  min-height: 42px;
-  padding-inline: 15px;
-  border-radius: 14px;
-  border-color: rgba(224, 228, 243, 0.96);
-  box-shadow: none;
-}
-
-.admin-users-compact-button.is-icon {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.admin-users-clear {
-  font-weight: 700;
-}
-
-.admin-users-table-meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 16px;
-  color: #6e7a96;
-  font-weight: 600;
-  flex-wrap: wrap;
-}
-
-.admin-users-table-shell {
-  margin-top: 16px;
-  border-top: 1px solid rgba(236, 239, 247, 0.96);
-}
-
-.admin-users-table-header,
-.admin-users-table-row {
-  display: grid;
-  grid-template-columns: 36px minmax(232px, 1.34fr) 92px 110px 128px 112px 108px 54px;
-  gap: 12px;
-  align-items: center;
-}
-
-.admin-users-table-header {
-  min-height: 48px;
-  color: #73809c;
-  font-size: 0.8rem;
-  font-weight: 700;
-}
-
-.admin-users-table-row {
-  min-height: 68px;
-  padding: 8px 0;
-  border-top: 1px solid rgba(236, 239, 247, 0.96);
-  color: #4d5974;
-  cursor: pointer;
-}
-
-.admin-users-table-row:focus-visible {
-  outline: 3px solid rgba(111, 76, 255, 0.24);
-  outline-offset: 4px;
-}
-
-.admin-users-table-row.is-active {
-  margin: 0 -8px;
-  padding: 8px 8px;
-  border-radius: 20px;
-  border: 1px solid rgba(126, 96, 255, 0.28);
-  background: linear-gradient(135deg, rgba(248, 245, 255, 0.98), rgba(255, 255, 255, 0.98));
-}
-
-.admin-users-check {
-  display: grid;
-  place-items: center;
-}
-
-.admin-users-check input {
-  display: none;
-}
-
-.admin-users-check span {
-  width: 18px;
-  height: 18px;
-  border-radius: 6px;
-  border: 1px solid rgba(211, 217, 235, 0.96);
-  background: rgba(255, 255, 255, 0.98);
-}
-
-.admin-users-check input:checked + span {
-  background: linear-gradient(135deg, #7d58ff, #6d49f8);
-  border-color: transparent;
-  box-shadow: 0 10px 18px rgba(106, 73, 255, 0.24);
-}
-
-.admin-users-user-cell {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 14px;
-  align-items: center;
-}
-
-.admin-users-user-copy {
-  display: grid;
-  gap: 3px;
-}
-
-.admin-users-user-copy span,
-.admin-users-user-copy small {
-  color: #7b87a3;
-}
-
-.admin-users-role-pill,
-.admin-users-status-pill,
-.admin-users-account-pill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  padding: 6px 11px;
-  border-radius: 999px;
-  font-size: 0.72rem;
-  font-weight: 700;
-}
-
-.admin-users-status-pill i,
-.admin-users-account-pill i {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: 0.92;
-}
-
-.admin-users-role-pill.is-green {
-  background: rgba(111, 210, 104, 0.12);
-  color: #4aa746;
-}
-
-.admin-users-role-pill.is-blue {
-  background: rgba(63, 144, 255, 0.12);
-  color: #2f86f6;
-}
-
-.admin-users-role-pill.is-purple {
-  background: rgba(125, 88, 255, 0.12);
-  color: var(--primary);
-}
-
-.admin-users-status-pill.is-active {
-  background: rgba(111, 210, 104, 0.12);
-  color: #4aa746;
-}
-
-.admin-users-status-pill.is-pending {
-  background: rgba(255, 181, 68, 0.14);
-  color: #e1901d;
-}
-
-.admin-users-status-pill.is-inactive {
-  background: rgba(255, 124, 124, 0.14);
-  color: #e25b51;
-}
-
-.admin-users-account-pill.is-verified {
-  background: rgba(111, 210, 104, 0.12);
-  color: #4aa746;
-}
-
-.admin-users-account-pill.is-warning {
-  background: rgba(255, 181, 68, 0.14);
-  color: #e1901d;
-}
-
-.admin-users-more {
-  width: 38px;
-  height: 38px;
-  border: 0;
-  border-radius: 12px;
-  background: transparent;
-  color: #7b87a3;
-}
-
-.admin-users-pagination {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-top: 16px;
-  padding-top: 14px;
-  border-top: 1px solid rgba(236, 239, 247, 0.96);
-  color: #75819b;
-}
-
-.admin-users-pagination-left,
-.admin-users-pagination-right {
-  align-items: center;
-  gap: 8px;
-}
-
-.admin-users-empty-state {
-  margin-top: 16px;
-}
-
-.admin-users-page-size {
-  min-width: 56px;
-  justify-content: center;
-}
-
-.admin-users-page-button {
-  width: 34px;
-  height: 34px;
-  display: grid;
-  place-items: center;
-  border-radius: 12px;
-  border: 1px solid rgba(228, 232, 244, 0.96);
-  background: rgba(255, 255, 255, 0.98);
-  color: #7d89a4;
-  font-weight: 700;
-}
-
-.admin-users-page-button.is-active {
-  background: linear-gradient(135deg, #7d58ff, #6d49f8);
-  color: white;
-  border-color: transparent;
-}
-
-.admin-users-profile-head,
-.admin-users-profile-main {
-  min-width: 0;
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-start;
-  gap: 12px;
-}
-
-.admin-users-profile-copy {
-  min-width: 0;
-}
-
-.admin-users-profile-title,
-.admin-users-profile-meta {
-  flex-wrap: wrap;
-}
-
-.admin-users-profile-title strong,
-.admin-users-profile-meta span,
-.admin-users-profile-meta small {
-  max-width: 100%;
-  overflow-wrap: anywhere;
-}
-
-.admin-users-profile-card span,
-.admin-users-profile-card small,
-.admin-users-info-grid span,
-.admin-users-progress-copy span,
-.admin-users-activity-copy span,
-.admin-users-audit-item span,
-.admin-users-actions-note {
-  color: #74809c;
-}
-
-.admin-users-close {
-  inline-size: 42px;
-  block-size: 42px;
-  min-inline-size: 42px;
-  min-block-size: 42px;
-  flex: 0 0 42px;
-  display: grid;
-  place-items: center;
-  padding: 0;
-  border: 0;
-  border-radius: 14px;
-  background: transparent;
-  color: #6f7b97;
-}
-
-.admin-users-info-grid {
-  display: grid;
-  gap: 10px;
-}
-
-.admin-users-info-grid div {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.admin-users-progress-wrap {
-  display: grid;
-  grid-template-columns: 108px minmax(0, 1fr);
-  gap: 14px;
-  align-items: center;
-}
-
-.admin-users-progress-copy {
-  display: grid;
-  gap: 10px;
-}
-
-.admin-users-progress-copy div {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.admin-users-activity-list,
-.admin-users-audit-list {
-  display: grid;
-  gap: 8px;
-}
-
-.admin-users-activity-item {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 10px;
-  align-items: center;
-}
-
-.admin-users-activity-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 11px;
-  display: grid;
-  place-items: center;
-  font-weight: 800;
-}
-
-.admin-users-activity-icon.is-green {
-  background: rgba(111, 210, 104, 0.12);
-  color: #4aa746;
-}
-
-.admin-users-activity-icon.is-blue {
-  background: rgba(63, 144, 255, 0.12);
-  color: #2f86f6;
-}
-
-.admin-users-activity-icon.is-purple {
-  background: rgba(125, 88, 255, 0.12);
-  color: var(--primary);
-}
-
-.admin-users-activity-copy,
-.admin-users-audit-copy {
-  min-width: 0;
-  display: grid;
-  gap: 4px;
-}
-
-.admin-users-audit-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 8px 0;
-  border-bottom: 1px solid rgba(236, 239, 247, 0.96);
-}
-
-.admin-users-audit-item:last-child {
-  border-bottom: 0;
-}
-
-.admin-users-audit-item small {
-  max-width: 100%;
-  color: #8b95af;
-  overflow-wrap: anywhere;
-}
-
-.admin-users-audit-copy strong,
-.admin-users-audit-copy span {
-  max-width: 100%;
-  overflow-wrap: anywhere;
-}
-
-.admin-users-actions-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.admin-users-empty-sidebar {
-  min-height: 220px;
-  align-content: center;
-}
-
-.admin-users-action-safe {
-  min-height: 48px;
-  border-radius: 16px;
-  border: 1px solid rgba(111, 210, 104, 0.16);
-  background: rgba(111, 210, 104, 0.08);
-  color: #49a347;
-  font-weight: 800;
-}
-
-@media (max-width: 1520px) {
-  .admin-users-layout {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 1180px) {
-  .admin-users-table-header,
-  .admin-users-table-row {
-    grid-template-columns: 34px minmax(220px, 1.3fr) 96px 112px 132px;
-  }
-
-  .admin-users-table-header span:nth-child(6),
-  .admin-users-table-header span:nth-child(7),
-  .admin-users-table-header span:nth-child(8),
-  .admin-users-table-row > :nth-child(6),
-  .admin-users-table-row > :nth-child(7),
-  .admin-users-table-row > :nth-child(8) {
-    display: none;
-  }
-}
-
-@media (max-width: 760px) {
-  .admin-users-search {
-    min-width: 100%;
-  }
-
-  .admin-users-tabs {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-    border-bottom: 0;
-    padding-bottom: 0;
-  }
-
-  .admin-users-tab {
-    padding: 10px 12px;
-    border-radius: 14px;
-    border: 1px solid rgba(233, 237, 247, 0.96);
-    background: rgba(255, 255, 255, 0.98);
-  }
-
-  .admin-users-tab.is-active {
-    border-bottom: 1px solid rgba(111, 76, 255, 0.22);
-    background: rgba(244, 240, 255, 0.96);
-  }
-
-  .admin-users-toolbar,
-  .admin-users-pagination,
-  .admin-users-progress-wrap {
-    grid-template-columns: 1fr;
-    display: grid;
-  }
-
-  .admin-users-toolbar-top,
-  .admin-users-toolbar-bottom {
-    justify-content: stretch;
-  }
-
-  .admin-users-toolbar-filters,
-  .admin-users-compact-button,
-  .admin-users-clear {
-    width: 100%;
-  }
-
-  .admin-users-table-card,
-  .admin-users-profile-card,
-  .admin-users-info-card,
-  .admin-users-progress-card,
-  .admin-users-activity-card,
-  .admin-users-audit-card,
-  .admin-users-actions-card {
-    border-radius: 22px;
-  }
-
-  .admin-users-table-header {
-    display: none;
-  }
-
-  .admin-users-table-row {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 10px;
-    min-height: 0;
-    padding: 12px;
-    border: 1px solid rgba(229, 233, 248, 0.96);
-    border-radius: 18px;
-    background: rgba(255, 255, 255, 0.92);
-  }
-
-  .admin-users-table-row > :nth-child(3),
-  .admin-users-table-row > :nth-child(4),
-  .admin-users-table-row > :nth-child(5),
-  .admin-users-table-row > :nth-child(6),
-  .admin-users-table-row > :nth-child(7),
-  .admin-users-table-row > :nth-child(8) {
-    display: none;
-  }
-
-  .admin-users-check {
-    display: none;
-  }
-
-  .admin-users-user-cell {
-    grid-template-columns: minmax(0, 1fr);
-    align-items: start;
-    gap: 10px;
-  }
-
-  .admin-users-user-copy {
-    gap: 6px;
-  }
-
-  .admin-users-user-copy strong,
-  .admin-users-user-copy span,
-  .admin-users-user-copy small {
-    max-width: 100%;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .admin-users-profile-head,
-  .admin-users-profile-main,
-  .admin-users-progress-copy div,
-  .admin-users-info-grid div,
-  .admin-users-audit-item {
-    display: grid;
-    grid-template-columns: 1fr;
-    justify-items: start;
-    text-align: left;
-  }
-
-  .admin-users-profile-main {
-    gap: 12px;
-  }
-
-  .admin-users-close {
-    justify-self: end;
-  }
-
-  .admin-users-actions-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (min-width: 900px) and (max-width: 1180px) {
-  .admin-users-layout {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (min-width: 1181px) {
-  .admin-users-layout {
-    grid-template-columns: minmax(0, 1.28fr) minmax(0, 0.84fr);
-    gap: 12px;
-  }
-
-  .admin-users-sidebar {
-    gap: 14px;
-  }
-
-  .admin-users-table-card,
-  .admin-users-profile-card,
-  .admin-users-info-card,
-  .admin-users-progress-card,
-  .admin-users-activity-card,
-  .admin-users-audit-card,
-  .admin-users-actions-card {
-    padding: 18px;
-    border-radius: 22px;
-  }
-
-  .admin-users-tabs {
-    gap: 18px;
-    padding-bottom: 10px;
-  }
-
-  .admin-users-tab {
-    padding-bottom: 12px;
-    font-size: 0.78rem;
-  }
-
-  .admin-users-toolbar {
-    gap: 10px;
-    margin-top: 12px;
-  }
-
-  .admin-users-search {
-    min-width: 280px;
-    min-height: 42px;
-    padding: 0 14px;
-    border-radius: 14px;
-    font-size: 0.8rem;
-  }
-
-  .admin-users-compact-button {
-    min-height: 40px;
-    padding-inline: 12px;
-    border-radius: 12px;
-    font-size: 0.76rem;
-  }
-
-  .admin-users-table-meta,
-  .admin-users-table-shell {
-    margin-top: 12px;
-  }
-
-  .admin-users-table-header,
-  .admin-users-table-row {
-    grid-template-columns: 28px minmax(180px, 1.34fr) 70px 92px 108px 90px 90px 36px;
-    gap: 8px;
-  }
-
-  .admin-users-table-header {
-    min-height: 40px;
-    font-size: 0.68rem;
-  }
-
-  .admin-users-table-row {
-    min-height: 58px;
-    padding: 7px 0;
-    font-size: 0.72rem;
-  }
-
-  .admin-users-table-header span:nth-child(6),
-  .admin-users-table-header span:nth-child(7),
-  .admin-users-table-header span:nth-child(8),
-  .admin-users-table-row > :nth-child(6),
-  .admin-users-table-row > :nth-child(7),
-  .admin-users-table-row > :nth-child(8) {
-    display: block;
-  }
-
-  .admin-users-table-row.is-active {
-    margin: 0 -6px;
-    padding: 7px 6px;
-    border-radius: 16px;
-  }
-
-  .admin-users-check span {
-    width: 16px;
-    height: 16px;
-    border-radius: 5px;
-  }
-
-  .admin-users-user-cell {
-    grid-template-columns: 40px minmax(0, 1fr);
-    gap: 10px;
-  }
-
-  .admin-users-user-cell :deep(.portrait-avatar) {
-    transform: scale(0.78);
-    transform-origin: center;
-  }
-
-  .admin-users-user-copy strong,
-  .admin-users-user-copy span,
-  .admin-users-user-copy small {
-    font-size: 0.72rem;
-  }
-
-  .admin-users-role-pill,
-  .admin-users-status-pill,
-  .admin-users-account-pill {
-    gap: 5px;
-    padding: 5px 9px;
-    font-size: 0.64rem;
-  }
-
-  .admin-users-status-pill i,
-  .admin-users-account-pill i {
-    width: 6px;
-    height: 6px;
-  }
-
-  .admin-users-more {
-    width: 38px;
-    height: 38px;
-    border-radius: 10px;
-  }
-
-  .admin-users-pagination {
-    gap: 12px;
-    margin-top: 12px;
-    padding-top: 12px;
-    font-size: 0.74rem;
-  }
-
-  .admin-users-page-button {
-    width: 30px;
-    height: 30px;
-    border-radius: 10px;
-    font-size: 0.72rem;
-  }
-
-  .admin-users-profile-main {
-    min-width: 0;
-    gap: 12px;
-  }
-
-  .admin-users-profile-main :deep(.portrait-avatar) {
-    transform: scale(0.84);
-    transform-origin: center;
-  }
-
-  .admin-users-profile-title strong {
-    font-size: 1rem;
-  }
-
-  .admin-users-profile-card span,
-  .admin-users-profile-card small,
-  .admin-users-info-grid,
-  .admin-users-progress-copy,
-  .admin-users-activity-copy,
-  .admin-users-audit-item,
-  .admin-users-actions-note {
-    font-size: 0.74rem;
-  }
-
-  .admin-users-info-grid,
-  .admin-users-progress-copy,
-  .admin-users-activity-list,
-  .admin-users-audit-list {
-    gap: 9px;
-  }
-
-  .admin-users-progress-wrap {
-    grid-template-columns: 86px minmax(0, 1fr);
-    gap: 12px;
-  }
-
-  .admin-users-activity-item {
-    gap: 10px;
-  }
-
-  .admin-users-activity-icon {
-    width: 30px;
-    height: 30px;
-    border-radius: 10px;
-  }
-
-  .admin-users-actions-grid {
-    gap: 10px;
-  }
-
-  .admin-users-action-safe,
-  .teacher-outline-button {
-    min-height: 40px;
-    border-radius: 12px;
-    padding: 9px 12px;
-    font-size: 0.74rem;
-  }
-}
-</style>

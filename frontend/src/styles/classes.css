@@ -1,0 +1,4370 @@
+/* Content history (teacher class page, admin review): a timeline, teacher steps in teal, admin decisions in purple. */
+.content-history {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.content-history-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: var(--space-4);
+  padding-bottom: var(--space-5);
+}
+
+.content-history-item:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  top: 36px;
+  bottom: var(--space-1);
+  left: 15.5px;
+  width: 1px;
+  background: var(--border-default);
+}
+
+.content-history-item:last-child {
+  padding-bottom: 0;
+}
+
+.content-history-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--module-classes);
+  border-radius: var(--radius-round);
+  background: var(--module-classes-soft);
+  color: var(--module-classes);
+}
+
+.content-history-icon.is-admin {
+  border-color: var(--color-primary-300);
+  background: var(--color-primary-50);
+  color: var(--color-primary-600);
+}
+
+.content-history-copy {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+  padding-top: var(--space-1);
+}
+
+.content-history-note {
+  margin: var(--space-1) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border-left: var(--border-width-thick) solid var(--border-strong);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--surface-sunken);
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
+}
+
+.content-history-note.is-warning {
+  border-left-color: var(--color-warning);
+  background: var(--color-warning-soft);
+  color: var(--color-warning-text);
+}
+
+.content-change-list {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding-left: var(--space-5);
+  list-style: disc;
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+}
+
+/* Feedback a teacher sent: date, a teal dot on the rule, the message. */
+.teacher-timeline {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.teacher-timeline-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 4.5rem 12px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-4);
+  padding-bottom: var(--space-6);
+}
+
+.teacher-timeline-item:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  top: 22px;
+  bottom: var(--space-1);
+  left: calc(4.5rem + var(--space-4) + 5.5px);
+  width: 1px;
+  background: var(--border-default);
+}
+
+.teacher-timeline-item:last-child {
+  padding-bottom: 0;
+}
+
+.teacher-timeline-date {
+  display: grid;
+  gap: var(--space-0-5);
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.teacher-timeline-date span {
+  color: var(--text-secondary);
+}
+
+.teacher-timeline-dot {
+  width: 12px;
+  height: 12px;
+  margin-top: var(--space-1);
+  border: var(--border-width-thick) solid var(--module-classes);
+  border-radius: var(--radius-round);
+  background: var(--surface-card);
+}
+
+.teacher-timeline-dot.is-encouraging,
+.teacher-timeline-dot.is-progress {
+  background: var(--module-classes);
+}
+
+.teacher-timeline-body {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.teacher-timeline-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+
+.teacher-timeline-message {
+  max-width: var(--reading-max);
+  margin: var(--space-1) 0 0;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.pub-classes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  gap: var(--grid-gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* ----- Teacher console: shared pieces -----
+   A working desk in teal on ink: figures set as type, timetables by day, ledgers with hairlines. */
+
+/* Headline numbers: overline label, stat figure, caption; hairlines between, no tiles. Each figure spans three shared
+   rows (label, number, caption), so a label that wraps keeps every number of the row on one line. */
+.teacher-figures-list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+  border-block: 1px solid var(--border-default);
+}
+
+.teacher-figure {
+  display: grid;
+  grid-row: span 3;
+  grid-template-rows: subgrid;
+  align-content: start;
+  row-gap: var(--space-1-5);
+  min-width: 0;
+  padding: var(--space-5) var(--space-5);
+  border-left: 1px solid var(--border-subtle);
+}
+
+.teacher-figure:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.teacher-figure dt {
+  color: var(--text-secondary);
+  font-size: var(--type-overline-size);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-wide);
+  text-transform: uppercase;
+}
+
+.teacher-figure dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* A thin decorative meter (seats booked, lessons done); the text beside it carries the value. */
+.teacher-meter {
+  display: block;
+  flex: none;
+  width: 56px;
+  height: 4px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--color-ink-100);
+}
+
+.teacher-meter > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--module-classes);
+}
+
+.teacher-next-tag {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  padding: 0 var(--space-1-5);
+  border-radius: var(--radius-xs);
+  background: var(--module-classes-soft);
+  color: var(--module-classes);
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-wide);
+  line-height: 18px;
+  text-transform: uppercase;
+}
+
+/* Timetable: a day heading, then one row per session with its time in a tabular column. */
+.teacher-agenda,
+.teacher-agenda-rows {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.teacher-agenda {
+  gap: var(--space-6);
+}
+
+.teacher-agenda-date {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+  margin: 0;
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border-default);
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+}
+
+.teacher-agenda-date .type-caption {
+  font-family: var(--font-body);
+  font-weight: var(--font-weight-regular);
+}
+
+.teacher-agenda-row {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.teacher-agenda-rows > li:last-child > .teacher-agenda-row {
+  border-bottom: 0;
+}
+
+/* The next session: a teal rule in the gutter (as on Live sessions); its text stays in the column. */
+.teacher-agenda-row.is-next {
+  margin-left: calc(-1 * var(--space-3));
+  padding-left: var(--space-3);
+  box-shadow: inset 3px 0 0 var(--module-classes);
+}
+
+.teacher-agenda-time {
+  display: grid;
+  gap: var(--space-0-5);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.teacher-agenda-time strong {
+  font-size: var(--font-size-md);
+}
+
+.teacher-agenda-time span {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.teacher-agenda-copy {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.teacher-agenda-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  min-width: 0;
+}
+
+.teacher-agenda-title strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.teacher-agenda-booking {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.teacher-agenda-chevron {
+  color: var(--text-secondary);
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+
+a.teacher-agenda-row:hover .teacher-agenda-title strong {
+  color: var(--text-link-hover);
+}
+
+a.teacher-agenda-row:hover .teacher-agenda-chevron {
+  transform: translateX(var(--space-0-5));
+  color: var(--text-primary);
+}
+
+/* ----- Teacher dashboard ----- */
+
+.teacher-dash-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(300px, 1fr);
+  grid-template-rows: auto auto 1fr;
+  grid-template-areas:
+    'figures figures'
+    'todo agenda'
+    'support agenda';
+  align-items: start;
+  gap: var(--page-gap);
+}
+
+.teacher-dash-figures {
+  grid-area: figures;
+}
+
+.teacher-dash-queue {
+  grid-area: todo;
+  display: grid;
+  gap: var(--space-5);
+}
+
+/* Beside the to-do sheet, the heading lines up with the sheet's heading (inside its padding). */
+.teacher-dash-agenda {
+  grid-area: agenda;
+  padding-top: var(--card-padding);
+}
+
+.teacher-dash-support {
+  grid-area: support;
+}
+
+.teacher-dash-agenda,
+.teacher-dash-support {
+  display: grid;
+  gap: var(--section-gap);
+  min-width: 0;
+}
+
+.teacher-dash-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-4);
+}
+
+.teacher-dash-head p,
+.teacher-dash-empty p {
+  margin: 0;
+}
+
+.teacher-dash-clear {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.teacher-dash-clear .seal {
+  --seal-size: 44px;
+}
+
+.teacher-dash-clear p {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.teacher-dash-group-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  margin: 0 0 var(--space-1);
+  color: var(--text-secondary);
+  font-size: var(--type-overline-size);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-wide);
+  text-transform: uppercase;
+}
+
+.teacher-dash-group.is-needs .teacher-dash-group-title {
+  color: var(--color-warning-text);
+}
+
+.teacher-dash-group-count {
+  min-width: 18px;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-pill);
+  background: var(--color-ink-100);
+  color: var(--color-ink-700);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  line-height: 18px;
+  text-align: center;
+}
+
+.teacher-dash-group.is-needs .teacher-dash-group-count {
+  background: var(--color-warning-soft);
+  color: var(--color-warning-text);
+}
+
+.teacher-dash-todo,
+.teacher-dash-people {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.teacher-dash-todo-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-3) var(--space-4);
+  padding: var(--space-4) 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.teacher-dash-todo-copy {
+  display: grid;
+  gap: var(--space-1-5);
+  min-width: 0;
+}
+
+.teacher-dash-todo-copy > strong {
+  overflow-wrap: anywhere;
+}
+
+.teacher-dash-note {
+  display: grid;
+  gap: var(--space-1);
+  margin: var(--space-1) 0 0;
+  padding: var(--space-0-5) 0 var(--space-0-5) var(--space-3);
+  border-left: var(--border-width-thick) solid var(--color-warning);
+}
+
+.teacher-dash-note p {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
+  overflow-wrap: anywhere;
+}
+
+.teacher-dash-empty {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+  margin: 0;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-default);
+}
+
+.teacher-dash-people {
+  border-top: 1px solid var(--border-default);
+}
+
+.teacher-dash-person {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.teacher-dash-people > li:last-child > .teacher-dash-person {
+  border-bottom: 0;
+}
+
+.teacher-dash-person-copy {
+  display: grid;
+  gap: var(--space-0-5);
+  min-width: 0;
+}
+
+.teacher-dash-person:hover strong {
+  color: var(--text-link-hover);
+}
+
+@media (max-width: 1200px) {
+  .teacher-dash-agenda {
+    padding-top: 0;
+  }
+
+  .teacher-dash-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: none;
+    grid-template-areas:
+      'figures figures'
+      'todo todo'
+      'agenda support';
+  }
+}
+
+/* ----- Teacher classes: the ledger ----- */
+
+.teacher-classes-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* One class per row; the Open link's hit area covers the row. */
+.teacher-classes-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 136px 324px 132px auto;
+  grid-template-areas: 'name status lessons people open';
+  align-items: center;
+  gap: var(--space-3) var(--space-6);
+  padding: var(--space-5) var(--card-padding);
+  border-top: 1px solid var(--border-subtle);
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.teacher-classes-row:first-child {
+  border-top: 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.teacher-classes-row:last-child {
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+
+.teacher-classes-row:only-child {
+  border-radius: var(--radius-lg);
+}
+
+.teacher-classes-row:hover,
+.teacher-classes-row:focus-within {
+  background: var(--surface-hover);
+}
+
+.teacher-classes-name {
+  grid-area: name;
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.teacher-classes-name p {
+  margin: 0;
+}
+
+.teacher-classes-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: -0.01em;
+  line-height: var(--line-height-snug);
+  overflow-wrap: anywhere;
+}
+
+.teacher-classes-status {
+  grid-area: status;
+  min-width: 0;
+}
+
+.teacher-classes-lessons {
+  grid-area: lessons;
+  display: grid;
+  gap: var(--space-1-5);
+  min-width: 0;
+}
+
+.teacher-classes-people {
+  grid-area: people;
+  display: grid;
+  gap: var(--space-0-5);
+  min-width: 0;
+  font-size: var(--font-size-md);
+}
+
+.teacher-classes-row .teacher-classes-open {
+  grid-area: open;
+  position: static;
+}
+
+.teacher-classes-open::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+/* Lessons by stage: live, in review, changes requested, draft (the caption beside it names them). Each part keeps
+   its words together; the line breaks only between parts. */
+.teacher-classes-pipeline > span {
+  white-space: nowrap;
+}
+
+.teacher-classes-pipeline .is-warning {
+  color: var(--color-warning-text);
+  font-weight: var(--font-weight-semibold);
+}
+
+.teacher-stack-bar {
+  display: flex;
+  gap: var(--space-0-5);
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--color-ink-100);
+}
+
+.teacher-stack-bar > span {
+  flex-basis: 0;
+  min-width: 4px;
+}
+
+.teacher-stack-bar > .is-published {
+  background: var(--module-classes);
+}
+
+.teacher-stack-bar > .is-review {
+  background: var(--color-info);
+}
+
+.teacher-stack-bar > .is-changes {
+  background: var(--color-warning);
+}
+
+.teacher-stack-bar > .is-draft {
+  background: var(--color-ink-300);
+}
+
+@media (max-width: 1200px) {
+  .teacher-classes-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr) 9rem;
+    grid-template-areas:
+      'name name open'
+      'status lessons people';
+  }
+
+  .teacher-classes-open {
+    justify-self: end;
+  }
+}
+
+/* ----- A teacher's class: state line, outline of units and lessons, details, history ----- */
+
+.teacher-class-state {
+  align-self: flex-start;
+  max-width: 100%;
+}
+
+.teacher-outline {
+  display: grid;
+  gap: var(--section-gap);
+}
+
+.teacher-outline-units {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.teacher-unit {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--card-padding) var(--space-4);
+  border-top: 1px solid var(--border-default);
+}
+
+.teacher-unit:first-child {
+  border-top: 0;
+}
+
+.teacher-unit-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.teacher-unit-number {
+  width: 3rem;
+  color: var(--module-classes);
+  font-family: var(--font-display);
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: lining-nums tabular-nums;
+  line-height: 1;
+}
+
+.teacher-unit-copy {
+  display: grid;
+  gap: var(--space-0-5);
+  min-width: 0;
+}
+
+.teacher-unit-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: -0.01em;
+  line-height: var(--line-height-snug);
+  overflow-wrap: anywhere;
+}
+
+.teacher-unit-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-1);
+}
+
+.teacher-unit-empty {
+  margin: 0;
+  padding: var(--space-3) 0 var(--space-1);
+}
+
+.teacher-unit-add {
+  justify-self: start;
+  margin-top: var(--space-1);
+}
+
+.teacher-move {
+  display: inline-flex;
+  gap: var(--space-0-5);
+}
+
+.teacher-lessons {
+  display: grid;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.teacher-lesson {
+  display: grid;
+  grid-template-columns: 3rem minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.teacher-lesson:last-child {
+  border-bottom: 0;
+}
+
+.teacher-lesson-number {
+  align-self: start;
+  padding-top: var(--space-0-5);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.teacher-lesson-status {
+  justify-self: end;
+}
+
+.teacher-lesson-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.teacher-lesson-open {
+  min-width: 5.5rem;
+  justify-content: center;
+}
+
+.teacher-lesson-copy {
+  display: grid;
+  gap: var(--space-0-5);
+  min-width: 0;
+}
+
+.teacher-lesson-copy > strong {
+  overflow-wrap: anywhere;
+}
+
+.teacher-lesson-note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-1-5);
+  margin-top: var(--space-1);
+  padding-left: var(--space-2);
+  border-left: var(--border-width-thick) solid var(--color-warning);
+  color: var(--color-warning-text);
+  font-size: var(--font-size-sm);
+}
+
+.teacher-lesson-note > .icon-glyph {
+  flex: none;
+  margin-top: var(--space-0-5);
+}
+
+.teacher-class-details {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(260px, 1fr);
+  align-items: start;
+  gap: var(--page-gap);
+}
+
+.teacher-class-form {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.teacher-class-form .card-footer {
+  margin: 0;
+}
+
+/* Beside the details sheet: the rule and padding put its heading level with the sheet's heading. */
+.teacher-class-note {
+  display: grid;
+  gap: var(--space-4);
+  padding-top: var(--card-padding);
+  border-top: 1px solid var(--border-default);
+}
+
+.teacher-class-note-head {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.teacher-class-history {
+  display: grid;
+  gap: var(--section-gap);
+  max-width: 880px;
+}
+
+@media (max-width: 1200px) {
+  .teacher-class-details {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: 880px;
+  }
+}
+
+/* ----- Lesson editor: rail, editor, live preview and the work bar ----- */
+
+.lesson-editor-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+}
+
+.lesson-editor-state .callout {
+  flex: 1 1 420px;
+}
+
+.lesson-editor-state-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+}
+
+.lesson-editor-workspace {
+  display: grid;
+  grid-template-columns: 208px minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-8);
+}
+
+.lesson-editor-main {
+  display: grid;
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+.lesson-editor-main:first-child {
+  grid-column: 1 / -1;
+}
+
+/* The class's units and lessons, the current one marked in teal. */
+.lesson-editor-rail {
+  position: sticky;
+  top: calc(var(--topbar-height) + var(--space-6));
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  max-height: calc(100vh - var(--topbar-height) - var(--space-12));
+  overflow-y: auto;
+}
+
+.lesson-editor-rail > .page-eyebrow {
+  min-height: var(--control-height-lg);
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.lesson-editor-rail-units,
+.lesson-editor-rail-lessons {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lesson-editor-rail-units {
+  gap: var(--space-4);
+}
+
+.lesson-editor-rail-unit {
+  display: block;
+  margin-bottom: var(--space-1);
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.lesson-editor-rail-link {
+  display: grid;
+  gap: var(--space-0-5);
+  padding: var(--space-2) var(--space-3);
+  border-left: var(--border-width-thick) solid var(--border-subtle);
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.lesson-editor-rail-link:hover {
+  background: var(--surface-sunken);
+}
+
+.lesson-editor-rail-link.is-current {
+  border-left-color: var(--module-classes);
+  background: var(--surface-card);
+  font-weight: var(--font-weight-semibold);
+}
+
+.lesson-editor-rail-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-regular);
+}
+
+.lesson-editor-rail-status::before {
+  content: '';
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-round);
+  background: currentColor;
+}
+
+.lesson-editor-rail-status.is-success {
+  color: var(--color-success-text);
+}
+
+.lesson-editor-rail-status.is-warning {
+  color: var(--color-warning-text);
+}
+
+.lesson-editor-rail-status.is-info {
+  color: var(--color-info-text);
+}
+
+/* Content: one sheet of sections, the live preview beside it. */
+.lesson-editor-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  align-items: start;
+  gap: var(--space-6);
+}
+
+.lesson-editor-live {
+  position: sticky;
+  top: calc(var(--topbar-height) + var(--space-6));
+  max-height: calc(100vh - var(--topbar-height) - var(--space-24));
+  overflow-y: auto;
+}
+
+.lesson-editor-sheet {
+  display: grid;
+  padding: 0;
+}
+
+.lesson-editor-section {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--card-padding);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.lesson-editor-section:first-child {
+  border-top: 0;
+}
+
+.lesson-editor-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+}
+
+.lesson-editor-section-head > div:first-child {
+  display: grid;
+  gap: var(--space-1);
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.lesson-editor-section-head p {
+  margin: 0;
+}
+
+.lesson-editor-details {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--space-4);
+}
+
+.lesson-editor-phrases {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.lesson-editor-row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 1.3fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.lesson-editor-row.is-option {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.lesson-editor-row-head {
+  color: var(--text-secondary);
+  font-size: var(--type-overline-size);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-wide);
+  text-transform: uppercase;
+}
+
+.lesson-editor-row-number {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.lesson-editor-video {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-subtle);
+}
+
+.lesson-editor-video-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-500);
+  color: var(--text-on-dark);
+}
+
+.lesson-editor-video-copy {
+  display: grid;
+  gap: var(--space-0-5);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.lesson-editor-video-actions,
+.lesson-editor-video-submit {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-1);
+}
+
+.lesson-editor-video-form {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border: 1px dashed var(--border-default);
+  border-radius: var(--radius-md);
+}
+
+.lesson-editor-empty {
+  margin: 0;
+  padding: var(--space-5) var(--space-4);
+  border: 1px dashed var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+  text-align: center;
+}
+
+.lesson-editor-foot-note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-1-5);
+  margin: 0;
+}
+
+.lesson-editor-foot-note > .icon-glyph {
+  flex: none;
+  margin-top: var(--space-0-5);
+}
+
+/* Activities and questions: numbered ledger rows, tools on the right. */
+.lesson-editor-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.lesson-editor-item {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.lesson-editor-item:last-child {
+  border-bottom: 0;
+}
+
+.lesson-editor-step {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1.5px solid var(--module-classes);
+  border-radius: var(--radius-round);
+  color: var(--module-classes);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.lesson-editor-item-copy {
+  display: grid;
+  gap: var(--space-0-5);
+  min-width: 0;
+  justify-items: start;
+}
+
+.lesson-editor-item-copy > strong {
+  overflow-wrap: anywhere;
+}
+
+.lesson-editor-item-type {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.lesson-editor-item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-0-5);
+}
+
+.lesson-editor-item-actions > .teacher-move {
+  margin-left: var(--space-1);
+  padding-left: var(--space-1);
+  border-left: 1px solid var(--border-subtle);
+}
+
+.lesson-question {
+  align-items: start;
+}
+
+.lesson-question > .lesson-editor-item-actions {
+  grid-column: 3 / -1;
+}
+
+.lesson-question-type {
+  color: var(--text-secondary);
+  font-size: var(--type-overline-size);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-wide);
+  text-transform: uppercase;
+}
+
+.lesson-question-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin: var(--space-1) 0;
+}
+
+.lesson-question-options .tag.is-correct {
+  border-color: var(--color-success-border);
+  background: var(--color-success-soft);
+  color: var(--color-success-text);
+}
+
+.lesson-editor-checklist {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lesson-editor-checklist li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-danger-text);
+}
+
+.lesson-editor-checklist li.is-done {
+  color: var(--color-success-text);
+}
+
+/* Quiz tab: the quiz sheet, the AI draft and recent attempts beside it. */
+.lesson-quiz-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  align-items: start;
+  gap: var(--space-6);
+}
+
+.lesson-quiz-side {
+  display: grid;
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+.lesson-quiz-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.lesson-quiz-chip {
+  min-height: var(--control-height-sm);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-pill);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    background-color var(--duration-fast) var(--ease-standard);
+}
+
+.lesson-quiz-chip:hover {
+  border-color: var(--border-interactive);
+}
+
+/* The chosen quiz: selected, not a call to action (the page's primary button stays the loudest thing). */
+.lesson-quiz-chip[aria-pressed='true'] {
+  border-color: var(--border-interactive);
+  background: var(--surface-selected);
+  color: var(--color-primary-700);
+}
+
+.lesson-quiz-settings {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
+  gap: var(--space-3);
+}
+
+.lesson-quiz-settings > .field:first-child {
+  grid-column: 1 / -1;
+}
+
+.lesson-quiz-settings > .btn {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+.lesson-quiz-marks {
+  display: flex;
+  align-items: center;
+  min-height: var(--control-height-md);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  font-variant-numeric: tabular-nums;
+}
+
+.lesson-quiz-attempts-section {
+  display: grid;
+  gap: var(--space-2);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-default);
+}
+
+.lesson-quiz-attempts-section p {
+  margin: 0;
+}
+
+.lesson-quiz-attempts {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lesson-quiz-attempts li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: var(--font-size-md);
+}
+
+.lesson-quiz-attempts strong {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Preview: the lesson's opening as students see it. */
+.lesson-preview {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.lesson-preview:not(.is-compact) {
+  max-width: 760px;
+}
+
+.lesson-preview-head {
+  display: grid;
+  gap: var(--space-0-5);
+}
+
+.lesson-preview-head p {
+  margin: 0;
+}
+
+.lesson-preview-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--type-overline-size);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-wide);
+  text-transform: uppercase;
+}
+
+.lesson-preview-stage {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-6);
+  border: 1px solid var(--border-subtle);
+  border-top: 3px solid var(--module-classes);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-sm);
+}
+
+.lesson-preview.is-compact .lesson-preview-stage {
+  padding: var(--space-5);
+}
+
+.lesson-preview-stage p {
+  margin: 0;
+}
+
+.lesson-preview-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-display);
+  line-height: var(--line-height-snug);
+  overflow-wrap: anywhere;
+}
+
+.lesson-preview.is-compact .lesson-preview-title {
+  font-size: var(--font-size-xl);
+}
+
+.lesson-preview-summary.is-empty {
+  color: var(--text-secondary);
+}
+
+/* The lesson video as students meet it: a quiet row, not a call to action. */
+.lesson-preview-video {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
+}
+
+.lesson-preview-phrases {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.lesson-preview-phrases li {
+  display: grid;
+  grid-template-columns: minmax(4.5rem, auto) minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.lesson-preview-phrases .cjk-text {
+  font-size: var(--font-size-lg);
+}
+
+.lesson-preview-label {
+  margin: var(--space-3) 0 0;
+  color: var(--text-secondary);
+  font-size: var(--type-overline-size);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-wide);
+  text-transform: uppercase;
+}
+
+.lesson-preview-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lesson-preview-list li {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2-5) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.lesson-preview-list li:last-child {
+  border-bottom: 0;
+}
+
+.lesson-preview-step {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-round);
+  background: var(--module-classes-soft);
+  color: var(--module-classes);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+.lesson-preview-item {
+  display: grid;
+  gap: var(--space-0-5);
+  min-width: 0;
+}
+
+/* The work bar: review state, save state and the two actions, always in reach. */
+.lesson-editor-workbar {
+  position: sticky;
+  bottom: var(--space-4);
+  z-index: var(--z-raised);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-4);
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-md);
+}
+
+.lesson-editor-workbar-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  min-width: 0;
+}
+
+.lesson-editor-save-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.lesson-editor-save-state.is-dirty {
+  color: var(--color-warning-text);
+  font-weight: var(--font-weight-semibold);
+}
+
+.lesson-editor-workbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+@media (max-width: 1200px) {
+  .lesson-editor-workspace,
+  .lesson-editor-content,
+  .lesson-quiz-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .lesson-editor-rail,
+  .lesson-editor-live {
+    display: none;
+  }
+
+  .lesson-quiz-side {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  }
+}
+
+/* ----- Teacher live sessions: the timetable ----- */
+
+.teacher-timetable,
+.teacher-timetable-rows {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* One day: the date in a column of its own, the day's sessions beside it. */
+.teacher-timetable-day {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 1fr);
+  gap: var(--space-6);
+  padding: var(--space-5) 0;
+  border-top: 1px solid var(--border-default);
+}
+
+/* The tabs above already draw the first rule. */
+.teacher-timetable-day:first-child {
+  border-top: 0;
+}
+
+.teacher-timetable-day:last-child {
+  border-bottom: 1px solid var(--border-default);
+}
+
+.teacher-timetable-date {
+  align-self: start;
+  position: sticky;
+  top: calc(var(--topbar-height) + var(--space-4));
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+}
+
+.teacher-timetable-daynum {
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: var(--font-size-4xl);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: lining-nums tabular-nums;
+  letter-spacing: var(--letter-spacing-display);
+  line-height: 1;
+}
+
+.teacher-timetable-day.is-today .teacher-timetable-daynum,
+.teacher-timetable-day.is-today .teacher-timetable-weekday {
+  color: var(--module-classes);
+}
+
+.teacher-timetable-date .type-caption {
+  font-weight: var(--font-weight-regular);
+}
+
+/* A session: time, what, seats, state; the Open button's hit area covers the row. Top-aligned like the student's
+   session rows: the time sits on the title's first line. */
+.teacher-timetable-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr) 200px 7.5rem auto;
+  align-items: start;
+  gap: var(--space-2) var(--space-5);
+  padding: var(--space-3) var(--space-3);
+  border-radius: var(--radius-md);
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.teacher-timetable-row + .teacher-timetable-row {
+  margin-top: var(--space-1);
+}
+
+.teacher-timetable-row:hover,
+.teacher-timetable-row:focus-within {
+  background: var(--surface-card);
+  box-shadow: var(--shadow-xs);
+}
+
+.teacher-timetable-row.is-next {
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  box-shadow: inset 3px 0 0 var(--module-classes);
+}
+
+.teacher-timetable-row.is-next:hover {
+  box-shadow:
+    inset 3px 0 0 var(--module-classes),
+    var(--shadow-xs);
+}
+
+.teacher-timetable-row.is-cancelled .teacher-agenda-title strong {
+  color: var(--text-secondary);
+  text-decoration: line-through;
+}
+
+.teacher-timetable-row.is-cancelled .teacher-agenda-time {
+  color: var(--text-secondary);
+}
+
+.teacher-timetable-copy,
+.teacher-timetable-seats {
+  display: grid;
+  gap: var(--space-0-5);
+  min-width: 0;
+}
+
+.teacher-timetable-seats strong {
+  font-size: var(--font-size-md);
+  font-variant-numeric: tabular-nums;
+}
+
+.teacher-timetable-state {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.teacher-timetable-row .teacher-timetable-open {
+  position: static;
+}
+
+.teacher-timetable-open::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+/* Session detail drawer */
+.teacher-session-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+}
+
+.teacher-live-students {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.teacher-live-students li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2-5) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.teacher-live-students li:last-child {
+  border-bottom: 0;
+}
+
+.teacher-live-student {
+  display: grid;
+  gap: var(--space-0-5);
+  min-width: 0;
+}
+
+/* Schedule form: date, start and end on one line. */
+.teacher-session-when {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+@media (max-width: 1200px) {
+  .teacher-timetable-row {
+    grid-template-columns: 76px minmax(0, 1fr) auto;
+  }
+
+  .teacher-timetable-seats {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .teacher-timetable-state {
+    grid-column: 3;
+    grid-row: 2;
+  }
+
+  .teacher-timetable-open {
+    grid-column: 3;
+    grid-row: 1;
+    justify-self: end;
+  }
+}
+
+/* ----- Teacher students: the roster and one student's dossier ----- */
+
+.teacher-students-layout {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-8);
+}
+
+/* Sticky beside the dossier; a long roster scrolls inside it. */
+.teacher-roster {
+  position: sticky;
+  top: calc(var(--topbar-height) + var(--space-6));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  max-height: calc(100vh - var(--topbar-height) - var(--space-12));
+}
+
+.teacher-roster-title {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--type-overline-size);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-wide);
+  text-transform: uppercase;
+}
+
+.teacher-roster-rows {
+  display: grid;
+  align-content: start;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: var(--space-1) 0 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  border-top: 1px solid var(--border-default);
+}
+
+.teacher-roster-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3);
+  border: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  border-left: 3px solid transparent;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.teacher-roster-row:hover {
+  background: var(--surface-sunken);
+}
+
+.teacher-roster-row.is-selected {
+  border-left-color: var(--module-classes);
+  background: var(--surface-card);
+}
+
+.teacher-roster-copy {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.teacher-roster-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.teacher-roster-top strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.teacher-roster-percent {
+  font-family: var(--font-display);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.teacher-meter.is-wide {
+  width: 100%;
+}
+
+.teacher-roster-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-warning-text);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+}
+
+.teacher-dossier {
+  display: grid;
+  min-width: 0;
+}
+
+.teacher-dossier-sheet {
+  display: grid;
+  gap: var(--space-8);
+  padding: var(--space-8);
+}
+
+.teacher-dossier-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-4);
+}
+
+.teacher-dossier-who {
+  display: grid;
+  gap: var(--space-1-5);
+  min-width: 0;
+}
+
+.teacher-dossier-who p {
+  margin: 0;
+}
+
+.teacher-dossier-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.teacher-dossier-class {
+  max-width: 320px;
+  margin-top: var(--space-2);
+}
+
+.teacher-dossier-figures {
+  margin: 0;
+}
+
+.teacher-dossier-figures .stat-figure {
+  font-size: var(--font-size-3xl);
+}
+
+.teacher-dossier-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  align-items: start;
+  gap: var(--space-8);
+}
+
+.teacher-dossier-section {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.teacher-dossier-section > div:first-child {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.teacher-dossier-section p {
+  margin: 0;
+}
+
+.teacher-dossier-lessons,
+.teacher-dossier-weak {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--border-default);
+}
+
+.teacher-dossier-lessons li {
+  display: grid;
+  gap: var(--space-1-5);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.teacher-dossier-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
+}
+
+.teacher-dossier-table .data-table {
+  min-width: 0;
+}
+
+.teacher-dossier-weak li {
+  display: grid;
+  grid-template-columns: 7rem minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--space-4);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.teacher-dossier-weak-score {
+  color: var(--color-warning-text);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.teacher-dossier-weak-copy {
+  display: grid;
+  gap: var(--space-0-5);
+  min-width: 0;
+}
+
+/* Feedback history */
+.teacher-feedback-board {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.teacher-feedback-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 260px));
+  gap: var(--space-3);
+}
+
+.teacher-feedback-sheet {
+  max-width: 920px;
+}
+
+/* Write feedback drawer */
+.feedback-types {
+  flex-wrap: wrap;
+}
+
+.feedback-starters {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-2);
+}
+
+.feedback-starters .chip {
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--font-size-sm);
+  text-align: left;
+  white-space: normal;
+}
+
+@media (max-width: 1200px) {
+  .teacher-students-layout {
+    grid-template-columns: 260px minmax(0, 1fr);
+    gap: var(--space-6);
+  }
+
+  .teacher-dossier-sheet {
+    padding: var(--card-padding);
+  }
+
+  .teacher-dossier-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Two by two: four figures side by side in the narrower dossier would break "50%" across lines. */
+  .teacher-dossier-figures {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .teacher-dossier-figures .teacher-figure:nth-child(odd) {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .teacher-dossier-figures .teacher-figure:nth-child(n + 3) {
+    border-top: 1px solid var(--border-subtle);
+  }
+}
+
+/* ===== Student classes: My classes, Find classes, Live sessions, class, lesson, activity, quiz ===== */
+
+/* The calendar tile of every session list: a teal rule on top, the weekday, the day and (optionally) the month. */
+.session-date-tile {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  flex: none;
+  width: 56px;
+  padding: var(--space-1-5) 0 var(--space-2);
+  border: 1px solid var(--border-default);
+  border-top: var(--border-width-thick) solid var(--module-classes);
+  border-radius: var(--radius-sm);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  line-height: var(--line-height-tight);
+}
+
+.session-date-tile.is-muted {
+  border-style: dashed;
+  border-top-color: var(--border-default);
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.session-date-tile-weekday,
+.session-date-tile-month {
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-wide);
+  text-transform: uppercase;
+}
+
+.session-date-tile-weekday {
+  color: var(--module-classes);
+}
+
+.session-date-tile.is-muted .session-date-tile-weekday,
+.session-date-tile-month {
+  color: var(--text-secondary);
+}
+
+.session-date-tile-day {
+  margin: var(--space-0-5) 0;
+  font-family: var(--font-display);
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+/* Key phrases: a phrase sheet with hairlines, the Chinese large, pinyin in the class pigment, the meaning below. */
+.key-phrase-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+  column-gap: var(--space-6);
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--border-subtle);
+  list-style: none;
+}
+
+/* The Chinese column has a floor (three characters), so the pinyin of short and long phrases starts at one x. */
+.key-phrase-card {
+  display: grid;
+  grid-template-columns: minmax(calc(3 * var(--font-size-2xl)), auto) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.key-phrase-chinese {
+  font-size: var(--font-size-2xl);
+  line-height: var(--line-height-snug);
+}
+
+.key-phrase-copy {
+  display: grid;
+  gap: var(--space-0-5);
+  min-width: 0;
+}
+
+.key-phrase-pinyin {
+  color: var(--module-classes);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.key-phrase-meaning {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.key-phrase-listen {
+  color: var(--text-secondary);
+}
+
+/* The quiet filter bar: search first, then the selects, on the paper with a hairline under it. */
+.class-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+  padding-bottom: var(--space-5);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.class-filters .field {
+  flex: 1 1 150px;
+}
+
+.class-filters > .class-filters-search {
+  flex: 2 1 260px;
+}
+
+.class-filters .field-label {
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* A class in a catalogue: the teacher's byline first, then the title (the whole card is its link). */
+.class-catalogue-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  height: 100%;
+  padding: var(--space-5);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-xs);
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.class-catalogue-card:hover {
+  border-color: var(--border-interactive);
+  box-shadow: var(--shadow-sm);
+}
+
+.class-catalogue-card-teacher {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.class-catalogue-card-by {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  line-height: var(--line-height-snug);
+}
+
+.class-catalogue-card-by-label {
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+/* The name, then the verified mark on its own line: every card's teacher block has the same height, so the titles
+   of a row line up whatever the length of the name. */
+.class-catalogue-card-name {
+  display: grid;
+  justify-items: start;
+}
+
+.class-catalogue-card-name > strong {
+  overflow-wrap: anywhere;
+}
+
+.class-catalogue-card-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+  overflow-wrap: anywhere;
+}
+
+.class-catalogue-card-link {
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+/* The whole card is the link's hit area (and shows its focus ring); the action buttons sit above it. */
+.class-catalogue-card-link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.class-catalogue-card-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.class-catalogue-card-link:focus-visible {
+  outline: none;
+}
+
+.class-catalogue-card-link:focus-visible::after {
+  outline: var(--border-width-focus) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.class-catalogue-card-about {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.class-catalogue-card-foot {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: auto;
+}
+
+.class-catalogue-card-labels {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1-5);
+}
+
+.class-catalogue-card-facts {
+  margin: 0;
+}
+
+.class-catalogue-card-actions {
+  position: relative;
+  z-index: var(--z-raised);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* Progress in the student's class pages (and in the teacher's student dossier) is drawn in the classes pigment. */
+.student-classes-page,
+.student-class-page,
+.student-lesson-page,
+.class-focus-page,
+.teacher-students-page {
+  --progress-color: var(--module-classes);
+}
+
+/* Overline labels of the classes area that carry its pigment (with .page-eyebrow). */
+.page-eyebrow.student-classes-pigment {
+  color: var(--module-classes);
+}
+
+/* Today's live session: one line of a timetable. */
+.student-classes-today {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-xs);
+}
+
+.student-classes-today-when {
+  display: grid;
+  gap: var(--space-0-5);
+  padding-right: var(--space-5);
+  border-right: 1px solid var(--border-subtle);
+}
+
+.student-classes-today-time {
+  font-family: var(--font-display);
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: lining-nums tabular-nums;
+  line-height: var(--line-height-tight);
+}
+
+.student-classes-today-copy {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.student-classes-today-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+  overflow-wrap: anywhere;
+}
+
+.student-classes-today-facts {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.student-classes-today-state {
+  display: grid;
+  justify-items: end;
+  gap: var(--space-1);
+}
+
+/* A joined class as a course cover: the teacher and the title on the left, the course on the right. */
+.student-classes-card {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  grid-template-rows: auto auto 1fr;
+  grid-template-areas:
+    'byline course'
+    'heading course'
+    'actions course';
+  gap: var(--space-5) var(--space-8);
+  padding: var(--space-8);
+  border: 1px solid var(--border-subtle);
+  border-top: var(--border-width-thick) solid var(--module-classes);
+  border-radius: var(--radius-xl);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-xs);
+}
+
+.student-classes-byline {
+  display: flex;
+  grid-area: byline;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.student-classes-byline-copy {
+  display: grid;
+  min-width: 0;
+  line-height: var(--line-height-snug);
+}
+
+.student-classes-byline-label {
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.student-classes-teacher {
+  font-size: var(--font-size-base);
+  overflow-wrap: anywhere;
+}
+
+.student-classes-heading {
+  display: grid;
+  grid-area: heading;
+  align-content: start;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.student-classes-heading > p {
+  margin: 0;
+}
+
+.student-classes-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-display);
+  line-height: var(--line-height-tight);
+  overflow-wrap: anywhere;
+}
+
+.student-classes-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1-5);
+  margin-top: var(--space-1);
+}
+
+.student-classes-actions {
+  display: flex;
+  flex-wrap: wrap;
+  grid-area: actions;
+  align-self: end;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.student-classes-next-live {
+  display: inline-flex;
+  flex-basis: 100%;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.student-classes-course {
+  display: grid;
+  grid-area: course;
+  align-content: start;
+  gap: var(--space-4);
+  min-width: 0;
+  padding-left: var(--space-8);
+  border-left: 1px solid var(--border-subtle);
+}
+
+.student-classes-course > .type-caption {
+  margin: 0;
+}
+
+.student-classes-progress {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-3);
+}
+
+.student-classes-progress > :last-child {
+  grid-column: 1 / -1;
+}
+
+.student-classes-lessons {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--border-subtle);
+  list-style: none;
+}
+
+.student-classes-lesson {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2-5) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* The lesson marker: a numbered ring; filled when done, a thick ring for the lesson to do now. */
+.student-classes-lesson-mark,
+.student-class-lesson-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-round);
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.student-classes-lesson.is-done .student-classes-lesson-mark,
+.student-class-lesson.is-done .student-class-lesson-mark {
+  border-color: var(--module-classes);
+  background: var(--module-classes);
+  color: var(--text-on-primary);
+}
+
+.student-classes-lesson.is-current .student-classes-lesson-mark,
+.student-class-lesson.is-current .student-class-lesson-mark {
+  border: var(--border-width-thick) solid var(--module-classes);
+  color: var(--module-classes);
+}
+
+.student-classes-lesson.is-unavailable .student-classes-lesson-mark,
+.student-class-lesson.is-unavailable .student-class-lesson-mark,
+.student-class-lesson.is-locked .student-class-lesson-mark {
+  border-style: dashed;
+  background: transparent;
+}
+
+.student-classes-lesson-title {
+  color: var(--text-primary);
+  font-weight: var(--font-weight-semibold);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+a.student-classes-lesson-title:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.student-classes-lesson.is-unavailable .student-classes-lesson-title {
+  color: var(--text-secondary);
+}
+
+.student-classes-lesson-state {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  text-align: right;
+}
+
+.student-classes-lesson.is-current .student-classes-lesson-state {
+  color: var(--module-classes);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* More classes: a quiet footer line with the faces of other teachers. */
+.student-classes-more {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-4);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.student-classes-more-avatars {
+  display: flex;
+}
+
+.student-classes-more-avatars > * {
+  outline: var(--border-width-thick) solid var(--surface-page);
+}
+
+.student-classes-more-avatars > * + * {
+  margin-left: calc(var(--space-1) * -1);
+}
+
+/* Wide enough to stay on one or two lines; in a narrow card the link drops to its own line instead of squeezing it. */
+.student-classes-more-copy {
+  flex: 1 1 14rem;
+  min-width: 0;
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+/* Find classes */
+.student-find-results {
+  display: grid;
+  gap: var(--section-gap);
+}
+
+.student-find-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: var(--grid-gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The agenda: one block per day (its date tile on the left), the day's sessions in time order on the right. */
+.student-live-section {
+  display: grid;
+  gap: var(--section-gap);
+}
+
+.student-live-none {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.student-live-agenda {
+  display: grid;
+  border-top: 1px solid var(--border-default);
+}
+
+.student-live-day {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: var(--space-6);
+  padding: var(--space-5) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.student-live-day-head {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: var(--space-1-5);
+}
+
+.student-live-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Rows end on the section's right edge; a booked one carries a straight teal rule at its start. */
+.student-live-row {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-5);
+  padding: var(--space-3) 0 var(--space-3) var(--space-4);
+}
+
+.student-live-row + .student-live-row {
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* A booked session: the same teal rule as the next session on the teacher's pages, no fill. */
+.student-live-row.is-booked {
+  box-shadow: inset 3px 0 0 var(--module-classes);
+}
+
+/* Time, end and platform, each on one line ("Microsoft Teams" fits the column). */
+.student-live-time {
+  display: grid;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+  line-height: var(--line-height-snug);
+}
+
+.student-live-time > strong {
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.student-live-copy {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.student-live-title {
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.student-live-row.is-cancelled .student-live-title {
+  color: var(--text-secondary);
+  text-decoration: line-through;
+}
+
+.student-live-row.is-cancelled .student-live-time > strong,
+.student-live-section.is-past .student-live-time > strong {
+  color: var(--text-secondary);
+}
+
+.student-live-teacher {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.student-live-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.student-live-note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.student-live-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.student-live-drawer-teacher {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.student-live-drawer-teacher > span {
+  display: grid;
+}
+
+/* The timetable of a class or a lesson (side column). */
+.class-sessions {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+}
+
+.class-sessions-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.class-sessions-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+}
+
+.class-sessions-empty {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+}
+
+.class-sessions-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.class-sessions-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.class-sessions-list li:last-child .class-sessions-item {
+  border-bottom: 0;
+}
+
+.class-sessions-item:hover .class-sessions-name {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.class-sessions-item.is-cancelled .class-sessions-name {
+  color: var(--text-secondary);
+  text-decoration: line-through;
+}
+
+.class-sessions-copy {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.class-sessions-name {
+  overflow-wrap: anywhere;
+}
+
+.class-sessions-state {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+/* The class header: the teacher's portrait leads the cover; the next step (or joining) sits beside it. */
+.student-class-hero {
+  display: grid;
+  gap: var(--space-6);
+}
+
+/* The same right column as the rail below it, so the two line up. */
+.student-class-hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+  align-items: start;
+  gap: var(--space-10);
+}
+
+.student-class-cover {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto 1fr;
+  grid-template-areas:
+    'teacher facts'
+    'teacher title'
+    'teacher about'
+    'teacher labels';
+  gap: var(--space-2) var(--space-6);
+}
+
+.student-class-teacher {
+  display: grid;
+  grid-area: teacher;
+  justify-items: center;
+  align-content: start;
+  gap: var(--space-2);
+}
+
+.student-class-facts {
+  grid-area: facts;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+}
+
+.student-class-facts > strong {
+  color: var(--text-primary);
+}
+
+.student-class-title {
+  grid-area: title;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--type-h1-size);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-display);
+  line-height: var(--line-height-tight);
+  overflow-wrap: anywhere;
+}
+
+.student-class-about {
+  grid-area: about;
+  max-width: var(--reading-max);
+  margin: var(--space-1) 0 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-lg);
+}
+
+.student-class-labels {
+  display: flex;
+  flex-wrap: wrap;
+  grid-area: labels;
+  align-content: start;
+  gap: var(--space-1-5);
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.student-class-aside {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--card-padding);
+  border: 1px solid var(--border-subtle);
+  border-top: var(--border-width-thick) solid var(--module-classes);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-xs);
+}
+
+.student-class-note,
+.student-class-progress {
+  align-self: stretch;
+}
+
+.student-class-aside-text {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.student-class-aside-text.is-strong {
+  color: var(--text-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* The teacher's note, in their own words. */
+.student-class-note {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-1);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.student-class-note-quote {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--font-size-lg);
+  font-style: italic;
+  line-height: var(--line-height-normal);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.student-class-note-by {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.student-class-progress {
+  display: grid;
+  gap: var(--space-1-5);
+}
+
+/* The course (units and lessons) and the timetable beside it. */
+.student-class-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+  align-items: start;
+  gap: var(--space-10);
+}
+
+.student-class-course {
+  display: grid;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+.student-class-course-hint {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+}
+
+.student-class-side {
+  display: grid;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+.student-class-unit {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.student-class-unit-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.student-class-unit-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--type-h2-size);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+}
+
+.student-class-lessons {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.student-class-lesson {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.student-class-lessons > li:last-child .student-class-lesson {
+  border-bottom: 0;
+}
+
+a.student-class-lesson {
+  border-radius: var(--radius-md);
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+a.student-class-lesson:hover {
+  background: var(--surface-card);
+}
+
+a.student-class-lesson:hover strong {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.student-class-lesson .student-class-lesson-mark {
+  width: 32px;
+  height: 32px;
+  font-size: var(--font-size-sm);
+}
+
+.student-class-lesson.is-locked,
+.student-class-lesson.is-unavailable {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  color: var(--text-secondary);
+}
+
+.student-class-lesson-copy {
+  display: grid;
+  gap: var(--space-0-5);
+  min-width: 0;
+}
+
+.student-class-lesson-copy > strong {
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.student-class-lesson-state {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.student-class-lesson.is-current .student-class-lesson-state {
+  color: var(--module-classes);
+  font-weight: var(--font-weight-semibold);
+}
+
+.student-class-lesson-chevron {
+  color: var(--text-secondary);
+}
+
+/* Quiz results and Feedback sit open on the page, like the Lessons tab (no sheet of their own). */
+.student-class-sheet {
+  display: grid;
+  gap: var(--section-gap);
+}
+
+.student-class-results-quiz {
+  display: grid;
+  gap: var(--space-0-5);
+}
+
+/* A few columns only: the table fits its column instead of keeping the 640px minimum. */
+.student-class-sheet .data-table {
+  min-width: 0;
+}
+
+.student-class-results-date {
+  white-space: nowrap;
+}
+
+.student-class-feedback {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.student-class-feedback-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-4);
+  padding: var(--space-5) 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* The tabs above already draw the first rule. */
+.student-class-feedback-item:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.student-class-feedback-body {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.student-class-feedback-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.student-class-feedback-message {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--font-size-lg);
+  line-height: var(--line-height-normal);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1200px) {
+  .student-class-hero-grid,
+  .student-class-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .student-class-aside {
+    max-width: 560px;
+  }
+
+  /* Joined, with a note: the note and the next step side by side under the cover. */
+  .student-class-aside:has(> .student-class-note) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+    gap: var(--space-3) var(--space-8);
+    max-width: none;
+  }
+
+  .student-class-aside:has(> .student-class-note) > * {
+    grid-column: 2;
+  }
+
+  .student-class-aside > .student-class-note {
+    grid-row: 1 / span 4;
+    grid-column: 1;
+    margin: 0;
+    padding: 0 var(--space-8) 0 0;
+    border-right: 1px solid var(--border-subtle);
+    border-bottom: 0;
+  }
+}
+
+/* A lesson reads top to bottom: summary, video, key phrases, activities, quiz; progress and sessions in the rail. */
+.student-lesson-byline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+}
+
+.student-lesson-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+  align-items: start;
+  gap: var(--space-10);
+}
+
+.student-lesson-main {
+  display: grid;
+  gap: var(--space-10);
+  min-width: 0;
+}
+
+.student-lesson-side {
+  display: grid;
+  align-items: start;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+.student-lesson-summary {
+  max-width: var(--reading-max);
+  margin: 0;
+  font-size: var(--font-size-lg);
+  line-height: var(--line-height-relaxed);
+}
+
+.student-lesson-section {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.student-lesson-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.student-lesson-heading {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--type-h2-size);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+}
+
+.student-lesson-video {
+  display: grid;
+  grid-template-columns: minmax(140px, 240px) minmax(0, 1fr);
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-xs);
+}
+
+/* Playing: the player takes the whole width, the title and actions go under it. */
+.student-lesson-video.is-playing {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.student-lesson-player {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: var(--surface-inverse);
+}
+
+.student-lesson-screen {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 9;
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+}
+
+.student-lesson-video-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+}
+
+.student-lesson-video-copy {
+  display: grid;
+  gap: var(--space-0-5);
+  min-width: 0;
+}
+
+.student-lesson-video-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.student-lesson-activities {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.student-lesson-activity {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* The numbered step marker of an activity: filled when done, a ring in the pigment for the next one. */
+.student-lesson-step {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: var(--border-width-thick) solid var(--border-default);
+  border-radius: var(--radius-round);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+.student-lesson-step.is-done {
+  border-color: var(--module-classes);
+  background: var(--module-classes);
+  color: var(--text-on-primary);
+}
+
+.student-lesson-step.is-next {
+  border-color: var(--module-classes);
+  color: var(--module-classes);
+}
+
+.student-lesson-activity-copy {
+  display: grid;
+  gap: var(--space-0-5);
+  min-width: 0;
+}
+
+.student-lesson-activity-copy > strong {
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.student-lesson-activity-done {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--module-classes);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.student-lesson-note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+/* The lesson quiz: a sheet of its own, with the best score as a figure. */
+.student-lesson-quiz {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-6);
+  padding: var(--card-padding);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-xs);
+}
+
+.student-lesson-quiz-copy {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.student-lesson-quiz-title {
+  font-family: var(--font-display);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+}
+
+.student-lesson-best {
+  display: grid;
+  justify-items: end;
+  gap: var(--space-1);
+}
+
+.student-lesson-progress {
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+}
+
+@media (max-width: 1200px) {
+  .student-lesson-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .student-lesson-side {
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  }
+}
+
+/* ----- Focus mode: activities and the lesson quiz ----- */
+
+.class-focus-main {
+  width: min(880px, 100%);
+  margin: 0 auto;
+  padding-top: var(--space-6);
+}
+
+.class-focus-main.is-wide {
+  width: min(1120px, 100%);
+}
+
+.class-focus-header {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.class-focus-header > .type-caption {
+  margin: 0;
+}
+
+.class-focus-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--type-h1-size);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-display);
+  line-height: var(--line-height-snug);
+}
+
+.class-focus-note {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  margin: 0;
+  color: var(--module-classes);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.class-focus-nav {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.class-focus-nav > :first-child {
+  justify-self: start;
+}
+
+.class-focus-nav > :last-child {
+  justify-self: end;
+}
+
+.class-focus-nav-copy {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+}
+
+/* An activity is done: the seal lands. */
+.class-activity-done {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--card-padding);
+  border: 1px solid var(--border-subtle);
+  border-top: var(--border-width-thick) solid var(--module-classes);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-sm);
+}
+
+.class-activity-seal {
+  --seal-size: 64px;
+  transform: rotate(-6deg);
+  animation: class-seal-land var(--duration-slow) var(--ease-spring);
+}
+
+@keyframes class-seal-land {
+  from {
+    opacity: 0;
+    transform: rotate(-6deg) scale(1.4);
+  }
+}
+
+.class-activity-done-copy {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.class-activity-done-copy > p {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.class-activity-done-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+}
+
+.class-activity-sheet {
+  padding: var(--card-padding);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-xs);
+}
+
+/* The activity players (flashcards, tracing, matching). */
+.class-player {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.class-player-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.class-player-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1-5);
+}
+
+.class-player-count {
+  font-size: var(--font-size-md);
+}
+
+.class-player-tools,
+.class-player-head > .btn {
+  display: flex;
+  gap: var(--space-1);
+  margin-left: auto;
+}
+
+.class-player-instruction,
+.class-player-empty {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.class-player-nav,
+.class-player-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.class-player-foot {
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.class-player-foot-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.class-player-dots {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.class-player-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-round);
+  background: var(--border-default);
+}
+
+.class-player-dot.is-seen {
+  background: var(--module-classes);
+}
+
+.class-player-dot.is-current {
+  outline: var(--border-width-thick) solid var(--module-classes);
+  outline-offset: var(--space-0-5);
+}
+
+/* A flashcard: practice paper with the word in the hanzi face; flipped, the meaning on a plain sheet. */
+.class-flashcard {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: var(--space-3);
+  min-height: 280px;
+  padding: var(--space-8) var(--space-6);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--paper-grid), var(--surface-subtle);
+  color: var(--text-primary);
+  font: inherit;
+  cursor: pointer;
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.class-flashcard:hover {
+  border-color: var(--border-interactive);
+  box-shadow: var(--shadow-sm);
+}
+
+.class-flashcard.is-flipped {
+  background: var(--surface-card);
+}
+
+.class-flashcard-word {
+  font-size: var(--font-size-7xl);
+  line-height: var(--line-height-tight);
+}
+
+.class-flashcard-meaning {
+  font-family: var(--font-display);
+  font-size: var(--font-size-4xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.class-flashcard-pinyin {
+  color: var(--module-classes);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+}
+
+.class-flashcard.is-flipped .class-flashcard-pinyin {
+  color: var(--text-secondary);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-regular);
+}
+
+.class-flashcard-flip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* Tracing: the model in a 田字格 tile, the pad a large 田字格 beside it. */
+.class-tracing {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.4fr) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-5);
+}
+
+.class-tracing-model {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--surface-sunken);
+  text-align: center;
+}
+
+.class-tracing-tile {
+  --hanzi-tile-size: 120px;
+}
+
+.class-tracing-done {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  color: var(--module-classes);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  list-style: none;
+}
+
+.class-tracing-done > li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.class-tracing-pad {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-2);
+}
+
+.class-tracing-count {
+  justify-self: start;
+}
+
+.class-tracing-canvas {
+  width: min(320px, 100%);
+  aspect-ratio: 1;
+  border: var(--border-width-thick) solid var(--color-primary-300);
+  border-radius: var(--radius-xs);
+  background: var(--surface-card);
+  cursor: crosshair;
+  touch-action: none;
+}
+
+/* Matching: two columns of tiles; a selected word, a paired one, a wrong and a right pair look different. */
+.class-matching {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5);
+}
+
+.class-matching-column {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+}
+
+.class-matching-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: var(--control-height-lg);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+
+.class-matching-item:hover:not(:disabled) {
+  border-color: var(--border-interactive);
+}
+
+.class-matching-item:disabled {
+  cursor: default;
+}
+
+.class-matching-item.is-selected {
+  border-color: var(--color-primary-500);
+  box-shadow: inset 0 0 0 1px var(--color-primary-500);
+}
+
+.class-matching-item.is-paired {
+  border-style: dashed;
+  background: var(--surface-subtle);
+}
+
+.class-matching-item.is-wrong {
+  border-style: solid;
+  border-color: var(--color-danger);
+  background: var(--color-danger-soft);
+}
+
+.class-matching-item.is-right {
+  border-style: solid;
+  border-color: var(--color-success);
+  background: var(--color-success-soft);
+}
+
+.class-matching-chinese {
+  font-family: var(--font-hanzi);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+}
+
+.class-matching-pair {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+/* The lesson quiz: before, while answering, and the result. */
+.quiz-intro {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--card-padding);
+  border: 1px solid var(--border-subtle);
+  border-top: var(--border-width-thick) solid var(--module-classes);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-xs);
+}
+
+.quiz-intro-text {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin: 0;
+  font-size: var(--font-size-lg);
+}
+
+.quiz-intro-text > :first-child {
+  flex: none;
+  margin-top: var(--space-1);
+  color: var(--module-classes);
+}
+
+.quiz-intro-best {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.quiz-intro-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.quiz-intro-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.quiz-question-panel {
+  display: grid;
+  gap: var(--space-5);
+  padding: var(--card-padding);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-xs);
+}
+
+.quiz-question-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.quiz-question-count {
+  font-size: var(--font-size-md);
+}
+
+.quiz-question-dots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1-5);
+}
+
+.quiz-question-dot {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-round);
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+}
+
+.quiz-question-dot:hover {
+  border-color: var(--border-interactive);
+}
+
+.quiz-question-dot.is-answered {
+  border-color: var(--module-classes);
+  background: var(--module-classes-soft);
+  color: var(--module-classes);
+}
+
+.quiz-question-dot.is-current {
+  border-color: var(--color-primary-500);
+  background: var(--color-primary-500);
+  color: var(--text-on-dark);
+}
+
+.quiz-question-stage {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-3);
+  padding: var(--space-10) var(--space-5);
+  border-radius: var(--radius-md);
+  background: var(--surface-subtle);
+  text-align: center;
+}
+
+.quiz-question-text {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+  overflow-wrap: anywhere;
+}
+
+.quiz-question-instruction {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.quiz-question-image {
+  max-width: min(280px, 100%);
+  border-radius: var(--radius-md);
+}
+
+.quiz-question-audio {
+  max-width: 100%;
+}
+
+.quiz-question-hint {
+  margin: 0;
+  text-align: left;
+}
+
+.quiz-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.quiz-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--control-height-lg);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    background-color var(--duration-fast) var(--ease-standard);
+}
+
+.quiz-option:hover {
+  border-color: var(--border-interactive);
+  background: var(--surface-subtle);
+}
+
+.quiz-option.is-selected {
+  border-color: var(--color-primary-500);
+  background: var(--surface-card);
+  box-shadow: inset 0 0 0 1px var(--color-primary-500);
+}
+
+.quiz-option-letter {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-round);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.quiz-option.is-selected .quiz-option-letter {
+  border-color: var(--color-primary-500);
+  background: var(--color-primary-500);
+  color: var(--text-on-dark);
+}
+
+/* The submit bar stays in reach while answering. */
+.quiz-submit-row {
+  position: sticky;
+  bottom: var(--space-4);
+  z-index: var(--z-sticky);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-5);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-md);
+}
+
+.quiz-submit-copy {
+  display: grid;
+  gap: var(--space-0-5);
+}
+
+.quiz-submit-copy > .type-caption {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* The result: the score, then the next step beside it (under it on smaller screens), then feedback and review. */
+.quiz-result-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+  grid-template-rows: auto auto 1fr;
+  grid-template-areas:
+    'score side'
+    'feedback side'
+    'review side';
+  align-items: start;
+  gap: var(--space-10);
+}
+
+.quiz-section-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--type-h2-size);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+}
+
+.quiz-result-layout:not(:has(> .quiz-feedback)) {
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    'score side'
+    'review side';
+}
+
+.quiz-score {
+  display: grid;
+  grid-area: score;
+  gap: var(--space-4);
+  padding: var(--card-padding);
+  border: 1px solid var(--border-subtle);
+  border-top: var(--border-width-thick) solid var(--module-classes);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-xs);
+}
+
+.quiz-score > p {
+  margin: 0;
+}
+
+.quiz-score-figures {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-4) var(--space-10);
+  margin: 0;
+}
+
+.quiz-score-figure {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.quiz-score-figure > dt {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.quiz-score-figure > dd {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: lining-nums tabular-nums;
+  line-height: var(--line-height-tight);
+}
+
+.quiz-score-figure.is-main > dd {
+  font-size: var(--type-display-size);
+}
+
+.quiz-score-rule {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.quiz-feedback {
+  display: grid;
+  grid-area: feedback;
+  gap: var(--space-4);
+}
+
+.quiz-feedback-list {
+  display: grid;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.quiz-feedback-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-4);
+}
+
+.quiz-feedback-note {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+}
+
+.quiz-feedback-note > blockquote {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--font-size-lg);
+  font-style: italic;
+  line-height: var(--line-height-normal);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.quiz-review {
+  display: grid;
+  grid-area: review;
+  gap: var(--space-2);
+}
+
+.quiz-review-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.quiz-review-head p {
+  margin: var(--space-1) 0 0;
+}
+
+.quiz-review-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.quiz-review-item {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-5) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.quiz-review-item-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-3);
+}
+
+.quiz-review-number {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: var(--border-width-thick) solid var(--border-default);
+  border-radius: var(--radius-round);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+}
+
+.quiz-review-item.is-wrong .quiz-review-number {
+  border-color: var(--color-danger);
+  color: var(--color-danger-text);
+}
+
+.quiz-review-item.is-correct .quiz-review-number {
+  border-color: var(--color-success);
+  color: var(--color-success-text);
+}
+
+.quiz-review-question {
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.quiz-review-answers,
+.quiz-review-explanation,
+.quiz-review-item > .btn-link {
+  margin: 0 0 0 calc(28px + var(--space-3));
+}
+
+.quiz-review-answers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-2);
+}
+
+.quiz-review-answers > div {
+  display: grid;
+  gap: var(--space-0-5);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+}
+
+.quiz-review-answers > .is-correct {
+  background: var(--color-success-soft);
+}
+
+.quiz-review-answers dt {
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+}
+
+.quiz-review-answers > .is-correct dt {
+  color: var(--color-success-text);
+}
+
+.quiz-review-answers dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+}
+
+.quiz-review-explanation {
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+}
+
+.quiz-review-item > .btn-link {
+  justify-self: start;
+}
+
+.quiz-result-side {
+  display: grid;
+  grid-area: side;
+  align-content: start;
+  gap: var(--space-4);
+}
+
+.quiz-next-steps {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.quiz-next-step {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+}
+
+.quiz-next-step > p {
+  margin: 0;
+}
+
+@media (max-width: 1200px) {
+  .quiz-result-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-template-areas:
+      'score'
+      'side'
+      'feedback'
+      'review';
+  }
+
+  /* Repeats the no-feedback variant above at its specificity, or its two-column areas would win here. */
+  .quiz-result-layout:not(:has(> .quiz-feedback)) {
+    grid-template-rows: none;
+    grid-template-areas:
+      'score'
+      'side'
+      'review';
+  }
+}

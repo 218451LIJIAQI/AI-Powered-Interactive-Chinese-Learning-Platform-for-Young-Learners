@@ -14,7 +14,7 @@ class SensitiveDataRedactorTests {
 
     private static final String TEXT_REDACTED = "[REDACTED]";
     private static final String MAP_REDACTED = SensitiveDataRedactor.FILTERED;
-    private static final String EMAIL = "parent@example.com";
+    private static final String EMAIL = "learner@example.com";
     private static final String STANDALONE_EMAIL = "standalone@example.com";
     private static final String ACCESS_TOKEN = "access-token";
     private static final String PASSWORD = "Secret123";
@@ -26,6 +26,16 @@ class SensitiveDataRedactorTests {
     private static final String RESET_PASSWORD_URL =
             "https://learn.example/reset-password?token=" + RAW_TOKEN + "&safe=true";
     private static final String RIGHT_TO_LEFT_OVERRIDE = "\u202E";
+
+    @Test
+    void theWordsBearerTokensAreNotACredentialButABearerValueIs() {
+        String redacted = SensitiveDataRedactor.redactText(
+                "User signed out and invalidated existing bearer tokens. Header was Bearer " + RAW_BEARER);
+
+        assertThat(redacted)
+                .startsWith("User signed out and invalidated existing bearer tokens.")
+                .doesNotContain(RAW_BEARER);
+    }
 
     @Test
     void redactTextCoversSecretsEmailsBearerTokensAndLayoutControl() {

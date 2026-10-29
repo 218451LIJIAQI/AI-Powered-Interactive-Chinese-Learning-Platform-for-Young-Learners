@@ -1,71 +1,77 @@
 <template>
-  <aside class="sidebar" :class="sidebarClass">
-    <AppBrand />
+  <aside class="sidebar">
+    <AppBrand compact class="sidebar-brand" :to="homePath" />
+    <span class="sidebar-role" data-testid="sidebar-role">{{ t(roleLabelKey) }}</span>
 
-    <div class="sidebar-intro">
-      <span class="sidebar-intro-badge">{{ roleBadge }}</span>
-      <strong>{{ roleHeading }}</strong>
-      <p>{{ roleSummary }}</p>
+    <nav class="sidebar-nav" :aria-label="t('dashboard.sidebarNavigation')">
+      <RouterLink
+        v-for="item in items"
+        :key="item.to"
+        :to="item.href"
+        class="sidebar-link"
+        :class="{ 'is-active': item.active, 'is-locked': item.locked }"
+        :aria-current="item.active ? 'page' : undefined"
+        :aria-label="item.locked ? t('dashboard.lockedItem', { label: item.label }) : undefined"
+      >
+        <IconGlyph :name="item.icon" />
+        <span class="sidebar-link-label">{{ item.label }}</span>
+        <IconGlyph v-if="item.locked" name="lock" :size="14" class="sidebar-link-lock" />
+        <span
+          v-else-if="item.count > 0"
+          class="sidebar-count"
+          :aria-label="t('dashboard.countBadge', { count: item.count })"
+          >{{ item.count > 99 ? '99+' : item.count }}</span
+        >
+      </RouterLink>
+    </nav>
+
+    <div class="sidebar-word" role="group" :aria-label="wordLabel">
+      <span class="hanzi-tile" aria-hidden="true">{{ word.hanzi }}</span>
+      <div class="sidebar-word-copy" aria-hidden="true">
+        <span class="sidebar-word-eyebrow">{{ t('dashboard.todaysWord') }}</span>
+        <strong class="cjk-text">{{ word.pinyin }}</strong>
+        <span>{{ wordMeaning }}</span>
+      </div>
     </div>
 
-    <section class="sidebar-showcase">
-      <div class="sidebar-showcase-illustration">
-        <div class="sidebar-showcase-bamboo" />
-        <PandaIllustration
-          class="sidebar-showcase-panda"
-          :size="showcasePandaSize"
-          :outfit="showcaseOutfit"
-          :accent="showcaseAccent"
-          compact
-        />
-        <div class="sidebar-showcase-skyline" />
-      </div>
-    </section>
+    <div class="sidebar-spacer" />
 
-    <div v-for="group in navigationGroups" :key="group.key" class="sidebar-nav-group">
-      <div v-if="group.title" class="sidebar-section-label">{{ group.title }}</div>
-      <nav class="sidebar-nav" :aria-label="group.ariaLabel">
-        <RouterLink v-for="item in group.items" :key="item.to" :to="item.to" custom v-slot="{ href, navigate }">
-          <a
-            :href="href"
-            class="sidebar-link"
-            :class="{ 'router-link-active': isLinkActive(item.to) }"
-            @click="navigate"
-          >
-            <IconGlyph :name="item.icon" class="sidebar-icon" />
-            <span>{{ item.label }}</span>
-          </a>
-        </RouterLink>
-      </nav>
-    </div>
+    <RouterLink
+      v-if="supportItem"
+      :to="supportItem.href"
+      class="sidebar-link sidebar-support"
+      :class="{ 'is-active': supportItem.active }"
+      :aria-current="supportItem.active ? 'page' : undefined"
+    >
+      <IconGlyph :name="supportItem.icon" />
+      <span class="sidebar-link-label">{{ supportItem.label }}</span>
+      <span
+        v-if="supportItem.count > 0"
+        class="sidebar-count"
+        :aria-label="t('dashboard.countBadge', { count: supportItem.count })"
+        >{{ supportItem.count }}</span
+      >
+    </RouterLink>
 
-    <div class="sidebar-footer stack">
-      <div class="row sidebar-footer-row">
-        <div class="sidebar-footer-badge"><IconGlyph :name="footerIcon" :size="22" /></div>
-        <div class="stack sidebar-footer-copy">
-          <strong class="sidebar-footer-title">{{ footerTitle }}</strong>
-          <span class="muted sidebar-footer-subtitle">{{ footerSubtitle }}</span>
-        </div>
+    <component
+      :is="status.to ? RouterLink : 'div'"
+      :to="status.to"
+      class="sidebar-status"
+      :class="`is-${status.tone}`"
+      data-testid="sidebar-status"
+    >
+      <div class="sidebar-status-row">
+        <strong>{{ status.title }}</strong>
+        <span v-if="status.pill" class="sidebar-status-pill">{{ status.pill }}</span>
       </div>
-      <div v-if="showFooterProgress" class="progress-bar sidebar-footer-progress" :class="footerProgressTone">
-        <span :style="footerProgressStyle" />
-      </div>
-      <div v-if="showFooterProgress" class="row-between sidebar-footer-meta">
-        <strong>{{ progressLabel }}</strong>
-        <span class="muted">{{ progressCaption }}</span>
-      </div>
-      <span v-else-if="showSignInHint" class="muted sidebar-footer-subtitle">
-        {{ t('dashboard.signInHint') }}
-      </span>
-      <div class="sidebar-footer-ornament"><IconGlyph :name="footerDecorationIcon" :size="26" /></div>
-    </div>
-
-    <div class="sidebar-bottom-scene" :class="`sidebar-bottom-scene--${sceneRole}`">
-      <span class="sidebar-bottom-scene-wave" />
-      <span class="sidebar-bottom-scene-leaf sidebar-bottom-scene-leaf--1" />
-      <span class="sidebar-bottom-scene-leaf sidebar-bottom-scene-leaf--2" />
-      <span class="sidebar-bottom-scene-flower" />
-    </div>
+      <span class="sidebar-status-meta">{{ status.meta }}</span>
+      <ProgressBar
+        v-if="status.progress !== null"
+        class="is-sm"
+        :progress="status.progress"
+        :label="status.progressLabel"
+      />
+    </component>
   </aside>
 </template>
 
@@ -75,270 +81,169 @@ import { RouterLink, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
 import IconGlyph from '@/components/common/IconGlyph.vue'
-import PandaIllustration from '@/components/common/PandaIllustration.vue'
-import { publicNav, roleNavigation } from '@/config/navigation'
+import ProgressBar from '@/components/common/ProgressBar.vue'
+import { useLocalMessages } from '@/composables/useLocalMessages'
+import { isNavItemActive, roleNavigation, roleSupportNav, type RoleNavItem } from '@/config/navigation'
 import { dashboardMessages } from '@/plugins/dashboardMessages'
 import { useAuthStore } from '@/stores/auth'
-import type { UserRole } from '@/types/api'
-import type { NavItem } from '@/config/navigation'
+import { useUiStore } from '@/stores/ui'
+import type { HealthStatusResponse, RewardSummaryResponse } from '@/types/api'
+import { formatDate, formatTime } from '@/utils/format'
+import { defaultRouteForRole } from '@/utils/role'
+import { dailyWord } from '@/utils/todaysWord'
+import { xpLevelFor } from '@/utils/xpLevel'
 
 import AppBrand from './AppBrand.vue'
+import { useLayoutRole } from './useLayoutRole'
 
-type LocalizedNavItem = NavItem & { label: string }
+interface Props {
+  /** The signed-in student's reward summary (level, XP, streak); the layout reads it again after learning. */
+  rewardSummary?: RewardSummaryResponse | null
+  /** Badge counts keyed by `RoleNavItem.countKey`. */
+  navCounts?: Readonly<Record<string, number>>
+  /** The admin's last health check: the response, or null when the server did not answer. */
+  health?: HealthStatusResponse | null
+}
 
-interface NavigationGroup {
-  readonly key: string
+const props = withDefaults(defineProps<Props>(), {
+  rewardSummary: null,
+  navCounts: () => ({}),
+  health: undefined,
+})
+
+interface SidebarItem {
+  readonly to: string
+  readonly href: string
+  readonly label: string
+  readonly icon: string
+  readonly active: boolean
+  readonly locked: boolean
+  readonly count: number
+}
+
+interface StatusCard {
   readonly title: string
-  readonly ariaLabel: string
-  readonly items: LocalizedNavItem[]
+  readonly pill: string
+  readonly meta: string
+  readonly tone: 'neutral' | 'success' | 'warning' | 'info'
+  readonly to?: string
+  readonly progress: number | null
+  readonly progressLabel: string
 }
-
-interface NavigationGroupConfig {
-  readonly key: string
-  readonly title: string
-  readonly ariaLabel: string
-  readonly itemIndices: readonly number[]
-}
-
-interface RoleSidebarCopy {
-  readonly badge: string
-  readonly heading: string
-  readonly summary: string
-  readonly footerIcon: string
-  readonly footerDecorationIcon: string
-}
-
-const ROLE_SIDEBAR_COPY: Record<UserRole, RoleSidebarCopy> = {
-  ADMIN: {
-    badge: 'dashboard.adminBadge',
-    heading: 'dashboard.adminHeading',
-    summary: 'dashboard.adminSummary',
-    footerIcon: 'shield',
-    footerDecorationIcon: 'dashboard',
-  },
-  TEACHER: {
-    badge: 'dashboard.teacherBadge',
-    heading: 'dashboard.teacherHeading',
-    summary: 'dashboard.teacherSummary',
-    footerIcon: 'teacher',
-    footerDecorationIcon: 'fun',
-  },
-  STUDENT: {
-    badge: 'dashboard.studentBadge',
-    heading: 'dashboard.studentHeading',
-    summary: 'dashboard.studentSummary',
-    footerIcon: 'trophy',
-    footerDecorationIcon: 'fun',
-  },
-}
-
-const ROLE_NAVIGATION_GROUPS: Record<UserRole, readonly NavigationGroupConfig[]> = {
-  ADMIN: [
-    { key: 'overview', title: 'dashboard.overview', ariaLabel: 'dashboard.adminOverview', itemIndices: [0, 7, 6] },
-    {
-      key: 'operations',
-      title: 'dashboard.operations',
-      ariaLabel: 'dashboard.adminOperations',
-      itemIndices: [1, 2, 5],
-    },
-    { key: 'trust', title: 'dashboard.trustContent', ariaLabel: 'dashboard.adminTrust', itemIndices: [3, 4] },
-    { key: 'platform', title: 'dashboard.platform', ariaLabel: 'dashboard.adminPlatform', itemIndices: [8] },
-  ],
-  TEACHER: [
-    { key: 'overview', title: 'dashboard.overview', ariaLabel: 'dashboard.teacherOverview', itemIndices: [0, 5] },
-    { key: 'teaching', title: 'dashboard.teaching', ariaLabel: 'dashboard.teacherTools', itemIndices: [2, 1] },
-    { key: 'learners', title: 'dashboard.learners', ariaLabel: 'dashboard.teacherLearners', itemIndices: [3, 4] },
-    { key: 'profile', title: 'dashboard.profile', ariaLabel: 'dashboard.teacherProfileSettings', itemIndices: [6] },
-  ],
-  STUDENT: [
-    { key: 'journey', title: 'dashboard.journey', ariaLabel: 'dashboard.studentNavigation', itemIndices: [0, 1, 2, 3] },
-    {
-      key: 'motivation',
-      title: 'dashboard.motivation',
-      ariaLabel: 'dashboard.studentMotivation',
-      itemIndices: [4, 5],
-    },
-    { key: 'support', title: 'dashboard.support', ariaLabel: 'dashboard.studentSupport', itemIndices: [6, 7] },
-  ],
-}
-
-const PUBLIC_NAVIGATION_GROUP = {
-  key: 'explore',
-  title: 'dashboard.explore',
-  ariaLabel: 'dashboard.publicNavigation',
-} as const
-
-const PREVIEW_PROGRESS_PERCENT = 55
-const POINTS_PER_PROGRESS_PERCENT = 4
-const showcaseAccent = '#f6d056'
 
 const auth = useAuthStore()
+const ui = useUiStore()
 const route = useRoute()
 const { t: globalT } = useI18n({ useScope: 'global' })
-const { t } = useI18n({
-  messages: {
-    en: { dashboard: dashboardMessages.en },
-    ms: { dashboard: dashboardMessages.ms },
-    zh: { dashboard: dashboardMessages.zh },
-  },
-})
+const { t } = useLocalMessages({ dashboard: dashboardMessages })
+const { role, isApplicant, roleLabelKey } = useLayoutRole()
 
-const isPreview = computed(() => auth.isPreviewSession)
-const studentProfile = computed(() => auth.currentUser?.studentProfile ?? null)
+const homePath = computed(() => defaultRouteForRole(role.value))
 
-const role = computed<UserRole>(() => (route.meta.previewRole as UserRole | undefined) ?? auth.activeRole ?? 'STUDENT')
-const isGuestCatalog = computed(() => route.path.startsWith('/courses'))
-const sceneRole = computed(() => (isGuestCatalog.value ? 'student' : role.value.toLowerCase()))
-const items = computed(() => (isGuestCatalog.value ? publicNav : roleNavigation[role.value]))
-const localizedItems = computed<LocalizedNavItem[]>(() =>
-  items.value.map((item) => ({
-    icon: item.icon,
-    label: globalT(item.labelKey),
-    labelKey: item.labelKey,
-    to: item.to,
-  })),
-)
-const activeRoleCopy = computed(() => ROLE_SIDEBAR_COPY[role.value])
-
-const sidebarClass = computed(() => `sidebar--${sceneRole.value}`)
-const roleBadge = computed(() => t(isGuestCatalog.value ? 'dashboard.publicPreview' : activeRoleCopy.value.badge))
-const roleHeading = computed(() => t(isGuestCatalog.value ? 'dashboard.guestHeading' : activeRoleCopy.value.heading))
-const roleSummary = computed(() => t(isGuestCatalog.value ? 'dashboard.guestSummary' : activeRoleCopy.value.summary))
-
-function pickItems(indices: readonly number[]): LocalizedNavItem[] {
-  return indices.reduce<LocalizedNavItem[]>((pickedItems, index) => {
-    const item = localizedItems.value[index]
-    if (item) {
-      pickedItems.push(item)
-    }
-    return pickedItems
-  }, [])
-}
-
-function buildNavigationGroup(config: NavigationGroupConfig): NavigationGroup {
+function toSidebarItem(item: RoleNavItem): SidebarItem {
+  const locked = Boolean(item.needsApproval) && isApplicant.value
   return {
-    key: config.key,
-    title: t(config.title),
-    ariaLabel: t(config.ariaLabel),
-    items: pickItems(config.itemIndices),
+    to: item.to,
+    href: locked ? '/teacher/locked' : item.to,
+    label: globalT(item.labelKey),
+    icon: item.icon,
+    active: !locked && isNavItemActive(item.to, route),
+    locked,
+    count: item.countKey ? Math.max(0, props.navCounts[item.countKey] ?? 0) : 0,
   }
 }
 
-const navigationGroups = computed<NavigationGroup[]>(() => {
-  if (isGuestCatalog.value) {
-    return [
-      {
-        key: PUBLIC_NAVIGATION_GROUP.key,
-        title: t(PUBLIC_NAVIGATION_GROUP.title),
-        ariaLabel: t(PUBLIC_NAVIGATION_GROUP.ariaLabel),
-        items: localizedItems.value,
-      },
-    ]
-  }
-
-  return ROLE_NAVIGATION_GROUPS[role.value].map(buildNavigationGroup)
+const items = computed<SidebarItem[]>(() => roleNavigation[role.value].map(toSidebarItem))
+const supportItem = computed<SidebarItem | null>(() => {
+  const item = roleSupportNav[role.value]
+  return item ? toSidebarItem(item) : null
 })
 
-const footerTitle = computed(() => {
-  if (isGuestCatalog.value) return t('dashboard.publicCatalog')
-
-  switch (role.value) {
-    case 'TEACHER':
-      return auth.displayName || t('dashboard.teacherName')
-    case 'ADMIN':
-      return t('dashboard.adminWorkspace')
-    default:
-      if (!isPreview.value && studentProfile.value?.currentLevel) {
-        return studentProfile.value.currentLevel
-      }
-      return isPreview.value ? t('dashboard.previewLearner') : t('dashboard.studentBadge')
-  }
-})
-
-const footerSubtitle = computed(() => {
-  if (isGuestCatalog.value) return t('dashboard.browseBeforeSignIn')
-
-  switch (role.value) {
-    case 'TEACHER':
-      return auth.currentUser?.teacherProfile?.teacherStatus === 'APPROVED'
-        ? t('dashboard.verifiedEducator')
-        : t('dashboard.educatorWorkspace')
-    case 'ADMIN':
-      return t('dashboard.administrator')
-    default:
-      return t('dashboard.keepLearning')
-  }
-})
-
-const showFooterProgress = computed<boolean>(() => !isGuestCatalog.value && role.value === 'STUDENT')
-
-const progress = computed<number>(() => {
-  if (!showFooterProgress.value) return 0
-
-  if (!isPreview.value && studentProfile.value) {
-    return Math.max(0, Math.min(100, Math.round(studentProfile.value.totalPoints / POINTS_PER_PROGRESS_PERCENT)))
-  }
-
-  return isPreview.value ? PREVIEW_PROGRESS_PERCENT : 0
-})
-
-const progressLabel = computed(() => {
-  if (!showFooterProgress.value) return ''
-
-  if (!isPreview.value && studentProfile.value) {
-    return t('dashboard.points', { count: studentProfile.value.totalPoints })
-  }
-
-  return isPreview.value ? t('dashboard.previewXp') : ''
-})
-
-const progressCaption = computed(() => {
-  if (!showFooterProgress.value) return ''
-  return isPreview.value ? t('dashboard.previewSession') : t('dashboard.earnedSoFar')
-})
-
-const footerIcon = computed(() => (isGuestCatalog.value ? 'search' : activeRoleCopy.value.footerIcon))
-
-const footerDecorationIcon = computed(() =>
-  isGuestCatalog.value ? 'learn' : activeRoleCopy.value.footerDecorationIcon,
+const word = dailyWord()
+const wordMeaning = computed(() => word.meaning[ui.locale])
+const wordLabel = computed(() =>
+  t('dashboard.todaysWordLabel', { hanzi: word.hanzi, pinyin: word.pinyin, meaning: wordMeaning.value }),
 )
 
-const isTeacherScene = computed<boolean>(() => !isGuestCatalog.value && role.value === 'TEACHER')
+const status = computed<StatusCard>(() => {
+  if (role.value === 'ADMIN') return adminStatus.value
+  if (role.value === 'TEACHER') return teacherStatus.value
+  return studentStatus.value
+})
 
-const showcasePandaSize = computed<number>(() => (isTeacherScene.value ? 122 : 118))
-
-const showcaseOutfit = computed<string>(() => (isTeacherScene.value ? '#7d56ff' : '#ef6b40'))
-
-const footerProgressTone = computed<string>(() => (showFooterProgress.value && isPreview.value ? 'warning' : ''))
-const footerProgressStyle = computed(() => ({ width: `${progress.value}%` }))
-const showSignInHint = computed<boolean>(() => !auth.isAuthenticated && !isGuestCatalog.value)
-
-function isLinkActive(to: string): boolean {
-  const hashIdx = to.indexOf('#')
-  const noHash = hashIdx >= 0 ? to.slice(0, hashIdx) : to
-  const qIdx = noHash.indexOf('?')
-  const targetPath = (qIdx >= 0 ? noHash.slice(0, qIdx) : noHash) || '/'
-  const queryPart = qIdx >= 0 ? noHash.slice(qIdx + 1) : ''
-
-  if (targetPath === '/') {
-    return route.path === '/'
+const studentStatus = computed<StatusCard>(() => {
+  const totalXp = props.rewardSummary?.totalPoints ?? auth.currentUser?.studentProfile?.totalPoints ?? 0
+  const streak = props.rewardSummary?.currentStreak ?? 0
+  const level = xpLevelFor(totalXp)
+  return {
+    title: t('dashboard.levelTitle', { level: level.level, title: globalT(level.titleKey) }),
+    pill: '',
+    meta: streak > 0 ? t('dashboard.xpAndStreak', { xp: totalXp, streak }) : t('dashboard.xpNoStreak', { xp: totalXp }),
+    tone: 'neutral',
+    to: '/student/progress',
+    progress: level.xpIntoLevel,
+    progressLabel: t('dashboard.nextLevelProgress', { level: level.level + 1 }),
   }
+})
 
-  if (route.path !== targetPath && !route.path.startsWith(`${targetPath}/`)) {
-    return false
-  }
-
-  if (!queryPart) {
-    return Object.keys(route.query).length === 0
-  }
-
-  const params = new URLSearchParams(queryPart)
-  for (const [key, value] of params.entries()) {
-    if (String(route.query[key] ?? '') !== value) {
-      return false
+const teacherStatus = computed<StatusCard>(() => {
+  const profile = auth.currentUser?.teacherProfile
+  if (!isApplicant.value) {
+    return {
+      title: t('dashboard.verifiedTeacher'),
+      pill: t('dashboard.approved'),
+      meta: profile?.approvedAt ? t('dashboard.approvedOn', { date: formatDate(profile.approvedAt) }) : '',
+      tone: 'success',
+      to: '/teacher/profile',
+      progress: null,
+      progressLabel: '',
     }
   }
+  const state = profile?.verificationState ?? 'IN_REVIEW'
+  const pill =
+    state === 'NOT_SUBMITTED'
+      ? t('dashboard.verificationNotSubmitted')
+      : state === 'CHANGES_REQUESTED'
+        ? t('dashboard.verificationChangesRequested')
+        : t('dashboard.verificationInReview')
+  return {
+    title: t('dashboard.verification'),
+    pill,
+    meta: t('dashboard.verificationHint'),
+    // The same tones as the verification pills on the pages: in review is information, changes requested a warning.
+    tone: state === 'CHANGES_REQUESTED' ? 'warning' : state === 'NOT_SUBMITTED' ? 'neutral' : 'info',
+    to: '/teacher/profile',
+    progress: null,
+    progressLabel: '',
+  }
+})
 
-  return true
-}
+const adminStatus = computed<StatusCard>(() => {
+  const health = props.health
+  const running = health?.status === 'UP'
+  // As on the admin dashboard: running without its AI provider is running, but worth a warning.
+  const withoutAi = running && health?.ai === 'UNAVAILABLE'
+  return {
+    title: t('dashboard.systemStatus'),
+    pill:
+      health === undefined
+        ? ''
+        : withoutAi
+          ? t('dashboard.systemNoAi')
+          : running
+            ? t('dashboard.systemRunning')
+            : t('dashboard.systemUnavailable'),
+    meta:
+      health === undefined
+        ? ''
+        : health
+          ? t('dashboard.systemCheckedAt', {
+              time: formatTime(health.timestamp),
+            })
+          : t('dashboard.systemCheckFailed'),
+    tone: running && !withoutAi ? 'success' : health === undefined ? 'neutral' : 'warning',
+    progress: null,
+    progressLabel: '',
+  }
+})
 </script>

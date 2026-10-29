@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   isSensitiveKey,
@@ -7,7 +7,7 @@ import {
   scrubSensitiveUrl,
   scrubSensitiveValue,
   firstQueryText,
-  removeSensitiveRouteState,
+  replaceSensitiveRouteState,
 } from './sensitiveData'
 
 describe('sensitive data scrubbing', () => {
@@ -16,13 +16,13 @@ describe('sensitive data scrubbing', () => {
     expect(isSensitiveKey('email')).toBe(true)
     expect(isSensitiveKey('reset_token')).toBe(true)
     expect(isSensitiveKey('sessionId')).toBe(true)
-    expect(isSensitiveKey('stripeApiKey')).toBe(true)
+    expect(isSensitiveKey('openAiApiKey')).toBe(true)
     expect(isSensitiveKey('displayName')).toBe(false)
   })
 
   it('redacts tokens, passwords, emails, cookies, bearer credentials, and JSON secret fields', () => {
     const scrubbed = scrubSensitiveValue(
-      'Authorization: Bearer abc.def token=reset-secret password:super-secret email=parent@example.com {"apiKey":"sk_live_secret"}',
+      'Authorization: Bearer abc.def token=reset-secret password:super-secret email=learner@example.com {"apiKey":"test_secret_value"}',
     )
 
     expect(scrubbed).toContain('[Filtered]')
@@ -32,8 +32,8 @@ describe('sensitive data scrubbing', () => {
     expect(scrubbed).not.toContain('abc.def')
     expect(scrubbed).not.toContain('reset-secret')
     expect(scrubbed).not.toContain('super-secret')
-    expect(scrubbed).not.toContain('parent@example.com')
-    expect(scrubbed).not.toContain('sk_live_secret')
+    expect(scrubbed).not.toContain('learner@example.com')
+    expect(scrubbed).not.toContain('test_secret_value')
   })
 
   it('redacts sensitive absolute URL query values while preserving safe navigation context', () => {
@@ -51,33 +51,33 @@ describe('sensitive data scrubbing', () => {
   })
 
   it('extracts the first non-empty query text from scalar or array query values', () => {
-    expect(firstQueryText(' Parent@Example.com ')).toBe('Parent@Example.com')
+    expect(firstQueryText(' Learner@Example.com ')).toBe('Learner@Example.com')
     expect(firstQueryText(['', null, ' reset-token '])).toBe('reset-token')
     expect(firstQueryText(null)).toBe('')
   })
 
   it('removes sensitive router state while preserving safe query context', () => {
-    expect(
-      removeSensitiveRouteState(
-        {
+    const router = { replace: vi.fn() }
+    replaceSensitiveRouteState(
+      router,
+      {
+        query: {
           tab: 'account',
           token: 'raw-reset-token',
           redirect: '/auth?token=nested-token',
         },
-        '#email=parent@example.com',
-      ),
-    ).toEqual({
-      query: { tab: 'account' },
-      hash: '',
-      changed: true,
-    })
+        hash: '#email=learner@example.com',
+      },
+      'reset-password',
+    )
+    expect(router.replace).toHaveBeenCalledWith({ name: 'reset-password', query: { tab: 'account' }, hash: '' })
   })
 
   it('redacts nested objects and sensitive record keys', () => {
     expect(
       scrubSensitiveUnknown({
         safe: 'hello',
-        nested: { email: 'parent@example.com', message: 'Bearer access-token', token: 'raw-token' },
+        nested: { email: 'learner@example.com', message: 'Bearer access-token', token: 'raw-token' },
       }),
     ).toEqual({
       safe: 'hello',
@@ -105,7 +105,7 @@ describe('sensitive data scrubbing', () => {
   })
 
   it('redacts sensitive values in Error objects', () => {
-    expect(scrubSensitiveUnknown(new Error('Reset failed for parent@example.com token=raw-token'))).toEqual({
+    expect(scrubSensitiveUnknown(new Error('Reset failed for learner@example.com token=raw-token'))).toEqual({
       name: 'Error',
       message: 'Reset failed for [Filtered] token=[Filtered]',
     })

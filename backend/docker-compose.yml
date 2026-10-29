@@ -3,12 +3,7 @@
 # Spins up the MySQL 8.4 instance the backend expects on host port 3307. The
 # Spring Boot application is intentionally NOT included here so that the same
 # `./mvnw spring-boot:run` workflow used during day-to-day development still
-# applies. Run from this folder:
-#
-#   docker compose up -d        # start MySQL in the background
-#   docker compose logs -f mysql  # tail the database log
-#   docker compose down         # stop and remove containers (volume kept)
-#   docker compose down -v      # WIPES the database; be deliberate
+# applies.
 #
 # The container is healthchecked so other tooling can wait on MySQL being
 # ready before launching the backend or running migrations.
@@ -34,12 +29,6 @@ services:
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_0900_ai_ci
-      # MySQL 8.4 made caching_sha2_password the only built-in default and
-      # removed the --default-authentication-plugin option, so we no longer
-      # set it explicitly here.
-      # Keep the local FYP database simple; this avoids GTID restrictions
-      # during repeated demo resets and Flyway validation.
-      - --enforce-gtid-consistency=OFF
     healthcheck:
       test: ['CMD-SHELL', 'MYSQL_PWD="$${MYSQL_PASSWORD}" mysqladmin ping -u"$${MYSQL_USER}" -h 127.0.0.1 --silent']
       interval: 5s

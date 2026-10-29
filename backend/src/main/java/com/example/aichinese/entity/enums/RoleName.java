@@ -1,6 +1,5 @@
 package com.example.aichinese.entity.enums;
 
-import java.util.Map;
 import java.util.Optional;
 
 public enum RoleName {
@@ -11,20 +10,10 @@ public enum RoleName {
 
     ADMIN;
 
-    public static final String AUTHORITY_PREFIX = "ROLE_";
-
-    private static final Map<String, RoleName> LOOKUP = EnumLookups.indexByName(RoleName.class);
+    private static final String AUTHORITY_PREFIX = "ROLE_";
 
     public static Optional<RoleName> tryFrom(String value) {
-        return EnumLookups.tryFrom(LOOKUP, value);
-    }
-
-    public static RoleName fromValue(String value) {
-        return EnumLookups.fromValue(
-                LOOKUP,
-                value,
-                "Role is required.",
-                () -> "Invalid role. Allowed values are STUDENT, TEACHER, or ADMIN.");
+        return EnumLookups.tryFrom(RoleName.class, value);
     }
 
     public String authority() {

@@ -1,58 +1,121 @@
-import { createRouter, createWebHistory } from 'vue-router'
-import type { RouteLocationNormalized, RouteLocationRaw } from 'vue-router'
+import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 
 import type { UserRole } from '@/types/api'
 
 import { useAuthStore } from '@/stores/auth'
-import { normalizeAppRoute } from '@/utils/routeCompat'
-import { defaultRouteForRole } from '@/utils/role'
+
+import { resolveNavigation } from './guard'
+import { applyDocumentTitle } from './pageTitle'
 
 const PublicLayout = () => import('@/layouts/PublicLayout.vue')
 const DashboardLayout = () => import('@/layouts/DashboardLayout.vue')
+
 const LandingPage = () => import('@/pages/public/LandingPage.vue')
+const PublicClassesPage = () => import('@/pages/public/PublicClassesPage.vue')
+const PublicClassDetailPage = () => import('@/pages/public/PublicClassDetailPage.vue')
+const HelpPage = () => import('@/pages/public/HelpPage.vue')
+const SafetyPage = () => import('@/pages/public/SafetyPage.vue')
 const AuthPage = () => import('@/pages/public/AuthPage.vue')
 const ForgotPasswordPage = () => import('@/pages/public/ForgotPasswordPage.vue')
 const ResetPasswordPage = () => import('@/pages/public/ResetPasswordPage.vue')
-const PaymentResultPage = () => import('@/pages/public/PaymentResultPage.vue')
-const CatalogPage = () => import('@/pages/public/CatalogPage.vue')
-const CourseDetailPage = () => import('@/pages/public/CourseDetailPage.vue')
+const ConfirmEmailPage = () => import('@/pages/public/ConfirmEmailPage.vue')
 const TermsPage = () => import('@/pages/public/TermsPage.vue')
 const PrivacyPage = () => import('@/pages/public/PrivacyPage.vue')
+const ResponsibleAiPage = () => import('@/pages/public/ResponsibleAiPage.vue')
+
 const StudentHomePage = () => import('@/pages/student/StudentHomePage.vue')
+const StudentSetupPage = () => import('@/pages/student/StudentSetupPage.vue')
 const StudentLearnPage = () => import('@/pages/student/StudentLearnPage.vue')
+const StudentLessonPlayerPage = () => import('@/pages/student/StudentLessonPlayerPage.vue')
 const StudentPracticePage = () => import('@/pages/student/StudentPracticePage.vue')
-const StudentQuizPage = () => import('@/pages/student/StudentQuizPage.vue')
-const StudentClassesPage = () => import('@/pages/student/StudentClassesPage.vue')
-const StudentAchievementsPage = () => import('@/pages/student/StudentAchievementsPage.vue')
-const StudentRewardsPage = () => import('@/pages/student/StudentRewardsPage.vue')
+const StudentMistakesReviewPage = () => import('@/pages/student/StudentMistakesReviewPage.vue')
 const StudentAiHelperPage = () => import('@/pages/student/StudentAiHelperPage.vue')
-const StudentProfilePage = () => import('@/pages/student/StudentProfilePage.vue')
+const StudentClassesPage = () => import('@/pages/student/StudentClassesPage.vue')
+const StudentFindClassesPage = () => import('@/pages/student/StudentFindClassesPage.vue')
+const StudentLiveSessionsPage = () => import('@/pages/student/StudentLiveSessionsPage.vue')
+const StudentClassPage = () => import('@/pages/student/StudentClassPage.vue')
+const StudentClassLessonPage = () => import('@/pages/student/StudentClassLessonPage.vue')
+const StudentClassActivityPage = () => import('@/pages/student/StudentClassActivityPage.vue')
+const StudentQuizPage = () => import('@/pages/student/StudentQuizPage.vue')
+const StudentProgressPage = () => import('@/pages/student/StudentProgressPage.vue')
+const StudentPlanPage = () => import('@/pages/student/StudentPlanPage.vue')
+const StudentLevelCheckPage = () => import('@/pages/student/StudentLevelCheckPage.vue')
+
+const SupportPage = () => import('@/pages/shared/SupportPage.vue')
+const SupportTicketPage = () => import('@/pages/shared/SupportTicketPage.vue')
+const NotificationsPage = () => import('@/pages/shared/NotificationsPage.vue')
+const AccountSettingsPage = () => import('@/pages/shared/AccountSettingsPage.vue')
+
 const TeacherDashboardPage = () => import('@/pages/teacher/TeacherDashboardPage.vue')
-const TeacherContentPage = () => import('@/pages/teacher/TeacherContentPage.vue')
 const TeacherClassesPage = () => import('@/pages/teacher/TeacherClassesPage.vue')
+const TeacherClassPage = () => import('@/pages/teacher/TeacherClassPage.vue')
+const TeacherLessonEditorPage = () => import('@/pages/teacher/TeacherLessonEditorPage.vue')
+const TeacherLiveSessionsPage = () => import('@/pages/teacher/TeacherLiveSessionsPage.vue')
 const TeacherStudentsPage = () => import('@/pages/teacher/TeacherStudentsPage.vue')
-const TeacherFeedbackPage = () => import('@/pages/teacher/TeacherFeedbackPage.vue')
+const TeacherFeedbackHistoryPage = () => import('@/pages/teacher/TeacherFeedbackHistoryPage.vue')
 const TeacherProfilePage = () => import('@/pages/teacher/TeacherProfilePage.vue')
-const TeacherEarningsPage = () => import('@/pages/teacher/TeacherEarningsPage.vue')
+const TeacherLockedPage = () => import('@/pages/teacher/TeacherLockedPage.vue')
+
 const AdminDashboardPage = () => import('@/pages/admin/AdminDashboardPage.vue')
-const AdminActivityLibraryPage = () => import('@/pages/admin/AdminActivityLibraryPage.vue')
 const AdminUsersPage = () => import('@/pages/admin/AdminUsersPage.vue')
-const AdminTeacherVerificationPage = () => import('@/pages/admin/AdminTeacherVerificationPage.vue')
-const AdminContentPage = () => import('@/pages/admin/AdminContentPage.vue')
-const AdminModerationPage = () => import('@/pages/admin/AdminModerationPage.vue')
-const AdminFinancePage = () => import('@/pages/admin/AdminFinancePage.vue')
+const AdminTeacherApplicationsPage = () => import('@/pages/admin/AdminTeacherApplicationsPage.vue')
+const AdminContentReviewPage = () => import('@/pages/admin/AdminContentReviewPage.vue')
+const AdminTeacherClassesPage = () => import('@/pages/admin/AdminTeacherClassesPage.vue')
+const AdminLearningPathPage = () => import('@/pages/admin/AdminLearningPathPage.vue')
+const AdminPracticeLibraryPage = () => import('@/pages/admin/AdminPracticeLibraryPage.vue')
+const AdminAiReportsPage = () => import('@/pages/admin/AdminAiReportsPage.vue')
+const AdminAiUsagePage = () => import('@/pages/admin/AdminAiUsagePage.vue')
+const AdminAiSettingsPage = () => import('@/pages/admin/AdminAiSettingsPage.vue')
+const AdminSupportPage = () => import('@/pages/admin/AdminSupportPage.vue')
 const AdminAnalyticsPage = () => import('@/pages/admin/AdminAnalyticsPage.vue')
-const AdminSettingsPage = () => import('@/pages/admin/AdminSettingsPage.vue')
-const UnauthorizedPage = () => import('@/pages/system/UnauthorizedPage.vue')
-const NotFoundPage = () => import('@/pages/system/NotFoundPage.vue')
+const AdminAuditLogPage = () => import('@/pages/admin/AdminAuditLogPage.vue')
+
+const SystemStatusPage = () => import('@/pages/system/SystemStatusPage.vue')
+
+const SAFE_HASH_SELECTOR_PATTERN = /^#[A-Za-z][A-Za-z0-9_-]*$/
 
 declare module 'vue-router' {
   interface RouteMeta {
-    title?: string
     roles?: UserRole[]
-    previewRole?: UserRole
+    /**
+     * Focus mode: a learning task (lesson player, practice review, setup, class activity, lesson quiz) fills the
+     * screen without the sidebar and header; the page draws its own top bar (FocusTopBar).
+     */
+    focus?: boolean
+    /** Teacher tools that open only after an admin approves the teacher (others see the Locked page). */
+    requiresApprovedTeacher?: boolean
   }
 }
+
+/** Old paths kept as redirects so links in stored notifications and bookmarks still land on the right page. */
+const legacyRedirects: RouteRecordRaw[] = [
+  { path: '/courses', redirect: { name: 'classes' } },
+  { path: '/courses/:classId', redirect: (to) => ({ name: 'class-detail', params: { classId: to.params.classId } }) },
+  { path: '/catalog', redirect: { name: 'classes' } },
+  { path: '/student/achievements', redirect: { name: 'student-progress' } },
+  { path: '/student/rewards', redirect: { name: 'student-progress' } },
+  { path: '/student/profile', redirect: { name: 'student-progress' } },
+  { path: '/student/feedback', redirect: { name: 'student-classes' } },
+  { path: '/student/ai-helper', redirect: { name: 'student-ai' } },
+  { path: '/student/ai-reports', redirect: { name: 'student-ai', params: { tab: 'ask' } } },
+  { path: '/student/practice-submissions', redirect: { name: 'student-ai', params: { tab: 'voice' } } },
+  { path: '/student/practice/wrong-answers', redirect: { name: 'student-practice', params: { type: 'mistakes' } } },
+  { path: '/student/live-classes', redirect: { name: 'student-live-sessions' } },
+  { path: '/teacher/content', redirect: { name: 'teacher-classes' } },
+  { path: '/teacher/activities', redirect: { name: 'teacher-classes' } },
+  { path: '/teacher/feedback', redirect: { name: 'teacher-feedback-history' } },
+  { path: '/teacher/live-classes', redirect: { name: 'teacher-live-sessions' } },
+  { path: '/teacher/recorded-lessons', redirect: { name: 'teacher-classes' } },
+  { path: '/teacher/moderation-records', redirect: { name: 'teacher-feedback-history' } },
+  { path: '/teacher/verification-status', redirect: { name: 'teacher-profile' } },
+  { path: '/admin/teacher-verification', redirect: { name: 'admin-teacher-applications' } },
+  { path: '/admin/teacher-approval', redirect: { name: 'admin-teacher-applications' } },
+  { path: '/admin/content-review', redirect: { name: 'admin-content-review' } },
+  { path: '/admin/activities', redirect: { name: 'admin-practice-library' } },
+  { path: '/admin/moderation', redirect: { name: 'admin-ai-reports' } },
+  { path: '/admin/ai-response-reports', redirect: { name: 'admin-ai-reports' } },
+  { path: '/admin/settings', redirect: { name: 'admin-ai-settings' } },
+]
 
 const router = createRouter({
   history: createWebHistory(),
@@ -61,286 +124,173 @@ const router = createRouter({
       path: '/',
       component: PublicLayout,
       children: [
-        { path: '', name: 'landing', component: LandingPage, meta: { title: 'MandarinSpark' } },
-        { path: 'auth', name: 'auth', component: AuthPage, meta: { title: 'Sign in' } },
-        {
-          path: 'forgot-password',
-          name: 'forgot-password',
-          component: ForgotPasswordPage,
-          meta: { title: 'Forgot password' },
-        },
-        {
-          path: 'reset-password',
-          name: 'reset-password',
-          component: ResetPasswordPage,
-          meta: { title: 'Reset password' },
-        },
-        { path: 'terms', name: 'terms', component: TermsPage, meta: { title: 'Terms of service' } },
-        { path: 'privacy', name: 'privacy', component: PrivacyPage, meta: { title: 'Privacy policy' } },
-      ],
-    },
-    {
-      path: '/payment',
-      component: PublicLayout,
-      children: [
-        { path: 'success', name: 'payment-success', component: PaymentResultPage, meta: { title: 'Payment success' } },
-        { path: 'cancel', name: 'payment-cancel', component: PaymentResultPage, meta: { title: 'Payment cancelled' } },
-      ],
-    },
-    {
-      path: '/courses',
-      component: DashboardLayout,
-      meta: { previewRole: 'STUDENT' },
-      children: [
-        {
-          path: '',
-          name: 'catalog',
-          component: CatalogPage,
-          meta: { title: 'Explore courses', previewRole: 'STUDENT' },
-        },
-        {
-          path: ':courseId',
-          name: 'course-detail',
-          component: CourseDetailPage,
-          meta: { title: 'Course detail', previewRole: 'STUDENT' },
-        },
+        { path: '', name: 'landing', component: LandingPage },
+        { path: 'classes', name: 'classes', component: PublicClassesPage },
+        { path: 'classes/:classId(\\d+)', name: 'class-detail', component: PublicClassDetailPage },
+        { path: 'help', name: 'help', component: HelpPage },
+        { path: 'safety', name: 'safety', component: SafetyPage },
+        { path: 'auth', name: 'auth', component: AuthPage },
+        { path: 'forgot-password', name: 'forgot-password', component: ForgotPasswordPage },
+        { path: 'reset-password', name: 'reset-password', component: ResetPasswordPage },
+        { path: 'confirm-email', name: 'confirm-email', component: ConfirmEmailPage },
+        { path: 'terms', name: 'terms', component: TermsPage },
+        { path: 'privacy', name: 'privacy', component: PrivacyPage },
+        { path: 'responsible-ai', name: 'responsible-ai', component: ResponsibleAiPage },
       ],
     },
     {
       path: '/student',
       component: DashboardLayout,
-      meta: { roles: ['STUDENT'], previewRole: 'STUDENT' },
+      meta: { roles: ['STUDENT'] },
       children: [
         { path: '', redirect: { name: 'student-home' } },
+        { path: 'home', name: 'student-home', component: StudentHomePage },
+        { path: 'setup', name: 'student-setup', component: StudentSetupPage, meta: { focus: true } },
+        { path: 'learn', name: 'student-learn', component: StudentLearnPage },
         {
-          path: 'home',
-          name: 'student-home',
-          component: StudentHomePage,
-          meta: { title: 'Student home', roles: ['STUDENT'], previewRole: 'STUDENT' },
+          path: 'learn/lessons/:lessonId(\\d+)',
+          name: 'student-learn-lesson',
+          component: StudentLessonPlayerPage,
+          meta: { focus: true },
         },
         {
-          path: 'learn',
-          name: 'student-learn',
-          component: StudentLearnPage,
-          meta: { title: 'Learn', roles: ['STUDENT'], previewRole: 'STUDENT' },
+          path: 'practice/review',
+          name: 'student-practice-review',
+          component: StudentMistakesReviewPage,
+          meta: { focus: true },
         },
         {
-          path: 'practice',
+          path: 'practice/:type(flashcards|quizzes|listening|tracing|drag-drop|matching|story|mistakes)?',
           name: 'student-practice',
           component: StudentPracticePage,
-          meta: { title: 'Practice', roles: ['STUDENT'], previewRole: 'STUDENT' },
+        },
+        { path: 'ai/:tab(talk|ask|quiz|story|voice)?', name: 'student-ai', component: StudentAiHelperPage },
+        { path: 'classes', name: 'student-classes', component: StudentClassesPage },
+        { path: 'classes/find', name: 'student-classes-find', component: StudentFindClassesPage },
+        { path: 'classes/live', name: 'student-live-sessions', component: StudentLiveSessionsPage },
+        {
+          path: 'classes/:classId(\\d+)/:tab(results|feedback)?',
+          name: 'student-class',
+          component: StudentClassPage,
         },
         {
-          path: 'quiz/:quizId?',
-          name: 'student-quiz',
-          component: StudentQuizPage,
-          meta: { title: 'Quiz attempt', roles: ['STUDENT'], previewRole: 'STUDENT' },
+          path: 'classes/:classId(\\d+)/lessons/:lessonId(\\d+)',
+          name: 'student-class-lesson',
+          component: StudentClassLessonPage,
         },
         {
-          path: 'classes',
-          name: 'student-classes',
-          component: StudentClassesPage,
-          meta: { title: 'Classes', roles: ['STUDENT'], previewRole: 'STUDENT' },
+          path: 'classes/:classId(\\d+)/lessons/:lessonId(\\d+)/activities/:activityType/:activityId(\\d+)',
+          name: 'student-class-activity',
+          component: StudentClassActivityPage,
+          meta: { focus: true },
         },
+        { path: 'quiz/:quizId(\\d+)', name: 'student-quiz', component: StudentQuizPage, meta: { focus: true } },
+        { path: 'progress', name: 'student-progress', component: StudentProgressPage },
+        { path: 'progress/plan', name: 'student-plan', component: StudentPlanPage },
         {
-          path: 'achievements',
-          name: 'student-achievements',
-          component: StudentAchievementsPage,
-          meta: { title: 'Achievements', roles: ['STUDENT'], previewRole: 'STUDENT' },
+          path: 'progress/plan/level-check',
+          name: 'student-level-check',
+          component: StudentLevelCheckPage,
+          meta: { focus: true },
         },
-        {
-          path: 'rewards',
-          name: 'student-rewards',
-          component: StudentRewardsPage,
-          meta: { title: 'Rewards', roles: ['STUDENT'], previewRole: 'STUDENT' },
-        },
-        {
-          path: 'ai-helper',
-          name: 'student-ai-helper',
-          component: StudentAiHelperPage,
-          meta: { title: 'AI helper', roles: ['STUDENT'], previewRole: 'STUDENT' },
-        },
-        {
-          path: 'profile',
-          name: 'student-profile',
-          component: StudentProfilePage,
-          meta: { title: 'Profile', roles: ['STUDENT'], previewRole: 'STUDENT' },
-        },
+        { path: 'support', name: 'student-support', component: SupportPage },
+        { path: 'support/:ticketId(\\d+)', name: 'student-support-ticket', component: SupportTicketPage },
+        { path: 'notifications', name: 'student-notifications', component: NotificationsPage },
+        { path: 'account', name: 'student-account', component: AccountSettingsPage },
       ],
     },
     {
       path: '/teacher',
       component: DashboardLayout,
-      meta: { roles: ['TEACHER'], previewRole: 'TEACHER' },
+      meta: { roles: ['TEACHER'] },
       children: [
         { path: '', redirect: { name: 'teacher-dashboard' } },
-        {
-          path: 'dashboard',
-          name: 'teacher-dashboard',
-          component: TeacherDashboardPage,
-          meta: { title: 'Teacher dashboard', roles: ['TEACHER'], previewRole: 'TEACHER' },
-        },
-        {
-          path: 'content',
-          name: 'teacher-content',
-          component: TeacherContentPage,
-          meta: { title: 'Content management', roles: ['TEACHER'], previewRole: 'TEACHER' },
-        },
+        { path: 'dashboard', name: 'teacher-dashboard', component: TeacherDashboardPage },
         {
           path: 'classes',
           name: 'teacher-classes',
           component: TeacherClassesPage,
-          meta: { title: 'Teacher classes', roles: ['TEACHER'], previewRole: 'TEACHER' },
+          meta: { requiresApprovedTeacher: true },
+        },
+        {
+          path: 'classes/:classId(\\d+)/:tab(details|history)?',
+          name: 'teacher-class',
+          component: TeacherClassPage,
+          meta: { requiresApprovedTeacher: true },
+        },
+        {
+          path: 'classes/:classId(\\d+)/lessons/:lessonId(\\d+)/:tab(activities|quiz|preview)?',
+          name: 'teacher-lesson',
+          component: TeacherLessonEditorPage,
+          meta: { requiresApprovedTeacher: true },
+        },
+        {
+          path: 'live-sessions/:tab(past)?',
+          name: 'teacher-live-sessions',
+          component: TeacherLiveSessionsPage,
+          meta: { requiresApprovedTeacher: true },
         },
         {
           path: 'students',
           name: 'teacher-students',
           component: TeacherStudentsPage,
-          meta: { title: 'Teacher students', roles: ['TEACHER'], previewRole: 'TEACHER' },
+          meta: { requiresApprovedTeacher: true },
         },
         {
-          path: 'feedback',
-          name: 'teacher-feedback',
-          component: TeacherFeedbackPage,
-          meta: { title: 'Feedback center', roles: ['TEACHER'], previewRole: 'TEACHER' },
+          path: 'students/feedback',
+          name: 'teacher-feedback-history',
+          component: TeacherFeedbackHistoryPage,
+          meta: { requiresApprovedTeacher: true },
         },
-        {
-          path: 'profile',
-          name: 'teacher-profile',
-          component: TeacherProfilePage,
-          meta: { title: 'Teacher profile', roles: ['TEACHER'], previewRole: 'TEACHER' },
-        },
-        {
-          path: 'earnings',
-          name: 'teacher-earnings',
-          component: TeacherEarningsPage,
-          meta: { title: 'Teacher earnings', roles: ['TEACHER'], previewRole: 'TEACHER' },
-        },
+        { path: 'profile', name: 'teacher-profile', component: TeacherProfilePage },
+        { path: 'locked', name: 'teacher-locked', component: TeacherLockedPage },
+        { path: 'support', name: 'teacher-support', component: SupportPage },
+        { path: 'support/:ticketId(\\d+)', name: 'teacher-support-ticket', component: SupportTicketPage },
+        { path: 'notifications', name: 'teacher-notifications', component: NotificationsPage },
+        { path: 'account', name: 'teacher-account', component: AccountSettingsPage },
       ],
     },
     {
       path: '/admin',
       component: DashboardLayout,
-      meta: { roles: ['ADMIN'], previewRole: 'ADMIN' },
+      meta: { roles: ['ADMIN'] },
       children: [
         { path: '', redirect: { name: 'admin-dashboard' } },
-        {
-          path: 'dashboard',
-          name: 'admin-dashboard',
-          component: AdminDashboardPage,
-          meta: { title: 'Admin dashboard', roles: ['ADMIN'], previewRole: 'ADMIN' },
-        },
-        {
-          path: 'users',
-          name: 'admin-users',
-          component: AdminUsersPage,
-          meta: { title: 'Users', roles: ['ADMIN'], previewRole: 'ADMIN' },
-        },
-        {
-          path: 'teacher-verification',
-          name: 'admin-teacher-verification',
-          component: AdminTeacherVerificationPage,
-          meta: { title: 'Teacher verification', roles: ['ADMIN'], previewRole: 'ADMIN' },
-        },
-        {
-          path: 'content',
-          name: 'admin-content',
-          component: AdminContentPage,
-          meta: { title: 'Content management', roles: ['ADMIN'], previewRole: 'ADMIN' },
-        },
-        {
-          path: 'activities',
-          name: 'admin-activities',
-          component: AdminActivityLibraryPage,
-          meta: { title: 'Activity library', roles: ['ADMIN'], previewRole: 'ADMIN' },
-        },
-        {
-          path: 'moderation',
-          name: 'admin-moderation',
-          component: AdminModerationPage,
-          meta: { title: 'Reports and moderation', roles: ['ADMIN'], previewRole: 'ADMIN' },
-        },
-        {
-          path: 'finance',
-          name: 'admin-finance',
-          component: AdminFinancePage,
-          meta: { title: 'Finance', roles: ['ADMIN'], previewRole: 'ADMIN' },
-        },
-        {
-          path: 'analytics',
-          name: 'admin-analytics',
-          component: AdminAnalyticsPage,
-          meta: { title: 'Analytics', roles: ['ADMIN'], previewRole: 'ADMIN' },
-        },
-        {
-          path: 'settings',
-          name: 'admin-settings',
-          component: AdminSettingsPage,
-          meta: { title: 'Settings and audit', roles: ['ADMIN'], previewRole: 'ADMIN' },
-        },
+        { path: 'dashboard', name: 'admin-dashboard', component: AdminDashboardPage },
+        { path: 'users', name: 'admin-users', component: AdminUsersPage },
+        { path: 'users/applications', name: 'admin-teacher-applications', component: AdminTeacherApplicationsPage },
+        { path: 'content', name: 'admin-content-review', component: AdminContentReviewPage },
+        { path: 'content/classes', name: 'admin-teacher-classes', component: AdminTeacherClassesPage },
+        { path: 'content/learning-path', name: 'admin-learning-path', component: AdminLearningPathPage },
+        { path: 'content/practice', name: 'admin-practice-library', component: AdminPracticeLibraryPage },
+        { path: 'ai', name: 'admin-ai-reports', component: AdminAiReportsPage },
+        { path: 'ai/usage', name: 'admin-ai-usage', component: AdminAiUsagePage },
+        { path: 'ai/settings', name: 'admin-ai-settings', component: AdminAiSettingsPage },
+        { path: 'support', name: 'admin-support', component: AdminSupportPage },
+        { path: 'analytics', name: 'admin-analytics', component: AdminAnalyticsPage },
+        { path: 'audit-log', name: 'admin-audit-log', component: AdminAuditLogPage },
+        { path: 'notifications', name: 'admin-notifications', component: NotificationsPage },
+        { path: 'account', name: 'admin-account', component: AccountSettingsPage },
       ],
     },
-    { path: '/unauthorized', name: 'unauthorized', component: UnauthorizedPage, meta: { title: 'Unauthorized' } },
-    { path: '/:pathMatch(.*)*', name: 'not-found', component: NotFoundPage, meta: { title: 'Page not found' } },
+    ...legacyRedirects,
+    { path: '/unauthorized', name: 'unauthorized', component: SystemStatusPage, props: { kind: 'unauthorized' } },
+    { path: '/:pathMatch(.*)*', name: 'not-found', component: SystemStatusPage, props: { kind: 'not-found' } },
   ],
   scrollBehavior(to, _from, savedPosition) {
     if (savedPosition) return savedPosition
-    const hashSelector = safeHashSelector(to.hash)
-    if (hashSelector) return { el: hashSelector, behavior: 'smooth' }
+    // Only a plain id is used as a selector (a crafted hash cannot inject one).
+    if (SAFE_HASH_SELECTOR_PATTERN.test(to.hash)) {
+      const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+      return { el: to.hash, behavior: reduceMotion ? 'auto' : 'smooth' }
+    }
     return { top: 0 }
   },
 })
 
-const AUTH_ROUTE_NAMES: ReadonlySet<string> = new Set(['auth', 'forgot-password', 'reset-password'])
-const SAFE_HASH_SELECTOR_PATTERN = /^#[A-Za-z][A-Za-z0-9_-]*$/
+router.beforeEach((to) => resolveNavigation(to, useAuthStore()))
 
-function safeHashSelector(hash: string): string | null {
-  return SAFE_HASH_SELECTOR_PATTERN.test(hash) ? hash : null
-}
-
-function pageTitle(to: RouteLocationNormalized): string {
-  return to.meta.title ? `${to.meta.title} | MandarinSpark` : 'MandarinSpark'
-}
-
-router.beforeEach(async (to): Promise<RouteLocationRaw | boolean> => {
-  const normalizedRoute = normalizeAppRoute(to.fullPath)
-  if (normalizedRoute && normalizedRoute !== to.fullPath) {
-    return normalizedRoute
-  }
-
-  const auth = useAuthStore()
-  await auth.bootstrap()
-
-  document.title = pageTitle(to)
-
-  const requiredRoles = to.meta.roles ?? []
-
-  if (typeof to.name === 'string' && AUTH_ROUTE_NAMES.has(to.name) && auth.isAuthenticated) {
-    return defaultRouteForRole(auth.activeRole)
-  }
-
-  if (requiredRoles.length === 0) {
-    return true
-  }
-
-  if (
-    auth.isPreviewSession &&
-    auth.previewRole &&
-    to.meta.previewRole === auth.previewRole &&
-    requiredRoles.includes(auth.previewRole)
-  ) {
-    return true
-  }
-
-  if (!auth.isAuthenticated) {
-    return { name: 'auth', query: { redirect: to.fullPath } }
-  }
-
-  if (!requiredRoles.some((role) => auth.hasRole(role))) {
-    return { name: 'unauthorized' }
-  }
-
-  return true
-})
+// FRLANG02: the tab title follows the final route and the interface language (App.vue re-applies it on change).
+router.afterEach((to) => applyDocumentTitle(to))
 
 export { router }

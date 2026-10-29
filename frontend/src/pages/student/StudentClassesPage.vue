@@ -1,905 +1,282 @@
 <template>
-  <div class="page-stack student-classes-page">
-    <DataNotice :using-fallback="liveResource.usingFallback.value" :error="noticeError" :success="actionSuccess" />
+  <div class="student-classes-page page-stack">
+    <PageHeaderBlock :title="t('studentClasses.mine.title')" :description="t('studentClasses.mine.lede')" />
+    <StudentClassesTabs :overview="overview" :load-counts="false" />
 
-    <ResourceSection :loading="pageLoading" :error="pageError" @retry="reloadAll">
-      <section class="student-classes-layout">
-        <div class="student-classes-main">
-          <article class="panel student-live-hero">
-            <div class="student-section-heading student-section-heading--live">
-              <span class="student-live-dot">{{ t('studentClasses.liveNow') }}</span>
-              <strong>{{ t('studentClasses.upcoming') }}</strong>
-            </div>
-
-            <template v-if="upcomingClass">
-              <div class="student-live-hero-grid">
-                <div class="student-live-date">
-                  <span>{{ upcomingMonth }}</span>
-                  <strong>{{ upcomingDay }}</strong>
-                  <small>{{ upcomingWeekday }}</small>
-                </div>
-
-                <div class="student-live-copy">
-                  <h2>{{ upcomingClass.title }}</h2>
-                  <p>{{ upcomingClassDescription }}</p>
-
-                  <div class="student-live-meta">
-                    <span>{{ classTimeRange }}</span>
-                    <span>{{ upcomingClassDurationLabel }}</span>
-                    <span>{{ upcomingMeetingPlatformLabel }}</span>
-                  </div>
-
-                  <div class="student-live-teacher">
-                    <span class="student-mini-avatar">{{ teacherInitials }}</span>
-                    <span>{{ primaryTeacherName }}</span>
-                  </div>
-
-                  <div class="student-live-actions">
-                    <button class="btn btn-secondary" type="button" @click="openLinkedLesson">
-                      {{ t('studentClasses.viewContent') }}
-                    </button>
-                  </div>
-                </div>
-
-                <div class="student-live-scene">
-                  <PandaIllustration
-                    class="student-live-panda"
-                    :size="164"
-                    outfit="#7d56ff"
-                    accent="#f6d056"
-                    pose="wave"
-                  />
-                </div>
-              </div>
-
-              <div class="student-live-footer">
-                <button
-                  class="btn btn-accent student-live-join"
-                  type="button"
-                  :disabled="liveReadOnly || classBusy || waitingForJoinWindow"
-                  @click="join(upcomingClass.id)"
-                >
-                  {{ upcomingClassActionLabel }}
-                </button>
-                <button
-                  v-if="canCancelUpcomingEnrolment"
-                  class="btn btn-secondary"
-                  type="button"
-                  :disabled="liveReadOnly || classBusy"
-                  @click="cancelEnrolment(upcomingClass.id)"
-                >
-                  {{ t('studentClasses.cancelEnrolment') }}
-                </button>
-                <button class="student-live-setup" type="button" @click="openProfile">
-                  {{ t('studentClasses.openProfile') }}
-                </button>
-              </div>
-            </template>
-
-            <StatePanel
-              v-else
-              icon="classes"
-              :title="t('studentClasses.noUpcoming')"
-              :message="t('studentClasses.noUpcomingHint')"
-            />
-          </article>
-
-          <div class="student-classes-bottom">
-            <article class="panel student-teacher-card">
-              <div class="student-section-heading">
-                <strong>{{ t('studentClasses.yourTeacher') }}</strong>
-              </div>
-
-              <template v-if="upcomingClass?.teacher">
-                <div class="student-teacher-profile">
-                  <PortraitAvatar :size="108" :kind="teacherPortraitKind" />
-                  <div class="stack u-gap-6">
-                    <div class="row">
-                      <strong>{{ primaryTeacherName }}</strong>
-                      <span class="student-teacher-badge">{{ t('studentClasses.linkedTeacher') }}</span>
-                    </div>
-                    <p>{{ t('studentClasses.teacherHint') }}</p>
-                  </div>
-                </div>
-              </template>
-              <StatePanel
-                v-else
-                icon="students"
-                :title="t('studentClasses.noTeacher')"
-                :message="t('studentClasses.noTeacherHint')"
-              />
-
-              <button class="btn btn-secondary btn-block" type="button" @click="openProfile">
-                {{ t('studentClasses.viewFeedback') }}
-              </button>
-            </article>
-
-            <article class="panel student-library-card">
-              <div class="row-between u-mb-14">
-                <div class="student-section-heading">
-                  <strong>{{ t('studentClasses.library') }}</strong>
-                </div>
-                <button class="student-link-button" type="button" @click="openLinkedLesson">
-                  {{ t('studentClasses.openLearn') }}
-                </button>
-              </div>
-
-              <div v-if="recordedLessonRows.length" class="student-library-list">
-                <article v-for="video in recordedLessonRows" :key="video.id" class="student-library-item">
-                  <div class="student-library-copy">
-                    <strong>{{ video.title }}</strong>
-                    <span class="muted">{{ video.context }}</span>
-                    <small>{{ video.meta }}</small>
-                  </div>
-                  <button class="student-library-watch" type="button" @click="openRecordedLesson(video)">
-                    {{ t('studentClasses.watch') }}
-                  </button>
-                </article>
-              </div>
-              <StatePanel
-                v-else
-                icon="learn"
-                :title="t('studentClasses.noRecordings')"
-                :message="t('studentClasses.noRecordingsHint')"
-              />
-            </article>
+    <ResourceSection
+      class="page-stack"
+      :loading="resource.loading.value"
+      :error="resource.error.value"
+      @retry="resource.reload"
+    >
+      <template v-if="overview">
+        <!-- Today's live session, set like a line of a timetable. -->
+        <section
+          v-if="overview.liveToday"
+          class="student-classes-today"
+          :class="{ 'is-booked': overview.liveToday.booked }"
+          aria-labelledby="live-today-title"
+          data-testid="live-today"
+        >
+          <span class="student-classes-today-when">
+            <span class="page-eyebrow student-classes-pigment">{{ t('studentClasses.mine.liveToday') }}</span>
+            <strong class="student-classes-today-time">{{ formatTime(overview.liveToday.startsAt) }}</strong>
+          </span>
+          <div class="student-classes-today-copy">
+            <h2 id="live-today-title" class="student-classes-today-title">{{ overview.liveToday.title }}</h2>
+            <p class="student-classes-today-facts">
+              <PortraitAvatar :size="24" :name="overview.liveToday.teacherName" />
+              {{
+                t('studentClasses.mine.liveTodayFacts', {
+                  teacher: overview.liveToday.teacherName,
+                  classTitle: overview.liveToday.classTitle,
+                  platform: t(PLATFORM_KEYS[overview.liveToday.platform]),
+                })
+              }}
+            </p>
           </div>
-        </div>
+          <span class="student-classes-today-state">
+            <StatusPill
+              v-if="overview.liveToday.booked"
+              :label="t('studentClasses.mine.youreBooked')"
+              tone="success"
+              icon="check"
+            />
+            <span v-if="overview.liveToday.booked" class="type-caption">
+              {{ t('studentClasses.mine.joinOpens', { time: formatTime(joinOpens(overview.liveToday.startsAt)) }) }}
+            </span>
+          </span>
+          <RouterLink
+            class="btn btn-sm"
+            :class="overview.liveToday.booked ? 'btn-secondary' : 'btn-primary'"
+            :to="{ name: 'student-live-sessions' }"
+          >
+            {{ overview.liveToday.booked ? t('studentClasses.mine.details') : t('studentClasses.mine.bookASeat') }}
+          </RouterLink>
+        </section>
 
-        <aside class="student-classes-side">
-          <article class="panel student-weekly-card">
-            <div class="row-between u-mb-10">
-              <div class="student-section-heading">
-                <strong>{{ t('studentClasses.weekly') }}</strong>
-              </div>
-              <button class="student-link-button" type="button" @click="reloadAll">
-                {{ t('studentClasses.refresh') }}
-              </button>
+        <StatePanel
+          v-if="!overview.classes.length"
+          tone="empty"
+          icon="classes"
+          spacious
+          :title="t('studentClasses.mine.emptyTitle')"
+          :message="t('studentClasses.mine.emptyMessage')"
+        >
+          <template #actions>
+            <RouterLink class="btn btn-primary" :to="{ name: 'student-classes-find' }">
+              {{ t('classCatalogue.findClasses') }}
+            </RouterLink>
+          </template>
+        </StatePanel>
+
+        <!-- Each class reads like a course cover: its teacher, its title, then the course and the next step. -->
+        <article
+          v-for="entry in overview.classes"
+          :key="entry.summary.id"
+          class="student-classes-card"
+          :aria-labelledby="`my-class-title-${entry.summary.id}`"
+          :data-testid="`my-class-${entry.summary.id}`"
+        >
+          <div class="student-classes-byline">
+            <PortraitAvatar :size="56" :name="entry.summary.teacher.name" />
+            <span class="student-classes-byline-copy">
+              <span class="student-classes-byline-label">{{ t('studentClasses.mine.yourTeacher') }}</span>
+              <strong class="student-classes-teacher">{{ entry.summary.teacher.name }}</strong>
+              <span v-if="entry.summary.teacher.verified" class="verified-mark">
+                <IconGlyph name="verified" :size="14" />{{ t('classes.verified') }}
+              </span>
+            </span>
+          </div>
+
+          <div class="student-classes-heading">
+            <h2 :id="`my-class-title-${entry.summary.id}`" class="student-classes-title">{{ entry.summary.title }}</h2>
+            <p class="type-caption">
+              {{
+                t('studentClasses.mine.facts', {
+                  units: t('classes.units', entry.summary.unitCount),
+                  lessons: t('classes.lessons', entry.summary.lessonCount),
+                  date: formatShortDate(entry.joinedAt),
+                })
+              }}
+            </p>
+            <div v-if="labels(entry).length" class="student-classes-labels">
+              <span v-for="label in labels(entry)" :key="label" class="tag">{{ label }}</span>
             </div>
+            <p v-if="entry.archived" class="callout is-warning is-compact">
+              <IconGlyph name="archive" :size="16" /><span>{{ t('studentClasses.mine.archived') }}</span>
+            </p>
+          </div>
 
-            <div v-if="weeklySchedule.length" class="student-schedule-list">
-              <article
-                v-for="item in weeklySchedule"
-                :key="item.id"
-                class="student-schedule-item"
-                :class="{ 'is-live': item.canJoin }"
+          <div class="student-classes-course">
+            <div class="student-classes-progress">
+              <span class="page-eyebrow">{{ t('studentClasses.mine.course') }}</span>
+              <span class="type-caption">
+                {{
+                  t('studentClasses.mine.lessonsDone', {
+                    done: entry.completedLessons,
+                    total: entry.summary.lessonCount,
+                    percent: entry.progressPercent,
+                  })
+                }}
+              </span>
+              <ProgressBar :progress="entry.progressPercent" :label="t('studentClasses.classPage.classProgress')" />
+            </div>
+            <ol class="student-classes-lessons">
+              <li
+                v-for="lesson in visibleLessons(entry)"
+                :key="lesson.id"
+                class="student-classes-lesson"
+                :class="`is-${lessonMark(entry, lesson)}`"
               >
-                <div class="student-schedule-date">
-                  <span>{{ item.weekdayShort }}</span>
-                  <strong>{{ item.day }}</strong>
-                </div>
+                <span class="student-classes-lesson-mark" aria-hidden="true">
+                  <IconGlyph v-if="lessonMark(entry, lesson) === 'done'" name="check" :size="14" />
+                  <template v-else>{{ lessonPosition(entry, lesson) }}</template>
+                </span>
+                <RouterLink
+                  v-if="lesson.available"
+                  class="student-classes-lesson-title"
+                  :to="lessonRoute(entry.summary.id, lesson.id)"
+                >
+                  {{ lesson.title }}
+                </RouterLink>
+                <span v-else class="student-classes-lesson-title">{{ lesson.title }}</span>
+                <span class="student-classes-lesson-state">{{ lessonState(entry, lesson) }}</span>
+              </li>
+            </ol>
+            <p v-if="entry.lessons.length > visibleLessons(entry).length" class="type-caption">
+              {{ t('studentClasses.mine.moreLessons', { count: entry.lessons.length - visibleLessons(entry).length }) }}
+            </p>
+          </div>
 
-                <div class="student-schedule-copy">
-                  <strong>{{ item.title }}</strong>
-                  <span>{{ item.timeLabel }}</span>
-                  <small>{{ item.teacherName }}</small>
-                </div>
+          <div class="student-classes-actions">
+            <RouterLink
+              v-if="entry.nextStep"
+              class="btn btn-primary"
+              :to="lessonRoute(entry.summary.id, entry.nextStep.lessonId)"
+            >
+              {{ t('studentClasses.mine.continue', { title: entry.nextStep.lessonTitle }) }}
+            </RouterLink>
+            <RouterLink
+              class="btn"
+              :class="entry.nextStep ? 'btn-secondary' : 'btn-primary'"
+              :to="{ name: 'student-class', params: { classId: entry.summary.id } }"
+            >
+              {{ t('studentClasses.mine.openClass') }}
+            </RouterLink>
+            <span v-if="entry.nextLiveSession" class="student-classes-next-live">
+              <IconGlyph name="live" :size="16" />
+              {{ t('studentClasses.mine.nextSession', { when: sessionWhen(entry.nextLiveSession.startsAt) }) }}
+            </span>
+          </div>
+        </article>
 
-                <div class="student-schedule-state">
-                  <span v-if="item.canJoin" class="student-schedule-live">{{ t('studentClasses.liveNow') }}</span>
-                  <span v-else>{{ item.statusLabel }}</span>
-                </div>
-              </article>
-            </div>
-            <StatePanel
-              v-else
-              icon="classes"
-              :title="t('studentClasses.noClasses')"
-              :message="t('studentClasses.noClassesHint')"
+        <section v-if="overview.classes.length && overview.moreClassCount" class="student-classes-more">
+          <span class="student-classes-more-avatars" aria-hidden="true">
+            <PortraitAvatar
+              v-for="teacher in overview.moreTeachers.slice(0, 3)"
+              :key="teacher.id"
+              :size="32"
+              :name="teacher.name"
             />
-          </article>
-
-          <article class="panel student-watch-again-card">
-            <div class="row-between u-mb-12">
-              <div class="student-section-heading">
-                <strong>{{ t('studentClasses.accessNotes') }}</strong>
-              </div>
-              <button class="student-link-button" type="button" @click="openLinkedLesson">
-                {{ t('studentClasses.openLearn') }}
-              </button>
-            </div>
-
-            <div class="student-watch-again-item">
-              <div class="student-watch-copy">
-                <strong>{{ watchAgainTitle }}</strong>
-                <span>{{ watchAgainSubtitle }}</span>
-                <small>{{ watchAgainMeta }}</small>
-              </div>
-            </div>
-          </article>
-
-          <article class="panel student-reminder-card">
-            <div class="row-between u-mb-10">
-              <div class="student-section-heading">
-                <strong>{{ t('studentClasses.reminders') }}</strong>
-              </div>
-            </div>
-
-            <div v-if="reminders.length" class="student-reminder-list">
-              <article v-for="reminder in reminders" :key="reminder.title" class="student-reminder-item">
-                <div class="student-reminder-copy">
-                  <strong>{{ reminder.title }}</strong>
-                  <span class="muted">{{ reminder.copy }}</span>
-                </div>
-                <span class="student-reminder-time">{{ reminder.time }}</span>
-              </article>
-            </div>
-            <StatePanel
-              v-else
-              icon="bell"
-              :title="t('studentClasses.noReminders')"
-              :message="t('studentClasses.noRemindersHint')"
-            />
-          </article>
-        </aside>
-      </section>
+          </span>
+          <p class="student-classes-more-copy">{{ t('studentClasses.mine.moreClasses', overview.moreClassCount) }}</p>
+          <RouterLink class="btn btn-link" :to="{ name: 'student-classes-find' }">
+            {{ t('classCatalogue.findClasses') }}<IconGlyph name="chevronRight" :size="16" />
+          </RouterLink>
+        </section>
+      </template>
     </ResourceSection>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
+import { computed } from 'vue'
+import { RouterLink } from 'vue-router'
 
-import { publicApi, studentApi } from '@/api/services'
-import DataNotice from '@/components/common/DataNotice.vue'
-import PandaIllustration from '@/components/common/PandaIllustration.vue'
+import { studentClassesApi } from '@/api/classes'
+import StudentClassesTabs from '@/components/classes/StudentClassesTabs.vue'
+import IconGlyph from '@/components/common/IconGlyph.vue'
 import PortraitAvatar from '@/components/common/PortraitAvatar.vue'
+import ProgressBar from '@/components/common/ProgressBar.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
+import StatusPill from '@/components/common/StatusPill.vue'
 import ResourceSection from '@/components/dashboard/ResourceSection.vue'
+import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
+import { useLocalMessages } from '@/composables/useLocalMessages'
 import { useResource } from '@/composables/useResource'
-import { publicCourseDetails, studentLiveClasses, teacherCoursePackages } from '@/demo/data'
+import { classCatalogueMessages } from '@/plugins/classCatalogueMessages'
+import { classesMessages } from '@/plugins/classesMessages'
 import { studentClassesMessages } from '@/plugins/studentClassesMessages'
-import type { CoursePackageResponse, LiveClassResponse } from '@/types/api'
-import { resolveApiError } from '@/utils/apiError'
-import { openSafeHttpUrl } from '@/utils/url'
+import type { LessonProgressRow, MyClassCard } from '@/types/classes'
+import { LEARNING_TYPE_KEYS, PLATFORM_KEYS, relativeDay } from '@/utils/classes'
+import { formatShortDate, formatTime, formatWeekdayDate } from '@/utils/format'
+import '@/styles/classes.css'
 
-const { locale, t } = useI18n({
-  messages: {
-    en: { studentClasses: studentClassesMessages.en },
-    ms: { studentClasses: studentClassesMessages.ms },
-    zh: { studentClasses: studentClassesMessages.zh },
-  },
+const { t } = useLocalMessages({
+  studentClasses: studentClassesMessages,
+  classCatalogue: classCatalogueMessages,
+  classes: classesMessages,
 })
 
-const dateLocale = computed(() => ({ en: 'en-US', ms: 'ms-MY', zh: 'zh-CN' })[locale.value] ?? 'en-US')
+const resource = useResource(() => studentClassesApi.myClasses())
+const overview = computed(() => resource.data.value)
 
-const router = useRouter()
+/** The course list shows up to four lessons around where the student is. */
+const VISIBLE_LESSONS = 4
 
-const liveResource = useResource(() => studentApi.liveClasses(), studentLiveClasses)
+const LESSON_STATE_KEYS = {
+  IN_PROGRESS: 'studentClasses.lessonState.IN_PROGRESS',
+  COMPLETED: 'studentClasses.lessonState.COMPLETED',
+  MASTERED: 'studentClasses.lessonState.MASTERED',
+  NOT_STARTED: 'studentClasses.lessonState.NOT_STARTED',
+} as const
 
-const liveClasses = computed(
-  () => liveResource.data.value ?? (liveResource.usingFallback.value ? studentLiveClasses : []),
-)
-const actionError = ref<string | null>(null)
-const actionSuccess = ref<string | null>(null)
-const classBusy = ref(false)
-const pageLoading = computed(() => liveResource.loading.value)
-const pageError = computed(() => liveResource.error.value)
-const noticeError = computed(() => actionError.value || liveResource.error.value)
-const liveReadOnly = computed(() => liveResource.usingFallback.value)
-
-const upcomingClass = computed(() => liveClasses.value.find((item) => item.canJoin) ?? liveClasses.value[0] ?? null)
-const canCancelUpcomingEnrolment = computed(() => {
-  const liveClass = upcomingClass.value
-  if (!liveClass?.enrolled || !['SCHEDULED', 'RESCHEDULED'].includes(liveClass.liveClassStatus)) {
-    return false
-  }
-
-  return Boolean(liveClass.startTime) && new Date(liveClass.startTime).getTime() > Date.now()
-})
-const waitingForJoinWindow = computed(() => canCancelUpcomingEnrolment.value && !upcomingClass.value?.canJoin)
-const primaryTeacherName = computed(
-  () => upcomingClass.value?.teacher?.displayName || t('studentClasses.teacherUnavailable'),
-)
-const upcomingClassDescription = computed(() => upcomingClass.value?.description || t('studentClasses.noDescription'))
-const upcomingClassDurationLabel = computed(() =>
-  t('studentClasses.minutes', { count: upcomingClass.value?.durationMinutes ?? 45 }),
-)
-const upcomingClassActionLabel = computed(() => {
-  if (classBusy.value) return t('studentClasses.updating')
-  if (upcomingClass.value?.canJoin) return t('studentClasses.join')
-  if (upcomingClass.value?.canEnrol) return t('studentClasses.enrolFirst')
-  if (waitingForJoinWindow.value) return t('studentClasses.startsLater')
-  return t('studentClasses.locked')
-})
-const teacherPortraitKind = computed<'female' | 'male' | 'hijab' | 'student'>(() => {
-  const name = primaryTeacherName.value.toLowerCase()
-  if (name.includes('siti')) return 'hijab'
-  if (name.includes('chen')) return 'male'
-  if (!upcomingClass.value?.teacher?.displayName) return 'student'
-  return 'female'
-})
-
-const teacherInitials = computed(
-  () =>
-    primaryTeacherName.value
-      .split(' ')
-      .filter(Boolean)
-      .map((part) => part[0])
-      .join('')
-      .slice(0, 2)
-      .toUpperCase() || '?',
-)
-
-const classDate = computed(() => new Date(upcomingClass.value?.startTime ?? new Date().toISOString()))
-const upcomingMonth = computed(() =>
-  new Intl.DateTimeFormat(dateLocale.value, { month: 'short' }).format(classDate.value).toUpperCase(),
-)
-const upcomingDay = computed(() =>
-  new Intl.DateTimeFormat(dateLocale.value, { day: 'numeric' }).format(classDate.value),
-)
-const upcomingWeekday = computed(() =>
-  new Intl.DateTimeFormat(dateLocale.value, { weekday: 'short' }).format(classDate.value).toUpperCase(),
-)
-const classTimeRange = computed(() => {
-  const formatter = new Intl.DateTimeFormat(dateLocale.value, {
-    hour: 'numeric',
-    minute: '2-digit',
-  })
-
-  if (!upcomingClass.value?.startTime || !upcomingClass.value?.endTime) {
-    return t('studentClasses.scheduleUnavailable')
-  }
-
-  return `${formatter.format(new Date(upcomingClass.value.startTime))} - ${formatter.format(new Date(upcomingClass.value.endTime))}`
-})
-
-const weeklySchedule = computed(() =>
-  [...liveClasses.value]
-    .sort((left, right) => new Date(left.startTime).getTime() - new Date(right.startTime).getTime())
-    .slice(0, 4)
-    .map((item) => {
-      const date = new Date(item.startTime)
-      return {
-        id: item.id,
-        title: item.title,
-        teacherName: item.teacher?.displayName || t('studentClasses.teacherUnavailable'),
-        weekdayShort: new Intl.DateTimeFormat(dateLocale.value, { weekday: 'short' }).format(date).toUpperCase(),
-        day: new Intl.DateTimeFormat(dateLocale.value, { day: 'numeric' }).format(date),
-        timeLabel: new Intl.DateTimeFormat(dateLocale.value, { hour: 'numeric', minute: '2-digit' }).format(date),
-        canJoin: Boolean(item.canJoin),
-        statusLabel: formatStatus(item.liveClassStatus),
-      }
-    }),
-)
-
-const recordedLessonRows = computed(() =>
-  (upcomingClass.value ? recordedRowsFromClass(upcomingClass.value) : []).slice(0, 4),
-)
-
-const watchAgainTitle = computed(() => {
-  if (recordedLessonRows.value.length) {
-    return recordedLessonRows.value[0].title
-  }
-
-  if (upcomingClass.value) {
-    return t('studentClasses.accessFor', { title: upcomingClass.value.title })
-  }
-
-  return t('studentClasses.noRecordedAccess')
-})
-
-const watchAgainSubtitle = computed(() => {
-  if (recordedLessonRows.value.length) {
-    return t('studentClasses.recordingsLinked')
-  }
-
-  if (upcomingClass.value?.canJoin) {
-    return t('studentClasses.joinFromPage')
-  }
-
-  return t('studentClasses.detailsLater')
-})
-
-const watchAgainMeta = computed(() => {
-  if (upcomingClass.value) {
-    return `${formatStatus(upcomingClass.value.liveClassStatus)} - ${upcomingMeetingPlatformLabel.value}`
-  }
-
-  return t('studentClasses.waitingSchedule')
-})
-
-const reminders = computed(() => {
-  if (!upcomingClass.value) return []
-
-  return [
-    {
-      title: upcomingClass.value.canJoin ? t('studentClasses.ready') : t('studentClasses.scheduled'),
-      copy: upcomingClass.value.title,
-      time: classTimeRange.value,
-    },
-    {
-      title: upcomingClass.value.canEnrol ? t('studentClasses.enrolAvailable') : t('studentClasses.enrolRequired'),
-      copy: t('studentClasses.status', { status: formatStatus(upcomingClass.value.liveClassStatus) }),
-      time: upcomingMeetingPlatformLabel.value,
-    },
-  ]
-})
-
-const upcomingMeetingPlatformLabel = computed(() => formatStatus(upcomingClass.value?.meetingPlatform ?? 'OTHER'))
-
-interface RecordedLessonRow {
-  id: string
-  lessonId: number | null
-  packageId: number | null
-  title: string
-  context: string
-  meta: string
-}
-
-function recordedRowsFromClass(item: LiveClassResponse): RecordedLessonRow[] {
-  if (item.lesson?.lessonTitle) {
-    return [
-      {
-        id: `lesson-${item.lesson.lessonId}`,
-        lessonId: item.lesson.lessonId,
-        packageId: null,
-        title: item.lesson.lessonTitle,
-        context: t('studentClasses.lessonLinked'),
-        meta: `${formatStatus(item.lesson.learningType)} - ${formatStatus(item.lesson.accessType)}`,
-      },
-    ]
-  }
-
-  if (item.coursePackage?.packageTitle) {
-    return [
-      {
-        id: `package-${item.coursePackage.packageId}`,
-        lessonId: null,
-        packageId: item.coursePackage.packageId,
-        title: item.coursePackage.packageTitle,
-        context: t('studentClasses.packageLinked'),
-        meta: `${formatStatus(item.coursePackage.learningType)} - ${formatStatus(item.coursePackage.accessType)}`,
-      },
-    ]
-  }
-
-  return []
-}
-
-function packageCourseId(packageId: number): string {
-  return `PACKAGE-${packageId}`
-}
-
-function fallbackLessonIdFromPackage(packageId: number): number | null {
-  return (
-    teacherCoursePackages
-      .find((item: CoursePackageResponse) => item.id === packageId && item.contentStatus === 'PUBLISHED')
-      ?.packageItems.find((item) => item.itemType === 'LESSON')?.itemId ?? null
+function labels(entry: MyClassCard): string[] {
+  const { levelName, topicName, learningType } = entry.summary
+  return [levelName, topicName, learningType ? t(LEARNING_TYPE_KEYS[learningType]) : null].filter(
+    (label): label is string => Boolean(label),
   )
 }
 
-async function openPackageLinkedContent(packageId: number): Promise<void> {
-  const courseId = packageCourseId(packageId)
-
-  try {
-    const detail = await publicApi.getCourseDetail(courseId)
-    const lessonId = detail.packageItems.find((item) => item.type === 'LESSON')?.contentId ?? null
-
-    if (lessonId) {
-      await openStudentLearn(lessonId)
-      return
-    }
-
-    await openCourseDetail(courseId)
-  } catch (reason) {
-    if (liveResource.usingFallback.value) {
-      const fallbackLessonId = fallbackLessonIdFromPackage(packageId)
-      if (fallbackLessonId) {
-        await openStudentLearn(fallbackLessonId)
-        return
-      }
-
-      if (publicCourseDetails[courseId]) {
-        await openCourseDetail(courseId)
-        return
-      }
-    }
-
-    actionError.value = resolveApiError(reason, t('studentClasses.packageOpenError'))
-  }
+function visibleLessons(entry: MyClassCard): LessonProgressRow[] {
+  const nextIndex = entry.nextStep ? entry.lessons.findIndex((lesson) => lesson.id === entry.nextStep?.lessonId) : 0
+  const start = Math.max(0, Math.min(nextIndex - 1, entry.lessons.length - VISIBLE_LESSONS))
+  return entry.lessons.slice(start, start + VISIBLE_LESSONS)
 }
 
-async function openRecordedLesson(video: RecordedLessonRow): Promise<void> {
-  actionError.value = null
-  actionSuccess.value = null
-
-  if (video.lessonId) {
-    await openStudentLearn(video.lessonId)
-    return
-  }
-
-  if (video.packageId) {
-    await openPackageLinkedContent(video.packageId)
-    return
-  }
-
-  actionError.value = t('studentClasses.noRecordingLink')
+/** "01", "02" …: the lesson's place in the whole class (the card lists lessons of several units in a row). */
+function lessonPosition(entry: MyClassCard, lesson: LessonProgressRow): string {
+  return String(entry.lessons.indexOf(lesson) + 1).padStart(2, '0')
 }
 
-async function openLinkedLesson(): Promise<void> {
-  actionError.value = null
-  actionSuccess.value = null
-  const lessonId =
-    upcomingClass.value?.lesson?.lessonId ?? recordedLessonRows.value.find((item) => item.lessonId)?.lessonId
-
-  if (lessonId) {
-    await openStudentLearn(lessonId)
-    return
-  }
-
-  const packageId =
-    upcomingClass.value?.coursePackage?.packageId ??
-    recordedLessonRows.value.find((item) => item.packageId)?.packageId ??
-    null
-
-  if (packageId) {
-    await openPackageLinkedContent(packageId)
-    return
-  }
-
-  actionError.value = t('studentClasses.noClassLink')
+/** The marker of a lesson row: finished, the one to work on now, still to come, or gone. */
+function lessonMark(entry: MyClassCard, lesson: LessonProgressRow): 'done' | 'current' | 'todo' | 'unavailable' {
+  if (!lesson.available) return 'unavailable'
+  if (lesson.status === 'COMPLETED' || lesson.status === 'MASTERED') return 'done'
+  if (lesson.status === 'IN_PROGRESS' || entry.nextStep?.lessonId === lesson.id) return 'current'
+  return 'todo'
 }
 
-async function enrol(id: number): Promise<void> {
-  if (classBusy.value) return
-  actionError.value = null
-  actionSuccess.value = null
-  if (liveReadOnly.value) {
-    actionError.value = t('studentClasses.previewEnrol')
-    return
+function lessonState(entry: MyClassCard, lesson: LessonProgressRow): string {
+  if (!lesson.available) return t('studentClasses.lessonState.unavailable')
+  if (lesson.status === 'NOT_STARTED' && entry.nextStep?.lessonId === lesson.id) {
+    return t('studentClasses.lessonState.upNext')
   }
-
-  classBusy.value = true
-  try {
-    await studentApi.enrolLiveClass(id)
-    await liveResource.reload()
-    actionSuccess.value = t('studentClasses.enrolled')
-  } catch (reason) {
-    actionError.value = resolveApiError(reason, t('studentClasses.enrolError'))
-  } finally {
-    classBusy.value = false
-  }
+  return t(LESSON_STATE_KEYS[lesson.status], { percent: lesson.percent })
 }
 
-async function cancelEnrolment(id: number): Promise<void> {
-  if (classBusy.value) return
-  actionError.value = null
-  actionSuccess.value = null
-  if (liveReadOnly.value) {
-    actionError.value = t('studentClasses.previewCancel')
-    return
-  }
-
-  classBusy.value = true
-  try {
-    await studentApi.cancelLiveClassEnrolment(id)
-    await liveResource.reload()
-    actionSuccess.value = t('studentClasses.cancelled')
-  } catch (reason) {
-    actionError.value = resolveApiError(reason, t('studentClasses.cancelError'))
-  } finally {
-    classBusy.value = false
-  }
+function lessonRoute(classId: number, lessonId: number) {
+  return { name: 'student-class-lesson', params: { classId, lessonId } }
 }
 
-async function join(id: number): Promise<void> {
-  if (classBusy.value) return
-  const target = liveClasses.value.find((item) => item.id === id)
-  actionError.value = null
-  actionSuccess.value = null
-
-  if (liveReadOnly.value) {
-    actionError.value = t('studentClasses.previewJoin')
-    return
-  }
-
-  if (target?.canJoin) {
-    actionError.value = null
-    try {
-      const response = await studentApi.joinLiveClass(id)
-      if (openSafeHttpUrl(response.meetingLink)) {
-        actionSuccess.value = t('studentClasses.opening')
-      } else {
-        actionError.value = t('studentClasses.unsafeLink')
-      }
-    } catch (reason) {
-      actionError.value = resolveApiError(reason, t('studentClasses.joinError'))
-    }
-    return
-  }
-
-  if (target?.canEnrol) {
-    await enrol(id)
-    return
-  }
-
-  actionError.value = t('studentClasses.lockedHint')
+function joinOpens(startsAt: string): string {
+  return new Date(new Date(startsAt).getTime() - 15 * 60_000).toISOString()
 }
 
-function formatStatus(status: string): string {
-  const keys: Record<string, string> = {
-    SCHEDULED: 'statusScheduled',
-    ONGOING: 'statusOngoing',
-    COMPLETED: 'statusCompleted',
-    CANCELLED: 'statusCancelled',
-    RESCHEDULED: 'statusRescheduled',
-    LIVE: 'typeLive',
-    RECORDED: 'typeRecorded',
-    HYBRID: 'typeHybrid',
-    FREE: 'accessFree',
-    PAID: 'accessPaid',
-    ZOOM: 'platformZoom',
-    GOOGLE_MEET: 'platformMeet',
-    MICROSOFT_TEAMS: 'platformTeams',
-    OTHER: 'platformOther',
-  }
-  const key = keys[status.toUpperCase()]
-  if (key) return t(`studentClasses.${key}`)
-  return status
-    .replaceAll('_', ' ')
-    .toLowerCase()
-    .replace(/(^|\s)\w/g, (match) => match.toUpperCase())
-}
-
-function reloadAll(): void {
-  void liveResource.reload()
-}
-
-function openProfile(): void {
-  void router.push('/student/profile')
-}
-
-async function openStudentLearn(lessonId: number): Promise<void> {
-  await router.push({ name: 'student-learn', query: { lessonId: String(lessonId) } })
-}
-
-async function openCourseDetail(courseId: string): Promise<void> {
-  await router.push({ name: 'course-detail', params: { courseId } })
+function sessionWhen(startsAt: string): string {
+  return relativeDay(startsAt) === 'today'
+    ? formatTime(startsAt)
+    : `${formatWeekdayDate(startsAt)}, ${formatTime(startsAt)}`
 }
 </script>
-
-<style scoped>
-.student-classes-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1.35fr) 360px;
-  gap: 18px;
-}
-
-.student-classes-main,
-.student-classes-side {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
-.student-live-hero,
-.student-teacher-card,
-.student-library-card,
-.student-weekly-card,
-.student-watch-again-card,
-.student-reminder-card {
-  border-radius: 24px;
-}
-
-.student-live-hero-grid {
-  display: grid;
-  grid-template-columns: 120px minmax(0, 1fr) 220px;
-  gap: 18px;
-  align-items: center;
-}
-
-.student-live-date {
-  display: grid;
-  justify-items: center;
-  padding: 18px;
-  border-radius: 18px;
-  background: rgba(247, 240, 255, 0.96);
-}
-
-.student-live-date span,
-.student-live-copy p,
-.student-live-meta span,
-.student-live-teacher span,
-.student-library-copy span,
-.student-library-copy small,
-.student-schedule-copy span,
-.student-schedule-copy small,
-.student-watch-copy span,
-.student-watch-copy small,
-.student-reminder-copy span,
-.student-reminder-time {
-  color: var(--text-soft);
-}
-
-.student-live-date strong,
-.student-live-copy h2 {
-  font-family: 'Fredoka', sans-serif;
-}
-
-.student-live-date strong {
-  font-size: 2.1rem;
-}
-
-.student-live-copy {
-  display: grid;
-  gap: 12px;
-}
-
-.student-live-copy h2 {
-  margin: 0;
-  font-size: 2rem;
-}
-
-.student-live-copy p {
-  margin: 0;
-  line-height: 1.6;
-}
-
-.student-live-meta,
-.student-live-teacher,
-.student-live-actions,
-.student-live-footer {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.student-mini-avatar {
-  width: 36px;
-  height: 36px;
-  display: inline-grid;
-  place-items: center;
-  border-radius: 50%;
-  background: rgba(125, 88, 255, 0.14);
-  color: #7658ff;
-  font-weight: 800;
-}
-
-.student-live-scene {
-  display: grid;
-  place-items: center;
-}
-
-.student-live-footer {
-  margin-top: 18px;
-}
-
-.student-live-join {
-  min-width: 180px;
-}
-
-.student-live-setup {
-  min-height: 44px;
-  padding: 0 18px;
-  border-radius: 14px;
-  border: 1px solid rgba(229, 233, 245, 0.96);
-  background: rgba(255, 255, 255, 0.98);
-  color: #344260;
-  font-weight: 700;
-}
-
-.student-classes-bottom {
-  display: grid;
-  grid-template-columns: minmax(0, 0.9fr) 1.1fr;
-  gap: 18px;
-}
-
-.student-teacher-profile {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 16px;
-  align-items: center;
-}
-
-.student-teacher-profile p {
-  margin: 0;
-  color: var(--text-soft);
-  line-height: 1.6;
-}
-
-.student-teacher-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 5px 10px;
-  border-radius: 999px;
-  background: rgba(125, 88, 255, 0.12);
-  color: #7a56ff;
-  font-size: 0.76rem;
-  font-weight: 700;
-  margin-left: 10px;
-}
-
-.student-library-list,
-.student-schedule-list,
-.student-reminder-list {
-  display: grid;
-  gap: 12px;
-}
-
-.student-library-item,
-.student-schedule-item,
-.student-reminder-item {
-  display: grid;
-  gap: 12px;
-  align-items: center;
-}
-
-.student-library-item {
-  grid-template-columns: minmax(0, 1fr) auto;
-}
-
-.student-library-copy,
-.student-schedule-copy,
-.student-watch-copy,
-.student-reminder-copy {
-  display: grid;
-  gap: 4px;
-}
-
-.student-library-watch {
-  min-height: 40px;
-  padding: 0 16px;
-  border-radius: 12px;
-  border: 1px solid rgba(229, 233, 245, 0.96);
-  background: rgba(255, 255, 255, 0.98);
-  color: #344260;
-  font-weight: 700;
-}
-
-.student-schedule-item {
-  grid-template-columns: 72px minmax(0, 1fr) auto;
-}
-
-.student-schedule-date {
-  display: grid;
-  justify-items: center;
-  padding: 12px;
-  border-radius: 16px;
-  background: rgba(246, 248, 252, 0.96);
-}
-
-.student-schedule-date strong {
-  font-family: 'Fredoka', sans-serif;
-  font-size: 1.35rem;
-}
-
-.student-schedule-live {
-  color: #4aa746;
-  font-weight: 800;
-}
-
-.student-watch-again-item {
-  padding: 14px;
-  border-radius: 18px;
-  background: rgba(246, 248, 252, 0.96);
-}
-
-.student-reminder-item {
-  grid-template-columns: minmax(0, 1fr) auto;
-}
-
-@media (max-width: 1420px) {
-  .student-classes-layout {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 1080px) {
-  .student-live-hero-grid,
-  .student-classes-bottom {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 760px) {
-  .student-library-item,
-  .student-schedule-item,
-  .student-reminder-item {
-    grid-template-columns: 1fr;
-  }
-}
-</style>

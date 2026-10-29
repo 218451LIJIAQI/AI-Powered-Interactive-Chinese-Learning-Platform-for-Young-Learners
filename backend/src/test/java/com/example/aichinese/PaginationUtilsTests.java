@@ -1,10 +1,12 @@
 package com.example.aichinese;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import com.example.aichinese.dto.PageResponse;
 import com.example.aichinese.util.PaginationUtils;
 
 /**
@@ -15,53 +17,36 @@ import com.example.aichinese.util.PaginationUtils;
  */
 class PaginationUtilsTests {
 
-    private static final int MIN_PAGE = 0;
-    private static final int MIN_SIZE = 1;
-    private static final int NEGATIVE_PAGE = -10;
-    private static final int NEGATIVE_SIZE = -5;
-    private static final int DEFAULT_MAX_SIZE = 100;
     private static final int OVERSIZED_REQUEST_SIZE = 100_000;
-    private static final int VALID_PAGE = 3;
-    private static final int VALID_SIZE = 25;
-    private static final int LAST_VALID_INDEX = 50;
-    private static final int TOTAL_ITEMS = 250;
-    private static final int EMPTY_TOTAL_ITEMS = 0;
-    private static final int EXPECTED_TOTAL_PAGES = 3;
-    private static final int INVALID_MAX_SIZE = 0;
 
     @Test
     void sanitizePageFloorsNegativePagesToZero() {
-        assertThat(PaginationUtils.sanitizePage(NEGATIVE_PAGE)).isZero();
-        assertThat(PaginationUtils.sanitizePage(VALID_PAGE)).isEqualTo(VALID_PAGE);
+        assertThat(PaginationUtils.sanitizePage(-10)).isZero();
+        assertThat(PaginationUtils.sanitizePage(3)).isEqualTo(3);
     }
 
     @Test
     void sanitizeSizeBoundsValuesToDefaultMaximum() {
-        assertThat(PaginationUtils.sanitizeSize(NEGATIVE_SIZE)).isEqualTo(MIN_SIZE);
-        assertThat(PaginationUtils.sanitizeSize(MIN_PAGE)).isEqualTo(MIN_SIZE);
-        assertThat(PaginationUtils.sanitizeSize(VALID_SIZE)).isEqualTo(VALID_SIZE);
-        assertThat(PaginationUtils.sanitizeSize(OVERSIZED_REQUEST_SIZE)).isEqualTo(DEFAULT_MAX_SIZE);
-    }
-
-    @Test
-    void sanitizeSizeRejectsInvalidMaximum() {
-        assertThatIllegalArgumentException()
-                .isThrownBy(() -> PaginationUtils.sanitizeSize(VALID_SIZE, INVALID_MAX_SIZE))
-                .withMessage("maxSize must be positive.");
+        assertThat(PaginationUtils.sanitizeSize(-5)).isEqualTo(1);
+        assertThat(PaginationUtils.sanitizeSize(0)).isEqualTo(1);
+        assertThat(PaginationUtils.sanitizeSize(25)).isEqualTo(25);
+        assertThat(PaginationUtils.sanitizeSize(OVERSIZED_REQUEST_SIZE)).isEqualTo(100);
     }
 
     @Test
     void startAndEndIndexAvoidIntegerOverflowForVeryLargePages() {
-        int startIndex = PaginationUtils.startIndex(Integer.MAX_VALUE, OVERSIZED_REQUEST_SIZE, LAST_VALID_INDEX);
-        int endIndex = PaginationUtils.endIndex(startIndex, OVERSIZED_REQUEST_SIZE, LAST_VALID_INDEX);
+        int startIndex = PaginationUtils.startIndex(Integer.MAX_VALUE, OVERSIZED_REQUEST_SIZE, 50);
+        int endIndex = PaginationUtils.endIndex(startIndex, OVERSIZED_REQUEST_SIZE, 50);
 
-        assertThat(startIndex).isEqualTo(LAST_VALID_INDEX);
-        assertThat(endIndex).isEqualTo(LAST_VALID_INDEX);
+        assertThat(startIndex).isEqualTo(50);
+        assertThat(endIndex).isEqualTo(50);
     }
 
+    /** A page reports its page count from the sanitized size, as every paged service builds it. */
     @Test
-    void totalPagesUsesSanitizedPageSize() {
-        assertThat(PaginationUtils.totalPages(TOTAL_ITEMS, OVERSIZED_REQUEST_SIZE)).isEqualTo(EXPECTED_TOTAL_PAGES);
-        assertThat(PaginationUtils.totalPages(EMPTY_TOTAL_ITEMS, VALID_SIZE)).isZero();
+    void pageResponseCountsPagesOfTheSanitizedSize() {
+        int size = PaginationUtils.sanitizeSize(OVERSIZED_REQUEST_SIZE);
+        assertThat(PageResponse.of(List.of(), 0, size, 250).totalPages()).isEqualTo(3);
+        assertThat(PageResponse.of(List.of(), 0, 25, 0).totalPages()).isZero();
     }
 }

@@ -2,36 +2,18 @@ package com.example.aichinese.dto.ai;
 
 import java.util.List;
 
-import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-
-@JsonPropertyOrder({
-        "title",
-        "chineseStory",
-        "pinyin",
-        "englishTranslation",
-        "bahasaMelayuTranslation",
-        "vocabularyList",
-        "comprehensionQuestions",
-        "encouragement",
-        "usageMode",
-        "status"
-})
+/** A generated beginner story for the student's reader: its lines, key words and comprehension questions. */
 public record AiStoryGeneratorResponse(
         String title,
-        String chineseStory,
-        String pinyin,
-        String englishTranslation,
-        String bahasaMelayuTranslation,
+        String titleTranslation,
+        List<AiStoryLineResponse> lines,
         List<AiStoryVocabularyItemResponse> vocabularyList,
         List<AiStoryComprehensionQuestionResponse> comprehensionQuestions,
-        String encouragement,
-        String usageMode,
         String status) {
 
     public AiStoryGeneratorResponse {
+        lines = lines == null ? List.of() : List.copyOf(lines);
         vocabularyList = vocabularyList == null ? List.of() : List.copyOf(vocabularyList);
-        comprehensionQuestions = comprehensionQuestions == null
-                ? List.of()
-                : List.copyOf(comprehensionQuestions);
+        comprehensionQuestions = comprehensionQuestions == null ? List.of() : List.copyOf(comprehensionQuestions);
     }
 }

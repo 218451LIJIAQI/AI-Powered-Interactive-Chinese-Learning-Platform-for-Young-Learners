@@ -1,0 +1,1208 @@
+/* Ops module, signed-in pages of every role: Help & support, Notifications, Account, teacher verification. */
+
+/* ----- Help & support ----- */
+
+/* The requests as hairline rows with the quick answers beside them; a request opens as a conversation. */
+.support-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  align-items: start;
+  gap: var(--space-12);
+}
+
+.support-request-list,
+.notifications-list,
+.account-preferences,
+.account-blocked-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.support-request-list > li + li,
+.account-preferences > li + li {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.support-requests {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.support-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+}
+
+.support-section-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+}
+
+.support-request-list {
+  border-block: 1px solid var(--border-subtle);
+}
+
+.support-request-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  margin: 0 calc(-1 * var(--space-3));
+  padding: var(--space-4) var(--space-3);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  text-decoration: none;
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+
+.support-request-row:hover {
+  background: var(--surface-hover);
+}
+
+.support-request-copy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.support-request-subject {
+  font-weight: var(--font-weight-bold);
+  overflow-wrap: anywhere;
+}
+
+.support-request-number {
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.support-request-row.is-solved .support-request-subject {
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.support-request-chevron {
+  color: var(--text-secondary);
+}
+
+.support-footnote {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.support-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* Quick answers: each question opens its answer in place. */
+.support-answer-list {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  margin-bottom: var(--space-2);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.support-answer {
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.support-answer summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  list-style: none;
+}
+
+.support-answer summary::-webkit-details-marker {
+  display: none;
+}
+
+.support-answer summary:hover {
+  color: var(--text-link-hover);
+}
+
+.support-answer-chevron {
+  flex: 0 0 auto;
+  color: var(--text-secondary);
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+
+.support-answer[open] .support-answer-chevron {
+  transform: rotate(180deg);
+}
+
+.support-answer p {
+  margin: 0 0 var(--space-4);
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+}
+
+.support-rail-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--text-link);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  text-decoration: none;
+}
+
+.support-rail-link:hover {
+  color: var(--text-link-hover);
+  text-decoration: underline;
+}
+
+.support-rail-copy {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+}
+
+/* The ticket's state: solved, or how to close it. */
+.support-status {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding-left: var(--space-5);
+  border-left: var(--border-width-thick) solid var(--border-default);
+}
+
+.support-file-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.support-privacy-note {
+  flex: 1 1 200px;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+/* The conversation: support speaks from the left with its mark, the requester from the right. */
+.support-conversation {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+.support-thread {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.support-message {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  max-width: min(640px, 88%);
+}
+
+.support-message.is-requester {
+  align-self: flex-end;
+}
+
+.support-message-avatar {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: var(--space-10);
+  height: var(--space-10);
+  border-radius: var(--radius-round);
+  background: var(--surface-inverse);
+  color: var(--text-on-dark);
+}
+
+.support-message-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1-5);
+  min-width: 0;
+}
+
+.support-message.is-requester .support-message-body {
+  align-items: flex-end;
+}
+
+.support-message-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.support-message-head strong {
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
+}
+
+.support-message-text {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs) var(--radius-lg) var(--radius-lg);
+  background: var(--surface-card);
+  line-height: var(--line-height-relaxed);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.support-message.is-requester .support-message-text {
+  border-color: var(--color-primary-100);
+  border-radius: var(--radius-lg) var(--radius-xs) var(--radius-lg) var(--radius-lg);
+  background: var(--color-primary-50);
+}
+
+.support-attachment {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  width: fit-content;
+  max-width: 100%;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-pill);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.support-attachment:hover {
+  border-color: var(--border-interactive);
+  background: var(--surface-hover);
+}
+
+.support-reply {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.support-reply-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+.support-reply-foot .field-error {
+  flex: 1 1 200px;
+}
+
+/* ----- Notifications ----- */
+
+/* A timeline by day, at reading width: a day heading, then hairline rows. Unread rows carry a dot and the word
+   "Unread", a purple icon and a bolder title; the filters stay quiet above the list. */
+.notifications-unread {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+}
+
+.notifications-unread.has-unread {
+  color: var(--color-primary-700);
+}
+
+.notifications-dot {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: var(--radius-round);
+  background: var(--color-primary-500);
+}
+
+.notifications-feed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.notifications-days {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-10);
+}
+
+.notifications-day {
+  display: flex;
+  flex-direction: column;
+}
+
+.notifications-day-title {
+  margin: 0;
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border-default);
+  font-family: var(--font-display);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+}
+
+.notifications-list > li + li {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.notifications-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-3) var(--space-4);
+  padding: var(--space-4) var(--space-3);
+}
+
+.notifications-item-icon {
+  display: grid;
+  place-items: center;
+  width: var(--space-10);
+  height: var(--space-10);
+  border-radius: var(--radius-round);
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+}
+
+.notifications-item.is-unread .notifications-item-icon {
+  background: var(--surface-selected);
+  color: var(--color-primary-600);
+}
+
+.notifications-item-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.notifications-item-title {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.notifications-item.is-unread .notifications-item-title {
+  font-weight: var(--font-weight-bold);
+}
+
+/* The list takes the page width like Support and Account; only the message keeps a reading measure. */
+.notifications-item-message {
+  max-width: var(--reading-max);
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+  overflow-wrap: anywhere;
+}
+
+.notifications-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  margin: var(--space-1) 0 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.notifications-item-new {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  color: var(--color-primary-700);
+  font-weight: var(--font-weight-bold);
+}
+
+.notifications-item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+/* ----- Account ----- */
+
+/* Calm settings: a section index on the left (desktop), one sheet of sections divided by hairlines, each section's
+   title and purpose beside its form; the danger zone stands apart below the sheet. */
+.account-layout {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-10);
+}
+
+.account-index {
+  position: sticky;
+  top: calc(var(--topbar-height) + var(--space-6));
+}
+
+.account-index ul {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  border-left: 1px solid var(--border-subtle);
+  list-style: none;
+}
+
+.account-index a {
+  display: block;
+  margin-left: -1px;
+  padding: var(--space-2) var(--space-4);
+  border-left: var(--border-width-thick) solid transparent;
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  text-decoration: none;
+  transition:
+    color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+
+.account-index a:hover {
+  border-left-color: var(--color-primary-500);
+  color: var(--color-primary-700);
+}
+
+.account-index a.is-danger {
+  color: var(--color-danger-text);
+}
+
+.account-index a.is-danger:hover {
+  border-left-color: var(--color-danger-text);
+}
+
+.account-sections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  min-width: 0;
+  max-width: 960px;
+}
+
+.account-sheet {
+  padding-block: 0;
+}
+
+.account-section {
+  display: grid;
+  grid-template-columns: minmax(0, 14rem) minmax(0, 1fr);
+  gap: var(--space-4) var(--space-10);
+  padding: var(--space-8) 0;
+  scroll-margin-top: calc(var(--topbar-height) + var(--space-4));
+}
+
+.account-sheet > .account-section + .account-section {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.account-section-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1-5);
+  min-width: 0;
+}
+
+.account-section-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+}
+
+.account-section-hint {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.account-form {
+  min-width: 0;
+}
+
+.account-email-row {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.account-email-row .input {
+  flex: 1 1 auto;
+}
+
+.account-email-row .btn {
+  white-space: nowrap;
+}
+
+.account-goal .segmented {
+  justify-self: start;
+}
+
+.account-notes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  list-style: none;
+}
+
+.account-notes li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.account-notes-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-0-5);
+  color: var(--text-link);
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+}
+
+.account-notes-link:hover {
+  color: var(--text-link-hover);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.account-notes .icon-glyph {
+  flex: 0 0 auto;
+  margin-top: var(--space-0-5);
+}
+
+.account-preference {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) 0;
+}
+
+.account-preference:first-child {
+  padding-top: 0;
+}
+
+.account-preference-label {
+  display: grid;
+  gap: var(--space-0-5);
+  min-width: 0;
+  cursor: pointer;
+}
+
+.account-preference-label span {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.account-preference-control {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.account-password-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.account-row {
+  display: flex;
+  align-items: flex-start;
+}
+
+.account-danger {
+  padding: var(--space-6) var(--card-padding);
+  border: 1px solid var(--color-danger-border);
+  border-radius: var(--radius-lg);
+}
+
+.account-danger .account-section-title {
+  color: var(--color-danger-text);
+}
+
+.account-blocked-list {
+  gap: var(--space-2);
+}
+
+.account-blocked-list li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.account-blocked-list li span {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+/* Below 1200px the index would squeeze the fields: the sheet takes the whole width. */
+@media (max-width: 1200px) {
+  .account-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .account-index {
+    display: none;
+  }
+}
+
+/* ----- Teacher applicant dashboard ----- */
+
+.applicant-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(260px, 1fr);
+  align-items: start;
+  gap: var(--page-gap);
+}
+
+.applicant-sheet {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.applicant-sheet-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+}
+
+/* The application as a path of three seals: stamped when done, outlined when current, muted when to come. */
+.applicant-path {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.applicant-path-title {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--type-overline-size);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-wide);
+  text-transform: uppercase;
+}
+
+.applicant-step-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.applicant-step {
+  position: relative;
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  gap: var(--space-3);
+  min-width: 0;
+  padding-right: var(--space-4);
+}
+
+.applicant-step:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 21px;
+  right: var(--space-3);
+  left: calc(44px + var(--space-3));
+  border-top: var(--border-width-thick) dashed var(--border-default);
+}
+
+.applicant-step.is-done:not(:last-child)::after {
+  border-top-style: solid;
+  border-top-color: var(--color-primary-300);
+}
+
+.applicant-step-seal {
+  --seal-size: 44px;
+  font-family: var(--font-display);
+  font-size: var(--font-size-lg);
+}
+
+.applicant-step-copy {
+  display: grid;
+  gap: var(--space-0-5);
+  min-width: 0;
+}
+
+.applicant-step.is-upcoming .applicant-step-copy strong {
+  color: var(--text-secondary);
+}
+
+.applicant-state {
+  display: grid;
+  gap: var(--space-4);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.applicant-state-text {
+  max-width: var(--reading-max);
+  margin: 0;
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-normal);
+}
+
+.applicant-subtitle {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--type-overline-size);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-wide);
+  text-transform: uppercase;
+}
+
+.applicant-next {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: applicant-next;
+}
+
+.applicant-next li {
+  display: grid;
+  grid-template-columns: var(--space-6) minmax(0, 1fr);
+  gap: var(--space-3);
+  font-size: var(--font-size-md);
+  counter-increment: applicant-next;
+}
+
+.applicant-next li::before {
+  content: counter(applicant-next);
+  color: var(--module-classes);
+  font-family: var(--font-display);
+  font-weight: var(--font-weight-semibold);
+  text-align: right;
+}
+
+.applicant-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.applicant-reason {
+  display: grid;
+  gap: var(--space-1-5);
+  margin: 0;
+  padding: var(--space-4);
+  border-left: var(--border-width-thick) solid var(--color-warning);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  background: var(--color-warning-soft);
+}
+
+.applicant-reason p {
+  margin: 0;
+}
+
+.applicant-reason-from {
+  font-weight: var(--font-weight-bold);
+}
+
+.applicant-fix {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.applicant-fix .type-caption {
+  margin: 0;
+}
+
+/* The tools that open after approval: a quiet list, each with a muted seal and a lock. */
+/* Beside the application sheet, the heading lines up with the sheet's heading (inside its padding). */
+.applicant-tools {
+  display: grid;
+  gap: var(--section-gap);
+  min-width: 0;
+  padding-top: var(--card-padding);
+}
+
+.applicant-tool-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--border-default);
+}
+
+.applicant-tool {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  text-decoration: none;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+
+.applicant-tool:hover {
+  background: var(--surface-sunken);
+}
+
+.applicant-tool-seal {
+  --seal-size: 40px;
+}
+
+.applicant-tool-copy {
+  display: grid;
+  gap: var(--space-0-5);
+  min-width: 0;
+}
+
+.applicant-tool-lock {
+  color: var(--text-secondary);
+}
+
+/* ----- Teaching profile ----- */
+
+.teaching-profile-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(280px, 1fr);
+  align-items: start;
+  gap: var(--page-gap);
+}
+
+.teaching-profile-column {
+  display: grid;
+  gap: var(--grid-gap);
+  min-width: 0;
+}
+
+.teaching-profile-card {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.teaching-card-head {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.teaching-card-head p {
+  margin: 0;
+}
+
+.teaching-verification-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.teaching-verification-seal {
+  --seal-size: 44px;
+}
+
+.teaching-reason {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.teaching-reason p {
+  margin: 0;
+}
+
+.teaching-verification-copy {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+}
+
+.teaching-documents {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--border-default);
+}
+
+.teaching-document {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.teaching-document-icon {
+  display: grid;
+  place-items: center;
+  color: var(--text-secondary);
+}
+
+.teaching-document-copy {
+  display: grid;
+  gap: var(--space-0-5);
+  min-width: 0;
+}
+
+.teaching-document-need {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-regular);
+}
+
+.teaching-document-file {
+  width: fit-content;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-link);
+  font-size: var(--font-size-sm);
+  text-align: left;
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.teaching-document-file:hover {
+  color: var(--text-link-hover);
+}
+
+.teaching-file-rule {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.teaching-submit {
+  display: grid;
+  gap: var(--space-3);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.teaching-consent-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  width: fit-content;
+  margin-left: var(--space-7);
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+}
+
+/* How students see the teacher: the card of the public class page, live as the form is typed. */
+.teaching-preview-aside {
+  position: sticky;
+  top: calc(var(--topbar-height) + var(--space-6));
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.teaching-preview-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--type-overline-size);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-spacing-wide);
+  text-transform: uppercase;
+}
+
+.teaching-preview {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-6);
+  border: 1px solid var(--border-subtle);
+  border-top: 3px solid var(--module-classes);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-sm);
+}
+
+.teaching-preview-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.teaching-preview-head div {
+  display: grid;
+  gap: var(--space-0-5);
+  min-width: 0;
+}
+
+.teaching-preview-name {
+  font-family: var(--font-display);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.teaching-preview-role {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.teaching-preview-bio {
+  margin: 0;
+  font-size: var(--font-size-md);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.teaching-preview-classes {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.teaching-preview-classes li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--module-classes);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* ----- Locked page ----- */
+
+.teacher-locked-card {
+  display: grid;
+  gap: var(--space-6);
+  max-width: 760px;
+  padding: var(--space-8);
+}
+
+.teacher-locked-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-4);
+}
+
+.teacher-locked-seal {
+  --seal-size: 56px;
+}
+
+.teacher-locked-copy {
+  display: grid;
+  gap: var(--space-1-5);
+  min-width: 0;
+}
+
+.teacher-locked-copy p {
+  margin: 0;
+}
+
+.teacher-locked-status {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+}
+
+.teacher-locked-status-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.teacher-locked-status .type-caption {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.teacher-locked-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+@media (max-width: 1200px) {
+  .support-layout,
+  .applicant-layout,
+  .teaching-profile-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .applicant-tools {
+    padding-top: 0;
+  }
+
+  .teaching-preview-aside {
+    position: static;
+    max-width: 560px;
+  }
+}

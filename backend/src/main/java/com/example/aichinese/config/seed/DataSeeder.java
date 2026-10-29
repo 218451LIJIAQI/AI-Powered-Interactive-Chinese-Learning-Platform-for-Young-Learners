@@ -19,7 +19,6 @@ import com.example.aichinese.entity.Badge;
 import com.example.aichinese.entity.LearningCategory;
 import com.example.aichinese.entity.LearningLevel;
 import com.example.aichinese.entity.Role;
-import com.example.aichinese.entity.SystemSetting;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.RoleName;
 import com.example.aichinese.repository.BadgeRepository;
@@ -28,6 +27,9 @@ import com.example.aichinese.repository.LearningLevelRepository;
 import com.example.aichinese.repository.RoleRepository;
 import com.example.aichinese.repository.SystemSettingRepository;
 import com.example.aichinese.repository.UserRepository;
+import com.example.aichinese.service.PlatformSettingsService;
+import com.example.aichinese.service.PlatformSettingsService.SettingDefinition;
+import com.example.aichinese.service.RewardBadge;
 
 @Component
 @Order(0)
@@ -38,78 +40,19 @@ public class DataSeeder implements CommandLineRunner {
             RoleName.STUDENT, "Student role for learners using the platform.",
             RoleName.TEACHER, "Teacher role for educators creating and managing learning content.",
             RoleName.ADMIN, "Admin role for platform management and moderation.");
-    private static final List<String> LEARNING_LEVELS = List.of("Beginner", "Intermediate", "Advanced");
+    /** Mandarin levels of classes and students: Beginner 1 is HSK 1, Beginner 2 is HSK 2. */
+    private static final List<String> LEARNING_LEVELS = List.of("Beginner 1", "Beginner 2");
+    /** Class topics. */
     private static final List<String> LEARNING_CATEGORIES = List.of(
             "Pinyin",
             "Tones",
             "Vocabulary",
-            "Chinese Characters",
+            "Characters",
             "Listening",
-            "Reading",
-            "Writing / Tracing",
-            "Daily Conversation",
+            "Speaking",
+            "Sentences",
             "Numbers",
-            "Colours",
-            "Animals",
-            "Family",
-            "School",
-            "Food",
-            "Greetings");
-    private static final List<BadgeSeed> BADGES = List.of(
-            new BadgeSeed("First Steps", "Awarded for starting the learning journey.", "badge-first-steps"),
-            new BadgeSeed("Quiz Explorer", "Awarded for completing early quiz practice.", "badge-quiz-explorer"),
-            new BadgeSeed("Daily Spark", "Awarded for building a learning streak.", "badge-daily-spark"));
-    private static final List<SettingSeed> SYSTEM_SETTINGS = List.of(
-            new SettingSeed(
-                    "platform_name",
-                    "AI-Powered Interactive Chinese Learning Platform for Young Learners",
-                    "Displayed platform name.",
-                    false),
-            new SettingSeed(
-                    "default_currency",
-                    "MYR",
-                    "Default currency for the Malaysian deployment context.",
-                    true),
-            new SettingSeed(
-                    "platform_commission_rate",
-                    "0.20",
-                    "Editable platform commission rate represented as a decimal.",
-                    true),
-            new SettingSeed(
-                    "ai_disclaimer_text",
-                    "AI-generated content may not always be accurate. Please review before use.",
-                    "Shown on AI-powered learning experiences.",
-                    true),
-            new SettingSeed(
-                    "admin_email_notifications_enabled",
-                    "true",
-                    "Enable email notifications for admin workflows.",
-                    true),
-            new SettingSeed(
-                    "admin_in_app_notifications_enabled",
-                    "true",
-                    "Enable in-app notifications for admin workflows.",
-                    true),
-            new SettingSeed(
-                    "admin_daily_summary_enabled",
-                    "false",
-                    "Enable daily admin summary delivery.",
-                    true),
-            new SettingSeed(
-                    "strict_content_filtering_enabled",
-                    "true",
-                    "Enable strict content filtering for safety-sensitive flows.",
-                    true),
-            new SettingSeed(
-                    "sensitive_word_filter_enabled",
-                    "true",
-                    "Enable profanity and sensitive word filtering.",
-                    true),
-            new SettingSeed(
-                    "ai_safety_check_enabled",
-                    "true",
-                    "Enable AI safety checks before AI guidance is shown.",
-                    true));
+            "Culture");
 
     private final RoleRepository roleRepository;
     private final LearningLevelRepository learningLevelRepository;
@@ -133,13 +76,13 @@ public class DataSeeder implements CommandLineRunner {
             SystemSettingRepository systemSettingRepository,
             UserRepository userRepository,
             PasswordEncoder passwordEncoder) {
-        this.roleRepository = Objects.requireNonNull(roleRepository, "roleRepository");
-        this.learningLevelRepository = Objects.requireNonNull(learningLevelRepository, "learningLevelRepository");
-        this.learningCategoryRepository = Objects.requireNonNull(learningCategoryRepository, "learningCategoryRepository");
-        this.badgeRepository = Objects.requireNonNull(badgeRepository, "badgeRepository");
-        this.systemSettingRepository = Objects.requireNonNull(systemSettingRepository, "systemSettingRepository");
-        this.userRepository = Objects.requireNonNull(userRepository, "userRepository");
-        this.passwordEncoder = Objects.requireNonNull(passwordEncoder, "passwordEncoder");
+        this.roleRepository = roleRepository;
+        this.learningLevelRepository = learningLevelRepository;
+        this.learningCategoryRepository = learningCategoryRepository;
+        this.badgeRepository = badgeRepository;
+        this.systemSettingRepository = systemSettingRepository;
+        this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Override
@@ -169,7 +112,7 @@ public class DataSeeder implements CommandLineRunner {
             learningLevelRepository.findByName(name).orElseGet(() -> {
                 LearningLevel level = new LearningLevel();
                 level.setName(name);
-                level.setDescription(name + " level learning path.");
+                level.setDescription(name + " (HSK " + sortOrder + ")");
                 level.setSortOrder(sortOrder);
                 return learningLevelRepository.save(level);
             });
@@ -190,33 +133,30 @@ public class DataSeeder implements CommandLineRunner {
         }
     }
 
+    /** Exactly the badges the reward service awards. */
     private void seedBadges() {
-        for (BadgeSeed seed : BADGES) {
-            badgeRepository.findByName(seed.name()).orElseGet(() -> {
-                Badge badge = new Badge();
-                badge.setName(seed.name());
+        for (RewardBadge seed : RewardBadge.values()) {
+            Badge badge = badgeRepository.findByName(seed.badgeName()).orElseGet(Badge::new);
+            boolean changed = badge.getId() == null
+                    || !Objects.equals(badge.getDescription(), seed.description())
+                    || !Objects.equals(badge.getIconKey(), seed.iconKey())
+                    || !badge.isActive();
+            if (changed) {
+                // Keeps the catalogue description (the earning rule) aligned with RewardBadge.
+                badge.setName(seed.badgeName());
                 badge.setDescription(seed.description());
                 badge.setIconKey(seed.iconKey());
-                return badgeRepository.save(badge);
-            });
+                badge.setActive(true);
+                badgeRepository.save(badge);
+            }
         }
     }
 
     private void seedSystemSettings() {
-        SYSTEM_SETTINGS.forEach(seed -> systemSettingRepository.findBySettingKey(seed.key()).orElseGet(() -> {
-            SystemSetting setting = new SystemSetting();
-            setting.setSettingKey(seed.key());
-            setting.setSettingValue(seed.value());
-            setting.setDescription(seed.description());
-            setting.setEditable(seed.editable());
-            return systemSettingRepository.save(setting);
-        }));
-    }
-
-    private record BadgeSeed(String name, String description, String iconKey) {
-    }
-
-    private record SettingSeed(String key, String value, String description, boolean editable) {
+        for (SettingDefinition definition : PlatformSettingsService.SETTING_DEFINITIONS) {
+            systemSettingRepository.findBySettingKey(definition.key())
+                    .orElseGet(() -> systemSettingRepository.save(definition.newSetting()));
+        }
     }
 
     private void seedDefaultAdmin() {
@@ -239,7 +179,6 @@ public class DataSeeder implements CommandLineRunner {
         admin.setPasswordHash(passwordEncoder.encode(defaultAdminPassword));
         admin.setDisplayName("Platform Administrator");
         admin.setPreferredLanguage("en");
-        admin.setActive(true);
         admin.setRoles(Set.of(adminRole));
         userRepository.save(admin);
 

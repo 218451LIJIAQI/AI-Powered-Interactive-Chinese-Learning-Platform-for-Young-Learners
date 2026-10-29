@@ -1,31 +1,40 @@
-/* Frontend mirror of backend REST API request and response contracts. */
-export type AppLanguage = 'en' | 'ms' | 'zh'
+/*
+ * Frontend mirror of the backend REST API contracts that several areas share. Response types list only the fields the
+ * frontend reads; the server may send more, which the client simply ignores.
+ */
+/** BCP-47 interface languages (FRLANG01). Old accounts may still return a legacy Chinese code; see utils/locale.ts. */
+export type AppLanguage = 'en' | 'ms' | 'zh-CN'
 export type UserRole = 'STUDENT' | 'TEACHER' | 'ADMIN'
-type TeacherStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
-export type AccessType = 'FREE' | 'PAID'
-export type LearningType = 'LIVE' | 'RECORDED' | 'HYBRID'
-export type AgeBand = 'KINDERGARTEN' | 'LOWER_PRIMARY' | 'UPPER_PRIMARY' | 'ALL_AGES'
-export type ActivityDifficulty = 'EASY' | 'MEDIUM' | 'HARD'
-export type ContentStatus = 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'PUBLISHED' | 'ARCHIVED'
-export type LiveClassStatus = 'SCHEDULED' | 'ONGOING' | 'COMPLETED' | 'CANCELLED' | 'RESCHEDULED'
-type AiResponseReportStatus = 'PENDING_REVIEW' | 'IN_REVIEW' | 'RESOLVED' | 'DISMISSED'
-export type AiResponseReportReviewStatus = Exclude<AiResponseReportStatus, 'PENDING_REVIEW'>
+export type TeacherStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
+/**
+ * Review workflow states (FRCONT06, FRADM04): DRAFT -> SUBMITTED -> PUBLISHED | REJECTED,
+ * DRAFT | PUBLISHED | REJECTED -> ARCHIVED -> the status before archive.
+ */
+export type ContentStatus = 'DRAFT' | 'SUBMITTED' | 'REJECTED' | 'PUBLISHED' | 'ARCHIVED'
+/** Optional scaffolding stage of a quiz or practice activity (FRCONT10). */
+export type LearningStage = 'GUIDED' | 'SCAFFOLDED' | 'INDEPENDENT'
+/** What an item of the admin review queue is: a class (PACKAGE) or a lesson. */
+export type ReviewContentType = 'PACKAGE' | 'LESSON'
+/** Open until an admin resolves it (the answer was wrong and the admin acted) or dismisses it (it was fine). */
+export type AiResponseReportStatus = 'PENDING_REVIEW' | 'RESOLVED' | 'DISMISSED'
 export type AiResponseReportReason =
   | 'INCORRECT_CONTENT'
-  | 'HALLUCINATION'
-  | 'UNSAFE_CONTENT'
-  | 'AGE_INAPPROPRIATE'
+  | 'UNCLEAR_EXPLANATION'
+  | 'INAPPROPRIATE_CONTENT'
+  | 'SCORE_SEEMS_WRONG'
   | 'OTHER'
-export type ManagedContentType = 'LESSON' | 'MODULE' | 'PACKAGE'
-export type PackageItemType = 'MODULE' | 'LESSON'
-export type TeacherVerificationDocumentType = 'CERTIFICATE' | 'QUALIFICATION' | 'IDENTITY' | 'OTHER'
-export type AdminActivityType =
-  | 'FLASHCARD'
-  | 'MATCHING_GAME'
-  | 'LISTENING_EXERCISE'
-  | 'TRACING_EXERCISE'
-  | 'DRAG_DROP_ACTIVITY'
-  | 'STORY_ACTIVITY'
+/** The AI features whose requests are logged; LEARNING_PLAN is logged by the progress module. */
+export type AiFeatureKey =
+  | 'CHAT_TUTOR'
+  | 'XIAOMEI_CONVERSATION'
+  | 'QUIZ_GENERATOR'
+  | 'STORY_GENERATOR'
+  | 'PRACTICE_CHECK'
+  | 'TEACHER_DRAFT'
+  | 'LEARNING_PLAN'
+/** Lesson mastery indicator (FRPROG02): MASTERED = lesson completed and its best quiz scores average >= 80 %. */
+export type LessonMastery = 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | 'MASTERED'
+export type NotificationStatus = 'UNREAD' | 'READ'
 export type QuizQuestionType =
   | 'MULTIPLE_CHOICE'
   | 'TRUE_FALSE'
@@ -43,8 +52,6 @@ export interface ApiResponse<T> {
   message: string
   data: T
   errors: string[]
-  fieldErrors: Record<string, string[]>
-  requestId?: string | null
 }
 
 export interface PageResponse<T> {
@@ -55,137 +62,48 @@ export interface PageResponse<T> {
   totalPages: number
 }
 
+/** A learning level (`/public/levels`); categories (`/public/categories`) have the same shape. */
 export interface LearningLevel {
   id: number
   name: string
   description: string
 }
 
-export interface LearningCategory {
-  id: number
-  name: string
-  description: string
-}
-
-interface PublicTeacherSummary {
-  teacherId: number
-  displayName: string
-  verified: boolean
-}
-
-interface TeacherOwnerSummary {
-  teacherId: number
-  userId: number
-  fullName: string
-  teacherStatus: TeacherStatus
-}
-
-export interface PackageItemResponse {
-  id: number
-  packageId: number
-  itemType: PackageItemType
-  itemId: number
-  displayOrder: number
-  titleSnapshot: string
-}
-
-interface AuthUserSummary {
-  id: number
-  fullName: string
-  email: string
-  roles: UserRole[]
-  teacherStatus?: TeacherStatus | null
-}
-
 export interface AuthResponse {
   token: string
-  user: AuthUserSummary
 }
 
 export interface RegistrationResponse {
-  id: number
-  fullName: string
   email: string
-  preferredLanguage?: AppLanguage | null
-  roles: UserRole[]
-  teacherStatus?: TeacherStatus | null
 }
 
 export interface CurrentUserResponse {
   id: number
   fullName: string
   email: string
-  preferredLanguage?: AppLanguage | null
+  /** en | ms | zh-CN; legacy accounts may return the old Chinese code (normalise with normalizeAppLanguage). */
+  preferredLanguage?: string | null
   roles: UserRole[]
   studentProfile?: {
-    id: number
-    displayName: string
-    currentLevel: string
     totalPoints: number
   } | null
   teacherProfile?: {
-    id: number
     teacherStatus: TeacherStatus
-    bio?: string | null
-    rejectionReason?: string | null
+    /** Where the application stands: documents not sent yet, waiting for an admin, or sent back with a reason. */
+    verificationState: TeacherVerificationState
+    /** When an admin approved the teacher (ISO date-time), for the sidebar's "Verified teacher" card. */
+    approvedAt?: string | null
   } | null
 }
 
-export interface PublicCourseSummary {
-  id: string
-  contentId: number
-  type: ManagedContentType
-  title: string
-  shortDescription?: string | null
-  teacher: PublicTeacherSummary
-  level: LearningLevel
-  category: LearningCategory
-  learningType: LearningType
-  accessType: AccessType
-  price: number
-  currencyCode: string
-  coverImageUrl?: string | null
-  locked: boolean
-  status: ContentStatus
-}
-
-interface PublicCourseItemSummary {
-  type: PackageItemType
-  contentId: number
-  title: string
-  displayOrder: number
-}
-
-export interface PublicCourseDetail {
-  id: string
-  contentId: number
-  type: ManagedContentType
-  title: string
-  description?: string | null
-  teacher: PublicTeacherSummary
-  level: LearningLevel
-  category: LearningCategory
-  learningType: LearningType
-  accessType: AccessType
-  price: number
-  currencyCode: string
-  coverImageUrl?: string | null
-  locked: boolean
-  status: ContentStatus
-  basicContent?: string | null
-  packageItems: PublicCourseItemSummary[]
-  callToAction?: string | null
-  lockedMessage?: string | null
-}
+export type TeacherVerificationState = 'NOT_SUBMITTED' | 'IN_REVIEW' | 'CHANGES_REQUESTED' | 'APPROVED'
 
 export interface NotificationResponse {
   id: number
   title: string
   message: string
   type: string
-  status: string
-  targetType?: string | null
-  targetId?: number | null
+  status: NotificationStatus
   targetPath?: string | null
   createdAt: string
   readAt?: string | null
@@ -195,617 +113,17 @@ export interface NotificationUnreadCountResponse {
   unreadCount: number
 }
 
-export interface BulkOperationResponse {
-  updatedCount: number
-}
-
+/** `/health`: the server, the database and whether the AI provider is configured. */
 export interface HealthStatusResponse {
-  status: string
-  service: string
+  status: 'UP' | 'DOWN' | string
   timestamp: string
-}
-
-export interface StudentDashboardResponse {
-  fullName: string
-  currentLevel: string
-  learningProgressPercent: number
-  dailyStreak: number
-  points: number
-  badgeCount: number
-  recentQuizResults: Array<{
-    attemptId: number
-    quizId: number | null
-    quizTitle: string
-    score: number
-    maxScore: number
-    completedAt: string
-  }>
-  weakAreas: string[]
-  unfinishedLessons: Array<{
-    lessonId: number
-    lessonTitle: string
-    completionPercent: number
-    lastAccessedAt: string
-  }>
-  recentNotifications: Array<{
-    notificationId: number
-    title: string
-    message: string
-    status: string
-    targetPath?: string | null
-    createdAt: string
-  }>
-  recommendedNextStep?: string | null
-}
-
-interface StudentProgressLessonResponse {
-  lessonId: number
-  lessonTitle: string
-  completionPercent: number
-  completed: boolean
-  lastAccessedAt?: string | null
-}
-
-export interface StudentProgressSummaryResponse {
-  totalLessonsStarted: number
-  completedLessons: number
-  quizAverage: number
-  overallCompletionPercent: number
-  weakAreas: string[]
-  lastActivitySummary?: string | null
-  recentLessons: StudentProgressLessonResponse[]
-}
-
-export interface DailyStreakResponse {
-  currentStreak: number
-  bestStreak: number
-  lastLearningDate?: string | null
-}
-
-export interface BadgeSummaryResponse {
-  badgeId: number
-  name: string
-  description: string
-  iconKey?: string | null
-  awardedAt?: string | null
-}
-
-export interface PointsTransactionResponse {
-  id: number
-  pointsDelta: number
-  reason: string
-  sourceType: string
-  sourceId?: number | null
-  createdAt: string
+  database?: 'UP' | 'DOWN'
+  ai?: 'AVAILABLE' | 'UNAVAILABLE'
 }
 
 export interface RewardSummaryResponse {
   totalPoints: number
-  currentLevelNumber: number
-  progressToNextLevelPercent: number
-  streak: DailyStreakResponse
-  badges: BadgeSummaryResponse[]
-  recentPoints: PointsTransactionResponse[]
-}
-
-interface LiveClassTeacherSummaryResponse {
-  teacherId: number
-  userId: number
-  displayName: string
-}
-
-interface LiveClassLessonSummaryResponse {
-  lessonId: number
-  lessonTitle: string
-  learningType: string
-  accessType: string
-}
-
-interface LiveClassPackageSummaryResponse {
-  packageId: number
-  packageTitle: string
-  learningType: string
-  accessType: string
-}
-
-export interface LiveClassResponse {
-  id: number
-  title: string
-  description?: string | null
-  meetingPlatform: string
-  liveClassStatus: LiveClassStatus
-  startTime: string
-  endTime: string
-  timeZone: string
-  durationMinutes?: number | null
-  maxParticipants?: number | null
-  enrolledCount: number
-  enrolled: boolean
-  canEnrol: boolean
-  accessAllowed: boolean
-  canJoin: boolean
-  meetingLinkVisible: boolean
-  meetingLink?: string | null
-  teacher?: LiveClassTeacherSummaryResponse | null
-  lesson?: LiveClassLessonSummaryResponse | null
-  coursePackage?: LiveClassPackageSummaryResponse | null
-  createdAt: string
-  updatedAt: string
-}
-
-export interface RecordedLessonVideoResponse {
-  id: number
-  lessonId: number
-  packageId?: number | null
-  title: string
-  description?: string | null
-  sourceType: string
-  externalVideoUrl?: string | null
-  streamUrl?: string | null
-  durationSeconds?: number | null
-  sortOrder: number
-  active: boolean
-  createdAt: string
-  updatedAt: string
-}
-
-export interface StudentLessonPlayerResponse {
-  lessonId: number
-  title: string
-  description?: string | null
-  basicContent?: string | null
-  estimatedDurationMinutes?: number | null
-  completionPercent: number
-  completed: boolean
-  locked: boolean
-  learningType: string
-  liveClasses: LiveClassResponse[]
-  recordedVideos: RecordedLessonVideoResponse[]
-}
-
-export interface VideoProgressResponse {
-  id: number
-  lessonId: number
-  recordedVideoId: number
-  watchedSeconds: number
-  totalSeconds?: number | null
-  progressPercentage: number
-  completed: boolean
-  lastWatchedAt?: string | null
-  updatedAt: string
-}
-
-export interface StudentActivitySummaryResponse {
-  id: number
-  type: string
-  title: string
-  hskLevel?: number | null
-  ageBand?: string | null
-  difficulty?: string | null
-  topic?: string | null
-  tags: string[]
-  xpReward?: number | null
-  estimatedSeconds?: number | null
-  updatedAt: string
-  completed: boolean
-}
-
-export interface StudentActivityCompletionResponse {
-  activityId: number
-  type: string
-  earnedPoints: number
-  totalPoints: number
-  firstCompletion: boolean
-}
-
-export interface StudentFlashcardResponse {
-  id: number
-  title: string
-  frontText: string
-  backText: string
-  pinyin?: string | null
-  englishMeaning?: string | null
-  malayMeaning?: string | null
-  imageUrl?: string | null
-  audioUrl?: string | null
-  sortOrder?: number | null
-  extraPayload?: string | null
-  hskLevel?: number | null
-  ageBand?: string | null
-  difficulty?: string | null
-  topic?: string | null
-  tags: string[]
-  xpReward?: number | null
-  estimatedSeconds?: number | null
-  completed: boolean
-}
-
-interface StudentMatchingGameItemResponse {
-  id: number
-  leftText: string
-  rightText: string
-  leftImageUrl?: string | null
-  rightImageUrl?: string | null
-  pinyin?: string | null
-  sortOrder?: number | null
-}
-
-export interface StudentMatchingGameResponse {
-  id: number
-  title: string
-  hskLevel?: number | null
-  ageBand?: string | null
-  difficulty?: string | null
-  topic?: string | null
-  tags: string[]
-  xpReward?: number | null
-  estimatedSeconds?: number | null
-  completed: boolean
-  items: StudentMatchingGameItemResponse[]
-}
-
-export interface StudentListeningExerciseResponse {
-  id: number
-  title: string
-  audioUrl?: string | null
-  questionPayload?: string | null
-  hskLevel?: number | null
-  ageBand?: string | null
-  difficulty?: string | null
-  topic?: string | null
-  tags: string[]
-  xpReward?: number | null
-  estimatedSeconds?: number | null
-  completed: boolean
-}
-
-export interface StudentTracingExerciseResponse {
-  id: number
-  title: string
-  worksheetUrl?: string | null
-  targetCharacter: string
-  pinyin?: string | null
-  meaning?: string | null
-  instructions?: string | null
-  hskLevel?: number | null
-  ageBand?: string | null
-  difficulty?: string | null
-  topic?: string | null
-  tags: string[]
-  xpReward?: number | null
-  estimatedSeconds?: number | null
-  completed: boolean
-}
-
-interface StudentDragDropItemResponse {
-  id: number
-  dragText: string
-  targetZone: string
-  pinyin?: string | null
-  imageUrl?: string | null
-  sortOrder?: number | null
-}
-
-export interface StudentDragDropActivityResponse {
-  id: number
-  title: string
-  instructions?: string | null
-  hskLevel?: number | null
-  ageBand?: string | null
-  difficulty?: string | null
-  topic?: string | null
-  tags: string[]
-  xpReward?: number | null
-  estimatedSeconds?: number | null
-  completed: boolean
-  items: StudentDragDropItemResponse[]
-}
-
-interface StudentStoryQuestionResponse {
-  id: number
-  questionText: string
-  optionsPayload: string
-  explanation?: string | null
-  sortOrder?: number | null
-}
-
-export interface StudentStoryActivityResponse {
-  id: number
-  title: string
-  instructions?: string | null
-  storyText: string
-  pinyin?: string | null
-  translation?: string | null
-  imageUrl?: string | null
-  hskLevel?: number | null
-  ageBand?: string | null
-  difficulty?: string | null
-  topic?: string | null
-  tags: string[]
-  xpReward?: number | null
-  estimatedSeconds?: number | null
-  completed: boolean
-  questions: StudentStoryQuestionResponse[]
-}
-
-export interface AdminActivitySummaryResponse {
-  id: number
-  type: AdminActivityType
-  title: string
-  status: ContentStatus
-  hskLevel?: number | null
-  ageBand?: AgeBand | null
-  difficulty?: ActivityDifficulty | null
-  topic?: string | null
-  tags: string[]
-  xpReward?: number | null
-  estimatedSeconds?: number | null
-  createdByUserId?: number | null
-  createdByDisplayName?: string | null
-  createdAt: string
-  updatedAt: string
-}
-
-interface AdminMatchingGameItemResponse {
-  id: number
-  leftText: string
-  rightText: string
-  leftImageUrl?: string | null
-  rightImageUrl?: string | null
-  pinyin?: string | null
-  sortOrder?: number | null
-}
-
-interface AdminDragDropItemResponse {
-  id: number
-  dragText: string
-  targetZone: string
-  pinyin?: string | null
-  imageUrl?: string | null
-  sortOrder?: number | null
-}
-
-interface AdminStoryQuestionResponse {
-  id: number
-  questionText: string
-  optionsPayload: string
-  explanation?: string | null
-  sortOrder?: number | null
-}
-
-export interface AdminFlashcardResponse {
-  id: number
-  title?: string | null
-  frontText: string
-  backText: string
-  pinyin?: string | null
-  englishMeaning?: string | null
-  malayMeaning?: string | null
-  imageUrl?: string | null
-  audioUrl?: string | null
-  sortOrder?: number | null
-  extraPayload?: string | null
-  status: ContentStatus
-  hskLevel?: number | null
-  ageBand?: AgeBand | null
-  difficulty?: ActivityDifficulty | null
-  topic?: string | null
-  tags: string[]
-  xpReward?: number | null
-  estimatedSeconds?: number | null
-  createdByUserId?: number | null
-  createdByDisplayName?: string | null
-  createdAt: string
-  updatedAt: string
-}
-
-export interface AdminMatchingGameResponse {
-  id: number
-  title: string
-  status: ContentStatus
-  hskLevel?: number | null
-  ageBand?: AgeBand | null
-  difficulty?: ActivityDifficulty | null
-  topic?: string | null
-  tags: string[]
-  xpReward?: number | null
-  estimatedSeconds?: number | null
-  createdByUserId?: number | null
-  createdByDisplayName?: string | null
-  createdAt: string
-  updatedAt: string
-  items: AdminMatchingGameItemResponse[]
-}
-
-export interface AdminListeningExerciseResponse {
-  id: number
-  title: string
-  audioUrl?: string | null
-  questionPayload?: string | null
-  status: ContentStatus
-  hskLevel?: number | null
-  ageBand?: AgeBand | null
-  difficulty?: ActivityDifficulty | null
-  topic?: string | null
-  tags: string[]
-  xpReward?: number | null
-  estimatedSeconds?: number | null
-  createdByUserId?: number | null
-  createdByDisplayName?: string | null
-  createdAt: string
-  updatedAt: string
-}
-
-export interface AdminTracingExerciseResponse {
-  id: number
-  title: string
-  worksheetUrl?: string | null
-  targetCharacter?: string | null
-  pinyin?: string | null
-  meaning?: string | null
-  instructions?: string | null
-  status: ContentStatus
-  hskLevel?: number | null
-  ageBand?: AgeBand | null
-  difficulty?: ActivityDifficulty | null
-  topic?: string | null
-  tags: string[]
-  xpReward?: number | null
-  estimatedSeconds?: number | null
-  createdByUserId?: number | null
-  createdByDisplayName?: string | null
-  createdAt: string
-  updatedAt: string
-}
-
-export interface AdminDragDropActivityResponse {
-  id: number
-  title: string
-  instructions?: string | null
-  status: ContentStatus
-  hskLevel?: number | null
-  ageBand?: AgeBand | null
-  difficulty?: ActivityDifficulty | null
-  topic?: string | null
-  tags: string[]
-  xpReward?: number | null
-  estimatedSeconds?: number | null
-  createdByUserId?: number | null
-  createdByDisplayName?: string | null
-  createdAt: string
-  updatedAt: string
-  items: AdminDragDropItemResponse[]
-}
-
-export interface AdminStoryActivityResponse {
-  id: number
-  title: string
-  instructions?: string | null
-  storyText: string
-  pinyin?: string | null
-  translation?: string | null
-  imageUrl?: string | null
-  status: ContentStatus
-  hskLevel?: number | null
-  ageBand?: AgeBand | null
-  difficulty?: ActivityDifficulty | null
-  topic?: string | null
-  tags: string[]
-  xpReward?: number | null
-  estimatedSeconds?: number | null
-  createdByUserId?: number | null
-  createdByDisplayName?: string | null
-  createdAt: string
-  updatedAt: string
-  questions: AdminStoryQuestionResponse[]
-}
-
-interface QuizOptionResponse {
-  id: number
-  optionText: string
-  displayOrder: number
-}
-
-interface StudentQuizQuestionResponse {
-  id: number
-  questionType: QuizQuestionType
-  questionText: string
-  points: number
-  displayOrder: number
-  options: QuizOptionResponse[]
-}
-
-export interface StudentQuizResponse {
-  id: number
-  lessonId: number
-  lessonTitle: string
-  title: string
-  description?: string | null
-  timeLimitMinutes?: number | null
-  totalPoints: number
-  questions: StudentQuizQuestionResponse[]
-}
-
-export interface StudentQuizSummaryResponse {
-  id: number
-  lessonId: number
-  lessonTitle: string
-  title: string
-  description?: string | null
-  timeLimitMinutes?: number | null
-  totalPoints: number
-  questionCount: number
-}
-
-interface QuizAttemptResultQuestionResponse {
-  questionId: number
-  questionType: string
-  questionText: string
-  studentAnswer: string
-  correctAnswer: string
-  correct: boolean
-  points?: number | null
-  explanation?: string | null
-}
-
-export interface QuizAttemptResultResponse {
-  attemptId: number
-  quizId: number
-  quizTitle: string
-  score: number
-  maxScore: number
-  totalQuestions: number
-  correctCount: number
-  wrongCount: number
-  earnedPoints: number
-  totalPoints: number
-  passed: boolean
-  startedAt: string
-  submittedAt: string
-  answers: QuizAttemptResultQuestionResponse[]
-}
-
-export interface WrongAnswerResponse {
-  attemptId: number
-  questionId: number
-  quizTitle: string
-  questionText: string
-  questionType: string
-  studentAnswer: string
-  correctAnswer: string
-  explanation?: string | null
-  submittedAt: string
-}
-
-export interface TeacherDashboardResponse {
-  fullName: string
-  teacherStatus: TeacherStatus
-  totalLessons: number
-  totalStudents: number
-  averageQuizScore: number
-  earningsSummary: {
-    grossAmount: number
-    netAmount: number
-    availableBalance: number
-    pendingBalance: number
-    currencyCode: string
-  }
-  recentQuizResults: Array<{
-    attemptId: number
-    quizTitle: string
-    studentName: string
-    score: number
-    maxScore: number
-    completedAt: string
-  }>
-  recentNotifications: Array<{
-    notificationId: number
-    title: string
-    message: string
-    status: string
-    targetPath?: string | null
-    createdAt: string
-  }>
+  currentStreak: number
 }
 
 export interface AnalyticsTrendPoint {
@@ -813,534 +131,48 @@ export interface AnalyticsTrendPoint {
   value: number
 }
 
-export interface AnalyticsBreakdownItem {
-  label: string
-  value: number
-}
-
-export interface TeacherAnalyticsResponse {
-  overview: {
-    totalModules: number
-    totalLessons: number
-    totalPackages: number
-    publishedContentItems: number
-    submittedContentItems: number
-    totalActiveStudents: number
-    averageQuizScore: number
-    netEarnings: number
-    availableBalance: number
-    currencyCode: string
-    upcomingLiveClasses: number
-    totalLiveEnrolments: number
-  }
-  quizScoreTrend: AnalyticsTrendPoint[]
-  earningsTrend: AnalyticsTrendPoint[]
-  contentStatusBreakdown: AnalyticsBreakdownItem[]
-}
-
-interface TeacherVerificationDocumentSummaryResponse {
-  id: number
-  documentType: TeacherVerificationDocumentType
-  description?: string | null
-  originalFileName: string
-  contentType: string
-  fileSize: number
-  submittedAt: string
-  currentVersion: boolean
-}
-
-interface TeacherVerificationReviewSummaryResponse {
-  id: number
-  decisionStatus: TeacherStatus
-  note?: string | null
-  reviewerName?: string | null
-  reviewedAt: string
-}
-
-export interface TeacherVerificationStatusResponse {
-  teacherStatus: TeacherStatus
-  latestSubmittedDocuments: TeacherVerificationDocumentSummaryResponse[]
-  latestReviewResult?: TeacherVerificationReviewSummaryResponse | null
-  rejectionReason?: string | null
-  resubmissionAllowed: boolean
-}
-
-export interface TeacherProfileResponse {
-  userId: number
-  fullName: string
-  email: string
-  teacherProfileId: number
-  bio?: string | null
-  shortIntroduction?: string | null
-  teachingCategories: string[]
-  teacherStatus: TeacherStatus
-  rejectionReason?: string | null
-  verificationDocuments: TeacherVerificationDocumentSummaryResponse[]
-  createdAt: string
-  updatedAt: string
-}
-
-export interface TeacherStudentSummaryResponse {
-  studentId: number
-  userId: number
-  fullName: string
-  email: string
-  displayName?: string | null
-  currentLevel?: string | null
-  progressPercent: number
-  quizAveragePercent?: number | null
-  atRisk: boolean
-  weakAreas: string[]
-  latestFeedbackType?: string | null
-  latestFeedbackAt?: string | null
-  latestActivityAt?: string | null
-  joinedAt: string
-}
-
-export interface LearningModuleResponse {
-  id: number
-  title: string
-  description?: string | null
-  level: LearningLevel
-  category: LearningCategory
-  accessType: AccessType
-  price: number
-  coverImageUrl?: string | null
-  contentStatus: ContentStatus
-  rejectionReason?: string | null
-  teacher: TeacherOwnerSummary
-  createdAt: string
-  updatedAt: string
-}
-
-export interface LessonResponse {
-  id: number
-  title: string
-  description?: string | null
-  basicContent?: string | null
-  moduleId?: number | null
-  moduleTitle?: string | null
-  level: LearningLevel
-  category: LearningCategory
-  learningType: LearningType
-  accessType: AccessType
-  price: number
-  estimatedDurationMinutes?: number | null
-  coverImageUrl?: string | null
-  contentStatus: ContentStatus
-  rejectionReason?: string | null
-  teacher: TeacherOwnerSummary
-  createdAt: string
-  updatedAt: string
-}
-
-export interface CoursePackageResponse {
-  id: number
-  title: string
-  description?: string | null
-  level: LearningLevel
-  category: LearningCategory
-  learningType: LearningType
-  accessType: AccessType
-  price: number
-  coverImageUrl?: string | null
-  contentStatus: ContentStatus
-  rejectionReason?: string | null
-  teacher: TeacherOwnerSummary
-  packageItems: PackageItemResponse[]
-  createdAt: string
-  updatedAt: string
-}
-
-interface TeacherQuizOptionResponse {
-  id: number
-  optionText: string
-  correctOption?: boolean | null
-  displayOrder: number
-}
-
-export interface TeacherQuizQuestionResponse {
-  id: number
-  questionType: QuizQuestionType
-  questionText: string
-  correctAnswerText?: string | null
-  points: number
-  displayOrder: number
-  explanation?: string | null
-  options: TeacherQuizOptionResponse[]
-}
-
-export interface TeacherQuizResponse {
-  id: number
-  lessonId: number
-  lessonTitle: string
-  title: string
-  description?: string | null
-  contentStatus: ContentStatus
-  timeLimitMinutes?: number | null
-  totalPoints: number
-  questions: TeacherQuizQuestionResponse[]
-  createdAt: string
-  updatedAt: string
-}
-
-export interface TeacherQuizAttemptSummaryResponse {
-  attemptId: number
-  studentId: number
-  studentName: string
-  score: number
-  maxScore: number
-  submittedAt: string
-}
-
-export interface LiveClassEnrolmentResponse {
-  id: number
-  liveClassId: number
-  studentId: number
-  studentName: string
-  studentEmail: string
-  enrolmentStatus: string
-  enrolledAt: string
-  cancelledAt?: string | null
-  attendedAt?: string | null
-}
-
-export interface LessonVideoProgressSummaryResponse {
-  studentId: number
-  studentName: string
-  studentEmail: string
-  recordedVideoId: number
-  recordedVideoTitle: string
-  progressPercentage: number
-  watchedSeconds: number
-  totalSeconds: number
-  completed: boolean
-  lastWatchedAt?: string | null
-}
-
-export interface TeacherFeedbackResponse {
-  id: number
-  teacherId: number
-  teacherName: string
-  studentId: number
-  studentName: string
-  lessonId?: number | null
-  lessonTitle?: string | null
-  quizAttemptId?: number | null
-  quizTitle?: string | null
-  feedbackType?: string | null
-  message: string
-  createdAt: string
-  updatedAt: string
-}
-
-export interface StudentTeacherFeedbackResponse {
-  id: number
-  teacherName: string
-  lessonId?: number | null
-  lessonTitle?: string | null
-  quizAttemptId?: number | null
-  quizTitle?: string | null
-  feedbackType?: string | null
-  message: string
-  createdAt: string
-  updatedAt: string
-}
-
-export interface TeacherEarningSummaryResponse {
-  grossAmount: number
-  totalNetAmount: number
-  availableBalance: number
-  pendingBalance: number
-  currencyCode: string
-}
-
-export interface TeacherEarningResponse {
-  id: number
-  orderItemId?: number | null
-  itemTitle: string
-  grossAmount: number
-  commissionAmount: number
-  netAmount: number
-  currencyCode: string
-  earningStatus: string
-  createdAt: string
-}
-
-export interface TeacherPayoutRequestResponse {
-  id: number
-  amount: number
-  currencyCode: string
-  requestedNote?: string | null
-  decisionReason?: string | null
-  payoutStatus: string
-  createdAt: string
-}
-
-export interface AdminPayoutRequestResponse extends TeacherPayoutRequestResponse {
-  teacherId: number
-  teacherName: string
-  teacherEmail: string
-}
-
-export interface AdminDashboardResponse {
-  fullName: string
-  totalStudents: number
-  totalTeachers: number
-  pendingTeacherApprovals: number
-  totalModules: number
-  totalLessons: number
-  totalQuizzes: number
-  totalGames: number
-  recentUserActivity: Array<{
-    userId: number
-    fullName: string
-    email: string
-    roles: UserRole[]
-    createdAt: string
-  }>
-  aiUsageSummary: {
-    totalRequests: number
-    successfulRequests: number
-  }
-  paymentRevenueSummary: {
-    totalTransactions: number
-    paidTransactions: number
-    totalRevenue: number
-    currencyCode: string
-  }
-  pendingRefunds: number
-  pendingPayouts: number
-  recentAuditLogs: Array<{
-    auditLogId: number
-    actionType: string
-    targetType: string
-    description: string
-    createdAt: string
-  }>
-}
-
-export interface AdminAnalyticsResponse {
-  overview: {
-    totalStudents: number
-    totalTeachers: number
-    pendingTeacherApprovals: number
-    approvedTeachers: number
-    rejectedTeachers: number
-    publishedContentItems: number
-    totalRevenue: number
-    currencyCode: string
-    pendingRefunds: number
-    pendingPayouts: number
-    moderationActions: number
-    auditLogEntries: number
-    adminUnreadNotifications: number
-    aiRequests: number
-  }
-  userRegistrationTrend: AnalyticsTrendPoint[]
-  teacherApprovalBreakdown: AnalyticsBreakdownItem[]
-  contentStatusBreakdown: AnalyticsBreakdownItem[]
-  paymentStatusBreakdown: AnalyticsBreakdownItem[]
-  aiStatusBreakdown: AnalyticsBreakdownItem[]
-}
-
-export interface AdminUserListItemResponse {
-  userId: number
-  fullName: string
-  email: string
-  roles: UserRole[]
-  active: boolean
-  teacherStatus?: TeacherStatus | null
-  createdAt: string
-  updatedAt: string
-}
-
-export interface AdminTeacherListItemResponse {
-  teacherId: number
-  userId: number
-  fullName: string
-  email: string
-  teacherStatus: TeacherStatus
-  bioSummary?: string | null
-  verificationDocumentCount: number
-  latestReviewDate?: string | null
-  latestSubmissionTime?: string | null
-  createdAt: string
-}
-
-interface AdminAuditSummaryResponse {
-  auditLogId: number
-  actionType: string
-  targetType: string
-  description: string
-  createdAt: string
-}
-
-export interface AdminTeacherDetailResponse {
-  teacherId: number
-  userId: number
-  fullName: string
-  email: string
-  bio?: string | null
-  shortIntroduction?: string | null
-  teachingCategories: string[]
-  teacherStatus: TeacherStatus
-  rejectionReason?: string | null
-  verifiedAt?: string | null
-  verificationDocuments: TeacherVerificationDocumentSummaryResponse[]
-  verificationReviewHistory: TeacherVerificationReviewSummaryResponse[]
-  recentAuditLogs: AdminAuditSummaryResponse[]
-  createdAt: string
-  updatedAt: string
-}
-
-export interface AdminStudentListItemResponse {
-  studentId: number
-  userId: number
-  fullName: string
-  email: string
-  preferredLanguage?: AppLanguage | null
-  createdAt: string
-}
-
-export interface ContentSubmissionResponse {
-  contentType: ManagedContentType
-  id: number
-  title: string
-  description?: string | null
-  teacher: TeacherOwnerSummary
-  level: LearningLevel
-  category: LearningCategory
-  learningType?: LearningType | null
-  accessType: AccessType
-  price: number
-  contentStatus: ContentStatus
-  rejectionReason?: string | null
-  createdAt: string
-  updatedAt: string
-}
-
-export interface ContentSubmissionDetailResponse {
-  contentType: ManagedContentType
-  id: number
-  title: string
-  description?: string | null
-  basicContent?: string | null
-  moduleId?: number | null
-  moduleTitle?: string | null
-  teacher: TeacherOwnerSummary
-  level: LearningLevel
-  category: LearningCategory
-  learningType?: LearningType | null
-  accessType: AccessType
-  price: number
-  coverImageUrl?: string | null
-  contentStatus: ContentStatus
-  rejectionReason?: string | null
-  packageItems: PackageItemResponse[]
-  createdAt: string
-  updatedAt: string
-}
-
-export interface ModerationRecordResponse {
-  id: number
-  targetType: string
-  targetId: number
-  targetTitle: string
-  actionTaken: string
-  note?: string | null
-  adminUserId: number
-  adminName: string
-  relatedTeacherId?: number | null
-  relatedTeacherName?: string | null
-  createdAt: string
-}
-
-export interface AuditLogResponse {
-  id: number
-  actorUserId?: number | null
-  actorEmail?: string | null
-  actionType: string
-  targetType: string
-  targetId?: number | null
-  description: string
-  ipAddress?: string | null
-  requestId?: string | null
-  createdAt: string
-}
-
 export interface AiAvailabilityResponse {
   available: boolean
-  provider?: string | null
-  model?: string | null
-  status: string
-  message?: string | null
-  textGenerationAvailable: boolean
-  audioAnalysisAvailable: boolean
-  imageAnalysisAvailable: boolean
 }
 
 export interface AiChatResponse {
   sessionId?: number | null
-  userMessage: string
+  /** The stored answer, named when the student reports it; null when SparkBot did not answer. */
+  chatMessageId?: number | null
   aiResponse: string
-  language?: string | null
-  createdAt: string
-  status: string
-}
-
-export interface AiVocabularyHelperResponse {
-  chineseWord: string
-  pinyin?: string | null
-  englishMeaning?: string | null
-  bahasaMelayuMeaning?: string | null
-  simpleExplanation?: string | null
-  exampleSentence?: string | null
-  exampleSentencePinyin?: string | null
-  exampleSentenceTranslation?: string | null
-  imagePromptOrDescription?: string | null
-  miniPracticeQuestion?: string | null
-  encouragement?: string | null
-  status: string
-}
-
-export interface AiSentencePracticeResponse {
-  originalSentence: string
-  correctedSentence?: string | null
-  pinyin?: string | null
-  englishMeaning?: string | null
-  bahasaMelayuMeaning?: string | null
-  improvementExplanation?: string | null
-  naturalSentenceVersion?: string | null
-  practiceTask?: string | null
-  encouragement?: string | null
   status: string
 }
 
 interface AiStoryVocabularyItemResponse {
-  chineseWord: string
+  chineseWord?: string | null
   pinyin?: string | null
   englishMeaning?: string | null
   bahasaMelayuMeaning?: string | null
 }
 
 interface AiStoryComprehensionQuestionResponse {
-  question: string
+  question?: string | null
   options: string[]
-  answer: string
+  answer?: string | null
   explanation?: string | null
+}
+
+/**
+ * Chinese with its pinyin and its translation into the student's language: a sentence of a story, or a line (or, for
+ * a word, the meaning) in a talk with Xiaomei.
+ */
+export interface AiStoryLine {
+  chinese: string
+  pinyin?: string | null
+  translation?: string | null
 }
 
 export interface AiStoryGeneratorResponse {
   title: string
-  chineseStory: string
-  pinyin?: string | null
-  englishTranslation?: string | null
-  bahasaMelayuTranslation?: string | null
+  titleTranslation?: string | null
+  lines: AiStoryLine[]
   vocabularyList: AiStoryVocabularyItemResponse[]
   comprehensionQuestions: AiStoryComprehensionQuestionResponse[]
-  encouragement?: string | null
-  usageMode?: string | null
   status: string
 }
 
@@ -1357,45 +189,12 @@ interface AiGeneratedQuizQuestionResponse {
 export interface AiQuizGeneratorResponse {
   title: string
   topic: string
-  level?: string | null
-  category?: string | null
-  usageMode?: string | null
   questions: AiGeneratedQuizQuestionResponse[]
-  status: string
-}
-
-export interface AiLearningRecommendationResponse {
-  recommendedNextStep?: string | null
-  recommendedLessonOrActivity?: string | null
-  weakAreaSummary?: string | null
-  revisionSuggestion?: string | null
-  shortEncouragement?: string | null
-  suggestedPracticeTypes: string[]
-  status: string
-}
-
-export interface AiPronunciationFeedbackResponse {
-  feedback?: string | null
-  pronunciationComment?: string | null
-  toneComment?: string | null
-  improvementTips?: string | null
-  encouragement?: string | null
-  status: string
-}
-
-export interface AiWritingFeedbackResponse {
-  feedback?: string | null
-  clarityComment?: string | null
-  improvementTips?: string | null
-  encouragement?: string | null
   status: string
 }
 
 export interface StudentAiResponseReportResponse {
   id: number
-  aiUsageLogId?: number | null
-  chatSessionId?: number | null
-  chatMessageId?: number | null
   featureKey: string
   reasonCategory: AiResponseReportReason
   description?: string | null
@@ -1404,142 +203,28 @@ export interface StudentAiResponseReportResponse {
   status: AiResponseReportStatus
   createdAt: string
   reviewedAt?: string | null
-  updatedAt: string
+  /** The admin's note to the student, once the report is resolved or dismissed. */
+  reviewerNote?: string | null
 }
 
 export interface AdminAiResponseReportResponse extends StudentAiResponseReportResponse {
-  studentUserId?: number | null
   studentName?: string | null
   studentEmail?: string | null
-  reviewerUserId?: number | null
   reviewerName?: string | null
-  reviewerNote?: string | null
 }
 
 export interface AdminAiUsageLogResponse {
   id: number
-  userId?: number | null
   userName?: string | null
-  userEmail?: string | null
   userRole?: string | null
   featureKey: string
-  providerName?: string | null
-  modelName?: string | null
   status: string
-  tokenCount?: number | null
-  languagePreference?: string | null
-  inputSummary?: string | null
-  outputSummary?: string | null
   errorSummary?: string | null
-  relatedEntityType?: string | null
-  relatedEntityId?: number | null
   createdAt: string
-}
-
-export interface CartItemResponse {
-  cartItemId: number
-  itemType: ManagedContentType
-  itemId: number
-  title: string
-  unitPrice: number
-  currencyCode: string
-  quantity: number
-  subtotal: number
-  teacherOwned: boolean
-}
-
-export interface CartResponse {
-  cartId: number
-  items: CartItemResponse[]
-  totalAmount: number
-  currencyCode: string
-  empty: boolean
-}
-
-export interface CheckoutResponse {
-  orderId: number
-  orderNumber: string
-  paymentId: number
-  paymentStatus: string
-  totalAmount: number
-  currencyCode: string
-  checkoutUrl?: string | null
-  providerName: string
-  providerStatus?: string | null
-  paymentAvailable: boolean
-  message?: string | null
-  items: CartItemResponse[]
-}
-
-export interface StudentPaymentRecordResponse {
-  paymentId: number
-  orderId: number
-  orderNumber: string
-  providerName: string
-  amount: number
-  currencyCode: string
-  paymentStatus: string
-  paymentMethod?: string | null
-  providerStatus?: string | null
-  paidAt?: string | null
-  createdAt: string
-  items: CartItemResponse[]
-}
-
-export interface AdminPaymentRecordResponse extends StudentPaymentRecordResponse {
-  studentId: number
-  studentName: string
-  studentEmail: string
-}
-
-export interface StudentRefundRequestResponse {
-  id: number
-  orderId: number
-  orderNumber: string
-  amount: number
-  reason: string
-  decisionReason?: string | null
-  refundStatus: string
-  createdAt: string
-}
-
-export interface AdminRefundRequestResponse extends StudentRefundRequestResponse {
-  studentId: number
-  studentName: string
-  studentEmail: string
-}
-
-export interface CommissionSettingResponse {
-  commissionRate: number
-  settingKey: string
-  description: string
-}
-
-export interface AdminPlatformSettingsResponse {
-  platformName: string
-  aiDisclaimerText: string
-  emailNotifications: boolean
-  inAppNotifications: boolean
-  dailySummary: boolean
-  strictContentFiltering: boolean
-  sensitiveWordFilter: boolean
-  aiSafetyCheck: boolean
-}
-
-export interface AdminPlatformSettingsUpdateRequest {
-  aiDisclaimerText: string
-  emailNotifications: boolean
-  inAppNotifications: boolean
-  dailySummary: boolean
-  strictContentFiltering: boolean
-  sensitiveWordFilter: boolean
-  aiSafetyCheck: boolean
 }
 
 export interface PublicPlatformSettingsResponse {
-  platformName: string
   aiDisclaimerText: string
-  strictContentFiltering: boolean
-  sensitiveWordFilter: boolean
-  aiSafetyCheck: boolean
+  /** Configured AI model (`app.ai.model-name`); null when none is set. */
+  aiModelName?: string | null
 }

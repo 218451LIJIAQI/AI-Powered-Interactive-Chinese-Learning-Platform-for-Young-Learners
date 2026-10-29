@@ -19,10 +19,7 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @EntityGraph(attributePaths = { "user", "user.roles" })
-    @Query("select t from RefreshToken t where t.tokenHash = :tokenHash")
-    Optional<RefreshToken> findLockedByTokenHash(@Param("tokenHash") String tokenHash);
-
-    boolean existsByTokenHash(String tokenHash);
+    Optional<RefreshToken> findLockedByTokenHash(String tokenHash);
 
     @Modifying
     @Transactional

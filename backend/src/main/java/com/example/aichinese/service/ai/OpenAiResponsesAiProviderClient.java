@@ -1,0 +1,109 @@
+package com.example.aichinese.service.ai;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.stereotype.Component;
+
+import com.example.aichinese.config.AiProperties;
+
+/**
+ * Default AI provider client for the prototype. It calls the OpenAI Responses API
+ * ({@code POST /v1/responses}) with the configured model (GPT-5.6 Luna by default),
+ * as specified in the project proposal. Bounded-AI instructions are sent through the
+ * {@code instructions} field, responses are not stored by the provider ({@code store=false}),
+ * and any provider error is converted into a controlled failure result.
+ */
+@Component
+public class OpenAiResponsesAiProviderClient extends HttpAiProviderClient {
+
+    private static final String ROLE_USER = "user";
+    private static final String STATUS_COMPLETED = "completed";
+    private static final String STATUS_INCOMPLETE = "incomplete";
+    /** Low detail keeps image token usage bounded; a single handwritten character does not need more. */
+    private static final String IMAGE_DETAIL = "low";
+
+    public OpenAiResponsesAiProviderClient(AiProperties aiProperties, RestTemplateBuilder restTemplateBuilder) {
+        super(aiProperties, restTemplateBuilder, "/responses");
+    }
+
+    @Override
+    Map<String, Object> buildRequestBody(String modelName, AiProviderPrompt prompt) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("model", modelName);
+        body.put("instructions", prompt.systemInstruction());
+        body.put("input", buildInput(prompt));
+        body.put("max_output_tokens", prompt.maxOutputTokens());
+        // Learner prompts are already persisted locally where needed; the provider does not need to keep them.
+        body.put("store", false);
+        if (prompt.expectJson()) {
+            body.put("text", Map.of("format", Map.of("type", "json_object")));
+        }
+        return body;
+    }
+
+    private static List<Map<String, Object>> buildInput(AiProviderPrompt prompt) {
+        List<Map<String, Object>> input = new ArrayList<>(prompt.messageHistory().size() + 1);
+        for (AiProviderPrompt.AiMessage message : prompt.messageHistory()) {
+            input.add(Map.of("role", message.role(), "content", message.content()));
+        }
+        if (prompt.hasImage()) {
+            // Multimodal turn: bounded text instruction plus the learner image as a data URL.
+            List<Map<String, Object>> content = List.of(
+                    Map.of("type", "input_text", "text", prompt.userPrompt()),
+                    Map.of("type", "input_image", "image_url", prompt.image().toDataUrl(), "detail", IMAGE_DETAIL));
+            input.add(Map.of("role", ROLE_USER, "content", content));
+        } else {
+            input.add(Map.of("role", ROLE_USER, "content", prompt.userPrompt()));
+        }
+        return input;
+    }
+
+    @Override
+    AiProviderResult parseResponse(Map<String, Object> responseBody, AiProviderPrompt prompt) {
+        Object status = responseBody.get("status");
+        boolean completed = status == null || STATUS_COMPLETED.equals(status);
+        boolean incomplete = STATUS_INCOMPLETE.equals(status);
+        if (!completed && !incomplete) {
+            return AiProviderResult.failure("Provider response status was not completed.");
+        }
+        // A truncated JSON document cannot be parsed safely, so incomplete JSON output is rejected.
+        if (incomplete && prompt.expectJson()) {
+            return AiProviderResult.failure("Provider response was incomplete.");
+        }
+
+        String text = extractOutputText(responseBody.get("output"));
+        if (text == null || text.isBlank()) {
+            return AiProviderResult.failure("Provider response text was empty.");
+        }
+
+        Integer tokenCount = AiProviderSupport.extractTokenCount(responseBody.get("usage"));
+        return AiProviderResult.success(text.trim(), tokenCount);
+    }
+
+    private static String extractOutputText(Object outputObject) {
+        if (!(outputObject instanceof List<?> outputItems)) {
+            return null;
+        }
+        StringBuilder text = new StringBuilder();
+        for (Object item : outputItems) {
+            if (!(item instanceof Map<?, ?> itemMap) || !"message".equals(itemMap.get("type"))) {
+                continue;
+            }
+            if (!(itemMap.get("content") instanceof List<?> contentParts)) {
+                continue;
+            }
+            for (Object part : contentParts) {
+                if (part instanceof Map<?, ?> partMap
+                        && "output_text".equals(partMap.get("type"))
+                        && partMap.get("text") instanceof String partText) {
+                    text.append(partText);
+                }
+            }
+        }
+        return text.toString();
+    }
+}
