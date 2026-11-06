@@ -54,6 +54,7 @@ const classDetail: ReviewDetail = {
     description: 'Festivals through the year.',
     levelName: 'Beginner 2',
     topicName: 'Culture',
+    bestAfterUnit: 3,
     learningType: 'RECORDED',
     teacherName: 'Li Wei',
     unitCount: 1,
@@ -89,6 +90,16 @@ describe('AdminContentReviewPage', () => {
     expect(wrapper.text()).toContain('Preview as a student')
     expect(wrapper.text()).toContain('Lantern Festival')
     expect(wrapper.text()).toContain('Not in this review: Festival Greetings.')
+    expect(wrapper.text()).toContain('Theme')
+    expect(wrapper.text()).toContain('Culture')
+    expect(wrapper.text()).toContain('Learn Unit 3')
+    expect(wrapper.text()).not.toContain('Learning type')
+    // Filters count the queue on the page.
+    expect(wrapper.findAll('.filter-chip').map((chip) => chip.text().replace(/\u00a0/g, ' '))).toEqual([
+      'All · 2',
+      'Classes · 1',
+      'Lessons · 1',
+    ])
     // The review tab counts the queue on the page, not the sidebar's nav count.
     expect(wrapper.get('[data-testid="content-tab-review"] .route-tab-count').text()).toBe('2')
     expect(navCounts).not.toHaveBeenCalled()
@@ -102,9 +113,11 @@ describe('AdminContentReviewPage', () => {
 
     await wrapper.get('[data-testid="request-changes"]').trigger('click')
     const dialog = wrapper.get('[data-testid="changes-dialog"]')
-    expect(dialog.get('[data-testid="changes-dialog-confirm"]').attributes('disabled')).toBeDefined()
+    await dialog.get('[data-testid="changes-dialog-confirm"]').trigger('click')
+    expect(api.requestChanges).not.toHaveBeenCalled()
+    expect(wrapper.get('[data-testid="changes-dialog"]').text()).toContain('Write a reason first.')
 
-    await dialog.get('[data-testid="review-reason"]').setValue('Add the meaning of 灯笼.')
+    await wrapper.get('[data-testid="review-reason"]').setValue('Add the meaning of 灯笼.')
     await wrapper.get('[data-testid="changes-dialog-confirm"]').trigger('click')
     await flushPromises()
 
@@ -114,13 +127,51 @@ describe('AdminContentReviewPage', () => {
     expect(api.lessonReview).toHaveBeenCalledWith(21)
   })
 
+  it('filters the queue on the page and shows an update with what changed', async () => {
+    api.lessonReview.mockResolvedValue({
+      ...classDetail,
+      item: revision,
+      classPreview: null,
+      notInReview: [],
+      changes: [{ kind: 'ACTIVITY_CHANGED', title: 'Match the Prices', count: null, total: null }],
+      lessons: [
+        {
+          lessonId: 21,
+          title: 'Ordering Food at the Canteen',
+          classTitle: 'Mandarin for Beginners',
+          unitTitle: 'Campus Life',
+          summary: null,
+          keyPhrases: [{ chinese: '多少钱？', pinyin: 'duōshao qián?', meaning: 'How much is it?' }],
+          videoTitle: null,
+          videoDurationSeconds: null,
+          activities: [{ type: 'MATCHING', title: 'Match the Prices', stage: null, isNew: false }],
+          quizzes: [],
+        },
+      ],
+    })
+    const wrapper = await mountPage()
+
+    const lessons = wrapper.findAll('.filter-chip').find((chip) => chip.text().startsWith('Lessons'))!
+    await lessons.trigger('click')
+    await flushPromises()
+
+    expect(api.queue).toHaveBeenCalledTimes(1)
+    expect(wrapper.find('[data-testid="review-item-class-4"]').exists()).toBe(false)
+    expect(api.lessonReview).toHaveBeenCalledWith(21)
+    expect(wrapper.text()).toContain('What changed')
+    expect(wrapper.text()).toContain('The published version stays live until you approve.')
+    expect(wrapper.text()).toContain('多少钱？')
+    expect(wrapper.text()).toContain('duōshao qián?')
+    expect(wrapper.text()).toContain('Updated')
+  })
+
   it('approves after confirming what goes live', async () => {
     api.approve.mockResolvedValue({ items: [], total: 0 })
     api.queue.mockResolvedValueOnce(queue).mockResolvedValue({ items: [], total: 0 })
     const wrapper = await mountPage()
 
     await wrapper.get('[data-testid="approve"]').trigger('click')
-    expect(wrapper.get('[data-testid="approve-dialog"]').text()).toContain('go live in the catalogue now')
+    expect(wrapper.get('[data-testid="approve-dialog"]').text()).toContain('go live for students now')
     await wrapper.get('[data-testid="approve-dialog-confirm"]').trigger('click')
     await flushPromises()
 

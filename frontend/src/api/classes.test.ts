@@ -7,7 +7,6 @@ import {
   studentClassesApi,
   teacherClassesApi,
   teacherSessionsApi,
-  teacherStudentsApi,
 } from './classes'
 import { installAxiosCapture, restoreAxiosAdapterAfterEach } from '@/test/axiosCapture'
 
@@ -49,20 +48,14 @@ describe('class API wrappers', () => {
     await expectRequests([
       [() => teacherClassesApi.dashboard(), 'GET /teachers/teaching-dashboard'],
       [() => teacherClassesApi.create({ title: 'New class' }), 'POST /teachers/classes'],
-      [() => teacherClassesApi.reorder(7, []), 'PUT /teachers/classes/7/structure'],
       [() => teacherClassesApi.discardDetails(7), 'DELETE /teachers/classes/7/pending-details'],
       [() => teacherClassesApi.addLesson(1, 'Greetings'), 'POST /teachers/units/1/lessons'],
       [
         () => lessonEditorApi.updateActivity(11, 'MATCHING', 5, { type: 'MATCHING', title: 'Match' }),
         'PUT /teachers/lessons/11/activities/matching/5',
       ],
-      [() => lessonEditorApi.reorderQuestions(11, 9, [3, 2]), 'PUT /teachers/lessons/11/quizzes/9/question-order'],
       [() => lessonEditorApi.discardRevision(11), 'DELETE /teachers/lessons/11/revision'],
       [() => teacherSessionsApi.saveRecording(2, 'https://example.com/r'), 'PUT /teachers/live-sessions/2/recording'],
-      [
-        () => teacherStudentsApi.updateFeedback(8, { type: 'LESSON', message: 'Well done.' }),
-        'PUT /teachers/feedback/8',
-      ],
       [() => adminClassesApi.queue('LESSON'), 'GET /admin/class-reviews'],
       [
         () => adminClassesApi.requestChanges('LESSON', 21, 'Add pinyin.'),

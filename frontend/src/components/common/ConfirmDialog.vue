@@ -2,7 +2,6 @@
   <AppOverlay
     :open="open"
     :title="title"
-    size="sm"
     role="alertdialog"
     :closable="false"
     :busy="busy"
@@ -44,7 +43,7 @@ import { commonMessages } from '@/plugins/commonMessages'
  * everything else (the cancel button, Escape, the scrim). Focus starts on the safe choice, so Enter never confirms by
  * accident. Tones:
  * - `primary` / `danger`: Cancel, then the filled confirm button (Publish, Archive, Delete …);
- * - `leave`: the focus-mode "Leave …?" step: an outline Leave (confirm), then a primary Keep going (cancel).
+ * - `leave`: the focus-mode "Leave …?" step: a secondary Leave (confirm), then a primary Keep going (cancel).
  * Extra fields (a reason) go in the default slot; `error` shows why the last attempt failed.
  */
 interface Props {
@@ -88,12 +87,12 @@ const buttons = computed<readonly DialogButton[]>(() => {
   const cancelLabel = props.cancelLabel || t('common.cancel')
   if (props.tone === 'leave') {
     return [
-      { action: 'confirm', label: props.confirmLabel, variant: 'btn-outline', safe: false },
+      { action: 'confirm', label: props.confirmLabel, variant: 'btn-secondary', safe: false },
       { action: 'cancel', label: cancelLabel, variant: 'btn-primary', safe: true },
     ]
   }
   return [
-    { action: 'cancel', label: cancelLabel, variant: 'btn-ghost', safe: true },
+    { action: 'cancel', label: cancelLabel, variant: 'btn-secondary', safe: true },
     {
       action: 'confirm',
       label: props.confirmLabel,

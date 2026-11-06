@@ -327,6 +327,7 @@ public class ClassReviewService {
                 pending ? coursePackage.getPendingDescription() : coursePackage.getDescription(),
                 TeacherClassService.levelName(pending ? coursePackage.getPendingLevel() : coursePackage.getLevel()),
                 TeacherClassService.topicName(pending ? coursePackage.getPendingCategory() : coursePackage.getCategory()),
+                pending ? coursePackage.getPendingBestAfterUnit() : coursePackage.getBestAfterUnit(),
                 pending ? coursePackage.getPendingLearningType() : coursePackage.getLearningType(),
                 teacherName(coursePackage),
                 units.size(),

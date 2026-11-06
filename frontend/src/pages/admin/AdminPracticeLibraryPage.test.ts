@@ -97,10 +97,24 @@ describe('AdminPracticeLibraryPage', () => {
     expect(rows).toHaveLength(1)
     expect(rows[0]!.text()).toContain('Food Quiz')
     expect(rows[0]!.text()).toContain('Published')
+    expect(rows[0]!.text()).toContain('Quizzes')
+    expect(rows[0]!.text()).toContain('HSK 1')
+    // The rows don't carry the author; it is read from the set's details.
+    expect(rows[0]!.text()).toContain('MandarinSpark team')
+    expect(wrapper.find('#library-stage').exists()).toBe(false)
+    expect(wrapper.findAll('#library-type option').map((option) => option.text())).toEqual([
+      'All types',
+      'Flashcards',
+      'Quizzes',
+      'Listening',
+      'Tracing',
+      'Drag & Drop',
+      'Matching',
+    ])
 
-    await wrapper.get('#library-type').setValue('STORY')
+    await wrapper.get('#library-type').setValue('QUIZZES')
     await flushPromises()
-    expect(api.practiceSets).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'STORY', page: 0 }))
+    expect(api.practiceSets).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'QUIZZES', page: 0 }))
   })
 
   it('archives a published set only after the confirm dialog, then offers Restore', async () => {
@@ -110,16 +124,16 @@ describe('AdminPracticeLibraryPage', () => {
     await wrapper.get('[data-testid="library-row"] button').trigger('click')
     await flushPromises()
     expect(api.practiceSet).toHaveBeenCalledWith('QUIZZES', 4)
-    expect(wrapper.get('[data-testid="set-details"]').text()).toContain('Which one is rice?')
+    expect(wrapper.get('[data-testid="set-details"]').text()).toContain('12 students')
 
     await wrapper.get('[data-testid="set-archive"]').trigger('click')
     expect(api.changePracticeSet).not.toHaveBeenCalled()
-    expect(wrapper.get('[data-testid="confirm-dialog"]').text()).toContain('Archive “Food Quiz”?')
+    expect(wrapper.get('[data-testid="set-confirm"]').text()).toContain('Archive “Food Quiz”?')
 
-    await wrapper.get('[data-testid="confirm-dialog-confirm"]').trigger('click')
+    await wrapper.get('[data-testid="set-confirm-confirm"]').trigger('click')
     await flushPromises()
     expect(api.changePracticeSet).toHaveBeenCalledWith('QUIZZES', 4, 'archive')
-    expect(wrapper.text()).toContain('Archived: “Food Quiz” is hidden from students.')
+    expect(wrapper.text()).toContain('Archived: “Food Quiz”.')
 
     api.changePracticeSet.mockResolvedValue(detail({ status: 'PUBLISHED' }))
     const restore = wrapper.findAll('button').find((button) => button.text() === 'Restore')!
@@ -147,6 +161,8 @@ describe('AdminPracticeLibraryPage', () => {
       null,
       expect.objectContaining({
         title: 'Colours',
+        stage: 'GUIDED',
+        xpReward: 10,
         items: [expect.objectContaining({ hanzi: '红色', meaning: 'red' })],
       }),
     )

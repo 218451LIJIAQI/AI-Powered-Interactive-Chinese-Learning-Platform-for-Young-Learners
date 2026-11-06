@@ -43,7 +43,7 @@ const { t } = useI18n()
 const options = computed<readonly LocaleOption[]>(() => [
   { label: 'EN', value: 'en', ariaLabel: t('chrome.switchEnglish') },
   { label: 'BM', value: 'ms', ariaLabel: t('chrome.switchMalay') },
-  { label: '简体中文', value: 'zh-CN', ariaLabel: t('chrome.switchChinese') },
+  { label: '中文', value: 'zh-CN', ariaLabel: t('chrome.switchChinese') },
 ])
 </script>
 

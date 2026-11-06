@@ -76,6 +76,11 @@ export const CLASSES_MESSAGES: readonly (readonly [en: string, ms: string, zh: s
     '描述不能超过 2000 个字符。',
   ],
   ['Topic id must be positive.', 'ID topik mestilah nombor positif.', '主题 ID 必须为正数。'],
+  [
+    'Best after unit must be between 1 and 8.',
+    'Unit "terbaik selepas" mestilah antara 1 dan 8.',
+    '“最好学完”的单元必须在 1 到 8 之间。',
+  ],
   ['The note must be 500 characters or fewer.', 'Nota mestilah 500 aksara atau kurang.', '备注不能超过 500 个字符。'],
   ['Unit title is required.', 'Tajuk unit diperlukan.', '请填写单元标题。'],
   [

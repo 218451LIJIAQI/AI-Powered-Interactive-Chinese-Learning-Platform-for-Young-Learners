@@ -14,7 +14,7 @@ const words = [
 
 function mountMatching(stage: 'GUIDED' | 'SCAFFOLDED' | 'INDEPENDENT') {
   return mount(ClassMatching, {
-    props: { activityId: 5, words, meanings: ['dad', 'mum'], stage },
+    props: { title: 'Family', activityId: 5, words, meanings: ['dad', 'mum'], stage, done: false },
     global: { stubs: { IconGlyph: true } },
   })
 }
@@ -56,9 +56,19 @@ describe('ClassMatching', () => {
       { wordId: 1, meaning: 'dad' },
       { wordId: 2, meaning: 'mum' },
     ])
+    // Wrong pairs stay on show, marked, until the student changes them.
     expect(wrapper.get('[data-testid="match-word-1"]').classes()).toContain('is-wrong')
-    expect(wrapper.text()).toContain('0 of 2 paired')
+    expect(wrapper.text()).toContain('2 of 2 pairs are wrong')
+    expect(wrapper.text()).toContain('2 of 2 paired')
     expect(wrapper.emitted('outcome')).toBeUndefined()
+
+    // Try again takes the wrong pairs apart.
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Try again')!
+      .trigger('click')
+    expect(wrapper.text()).toContain('0 of 2 paired')
+    expect(wrapper.text()).not.toContain('pairs are wrong')
 
     const outcome = {
       done: true,
@@ -74,6 +84,41 @@ describe('ClassMatching', () => {
     await flushPromises()
 
     expect(wrapper.emitted('outcome')?.[0]).toEqual([outcome])
+    expect(wrapper.get('[data-testid="match-word-1"]').classes()).toContain('is-right')
+  })
+
+  it('undoes a marked pair when it is clicked', async () => {
+    const wrapper = mountMatching('GUIDED')
+    await pair(wrapper, 1, 'dad')
+    await pair(wrapper, 2, 'mum')
+    api.checkMatching.mockResolvedValueOnce({
+      done: false,
+      pairs: [
+        { wordId: 1, correct: false },
+        { wordId: 2, correct: false },
+      ],
+      stepsDone: 1,
+      stepsTotal: 4,
+      lessonStatus: 'IN_PROGRESS',
+    })
+    await wrapper.get('[data-testid="activity-finish"]').trigger('click')
+    await flushPromises()
+
+    await wrapper.get('[data-testid="match-word-1"]').trigger('click')
+
+    expect(wrapper.get('[data-testid="match-word-1"]').classes()).not.toContain('is-wrong')
+    expect(wrapper.text()).toContain('1 of 2 paired')
+    expect(wrapper.text()).toContain('1 of 2 pairs is wrong')
+  })
+
+  it('names the columns after questions and answers when the answers are in Chinese', () => {
+    const wrapper = mount(ClassMatching, {
+      props: { title: 'Replies', activityId: 5, words, meanings: ['你好', '再见'], stage: 'GUIDED', done: false },
+      global: { stubs: { IconGlyph: true } },
+    })
+
+    expect(wrapper.text()).toContain('Question')
+    expect(wrapper.text()).toContain('Click a question, then its answer.')
   })
 
   it('gives one hint in a Supported activity and none in an Independent one', async () => {

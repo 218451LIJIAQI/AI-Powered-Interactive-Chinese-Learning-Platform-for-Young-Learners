@@ -17,10 +17,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 
 import com.example.aichinese.entity.DailyStreak;
 import com.example.aichinese.entity.LearnLesson;
+import com.example.aichinese.entity.LearnLessonCompletion;
 import com.example.aichinese.entity.LearnQuestion;
 import com.example.aichinese.entity.PointsTransaction;
 import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.repository.DailyStreakRepository;
+import com.example.aichinese.repository.LearnLessonCompletionRepository;
 import com.example.aichinese.repository.LearnLessonRepository;
 import com.example.aichinese.repository.LearnQuestionRepository;
 import com.example.aichinese.repository.PointsTransactionRepository;
@@ -30,6 +32,8 @@ import com.example.aichinese.support.ApiIntegrationTest;
 
 /** The Mistakes review, the daily goal, the streak and the Progress page. */
 class MistakesAndXpIntegrationTests extends ApiIntegrationTest {
+
+    private static final String FIRST_LESSON = "The four tones · 声调";
 
     @Autowired
     private LearnLessonRepository lessonRepository;
@@ -44,12 +48,15 @@ class MistakesAndXpIntegrationTests extends ApiIntegrationTest {
     private DailyStreakRepository dailyStreakRepository;
 
     @Autowired
+    private LearnLessonCompletionRepository lessonCompletionRepository;
+
+    @Autowired
     private LearnClock clock;
 
     @Test
     void aReviewClearsTheMistakesAnsweredRightAndPaysOnceADay() throws Exception {
         String token = api.registerStudent(uniqueEmail("mistakes-review"));
-        List<LearnQuestion> questions = questions("Hello and goodbye");
+        List<LearnQuestion> questions = questions(FIRST_LESSON);
         for (LearnQuestion question : questions.subList(0, 3)) {
             mockMvc.perform(api.jsonPost(lessonPath(question) + "/check", token,
                             Map.of("questionId", question.getId(), "answer", "wrong")))
@@ -99,7 +106,7 @@ class MistakesAndXpIntegrationTests extends ApiIntegrationTest {
     void studentsOnlySeeTheirOwnMistakes() throws Exception {
         String owner = api.registerStudent(uniqueEmail("mistakes-owner"));
         String other = api.registerStudent(uniqueEmail("mistakes-other"));
-        LearnQuestion question = questions("Hello and goodbye").get(0);
+        LearnQuestion question = questions(FIRST_LESSON).get(0);
         mockMvc.perform(api.jsonPost(lessonPath(question) + "/check", owner,
                 Map.of("questionId", question.getId(), "answer", "wrong")));
         Long mistakeId = api.data(mockMvc.perform(api.authGet("/api/v1/students/mistakes", owner)).andReturn())
@@ -126,7 +133,7 @@ class MistakesAndXpIntegrationTests extends ApiIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Daily goal must be 10, 20 or 30 XP."));
 
-        LearnLesson lesson = lesson("Hello and goodbye");
+        LearnLesson lesson = lesson(FIRST_LESSON);
         mockMvc.perform(api.jsonPost("/api/v1/students/learn/lessons/" + lesson.getId() + "/complete", token,
                         Map.of("answers", answers(lesson))))
                 .andExpect(jsonPath("$.data.xp.goalReached").value(false));
@@ -172,7 +179,7 @@ class MistakesAndXpIntegrationTests extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.data.currentStreak").value(2));
 
         mockMvc.perform(api.jsonPut("/api/v1/students/daily-goal", token, Map.of("dailyGoalXp", 10)));
-        LearnLesson lesson = lesson("Hello and goodbye");
+        LearnLesson lesson = lesson(FIRST_LESSON);
         mockMvc.perform(api.jsonPost("/api/v1/students/learn/lessons/" + lesson.getId() + "/complete", token,
                         Map.of("answers", answers(lesson))))
                 .andExpect(jsonPath("$.data.xp.goalJustReached").value(true))
@@ -217,6 +224,43 @@ class MistakesAndXpIntegrationTests extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.data.calendar.nextMonth").doesNotExist());
         mockMvc.perform(api.authGet("/api/v1/students/progress/overview", token).param("month", "May"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void skillsStartAtZeroWithNoWeakestAndComeFromRealCompletions() throws Exception {
+        String email = uniqueEmail("skills");
+        String token = api.registerStudent(email);
+        String skills = "/api/v1/students/progress/skills";
+        mockMvc.perform(api.authGet(skills, token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.weakest").doesNotExist())
+                .andExpect(jsonPath("$.data.skills[0].skill").value("VOCABULARY"))
+                .andExpect(jsonPath("$.data.skills[1].skill").value("LISTENING"))
+                .andExpect(jsonPath("$.data.skills[2].skill").value("CHARACTERS"))
+                .andExpect(jsonPath("$.data.skills[3].skill").value("SENTENCES"))
+                .andExpect(jsonPath("$.data.skills[0].percent").value(0))
+                .andExpect(jsonPath("$.data.skills[0].weeklyChange").value(0));
+
+        // A Unit 1 lesson counts for Listening: 1 of 6 pronunciation lessons plus 5 listening sets.
+        LearnLesson lesson = lesson(FIRST_LESSON);
+        mockMvc.perform(api.jsonPost("/api/v1/students/learn/lessons/" + lesson.getId() + "/complete", token,
+                        Map.of("answers", answers(lesson))))
+                .andExpect(status().isOk());
+        mockMvc.perform(api.authGet(skills, token))
+                .andExpect(jsonPath("$.data.skills[1].percent").value(9))
+                .andExpect(jsonPath("$.data.skills[1].weeklyChange").value(9))
+                .andExpect(jsonPath("$.data.weakest").value("VOCABULARY"));
+
+        // The same lesson finished before the last 7 days still counts, but not as this week's change.
+        StudentProfile student = studentProfile(email);
+        LearnLessonCompletion completion = lessonCompletionRepository.findByStudentIdWithLesson(student.getId()).get(0);
+        completion.setFirstCompletedAt(clock.now().minusDays(10));
+        lessonCompletionRepository.save(completion);
+        mockMvc.perform(api.authGet(skills, token))
+                .andExpect(jsonPath("$.data.skills[1].percent").value(9))
+                .andExpect(jsonPath("$.data.skills[1].weeklyChange").value(0));
+        mockMvc.perform(api.authGet(skills, api.approvedTeacher(uniqueEmail("skills-teacher"))))
+                .andExpect(status().isForbidden());
     }
 
     private String lessonPath(LearnQuestion question) {

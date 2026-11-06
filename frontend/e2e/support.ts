@@ -43,6 +43,15 @@ export async function expectSidebarItems(page: Page, labels: readonly string[]):
   await expect(sidebar(page).getByRole('link')).toHaveText(labels.map(pattern))
 }
 
+/** A section root has exactly one h1, named after the page but only there for assistive technology (sr-only). */
+export async function expectHiddenPageTitle(page: Page, title: string): Promise<void> {
+  const heading = page.getByRole('heading', { level: 1 })
+  await expect(heading).toHaveText(title)
+  await expect(heading).toHaveCount(1)
+  await expect(heading).toHaveClass(/sr-only/)
+  expect((await heading.boundingBox())!.width, `the h1 "${title}" takes no room`).toBeLessThanOrEqual(1)
+}
+
 /** Focus mode (lesson player, review, setup, class activity, quiz): the task fills the screen, without the sidebar. */
 export async function expectFocusMode(page: Page): Promise<void> {
   await expect(sidebar(page)).toHaveCount(0)
@@ -84,8 +93,8 @@ export async function registerStudent(page: Page, student: NewStudent): Promise<
   await page.getByRole('button', { name: 'Create account', exact: true }).click()
 }
 
-/** Switches the interface language with the EN / BM / 简体中文 switch of the header. */
-export async function switchLanguage(page: Page, label: 'EN' | 'BM' | '简体中文'): Promise<void> {
+/** Switches the interface language with the EN / BM / 中文 switch of the header. */
+export async function switchLanguage(page: Page, label: 'EN' | 'BM' | '中文'): Promise<void> {
   // The visible label stays the same in every language; the rest of the accessible name is translated.
   await page.getByRole('button', { name: new RegExp(`^${label}, `) }).click()
 }

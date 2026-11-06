@@ -1,16 +1,18 @@
 <template>
   <div class="plan-ai-note" data-testid="plan-ai-note">
-    <IconGlyph :name="plan.aiAssisted ? 'ai' : 'info'" :size="16" />
-    <p>{{ plan.aiAssisted ? t('plan.page.aiNote') : t('plan.page.rulesNote') }}</p>
-    <button
-      v-if="plan.aiAssisted"
-      class="btn btn-link"
-      type="button"
-      data-testid="plan-report"
-      @click="reporting = true"
-    >
-      <IconGlyph name="flag" :size="14" />{{ t('plan.common.report') }}
-    </button>
+    <IconGlyph :name="plan.aiAssisted ? 'magic' : 'info'" :size="14" />
+    <p>
+      {{ plan.aiAssisted ? t('plan.page.aiNote') : t('plan.page.rulesNote') }}
+      <button
+        v-if="plan.aiAssisted"
+        class="btn btn-link"
+        type="button"
+        data-testid="plan-report"
+        @click="reporting = true"
+      >
+        {{ t('plan.common.report') }}
+      </button>
+    </p>
     <AiReportDialog v-if="reporting" :target="target" @close="reporting = false" @sent="reporting = false" />
   </div>
 </template>

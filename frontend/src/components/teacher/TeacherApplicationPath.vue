@@ -1,18 +1,14 @@
 <template>
-  <section class="applicant-path" :aria-labelledby="headingId">
-    <h3 :id="headingId" class="applicant-path-title">{{ t('verification.yourApplication') }}</h3>
-    <ol class="applicant-step-list">
-      <li v-for="(step, index) in steps" :key="step.title" class="applicant-step" :class="`is-${step.status}`">
-        <span
-          class="seal applicant-step-seal"
-          :class="{ 'is-outline': step.status === 'current', 'is-muted': step.status === 'upcoming' }"
-          lang="zh-CN"
-          aria-hidden="true"
-          >{{ step.status === 'done' ? '完' : hanziNumeral(index + 1) }}</span
-        >
-        <span class="applicant-step-copy">
-          <strong>{{ index + 1 }}. {{ step.title }}</strong>
-          <span class="type-caption">
+  <section class="panel teacher-card" :aria-labelledby="headingId">
+    <h2 :id="headingId" class="card-title">{{ t('verification.yourApplication') }}</h2>
+    <ol class="row-list applicant-steps">
+      <li v-for="(step, index) in steps" :key="step.title">
+        <span class="teacher-tile" :class="{ 'is-filled': step.status === 'done' }" aria-hidden="true">
+          <IconGlyph :name="step.icon" :size="16" />
+        </span>
+        <span class="row-list-copy">
+          <strong class="row-list-title">{{ index + 1 }}. {{ step.title }}</strong>
+          <span class="row-list-meta">
             <span v-if="step.status === 'current'" class="sr-only">{{ t('verification.stepCurrent') }}: </span>
             {{ step.detail }}
           </span>
@@ -25,17 +21,16 @@
 <script setup lang="ts">
 import { computed, useId } from 'vue'
 
-import { hanziNumeral } from '@/components/learn/sealGlyphs'
+import IconGlyph from '@/components/common/IconGlyph.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { teacherVerificationMessages } from '@/plugins/teacherVerificationMessages'
 import type { TeacherProfileResponse } from '@/types/ops'
-import { formatDate, formatDateTime } from '@/utils/format'
+import { formatDateTime, formatShortDate } from '@/utils/format'
 import { hasRequiredDocuments, latestUpload } from '@/utils/teacherApplication'
 
 /**
- * A teacher application as a path of three steps (account, documents, admin review): finished steps are stamped
- * with a seal, the current one is an outline seal, the next one a muted seal. Shown on the applicant's dashboard and
- * on the Locked page, so the applicant always sees what unlocks the teaching tools.
+ * A teacher application as three steps (account, documents, admin review): a finished step has a filled tile with a
+ * check, the others a sunken tile with what the step is waiting on.
  */
 const props = defineProps<{ profile: TeacherProfileResponse }>()
 
@@ -44,7 +39,7 @@ const headingId = useId()
 
 type StepStatus = 'done' | 'current' | 'upcoming'
 
-const steps = computed<{ title: string; detail: string; status: StepStatus }[]>(() => {
+const steps = computed<{ title: string; detail: string; status: StepStatus; icon: string }[]>(() => {
   const profile = props.profile
   const state = profile.verificationState
   const documents = profile.documents
@@ -53,25 +48,31 @@ const steps = computed<{ title: string; detail: string; status: StepStatus }[]>(
   const documentsDone = submitted || hasRequiredDocuments(documents)
   const reviewDetail =
     state === 'IN_REVIEW'
-      ? t('verification.stepReviewInReview', { date: formatDate(profile.submittedAt) })
+      ? t('verification.stepReviewInReview', { date: formatShortDate(profile.submittedAt) })
       : state === 'CHANGES_REQUESTED'
         ? t('verification.stepReviewChanges', { date: formatDateTime(profile.latestDecision?.decidedAt) })
         : state === 'APPROVED'
-          ? t('verification.stepReviewApproved', { date: formatDate(profile.approvedAt) })
+          ? t('verification.stepReviewApproved', { date: formatShortDate(profile.approvedAt) })
           : t('verification.stepReviewWaiting')
   return [
-    { title: t('verification.stepAccount'), detail: t('verification.stepDone'), status: 'done' },
+    { title: t('verification.stepAccount'), detail: t('verification.stepDone'), status: 'done', icon: 'check' },
     {
       title: t('verification.stepDocuments'),
       detail: uploaded
-        ? t('verification.stepDocumentsDone', { count: documents.length, date: formatDate(uploaded) }, documents.length)
+        ? t(
+            'verification.stepDocumentsDone',
+            { count: documents.length, date: formatShortDate(uploaded) },
+            documents.length,
+          )
         : t('verification.stepDocumentsTodo'),
       status: documentsDone ? 'done' : 'current',
+      icon: documentsDone ? 'check' : 'upload',
     },
     {
       title: t('verification.stepReview'),
       detail: reviewDetail,
       status: state === 'APPROVED' ? 'done' : submitted ? 'current' : 'upcoming',
+      icon: state === 'APPROVED' ? 'check' : state === 'CHANGES_REQUESTED' ? 'alert' : 'history',
     },
   ]
 })

@@ -1,16 +1,11 @@
 /**
  * Translated labels for enum values the app shows through `useStatusLabels()` (composables/useStatusLabels.ts), so users
  * never see a raw IN_PROGRESS (FRLANG02). Keys are `<group>_<VALUE>`:
- * - `mastery`: lesson mastery (MasteryChip, class lesson pages);
  * - `auditAction`: actions of retired features that older audit log entries still carry. Actions the backend
  *   writes today are named in plugins/auditActionMessages.ts (utils/auditActions.ts), which takes precedence.
  */
 export const statusLabelMessages = {
   en: {
-    mastery_NOT_STARTED: 'Not started',
-    mastery_IN_PROGRESS: 'In progress',
-    mastery_COMPLETED: 'Completed',
-    mastery_MASTERED: 'Mastered',
     auditAction_TEACHER_ACTIVITY_CREATE: 'Teacher activity created',
     auditAction_TEACHER_ACTIVITY_UPDATE: 'Teacher activity updated',
     auditAction_TEACHER_ACTIVITY_DELETE: 'Teacher activity deleted',
@@ -48,10 +43,6 @@ export const statusLabelMessages = {
     auditAction_TEACHER_LIVE_CLASS_CANCEL: 'Live class cancelled',
   },
   ms: {
-    mastery_NOT_STARTED: 'Belum bermula',
-    mastery_IN_PROGRESS: 'Sedang berjalan',
-    mastery_COMPLETED: 'Selesai',
-    mastery_MASTERED: 'Dikuasai',
     auditAction_TEACHER_ACTIVITY_CREATE: 'Aktiviti guru dicipta',
     auditAction_TEACHER_ACTIVITY_UPDATE: 'Aktiviti guru dikemas kini',
     auditAction_TEACHER_ACTIVITY_DELETE: 'Aktiviti guru dipadam',
@@ -89,10 +80,6 @@ export const statusLabelMessages = {
     auditAction_TEACHER_LIVE_CLASS_CANCEL: 'Kelas langsung dibatalkan',
   },
   'zh-CN': {
-    mastery_NOT_STARTED: '未开始',
-    mastery_IN_PROGRESS: '学习中',
-    mastery_COMPLETED: '已完成',
-    mastery_MASTERED: '已掌握',
     auditAction_TEACHER_ACTIVITY_CREATE: '教师已创建活动',
     auditAction_TEACHER_ACTIVITY_UPDATE: '教师已更新活动',
     auditAction_TEACHER_ACTIVITY_DELETE: '教师已删除活动',

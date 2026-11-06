@@ -80,13 +80,14 @@ beforeEach(() => {
 })
 
 describe('AuthPage sign in (FRAUTH03)', () => {
-  it('has one h1 and shows 回 "to return" beside the form', () => {
+  it('has one h1 for screen readers and shows 你好 beside the form, with pinyin and meaning', () => {
     const wrapper = mountPage()
 
     expect(wrapper.findAll('h1')).toHaveLength(1)
     expect(wrapper.get('h1').text()).toBe('Welcome back')
-    expect(wrapper.get('.auth-brand-tile').text()).toBe('回')
-    expect(wrapper.get('.auth-brand-gloss').text()).toContain('to return')
+    expect(wrapper.get('h1').classes()).toContain('sr-only')
+    expect(wrapper.findAll('.auth-word-tile').map((tile) => tile.text())).toEqual(['你', '好'])
+    expect(wrapper.get('.auth-word-gloss').text()).toBe('nǐ hǎo · hello')
   })
 
   it('moves between the sign-in and create-account tabs with the arrow keys', async () => {
@@ -102,40 +103,44 @@ describe('AuthPage sign in (FRAUTH03)', () => {
     expect(wrapper.get('#auth-tab-signin').attributes('aria-selected')).toBe('true')
   })
 
-  it('signs in with the trimmed lower-case email and "Keep me signed in", then opens the role home', async () => {
+  it('signs in with the trimmed lower-case email, "Keep me signed in" off by default, then opens the role home', async () => {
     mocks.login.mockImplementation(async () => {
       mocks.auth.activeRole = 'TEACHER'
     })
     const wrapper = mountPage()
-    expect(wrapper.get<HTMLInputElement>('[data-testid="keep-signed-in"]').element.checked).toBe(true)
-
-    await signIn(wrapper)
-
-    expect(mocks.login).toHaveBeenCalledWith('mei@example.com', PASSWORD, true)
-    expect(mocks.push).toHaveBeenCalledWith('/teacher/dashboard')
-  })
-
-  it('returns to a safe redirect after signing in, and passes an unticked "Keep me signed in"', async () => {
-    mocks.route.query = { redirect: '/student/ai' }
-    mocks.login.mockResolvedValue(undefined)
-    const wrapper = mountPage()
-    await wrapper.get('[data-testid="keep-signed-in"]').setValue(false)
+    expect(wrapper.get<HTMLInputElement>('[data-testid="keep-signed-in"]').element.checked).toBe(false)
 
     await signIn(wrapper)
 
     expect(mocks.login).toHaveBeenCalledWith('mei@example.com', PASSWORD, false)
-    expect(mocks.push).toHaveBeenCalledWith('/student/ai')
+    expect(mocks.push).toHaveBeenCalledWith('/teacher/dashboard')
   })
 
-  it('says the email or password is incorrect, without saying which', async () => {
-    mocks.login.mockRejectedValue(apiError(401))
+  it('returns to a safe redirect after signing in, and passes a ticked "Keep me signed in"', async () => {
+    mocks.route.query = { redirect: '/student/ai' }
+    mocks.login.mockResolvedValue(undefined)
     const wrapper = mountPage()
+    await wrapper.get('[data-testid="keep-signed-in"]').setValue(true)
 
     await signIn(wrapper)
 
-    expect(wrapper.get('[data-testid="auth-error"]').text()).toContain('The email or password is incorrect.')
+    expect(mocks.login).toHaveBeenCalledWith('mei@example.com', PASSWORD, true)
+    expect(mocks.push).toHaveBeenCalledWith('/student/ai')
+  })
+
+  it('says the email or password is incorrect, without saying which, and waits in the emptied password field', async () => {
+    mocks.login.mockRejectedValue(apiError(401))
+    const wrapper = mountPage(document.body)
+
+    await signIn(wrapper)
+
+    expect(wrapper.get('[data-testid="auth-error"]').text()).toBe('The email or password is incorrect.')
     expect(wrapper.get('#login-email').attributes('aria-describedby')).toBe('login-error')
+    expect(wrapper.get<HTMLInputElement>('#login-email').element.value).toBe('Mei@Example.com')
+    expect(wrapper.get<HTMLInputElement>('#login-password').element.value).toBe('')
+    expect(document.activeElement).toBe(wrapper.get('#login-password').element)
     expect(mocks.push).not.toHaveBeenCalled()
+    wrapper.unmount()
   })
 
   it('pauses sign-in for the minutes the server gives in Retry-After', async () => {
@@ -189,16 +194,17 @@ describe('AuthPage create account (FRAUTH01, FRAUTH02)', () => {
     mocks.route.query = { tab: 'register', role: 'student' }
   })
 
-  it('shows 学 "to learn" beside the form and the teacher note only for a teacher account', async () => {
+  it('shows the teacher bio and note only for a teacher account', async () => {
     const wrapper = mountPage()
-    expect(wrapper.get('.auth-brand-tile').text()).toBe('学')
-    expect(wrapper.get('.auth-brand-gloss').text()).toContain('to learn')
+    expect(wrapper.get('h1').text()).toBe('Create account')
     expect(wrapper.get<HTMLInputElement>('[data-testid="auth-role-student"]').element.checked).toBe(true)
     expect(wrapper.find('.auth-teacher-note').exists()).toBe(false)
+    expect(wrapper.find('#register-teacher-bio').exists()).toBe(false)
 
     await wrapper.get('[data-testid="auth-role-teacher"]').setValue(true)
 
-    expect(wrapper.get('.auth-teacher-note').text()).toContain('after an admin approves them')
+    expect(wrapper.get('.auth-teacher-note').text()).toContain('An admin approves teacher accounts.')
+    expect(wrapper.find('#register-teacher-bio').exists()).toBe(true)
     expect(mocks.replace).toHaveBeenLastCalledWith({ path: '/auth', query: { tab: 'register', role: 'teacher' } })
   })
 
@@ -209,7 +215,7 @@ describe('AuthPage create account (FRAUTH01, FRAUTH02)', () => {
 
     const summary = wrapper.get('[data-testid="register-summary"]')
     expect(summary.text()).toContain('Your account was not created.')
-    expect(summary.text()).toContain('Fix the 5 highlighted items and try again.')
+    expect(summary.text()).toContain('Fix the 5 highlighted items.')
     expect(document.activeElement).toBe(summary.element)
     expect(wrapper.get('#register-full-name').attributes('aria-invalid')).toBe('true')
     expect(mocks.registerStudent).not.toHaveBeenCalled()
@@ -247,7 +253,7 @@ describe('AuthPage create account (FRAUTH01, FRAUTH02)', () => {
     expect(wrapper.get('#register-bio-error').text()).toBe(
       'Write 20 to 1,000 characters about your teaching background.',
     )
-    expect(wrapper.get('[data-testid="register-summary"]').text()).toContain('Fix the highlighted item and try again.')
+    expect(wrapper.get('[data-testid="register-summary"]').text()).toContain('Fix the highlighted item.')
     expect(mocks.registerTeacher).not.toHaveBeenCalled()
 
     await wrapper.get('#register-teacher-bio').setValue('  I teach Mandarin to young adults.  ')

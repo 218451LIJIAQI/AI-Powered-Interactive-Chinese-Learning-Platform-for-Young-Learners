@@ -3,13 +3,8 @@ export const legalMessages = {
   en: {
     home: 'Home',
     onThisPage: 'On this page',
-    officialTitle: 'AI-Powered Interactive Chinese Learning Platform for Young Adults in Malaysia',
-    termsLink: 'Read the Terms of Service',
-    privacyLink: 'Read the Privacy Notice',
-    responsibleAiLink: 'Read the Responsible AI guidance',
     terms: {
       title: 'Terms of Service',
-      intro: 'The rules for using MandarinSpark to learn, to teach and to look after the platform.',
       accountsTitle: 'Accounts and roles',
       accountsCopy:
         'MandarinSpark is for Mandarin beginners aged 18 and over, their teachers and the platform admins. When you create an account you confirm that you are 18 or older. Each account has one role (student, teacher or admin) and can use only that role’s tools. Teachers use the teaching tools after an admin approves their documents.',
@@ -28,10 +23,9 @@ export const legalMessages = {
     },
     privacy: {
       title: 'Privacy Notice',
-      intro: 'What MandarinSpark collects about students, teachers and admins, why, and how it is protected.',
       dataTitle: 'Data we collect',
       dataCopy:
-        'Account data (name, email, role, language and notification choices); learning data (lessons, practice, quiz attempts, XP, streaks, badges and your learning plan); class and live session bookings; teacher profiles and verification documents; AI Helper requests, practice scores and the reports you send; Help & support messages; notifications; and an audit log of admin actions.',
+        'Account data (name, email, role, language and notification choices); learning data (lessons, practice, quiz attempts, XP, streaks, badges and your learning plan); the classes you join; teacher profiles and verification documents; AI Helper requests, practice scores and the reports you send; Help & support messages; notifications; and an audit log of admin actions.',
       purposeTitle: 'Why we use it',
       purposeCopy:
         'To sign you in and show you the tools of your role, deliver lessons and practice, track your progress, let verified teachers run classes and give feedback, answer support requests, review teacher applications, content and AI reports, keep the platform secure and evaluate the prototype.',
@@ -63,13 +57,8 @@ export const legalMessages = {
   ms: {
     home: 'Utama',
     onThisPage: 'Dalam halaman ini',
-    officialTitle: 'Platform Pembelajaran Bahasa Cina Interaktif Berkuasa AI untuk Dewasa Muda di Malaysia',
-    termsLink: 'Baca Terma Perkhidmatan',
-    privacyLink: 'Baca Notis Privasi',
-    responsibleAiLink: 'Baca panduan AI Bertanggungjawab',
     terms: {
       title: 'Terma Perkhidmatan',
-      intro: 'Peraturan penggunaan MandarinSpark untuk belajar, mengajar dan menjaga platform.',
       accountsTitle: 'Akaun dan peranan',
       accountsCopy:
         'MandarinSpark adalah untuk pemula Mandarin berumur 18 tahun ke atas, guru mereka dan pentadbir platform. Apabila mencipta akaun, anda mengesahkan bahawa anda berumur 18 tahun atau lebih. Setiap akaun mempunyai satu peranan (pelajar, guru atau pentadbir) dan hanya boleh menggunakan alat peranan tersebut. Guru menggunakan alat mengajar selepas pentadbir meluluskan dokumen mereka.',
@@ -88,11 +77,9 @@ export const legalMessages = {
     },
     privacy: {
       title: 'Notis Privasi',
-      intro:
-        'Apa yang dikumpul oleh MandarinSpark tentang pelajar, guru dan pentadbir, sebabnya dan cara ia dilindungi.',
       dataTitle: 'Data yang kami kumpul',
       dataCopy:
-        'Data akaun (nama, e-mel, peranan, bahasa dan pilihan pemberitahuan); data pembelajaran (pelajaran, latihan, cubaan kuiz, XP, rentetan, lencana dan pelan pembelajaran anda); tempahan kelas dan sesi langsung; profil guru dan dokumen pengesahan; permintaan Pembantu AI, skor latihan dan laporan yang anda hantar; mesej Bantuan & sokongan; pemberitahuan; dan log audit tindakan pentadbir.',
+        'Data akaun (nama, e-mel, peranan, bahasa dan pilihan pemberitahuan); data pembelajaran (pelajaran, latihan, cubaan kuiz, XP, rentetan, lencana dan pelan pembelajaran anda); kelas yang anda sertai; profil guru dan dokumen pengesahan; permintaan Pembantu AI, skor latihan dan laporan yang anda hantar; mesej Bantuan & sokongan; pemberitahuan; dan log audit tindakan pentadbir.',
       purposeTitle: 'Mengapa kami menggunakannya',
       purposeCopy:
         'Untuk log masuk dan menunjukkan alat peranan anda, menyampaikan pelajaran dan latihan, menjejak kemajuan anda, membolehkan guru yang disahkan mengendalikan kelas dan memberi maklum balas, menjawab permintaan sokongan, menyemak permohonan guru, kandungan dan laporan AI, memastikan platform selamat dan menilai prototaip.',
@@ -124,13 +111,8 @@ export const legalMessages = {
   'zh-CN': {
     home: '首页',
     onThisPage: '本页内容',
-    officialTitle: '面向马来西亚年轻成人的 AI 驱动互动式中文学习平台',
-    termsLink: '阅读服务条款',
-    privacyLink: '阅读隐私声明',
-    responsibleAiLink: '阅读负责任的 AI 指南',
     terms: {
       title: '服务条款',
-      intro: '使用 MandarinSpark 进行学习、教学和平台管理的规则。',
       accountsTitle: '账号与角色',
       accountsCopy:
         'MandarinSpark 面向 18 岁及以上的中文初学者、他们的老师和平台管理员。创建账号即表示你确认自己已年满 18 岁。每个账号只有一个角色（学生、老师或管理员），只能使用该角色的工具。老师的证件经管理员批准后才能使用教学工具。',
@@ -149,10 +131,9 @@ export const legalMessages = {
     },
     privacy: {
       title: '隐私声明',
-      intro: 'MandarinSpark 收集哪些关于学生、老师和管理员的信息、原因以及如何保护这些信息。',
       dataTitle: '我们收集的数据',
       dataCopy:
-        '账号数据（姓名、邮箱、角色、语言和通知设置）；学习数据（课程、练习、测验记录、XP、连续学习记录、徽章和学习计划）；课程和直播课预约；老师资料和认证证件；AI 助手请求、练习评分以及你提交的举报；“帮助与支持”留言；通知；以及管理员操作的审计日志。',
+        '账号数据（姓名、邮箱、角色、语言和通知设置）；学习数据（课程、练习、测验记录、XP、连续学习记录、徽章和学习计划）；你加入的课程；老师资料和认证证件；AI 助手请求、练习评分以及你提交的举报；“帮助与支持”留言；通知；以及管理员操作的审计日志。',
       purposeTitle: '使用目的',
       purposeCopy:
         '用于登录并向你展示所属角色的工具、提供课程和练习、记录学习进度、让认证老师开课并给予反馈、回复支持请求、审核老师申请、内容和 AI 举报、保障平台安全以及评估原型。',

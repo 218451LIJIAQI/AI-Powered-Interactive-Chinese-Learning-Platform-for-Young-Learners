@@ -1,30 +1,17 @@
 <template>
   <div class="practice-player" data-testid="flashcards-player">
-    <div class="practice-meter">
-      <span class="practice-counter">{{ t('practice.cardOf', { current: index + 1, total: cards.length }) }}</span>
-      <ol class="practice-dots" :aria-label="t('practice.cardsSeen', { seen: seen.size, total: cards.length })">
-        <li
-          v-for="(dot, cardIndex) in cards"
-          :key="dot.key"
-          :class="{ 'is-current': cardIndex === index, 'is-seen': seen.has(cardIndex) }"
-        />
-      </ol>
-    </div>
+    <PracticeProgress
+      :dots="dots"
+      :label="t('practice.cardOf', { current: index + 1, total: cards.length })"
+      :list-label="t('practice.cardsSeen', { seen: seen.size, total: cards.length })"
+    />
 
-    <div v-if="card" class="practice-card-frame">
+    <div v-if="card" class="practice-card" :class="{ 'is-flipped': flipped }">
       <Transition name="practice-flip" mode="out-in">
-        <div :key="`${index}-${flipped}`" class="practice-card" :class="{ 'is-flipped': flipped }">
+        <div :key="`${index}-${flipped}`" class="practice-card-face">
           <template v-if="!flipped">
             <p class="practice-card-label">{{ t('practice.word') }}</p>
-            <p
-              v-if="tiles"
-              class="practice-card-tiles"
-              :class="`is-${tiles.length > 2 ? 'long' : 'short'}`"
-              lang="zh-CN"
-            >
-              <span v-for="(glyph, glyphIndex) in tiles" :key="glyphIndex" class="hanzi-tile">{{ glyph }}</span>
-            </p>
-            <p v-else class="practice-card-hanzi hanzi" lang="zh-CN">{{ card.hanzi }}</p>
+            <p class="practice-card-hanzi hanzi" lang="zh-CN">{{ card.hanzi }}</p>
             <p v-if="card.pinyin" class="practice-card-pinyin">{{ card.pinyin }}</p>
           </template>
           <template v-else>
@@ -41,7 +28,8 @@
           </template>
         </div>
       </Transition>
-      <div class="practice-card-tools">
+      <!-- Outside the turning face, so the focus stays on Flip. -->
+      <div class="btn-group is-sm">
         <ListenButtons v-if="card.hanzi" :text="card.hanzi" />
         <button class="btn btn-secondary btn-sm" type="button" data-testid="flip" @click="flipped = !flipped">
           <IconGlyph name="retry" :size="16" />
@@ -50,10 +38,12 @@
       </div>
     </div>
 
+    <p v-if="run.error.value" class="field-error" role="alert">{{ run.error.value }}</p>
+
     <div class="practice-footer">
-      <div class="practice-nav">
+      <div class="btn-group">
         <button class="btn btn-secondary" type="button" :disabled="index === 0" @click="go(index - 1)">
-          <IconGlyph name="chevronLeft" :size="16" />{{ t('practice.previous') }}
+          {{ t('practice.previous') }}
         </button>
         <button
           class="btn btn-secondary"
@@ -62,23 +52,24 @@
           data-testid="next-card"
           @click="go(index + 1)"
         >
-          {{ t('practice.next') }}<IconGlyph name="chevronRight" :size="16" />
+          {{ t('practice.next') }}
         </button>
       </div>
-      <button
-        class="btn btn-primary"
-        type="button"
-        :disabled="!allSeen || run.busy.value"
-        :aria-busy="run.busy.value"
-        :aria-describedby="allSeen ? undefined : `${baseId}-hint`"
-        data-testid="mark-reviewed"
-        @click="finish"
-      >
-        <IconGlyph name="check" :size="16" />{{ t('practice.markReviewed') }}
-      </button>
+      <div class="practice-footer-end">
+        <p v-if="!allSeen" :id="`${baseId}-hint`" class="practice-hint">{{ t('practice.seeEveryCard') }}</p>
+        <button
+          class="btn btn-primary"
+          type="button"
+          :disabled="!allSeen || run.busy.value"
+          :aria-busy="run.busy.value"
+          :aria-describedby="allSeen ? undefined : `${baseId}-hint`"
+          data-testid="mark-reviewed"
+          @click="finish"
+        >
+          <IconGlyph name="check" :size="16" />{{ t('practice.markReviewed') }}
+        </button>
+      </div>
     </div>
-    <p v-if="!allSeen" :id="`${baseId}-hint`" class="practice-hint">{{ t('practice.seeEveryCard') }}</p>
-    <p v-if="run.error.value" class="field-error" role="alert">{{ run.error.value }}</p>
   </div>
 </template>
 
@@ -91,18 +82,15 @@ import { useLocalMessages } from '@/composables/useLocalMessages'
 import { practiceMessages } from '@/plugins/practiceMessages'
 import type { PracticeResult, PracticeSet } from '@/types/learn'
 
+import PracticeProgress, { type PracticeDot } from './PracticeProgress.vue'
 import { usePracticeRun } from './usePracticeRun'
 
 /**
- * Flashcards: the word in 田字格 tiles (one per character), flip for the meaning, listen, previous / next; marking the
- * set reviewed (after seeing every card) finishes it.
+ * Flashcards: the word and its pinyin, flip for the meaning and an example, listen, previous / next; marking the set
+ * reviewed (after seeing every card) finishes it.
  */
 const props = defineProps<{ set: PracticeSet }>()
 const emit = defineEmits<{ finished: [result: PracticeResult] }>()
-
-/** Words up to this many characters sit in tiles; a longer phrase is set as text. */
-const MAX_TILES = 4
-const HAN = /^\p{Script=Han}$/u
 
 const { t } = useLocalMessages({ practice: practiceMessages })
 const baseId = useId()
@@ -118,10 +106,12 @@ const seen = ref(new Set<number>([0]))
 const card = computed(() => cards.value[index.value] ?? null)
 const allSeen = computed(() => seen.value.size >= cards.value.length)
 
-const tiles = computed(() => {
-  const glyphs = Array.from(card.value?.hanzi ?? '')
-  return glyphs.length && glyphs.length <= MAX_TILES && glyphs.every((glyph) => HAN.test(glyph)) ? glyphs : null
-})
+const dots = computed<PracticeDot[]>(() =>
+  cards.value.map((_, position) => {
+    if (position === index.value) return 'current'
+    return seen.value.has(position) ? 'seen' : 'ahead'
+  }),
+)
 
 function go(next: number): void {
   index.value = Math.min(Math.max(0, next), cards.value.length - 1)

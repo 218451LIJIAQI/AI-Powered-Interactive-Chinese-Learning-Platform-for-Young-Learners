@@ -1,5 +1,5 @@
 <template>
-  <section class="panel plan-card" aria-labelledby="plan-card-title" data-testid="plan-card">
+  <section class="panel plan-strip" aria-labelledby="plan-strip-title" data-testid="plan-card">
     <StatePanel
       v-if="resource.loading.value"
       tone="loading"
@@ -21,14 +21,15 @@
     </StatePanel>
 
     <template v-else-if="summary">
-      <div class="plan-card-goal">
-        <h2 id="plan-card-title" class="plan-card-overline">{{ t('plan.cards.myPlan') }}</h2>
-        <p class="plan-card-title">{{ title }}</p>
-        <p class="plan-card-note">
+      <span class="plan-icon-tile is-lg" aria-hidden="true"><IconGlyph name="target" :size="28" /></span>
+      <div class="plan-strip-goal">
+        <h2 id="plan-strip-title" class="page-eyebrow">{{ t('plan.cards.myPlan') }}</h2>
+        <p class="plan-strip-title">{{ title }}</p>
+        <p class="type-caption">
           {{
             summary.deadline
               ? t('plan.cards.byWeek', {
-                  date: longDate(summary.deadline),
+                  date: shortDayDate(summary.deadline),
                   week: summary.week,
                   total: summary.totalWeeks,
                 })
@@ -36,33 +37,28 @@
           }}
         </p>
       </div>
-      <div class="plan-card-level">
-        <p class="plan-card-label">{{ t('plan.page.mandarinLevel') }}</p>
-        <LevelLadder :placed="summary.level" :target="summary.targetLevel" />
-        <p class="plan-card-note">{{ t('plan.cards.separateFromXp') }}</p>
+      <div class="plan-strip-level">
+        <p class="page-eyebrow">{{ t('plan.page.mandarinLevel') }}</p>
+        <p class="plan-strip-value">{{ level }}</p>
       </div>
-      <div class="plan-card-progress">
-        <p class="plan-card-label">{{ t('plan.cards.planProgress', { percent: summary.percent }) }}</p>
-        <ProgressBar :progress="summary.percent" :label="t('plan.page.planProgress')" />
-        <div class="plan-card-foot">
-          <StatusPill
-            :label="t(STATUS_KEYS[summary.status])"
-            :tone="summary.status === 'BEHIND' ? 'warning' : 'success'"
-          />
-          <RouterLink class="btn btn-link" :to="{ name: 'student-plan' }">
-            {{ t('plan.cards.viewPlan') }}<IconGlyph name="chevronRight" :size="14" />
-          </RouterLink>
-        </div>
+      <div class="plan-strip-progress">
+        <p class="page-eyebrow">{{ t('plan.cards.planProgress', { percent: summary.percent }) }}</p>
+        <ProgressBar class="is-sm" :progress="summary.percent" :label="t('plan.page.planProgress')" />
+        <p class="type-caption">{{ statusLine }}</p>
       </div>
+      <RouterLink class="btn btn-secondary btn-sm" :to="{ name: 'student-plan' }">
+        {{ t('plan.cards.viewPlan') }}
+      </RouterLink>
     </template>
 
-    <div v-else class="plan-card-build">
-      <div class="plan-card-goal">
-        <h2 id="plan-card-title" class="plan-card-title">{{ t('plan.cards.buildTitle') }}</h2>
-        <p class="plan-card-note">{{ t('plan.cards.buildText') }}</p>
+    <template v-else>
+      <span class="plan-icon-tile is-lg" aria-hidden="true"><IconGlyph name="magic" :size="28" /></span>
+      <div class="plan-strip-goal plan-strip-build">
+        <h2 id="plan-strip-title" class="plan-strip-title">{{ t('plan.cards.buildTitle') }}</h2>
+        <p class="type-caption">{{ t('plan.cards.buildText') }}</p>
       </div>
       <RouterLink class="btn btn-primary" :to="{ name: 'student-setup' }">{{ t('plan.cards.buildPlan') }}</RouterLink>
-    </div>
+    </template>
   </section>
 </template>
 
@@ -76,22 +72,34 @@ import { planApi } from '@/api/plan'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import ProgressBar from '@/components/common/ProgressBar.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
-import StatusPill from '@/components/common/StatusPill.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { useResource } from '@/composables/useResource'
 import { planMessages } from '@/plugins/planMessages'
 
-import LevelLadder from './LevelLadder.vue'
-import { goalTitle, longDate } from './planFormat'
-import { STATUS_KEYS } from './planLabels'
+import { goalTitle, shortDayDate } from './planFormat'
+import { LEVEL_KEYS, STATUS_KEYS } from './planLabels'
 
 /**
- * The Progress page's "My learning plan" sheet: where the student is heading (the goal and its week), the Mandarin
- * level from the level check (separate from XP) and plan progress; or "Build your learning plan".
+ * The strip at the top of Progress: where the student is heading (the goal and its week), the Mandarin level from the
+ * level check, plan progress and the way to the plan; or "Build your learning plan".
  */
 const { t } = useLocalMessages({ plan: planMessages })
 const resource = useResource(() => planApi.overview())
 
 const summary = computed(() => resource.data.value?.plan ?? null)
 const title = computed(() => (summary.value ? goalTitle(t, summary.value.goalTitle, summary.value.reason) : ''))
+
+const level = computed(() => {
+  const value = summary.value
+  if (!value) return ''
+  return value.level === value.targetLevel
+    ? t(LEVEL_KEYS[value.level])
+    : t('plan.level.fromTo', { from: t(LEVEL_KEYS[value.level]), to: t(LEVEL_KEYS[value.targetLevel]) })
+})
+
+const statusLine = computed(() => {
+  const value = summary.value
+  if (!value) return ''
+  return value.status === 'ON_TRACK' ? t('plan.cards.onTrackWeek') : t(STATUS_KEYS[value.status])
+})
 </script>

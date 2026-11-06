@@ -1,7 +1,7 @@
 <template>
-  <section class="plan-side-block" aria-labelledby="plan-outcomes-title" data-testid="plan-outcomes">
-    <h3 id="plan-outcomes-title" class="plan-side-title">{{ t('plan.side.byTheEnd') }}</h3>
-    <ul class="plan-checklist">
+  <section class="plan-rail-block" aria-labelledby="plan-outcomes-title" data-testid="plan-outcomes">
+    <h3 id="plan-outcomes-title" class="card-title">{{ t('plan.side.byTheEnd') }}</h3>
+    <ul class="plan-icon-list">
       <li v-for="item in items" :key="item"><IconGlyph name="check" :size="16" />{{ item }}</li>
     </ul>
   </section>

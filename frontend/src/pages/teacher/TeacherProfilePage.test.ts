@@ -82,7 +82,7 @@ describe('TeacherProfilePage', () => {
     expect(submit().attributes('disabled')).toBeUndefined()
   })
 
-  it('submits the application, shows the notice and refreshes the account state', async () => {
+  it('submits the application, confirms it and refreshes the account state', async () => {
     teacherVerificationApi.profile.mockResolvedValue(
       profile({ documents: [document('CERTIFICATE'), document('IDENTITY')] }),
     )
@@ -138,8 +138,8 @@ describe('TeacherProfilePage', () => {
     const wrapper = await mountPage()
 
     expect(wrapper.find('[data-testid="teaching-reason"]').text()).toContain('Changes requested by Olivia Tan')
-    expect(wrapper.find('[data-testid="teaching-doc-IDENTITY"]').text()).toContain('Already sent')
-    expect(wrapper.find('[data-testid="teaching-submit"]').text()).toContain('Submit for verification again')
+    expect(wrapper.find('[data-testid="teaching-doc-IDENTITY"]').text()).toContain('No change needed')
+    expect(wrapper.find('[data-testid="teaching-submit"]').text()).toContain('Submit for verification')
   })
 
   it('refuses a document of the wrong type before uploading', async () => {
@@ -184,9 +184,8 @@ describe('TeacherProfilePage', () => {
     )
     const wrapper = await mountPage()
 
-    expect(wrapper.text()).toContain('All teaching tools are available.')
+    expect(wrapper.text()).toContain('Approved on')
     expect(wrapper.find('[data-testid="teaching-doc-CERTIFICATE"]').text()).toContain('Verified')
     expect(wrapper.find('[data-testid="teaching-upload-CERTIFICATE"]').exists()).toBe(false)
-    expect(wrapper.text()).toContain('Mandarin for Beginners')
   })
 })

@@ -1,39 +1,26 @@
 <template>
   <section class="learn-question" :aria-labelledby="`${baseId}-instruction`" data-testid="question-stage">
-    <h2 :id="`${baseId}-instruction`" class="learn-question-instruction">{{ instruction }}</h2>
+    <h2 :id="`${baseId}-instruction`" class="focus-title">{{ instruction }}</h2>
     <p v-if="context" class="learn-question-context">{{ context }}</p>
 
     <div v-if="isListening" class="learn-question-prompt">
       <ListenButtons :text="question.audioText ?? ''" :label="t('learn.theAudio')" large slow />
     </div>
     <div v-else-if="question.hanzi" class="learn-question-prompt">
-      <p v-if="hanziTiles.length" class="learn-question-word" lang="zh-CN">
-        <span class="sr-only">{{ question.hanzi }}</span>
-        <span
-          v-for="(character, index) in hanziTiles"
-          :key="`${character}-${index}`"
-          class="hanzi-tile learn-question-tile"
-          aria-hidden="true"
-          >{{ character }}</span
-        >
-      </p>
-      <p v-else class="learn-question-hanzi" lang="zh-CN">{{ question.hanzi }}</p>
-      <p v-if="question.pinyin" class="learn-question-pinyin">{{ question.pinyin }}</p>
-      <ListenButtons v-if="question.audioText" :text="question.audioText" />
+      <ListenButtons v-if="listenText" :text="listenText" prompt />
+      <div class="learn-question-word">
+        <p class="hanzi learn-question-hanzi" lang="zh-CN">{{ question.hanzi }}</p>
+        <p v-if="hint" class="learn-question-pinyin">{{ hint }}</p>
+      </div>
     </div>
     <p v-else-if="question.type === 'TRANSLATE_BUILD' && question.meaning" class="learn-question-meaning">
       “{{ question.meaning }}”
     </p>
 
-    <ol
-      v-if="question.answerKind === 'CHOICE'"
-      class="learn-options"
-      :class="optionsLayout"
-      :aria-label="t('learn.answers')"
-    >
+    <ol v-if="question.answerKind === 'CHOICE'" class="learn-options" :aria-label="t('learn.answers')">
       <li v-for="(option, index) in question.options" :key="`${option.text}-${index}`">
         <button
-          class="learn-option"
+          class="option-row learn-option"
           :class="optionClass(option.text)"
           type="button"
           :aria-pressed="modelValue === option.text"
@@ -41,10 +28,10 @@
           :data-testid="`option-${index}`"
           @click="emit('update:modelValue', option.text)"
         >
-          <span class="learn-option-key" aria-hidden="true">{{ index + 1 }}</span>
+          <span class="option-keycap" aria-hidden="true">{{ index + 1 }}</span>
           <span class="learn-option-text">
             <span
-              :class="{ 'learn-option-hanzi': isChinese(option.text) }"
+              :class="{ 'hanzi learn-option-hanzi': isChinese(option.text) }"
               :lang="isChinese(option.text) ? 'zh-CN' : undefined"
             >
               {{ option.text }}
@@ -54,6 +41,7 @@
           <IconGlyph
             v-if="optionMark(option.text)"
             class="learn-option-mark"
+            :class="`is-${optionMark(option.text)}`"
             :name="optionMark(option.text)!"
             :size="22"
           />
@@ -68,32 +56,45 @@
         role="group"
         :aria-label="t('learn.yourSentence')"
         data-testid="build-answer"
+        @dragover="allowDrop"
+        @drop="dropOnAnswer"
       >
         <span v-if="!placed.length" class="learn-build-placeholder">{{ t('learn.clickTilesHint') }}</span>
         <button
           v-for="(tileIndex, position) in placed"
           :key="`placed-${tileIndex}`"
           class="learn-tile"
+          :class="{ hanzi: isChinese(question.tiles[tileIndex] ?? '') }"
           lang="zh-CN"
           type="button"
           :disabled="locked"
           :aria-label="t('learn.removeTile', { tile: question.tiles[tileIndex] })"
+          :draggable="draggableTiles && !locked"
           @click="remove(position)"
+          @dragstart="startDrag($event, tileIndex)"
         >
           {{ question.tiles[tileIndex] }}
         </button>
       </div>
-      <div class="learn-build-bank" role="group" :aria-label="t('learn.wordTiles')">
+      <div
+        class="learn-build-bank"
+        role="group"
+        :aria-label="t('learn.wordTiles')"
+        @dragover="allowDrop"
+        @drop="dropOnBank"
+      >
         <button
           v-for="(tile, index) in question.tiles"
           :key="`bank-${index}`"
           class="learn-tile"
-          :class="{ 'is-used': placed.includes(index) }"
+          :class="{ 'is-used': placed.includes(index), hanzi: isChinese(tile) }"
           lang="zh-CN"
           type="button"
           :disabled="locked || placed.includes(index)"
           :data-testid="`tile-${index}`"
+          :draggable="draggableTiles && !locked && !placed.includes(index)"
           @click="add(index)"
+          @dragstart="startDrag($event, index)"
         >
           {{ tile }}
         </button>
@@ -113,11 +114,10 @@ import type { AnswerCheck, QuestionView } from '@/types/learn'
 import ListenButtons from './ListenButtons.vue'
 
 /**
- * One question of a lesson or a review, on a quiet stage: its instruction (written from the question type, or the
- * question's own wording), what it asks about (a short word on 田字格 tiles, a longer one in the hanzi serif, with
- * its pinyin and Listen; or the audio; or the sentence to say), and either large numbered options or word tiles to
- * put in order. The answer is the chosen option text, or the placed tiles separated by spaces. Every state is drawn:
- * selected (ink), checking and locked (the rest fade), right (jade, with a check) and wrong (red, with a cross).
+ * One question of a lesson or a review: its instruction (written from the question type, or the question's own wording),
+ * what it asks about (the word with its speaker and pinyin, the audio, or the sentence to say), and either answer rows
+ * with keycaps or word tiles to put in order. The answer is the chosen option text, or the placed tiles separated by
+ * spaces. Every state is drawn: selected, locked after the check, right (with a check) and wrong (with a cross).
  */
 interface Props {
   question: QuestionView
@@ -127,9 +127,11 @@ interface Props {
   check?: AnswerCheck | null
   /** A line under the instruction, such as what the student answered last time. */
   context?: string
+  /** Word tiles can also be dragged, to the sentence and back (Practice's Drag & Drop); clicks and keys always work. */
+  draggableTiles?: boolean
 }
 
-const props = withDefaults(defineProps<Props>(), { locked: false, check: null, context: '' })
+const props = withDefaults(defineProps<Props>(), { locked: false, check: null, context: '', draggableTiles: false })
 
 const emit = defineEmits<{
   'update:modelValue': [value: string | null]
@@ -163,20 +165,12 @@ const instruction = computed(() => {
   }
 })
 
-/** A word of one to four characters sits on 田字格 tiles, one per character; a longer phrase is set as text. */
-const hanziTiles = computed(() => {
-  const characters = Array.from(props.question.hanzi ?? '')
-  return characters.length >= 1 && characters.length <= 4 && characters.every(isChinese) ? characters : []
-})
+/** A pinyin question asks for the sound of the word, so the student may hear it even though no audio text is sent. */
+const listenText = computed(() => (props.question.type === 'PINYIN' ? props.question.hanzi : props.question.audioText))
+
+const hint = computed(() => (props.question.type === 'PINYIN' ? t('learn.hintPinyin') : (props.question.pinyin ?? '')))
 
 // ----- choices -----
-
-/** Short options sit side by side (three across for three); a long one puts them all in one column. */
-const optionsLayout = computed(() => {
-  const options = props.question.options
-  if (options.some((option) => option.text.length + (option.pinyin?.length ?? 0) > 22)) return 'is-stacked'
-  return options.length === 3 ? 'is-three' : ''
-})
 
 function same(a: string | null | undefined, b: string | null | undefined): boolean {
   const normalize = (value: string | null | undefined) =>
@@ -196,7 +190,7 @@ function optionClass(text: string): Record<string, boolean> {
   }
 }
 
-function optionMark(text: string): string | null {
+function optionMark(text: string): 'correct' | 'incorrect' | null {
   if (!props.check) return null
   if (same(text, props.check.correctAnswer)) return 'correct'
   return props.modelValue === text ? 'incorrect' : null
@@ -241,6 +235,32 @@ function remove(position: number): void {
   if (props.locked) return
   placed.value = placed.value.filter((_, at) => at !== position)
   sync()
+}
+
+/** The tile being dragged, as its index in `question.tiles`. */
+let dragged: number | null = null
+
+function startDrag(event: DragEvent, tileIndex: number): void {
+  dragged = tileIndex
+  // Firefox starts a drag only with data set.
+  event.dataTransfer?.setData('text/plain', props.question.tiles[tileIndex] ?? '')
+}
+
+function allowDrop(event: DragEvent): void {
+  if (dragged !== null) event.preventDefault()
+}
+
+function dropOnAnswer(event: DragEvent): void {
+  event.preventDefault()
+  if (dragged !== null) add(dragged)
+  dragged = null
+}
+
+function dropOnBank(event: DragEvent): void {
+  event.preventDefault()
+  const position = dragged === null ? -1 : placed.value.indexOf(dragged)
+  if (position >= 0) remove(position)
+  dragged = null
 }
 
 const buildClass = computed(() => ({

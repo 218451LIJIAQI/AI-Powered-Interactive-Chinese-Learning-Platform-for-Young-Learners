@@ -150,6 +150,8 @@ export interface AiReportTarget {
   payload: Omit<AiReportPayload, 'reasonCategory' | 'description'>
   titleKey: string
   attachedKey: string
+  /** Where the admin's reply appears, when not the default "Ask SparkBot › My reports". */
+  leadKey?: string
 }
 
 /**

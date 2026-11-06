@@ -2,19 +2,18 @@
   <footer class="public-footer">
     <div class="public-footer-brand">
       <AppBrand to="/" />
-      <p class="public-footer-blurb">{{ t('shell.footerBlurb') }}</p>
+      <p class="type-caption">{{ t('shell.copyright', { year }) }}</p>
     </div>
     <nav class="public-footer-columns" :aria-label="t('shell.footerLabel')">
-      <section v-for="column in COLUMNS" :key="column.title" class="public-footer-column">
-        <h2>{{ t(column.title) }}</h2>
-        <ul>
+      <section v-for="column in COLUMNS" :key="column.title">
+        <h2 class="page-eyebrow">{{ t(column.title) }}</h2>
+        <ul class="public-footer-links">
           <li v-for="link in column.links" :key="link.label">
             <RouterLink :to="link.to">{{ t(link.label) }}</RouterLink>
           </li>
         </ul>
       </section>
     </nav>
-    <p class="public-footer-copyright">{{ t('shell.copyright', { year }) }}</p>
   </footer>
 </template>
 
@@ -38,11 +37,8 @@ const COLUMNS = [
     ],
   },
   {
-    title: 'shell.columnAbout',
-    links: [
-      { label: 'shell.aboutUs', to: '/#about' },
-      { label: 'shell.teachWithUs', to: { path: '/auth', query: { tab: 'register', role: 'teacher' } } },
-    ],
+    title: 'shell.columnTeachers',
+    links: [{ label: 'shell.teachWithUs', to: { path: '/auth', query: { tab: 'register', role: 'teacher' } } }],
   },
   {
     title: 'shell.columnSafety',
@@ -55,10 +51,7 @@ const COLUMNS = [
   },
   {
     title: 'shell.columnSupport',
-    links: [
-      { label: 'shell.help', to: '/help' },
-      { label: 'shell.contact', to: '/help#contact' },
-    ],
+    links: [{ label: 'shell.help', to: '/help' }],
   },
 ] as const
 </script>

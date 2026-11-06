@@ -1,8 +1,8 @@
 <template>
-  <div class="student-live-page page-stack">
-    <PageHeaderBlock :title="t('classCatalogue.tabs.live')" :description="t('studentClasses.live.lede')" />
+  <div class="page-stack">
+    <PageHeaderBlock :title="t('classCatalogue.tabs.live')" hide-title />
     <StudentClassesTabs />
-    <DataNotice :error="actionError" :success="actionSuccess" />
+    <DataNotice :error="actionError" />
 
     <ResourceSection
       class="page-stack"
@@ -11,367 +11,124 @@
       @retry="resource.reload"
     >
       <template v-if="sessions">
-        <StatePanel
-          v-if="!sessions.upcoming.length && !sessions.past.length"
-          tone="empty"
-          icon="live"
-          spacious
-          :title="t('studentClasses.live.emptyTitle')"
-          :message="t('studentClasses.live.emptyMessage')"
-        >
-          <template #actions>
-            <RouterLink class="btn btn-primary" :to="{ name: 'student-classes-find' }">
-              {{ t('classCatalogue.findClasses') }}
-            </RouterLink>
-          </template>
-        </StatePanel>
+        <div v-if="!sessions.upcoming.length && !sessions.past.length" class="panel student-classes-empty">
+          <StatePanel
+            tone="empty"
+            icon="live"
+            :title="t('studentClasses.live.emptyTitle')"
+            :message="t('studentClasses.live.emptyMessage')"
+          >
+            <template #actions>
+              <RouterLink class="btn btn-primary" :to="{ name: 'student-classes-find' }">
+                {{ t('classCatalogue.findClasses') }}
+              </RouterLink>
+            </template>
+          </StatePanel>
+        </div>
 
         <template v-else>
-          <!-- Upcoming: an agenda, one block per day, the sessions of the day in time order. -->
-          <section class="student-live-section" aria-labelledby="live-upcoming-title">
-            <div class="section-header">
-              <h2 id="live-upcoming-title" class="section-title">{{ t('studentClasses.live.upcoming') }}</h2>
-              <p class="section-description">
-                {{
-                  t('studentClasses.live.upcomingFacts', {
-                    sessions: t('studentClasses.live.sessions', sessions.upcoming.length),
-                    booked: sessions.bookedCount,
-                  })
-                }}
-              </p>
+          <section class="panel student-live-card" aria-labelledby="live-upcoming-title">
+            <div class="class-card-head">
+              <h2 id="live-upcoming-title" class="card-title">{{ t('studentClasses.live.upcoming') }}</h2>
+              <span class="type-caption">{{ t('studentClasses.live.sessions', activeCount) }}</span>
             </div>
-            <p v-if="!sessions.upcoming.length" class="student-live-none">{{ t('studentClasses.live.noUpcoming') }}</p>
-            <div v-else class="student-live-agenda">
-              <div
-                v-for="day in upcomingDays"
-                :key="day.key"
-                class="student-live-day"
-                role="group"
-                :aria-label="formatWeekdayDate(day.at)"
+            <p v-if="!sessions.upcoming.length" class="type-caption">{{ t('studentClasses.live.noUpcoming') }}</p>
+            <ul v-else class="row-list">
+              <li
+                v-for="session in sessions.upcoming"
+                :key="session.id"
+                class="student-live-row"
+                :data-testid="`session-${session.id}`"
               >
-                <div class="student-live-day-head">
-                  <SessionDateTile :at="day.at" show-month />
-                  <span v-if="relativeDay(day.at) === 'today'" class="page-eyebrow student-classes-pigment">{{
-                    t('studentClasses.live.today')
-                  }}</span>
+                <SessionDateTile :at="session.startsAt" />
+                <div class="row-list-copy">
+                  <strong class="row-list-title"><CjkText :text="session.title" /></strong>
+                  <span class="row-list-meta">{{ session.classTitle }}</span>
+                  <span class="row-list-meta">{{ whenLine(session) }}</span>
+                  <span v-if="session.rescheduledFrom && !isCancelled(session)" class="row-list-meta">
+                    {{ t('classes.session.movedFrom', { time: movedFrom(session.rescheduledFrom) }) }}
+                  </span>
+                  <span v-if="joinNote(session)" class="student-live-note">
+                    <IconGlyph name="clock" :size="14" />
+                    {{ t('studentClasses.live.joinOpens', { time: formatTime(session.joinOpensAt) }) }}
+                  </span>
                 </div>
-                <ul class="student-live-list">
-                  <li
-                    v-for="session in day.items"
-                    :key="session.id"
-                    class="student-live-row"
-                    :class="{
-                      'is-cancelled': session.status === 'CANCELLED',
-                      'is-booked': session.booked && session.status !== 'CANCELLED',
-                    }"
-                    :data-testid="`session-${session.id}`"
+                <div class="row-list-actions">
+                  <StatusPill v-if="isCancelled(session)" :label="t('classes.session.CANCELLED')" tone="outline" />
+                  <!-- The session is full and she has no seat: Join could only fail, so the row says so instead. -->
+                  <StatusPill v-else-if="isFullForHer(session)" :label="t('classes.session.FULL')" tone="outline" />
+                  <button
+                    v-else-if="showsJoin(session)"
+                    type="button"
+                    class="btn btn-sm"
+                    :class="windowOpen(session) ? 'btn-primary' : 'btn-secondary'"
+                    :disabled="!windowOpen(session) || busyId === session.id"
+                    :aria-busy="busyId === session.id"
+                    :aria-label="t('studentClasses.live.joinLabel', { title: session.title })"
+                    @click="join(session)"
                   >
-                    <span class="student-live-time">
-                      <strong>{{ formatTime(session.startsAt) }}</strong>
-                      <span>{{ t('studentClasses.live.until', { time: formatTime(session.endsAt) }) }}</span>
-                      <span>{{ t(PLATFORM_KEYS[session.platform]) }}</span>
-                    </span>
-                    <div class="student-live-copy">
-                      <strong class="student-live-title">{{ session.title }}</strong>
-                      <span class="student-live-teacher">
-                        <PortraitAvatar :size="24" :name="session.teacherName" />
-                        <span>
-                          {{
-                            t('studentClasses.live.teacherLine', {
-                              teacher: session.teacherName,
-                              classTitle: session.classTitle,
-                            })
-                          }}<template v-if="session.lessonTitle">
-                            · {{ t('studentClasses.live.lessonLine', { lesson: session.lessonTitle }) }}</template
-                          >
-                        </span>
-                      </span>
-                      <div v-if="hasState(session)" class="student-live-state">
-                        <StatusPill
-                          v-if="session.booked && session.status !== 'CANCELLED'"
-                          :label="t('classes.session.booked')"
-                          tone="success"
-                          icon="check"
-                        />
-                        <StatusPill
-                          v-if="showsStatus(session)"
-                          :label="t(SESSION_STATUS_KEYS[session.status])"
-                          :tone="SESSION_STATUS_TONES[session.status]"
-                        />
-                        <StatusPill
-                          v-if="session.rescheduledFrom && session.status !== 'CANCELLED'"
-                          :label="t('classes.session.movedFrom', { time: formatTime(session.rescheduledFrom) })"
-                          tone="info"
-                          icon="calendar"
-                        />
-                        <span v-if="showsSeats(session)" class="type-caption">
-                          {{ t('classes.session.seatsLeft', session.seatsLeft ?? 0) }}
-                        </span>
-                      </div>
-                      <p v-if="session.status === 'CANCELLED' && session.cancelledAt" class="student-live-note">
-                        <IconGlyph name="alert" :size="14" />
-                        {{ t('studentClasses.live.cancelledOn', { date: formatShortDate(session.cancelledAt) }) }}
-                      </p>
-                      <p v-else-if="session.booked && !session.canJoin" class="student-live-note">
-                        <IconGlyph name="clock" :size="14" />
-                        {{ t('studentClasses.live.joinOpens', { time: formatTime(session.joinOpensAt) }) }}
-                      </p>
-                      <p v-else-if="session.bookingCancelled && !session.booked" class="student-live-note">
-                        {{ t('studentClasses.live.bookingCancelled') }}
-                      </p>
-                    </div>
-                    <div class="student-live-actions">
-                      <button
-                        v-if="session.booked && session.status !== 'CANCELLED'"
-                        type="button"
-                        class="btn btn-sm"
-                        :class="session.canJoin ? 'btn-primary' : 'btn-outline'"
-                        :disabled="!session.canJoin || busyId === session.id"
-                        :aria-label="t('studentClasses.live.joinLabel', { title: session.title })"
-                        @click="join(session)"
-                      >
-                        <IconGlyph name="video" :size="16" />{{ t('studentClasses.live.join') }}
-                      </button>
-                      <button
-                        v-else-if="session.canBook"
-                        type="button"
-                        class="btn btn-secondary btn-sm"
-                        :disabled="busyId === session.id"
-                        :aria-busy="busyId === session.id"
-                        :aria-label="t('studentClasses.live.bookLabel', { title: session.title })"
-                        @click="book(session)"
-                      >
-                        <IconGlyph name="calendarCheck" :size="16" />{{ t('studentClasses.live.book') }}
-                      </button>
-                      <!-- A full session is a state, not a disabled action. -->
-                      <StatusPill
-                        v-else-if="session.status === 'FULL'"
-                        :label="t('studentClasses.live.full')"
-                        tone="warning"
-                      />
-                      <button
-                        type="button"
-                        class="btn btn-link"
-                        :aria-label="t('studentClasses.live.detailsLabel', { title: session.title })"
-                        @click="selected = session"
-                      >
-                        {{ t('studentClasses.live.details') }}<IconGlyph name="chevronRight" :size="16" />
-                      </button>
-                    </div>
-                  </li>
-                </ul>
-              </div>
-            </div>
+                    <IconGlyph name="video" :size="16" />{{ t('studentClasses.live.join') }}
+                  </button>
+                </div>
+              </li>
+            </ul>
           </section>
 
-          <!-- Past: the sessions she booked, newest first, with their recordings. -->
-          <section class="student-live-section is-past" aria-labelledby="live-past-title">
-            <div class="section-header">
-              <h2 id="live-past-title" class="section-title">{{ t('studentClasses.live.past') }}</h2>
-              <p class="section-description">
-                {{
-                  t('studentClasses.live.pastFacts', {
-                    recordings: t('studentClasses.live.recordings', recordingCount),
-                  })
-                }}
-              </p>
+          <section class="panel student-live-card" aria-labelledby="live-past-title">
+            <div class="class-card-head">
+              <h2 id="live-past-title" class="card-title">{{ t('studentClasses.live.past') }}</h2>
+              <span v-if="recordingCount" class="type-caption">
+                {{ t('studentClasses.live.recordings', recordingCount) }}
+              </span>
             </div>
-            <p v-if="!sessions.past.length" class="student-live-none">{{ t('studentClasses.live.noPast') }}</p>
-            <div v-else class="student-live-agenda">
-              <div
-                v-for="day in pastDays"
-                :key="day.key"
-                class="student-live-day"
-                role="group"
-                :aria-label="formatWeekdayDate(day.at)"
+            <p v-if="!sessions.past.length" class="type-caption">{{ t('studentClasses.live.noPast') }}</p>
+            <ul v-else class="row-list">
+              <li
+                v-for="session in sessions.past"
+                :key="session.id"
+                class="student-live-row"
+                :data-testid="`session-${session.id}`"
               >
-                <div class="student-live-day-head">
-                  <SessionDateTile :at="day.at" show-month />
+                <SessionDateTile :at="session.startsAt" />
+                <div class="row-list-copy">
+                  <strong class="row-list-title"><CjkText :text="session.title" /></strong>
+                  <span class="row-list-meta">{{ session.classTitle }}</span>
+                  <span class="row-list-meta">{{ whenLine(session) }}</span>
                 </div>
-                <ul class="student-live-list">
-                  <li v-for="session in day.items" :key="session.id" class="student-live-row">
-                    <span class="student-live-time">
-                      <strong>{{ formatTime(session.startsAt) }}</strong>
-                      <span>{{ t('studentClasses.live.until', { time: formatTime(session.endsAt) }) }}</span>
-                      <span>{{ t(PLATFORM_KEYS[session.platform]) }}</span>
-                    </span>
-                    <div class="student-live-copy">
-                      <strong class="student-live-title">{{ session.title }}</strong>
-                      <span class="student-live-teacher">
-                        <PortraitAvatar :size="24" :name="session.teacherName" />
-                        <span>
-                          {{
-                            t('studentClasses.live.teacherLine', {
-                              teacher: session.teacherName,
-                              classTitle: session.classTitle,
-                            })
-                          }}<template v-if="session.lessonTitle">
-                            · {{ t('studentClasses.live.lessonLine', { lesson: session.lessonTitle }) }}</template
-                          >
-                        </span>
-                      </span>
-                      <div class="student-live-state">
-                        <StatusPill
-                          :label="
-                            session.attended ? t('studentClasses.live.attended') : t('studentClasses.live.missed')
-                          "
-                          :tone="session.attended ? 'success' : 'neutral'"
-                          :icon="session.attended ? 'check' : ''"
-                        />
-                      </div>
-                    </div>
-                    <div class="student-live-actions">
-                      <a
-                        v-if="session.recordingUrl && isWebLink(session.recordingUrl)"
-                        class="btn btn-secondary btn-sm"
-                        :href="session.recordingUrl"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        :aria-label="`${t('studentClasses.live.recordingLabel', { title: session.title })} ${t('classes.opensInNewTab')}`"
-                      >
-                        <IconGlyph name="play" :size="16" />{{ t('studentClasses.live.recording') }}
-                      </a>
-                      <button
-                        type="button"
-                        class="btn btn-link"
-                        :aria-label="t('studentClasses.live.detailsLabel', { title: session.title })"
-                        @click="selected = session"
-                      >
-                        {{ t('studentClasses.live.details') }}<IconGlyph name="chevronRight" :size="16" />
-                      </button>
-                    </div>
-                  </li>
-                </ul>
-              </div>
-            </div>
+                <div class="row-list-actions">
+                  <a
+                    v-if="session.recordingUrl && isWebLink(session.recordingUrl)"
+                    class="btn btn-secondary btn-sm"
+                    :href="session.recordingUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    :aria-label="`${t('studentClasses.live.recordingLabel', { title: session.title })} ${t('classes.opensInNewTab')}`"
+                  >
+                    <IconGlyph name="play" :size="16" />{{ t('studentClasses.live.watchRecording') }}
+                  </a>
+                </div>
+              </li>
+            </ul>
           </section>
         </template>
       </template>
     </ResourceSection>
-
-    <AppOverlay
-      variant="drawer"
-      :open="selected !== null"
-      :title="selected?.title ?? ''"
-      :subtitle="selected ? whenLine(selected) : ''"
-      test-id="session-details"
-      @close="selected = null"
-    >
-      <template v-if="selected">
-        <div class="student-live-drawer-teacher">
-          <PortraitAvatar :size="40" :name="selected.teacherName" />
-          <span>
-            <span class="type-caption">{{ t('studentClasses.live.drawerTeacher') }}</span>
-            <strong>{{ selected.teacherName }}</strong>
-          </span>
-        </div>
-        <div class="student-live-state">
-          <StatusPill :label="t(SESSION_STATUS_KEYS[selected.status])" :tone="SESSION_STATUS_TONES[selected.status]" />
-          <StatusPill v-if="selected.booked" :label="t('classes.session.booked')" tone="success" icon="check" />
-        </div>
-        <dl class="kv-list">
-          <dt>{{ t('studentClasses.live.drawerClass') }}</dt>
-          <dd>
-            <RouterLink :to="{ name: 'student-class', params: { classId: selected.classId } }">{{
-              selected.classTitle
-            }}</RouterLink>
-          </dd>
-          <template v-if="selected.lessonId">
-            <dt>{{ t('studentClasses.live.drawerLesson') }}</dt>
-            <dd>
-              <RouterLink
-                :to="{
-                  name: 'student-class-lesson',
-                  params: { classId: selected.classId, lessonId: selected.lessonId },
-                }"
-                >{{ selected.lessonTitle }}</RouterLink
-              >
-            </dd>
-          </template>
-          <dt>{{ t('studentClasses.live.drawerWhen') }}</dt>
-          <dd>{{ whenLine(selected) }}</dd>
-          <dt>{{ t('studentClasses.live.drawerPlatform') }}</dt>
-          <dd>{{ t(PLATFORM_KEYS[selected.platform]) }}</dd>
-          <dt>{{ t('studentClasses.live.drawerSeats') }}</dt>
-          <dd>
-            {{
-              selected.capacity
-                ? t('studentClasses.live.seatsBooked', { booked: selected.bookedCount, capacity: selected.capacity })
-                : t('studentClasses.live.seatsOpen', { booked: selected.bookedCount })
-            }}
-          </dd>
-        </dl>
-        <p v-if="selected.rescheduledFrom" class="type-caption">
-          {{
-            t('classes.session.movedFrom', {
-              time: `${formatWeekdayDate(selected.rescheduledFrom)}, ${formatTime(selected.rescheduledFrom)}`,
-            })
-          }}
-        </p>
-        <p v-if="selected.booked && !selected.canJoin && selected.status !== 'COMPLETED'" class="callout is-compact">
-          <IconGlyph name="clock" :size="16" />
-          <span>{{ t('studentClasses.live.joinOpens', { time: formatTime(selected.joinOpensAt) }) }}</span>
-        </p>
-      </template>
-      <template v-if="selected" #footer>
-        <button
-          v-if="selected.booked && canCancel(selected)"
-          type="button"
-          class="btn btn-danger-soft"
-          @click="cancelTarget = selected"
-        >
-          {{ t('studentClasses.live.cancelBooking') }}
-        </button>
-        <button
-          v-if="selected.booked && selected.canJoin"
-          type="button"
-          class="btn btn-primary"
-          @click="join(selected)"
-        >
-          {{ t('studentClasses.live.join') }}
-        </button>
-        <button v-else-if="selected.canBook" type="button" class="btn btn-primary" @click="book(selected)">
-          {{ t('studentClasses.live.book') }}
-        </button>
-      </template>
-    </AppOverlay>
-
-    <ConfirmDialog
-      :open="cancelTarget !== null"
-      :title="t('studentClasses.live.cancelTitle')"
-      :message="
-        cancelTarget
-          ? t('studentClasses.live.cancelMessage', {
-              title: cancelTarget.title,
-              day: formatWeekdayDate(cancelTarget.startsAt),
-            })
-          : ''
-      "
-      :confirm-label="t('studentClasses.live.cancelConfirm')"
-      :cancel-label="t('studentClasses.live.keepBooking')"
-      tone="danger"
-      :busy="busyId !== null"
-      @cancel="cancelTarget = null"
-      @confirm="cancelBooking"
-    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import { studentClassesApi } from '@/api/classes'
-import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
-import AppOverlay from '@/components/common/AppOverlay.vue'
 import SessionDateTile from '@/components/classes/SessionDateTile.vue'
 import StudentClassesTabs from '@/components/classes/StudentClassesTabs.vue'
 import DataNotice from '@/components/common/DataNotice.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
-import PortraitAvatar from '@/components/common/PortraitAvatar.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
 import StatusPill from '@/components/common/StatusPill.vue'
 import ResourceSection from '@/components/dashboard/ResourceSection.vue'
+import CjkText from '@/components/learning/CjkText.vue'
 import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useActionFeedback } from '@/composables/useActionFeedback'
 import { useLocalMessages } from '@/composables/useLocalMessages'
@@ -381,103 +138,74 @@ import { classesMessages } from '@/plugins/classesMessages'
 import { studentClassesMessages } from '@/plugins/studentClassesMessages'
 import type { StudentSession } from '@/types/classes'
 import { resolveApiError } from '@/utils/apiError'
-import {
-  PLATFORM_KEYS,
-  SESSION_STATUS_KEYS,
-  SESSION_STATUS_TONES,
-  groupByDay,
-  isWebLink,
-  relativeDay,
-} from '@/utils/classes'
-import { formatShortDate, formatTime, formatWeekdayDate } from '@/utils/format'
+import { isWebLink, relativeDay } from '@/utils/classes'
+import { formatTime, formatWeekdayDate } from '@/utils/format'
 import '@/styles/classes.css'
+
+/** How often the page looks at the clock, so Join turns on by itself when the window opens. */
+const CLOCK_TICK_MS = 30_000
 
 const { t } = useLocalMessages({
   studentClasses: studentClassesMessages,
   classCatalogue: classCatalogueMessages,
   classes: classesMessages,
 })
-const { actionError, actionSuccess, runAction, showError } = useActionFeedback()
+const { actionError, showError, clearFeedback } = useActionFeedback()
 
 const resource = useResource(() => studentClassesApi.liveSessions())
 const sessions = computed(() => resource.data.value)
+const activeCount = computed(() => sessions.value?.upcoming.filter((session) => !isCancelled(session)).length ?? 0)
 const recordingCount = computed(() => sessions.value?.past.filter((session) => session.recordingUrl).length ?? 0)
-
-const upcomingDays = computed(() => groupByDay(sessions.value?.upcoming ?? []))
-const pastDays = computed(() => groupByDay(sessions.value?.past ?? []))
-
-const selected = ref<StudentSession | null>(null)
-const cancelTarget = ref<StudentSession | null>(null)
 const busyId = ref<number | null>(null)
 
-/** "Scheduled" is the normal case and "Full" shows on the action, so only the other states get a pill. */
-function showsStatus(session: StudentSession): boolean {
-  if (session.status === 'RESCHEDULED') return !session.rescheduledFrom
-  return session.status === 'CANCELLED' || session.status === 'COMPLETED'
+const now = ref(Date.now())
+const clock = setInterval(() => (now.value = Date.now()), CLOCK_TICK_MS)
+onBeforeUnmount(() => clearInterval(clock))
+
+function isCancelled(session: StudentSession): boolean {
+  return session.status === 'CANCELLED'
 }
 
-function showsSeats(session: StudentSession): boolean {
-  return session.seatsLeft !== null && session.canBook
+function isFullForHer(session: StudentSession): boolean {
+  return !session.booked && session.status === 'FULL'
 }
 
-function hasState(session: StudentSession): boolean {
-  return (
-    (session.booked && session.status !== 'CANCELLED') ||
-    showsStatus(session) ||
-    Boolean(session.rescheduledFrom && session.status !== 'CANCELLED') ||
-    showsSeats(session)
-  )
+/** Joining is possible from 15 minutes before the start until the end (the server checks this too). */
+function windowOpen(session: StudentSession): boolean {
+  return now.value >= new Date(session.joinOpensAt).getTime() && now.value <= new Date(session.endsAt).getTime()
+}
+
+/** A session she can get into shows Join on its day; later days are only a timetable. */
+function showsJoin(session: StudentSession): boolean {
+  if (!session.booked && !session.canBook) return false
+  return relativeDay(session.startsAt) === 'today' || windowOpen(session)
+}
+
+function joinNote(session: StudentSession): boolean {
+  return !isCancelled(session) && showsJoin(session) && !windowOpen(session)
 }
 
 function whenLine(session: StudentSession): string {
   return t('studentClasses.live.whenLine', {
     day: formatWeekdayDate(session.startsAt),
     time: t('classes.session.timeRange', { start: formatTime(session.startsAt), end: formatTime(session.endsAt) }),
-    platform: t(PLATFORM_KEYS[session.platform]),
   })
 }
 
-function canCancel(session: StudentSession): boolean {
-  return session.status !== 'CANCELLED' && new Date(session.startsAt).getTime() > Date.now()
+function movedFrom(previous: string): string {
+  return `${formatWeekdayDate(previous)}, ${formatTime(previous)}`
 }
 
-async function refresh(): Promise<void> {
-  await resource.reload()
-  if (selected.value) {
-    const id = selected.value.id
-    selected.value =
-      [...(sessions.value?.upcoming ?? []), ...(sessions.value?.past ?? [])].find((s) => s.id === id) ?? null
-  }
-}
-
-async function book(session: StudentSession): Promise<void> {
-  busyId.value = session.id
-  const done = await runAction(t('studentClasses.live.bookError'), async () => {
-    await studentClassesApi.book(session.id)
-    return t('studentClasses.live.booked', { title: session.title })
-  })
-  busyId.value = null
-  if (done) await refresh()
-}
-
-async function cancelBooking(): Promise<void> {
-  const session = cancelTarget.value
-  if (!session) return
-  busyId.value = session.id
-  const done = await runAction(t('studentClasses.live.cancelError'), async () => {
-    await studentClassesApi.cancelBooking(session.id)
-    return t('studentClasses.live.cancelled', { title: session.title })
-  })
-  busyId.value = null
-  cancelTarget.value = null
-  if (done) await refresh()
-}
-
-/** Opens the meeting in a new tab; the server records attendance. The tab opens first so pop-up blockers allow it. */
+/**
+ * Join is one click: the server only lets a booked student in, so a seat is booked first when she has none. Opens the
+ * meeting in a new tab (opened first, so pop-up blockers allow it); the server records attendance.
+ */
 async function join(session: StudentSession): Promise<void> {
   const tab = window.open('', '_blank')
   busyId.value = session.id
+  clearFeedback()
   try {
+    if (!session.booked) await studentClassesApi.book(session.id)
     const { meetingLink } = await studentClassesApi.joinSession(session.id)
     if (tab && isWebLink(meetingLink)) {
       tab.opener = null
@@ -485,12 +213,12 @@ async function join(session: StudentSession): Promise<void> {
     } else if (isWebLink(meetingLink)) {
       window.location.assign(meetingLink)
     }
-    await refresh()
   } catch (reason) {
     tab?.close()
     showError(resolveApiError(reason, t('studentClasses.live.joinError')))
   } finally {
     busyId.value = null
+    await resource.reload()
   }
 }
 </script>

@@ -29,15 +29,11 @@ describe('AdminAiSettingsPage', () => {
     api.settings.mockResolvedValue(SETTINGS)
   })
 
-  it('previews the AI notice and shows the request limits from the server', async () => {
+  it('shows the request limits from the server and who changed the settings last', async () => {
     const wrapper = mountPage()
     await flushPromises()
 
-    await wrapper.get('textarea').setValue('Check AI answers with your teacher.')
-
-    expect(wrapper.get('[data-testid="ai-notice"]').text()).toBe('Check AI answers with your teacher.')
-    expect(wrapper.get('.admin-ai-limits-box').text()).toContain('10')
-    expect(wrapper.get('.admin-ai-limits-box').text()).toContain('100')
+    expect(wrapper.text()).toContain('10 requests a minute · 100 a day per user')
     expect(wrapper.text()).toContain('Admin Lee')
   })
 

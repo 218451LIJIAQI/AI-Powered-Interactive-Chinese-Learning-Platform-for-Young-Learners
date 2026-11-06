@@ -94,8 +94,8 @@ describe('AdminSupportPage', () => {
     await flushPromises()
 
     expect(supportApi.queue).toHaveBeenCalledWith('OPEN', 0, 20)
-    expect(wrapper.get('[data-testid="admin-support-tab-open"]').text()).toBe('Open · 2')
-    expect(wrapper.get('[data-testid="admin-support-tab-answered"]').text()).toBe('Answered · 1')
+    expect(wrapper.get('[data-testid="admin-support-tab-open"]').text()).toBe('Open · 2')
+    expect(wrapper.get('[data-testid="admin-support-tab-answered"]').text()).toBe('Answered · 1')
     const items = wrapper.findAll('[data-testid="admin-support-item"]')
     expect(items).toHaveLength(2)
     expect(items[0].text()).toContain('#1041')
@@ -126,9 +126,6 @@ describe('AdminSupportPage', () => {
     expect(detail.text()).toContain('#1041 · Booking shows the wrong time')
     expect(detail.text()).toContain('From Daniel Tan (student) · daniel@example.com · Classes')
     expect(detail.find('a[href="/admin/users?user=90"]').exists()).toBe(true)
-    expect(wrapper.get('[data-testid="admin-support-reply-hint"]').text()).toBe(
-      'Sending marks it Answered. The student gets a notification.',
-    )
   })
 
   it('needs a reply before sending it and confirms who was told', async () => {
@@ -136,12 +133,12 @@ describe('AdminSupportPage', () => {
     const { wrapper } = await mountAdminPage(AdminSupportPage, '/admin/support?request=41')
     await flushPromises()
 
-    await wrapper.get('form.admin-support-reply').trigger('submit')
+    await wrapper.get('[data-testid="admin-support-detail"] form').trigger('submit')
     expect(wrapper.text()).toContain('Write a reply first.')
     expect(supportApi.reply).not.toHaveBeenCalled()
 
     await wrapper.get('[data-testid="admin-support-reply"]').setValue('  The time is now fixed.  ')
-    await wrapper.get('form.admin-support-reply').trigger('submit')
+    await wrapper.get('[data-testid="admin-support-detail"] form').trigger('submit')
     await flushPromises()
 
     expect(supportApi.reply).toHaveBeenCalledWith(41, 'The time is now fixed.')
@@ -160,9 +157,6 @@ describe('AdminSupportPage', () => {
     expect(detail.text()).toContain('From a visitor · aisyah@example.com · Account')
     expect(detail.text()).toContain('Visitor')
     expect(detail.text()).not.toContain('View user')
-    expect(wrapper.get('[data-testid="admin-support-reply-hint"]').text()).toBe(
-      'Sending marks it Answered and emails aisyah@example.com.',
-    )
 
     await wrapper.get('[data-testid="admin-support-solve"]').trigger('click')
     await flushPromises()
@@ -181,7 +175,7 @@ describe('AdminSupportPage', () => {
     await flushPromises()
 
     await wrapper.get('[data-testid="admin-support-reply"]').setValue('Following up')
-    await wrapper.get('form.admin-support-reply').trigger('submit')
+    await wrapper.get('[data-testid="admin-support-detail"] form').trigger('submit')
     await flushPromises()
 
     expect(wrapper.text()).toContain('This request is already solved.')

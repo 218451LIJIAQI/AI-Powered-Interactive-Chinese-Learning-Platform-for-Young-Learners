@@ -11,17 +11,22 @@ test.beforeEach(async ({ page }) => {
   await expect(page).toHaveURL(/\/teacher\/dashboard$/)
 })
 
-test('the applicant dashboard shows the verification status and the tools that open after approval', async ({
-  page,
-}) => {
+test('the applicant dashboard shows the verification status and the steps of her application', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Verification: In review' })).toBeVisible()
-  await expect(page.getByRole('region', { name: 'Your application' })).toContainText('3. Admin review')
 
-  const opensLater = page.getByRole('region', { name: 'Opens after approval' })
-  for (const tool of LOCKED_TOOLS) {
-    await expect(opensLater.getByRole('link', { name: new RegExp(`^Locked ${tool}\\b`) })).toBeVisible()
-  }
+  const application = page.getByRole('region', { name: 'Your application' })
+  await expect(application.getByRole('listitem')).toHaveText([
+    /^1\. Create your account\s*Done$/,
+    /^2\. Upload your documents\s*3 documents uploaded/,
+    /^3\. Admin review\s*Current step:\s+In review since/,
+  ])
+
+  await page
+    .getByRole('region', { name: 'Verification: In review' })
+    .getByRole('link', { name: 'View verification status' })
+    .click()
+  await expect(page).toHaveURL(/\/teacher\/profile$/)
 })
 
 test('the teacher tools are locked in the sidebar and their pages route to the Locked page', async ({ page }) => {

@@ -27,6 +27,7 @@ public record LevelCheckNextResponse(
             String hanzi,
             String pinyin,
             String audioText,
+            LevelCheckSkill skill,
             List<Option> options) {
 
         public Question {

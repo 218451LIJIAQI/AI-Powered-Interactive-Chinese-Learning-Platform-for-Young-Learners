@@ -25,11 +25,8 @@
         :aria-label="t('dashboard.openAccount', { name: displayName })"
         data-testid="topbar-account"
       >
-        <PortraitAvatar :size="34" :name="displayName" />
-        <span class="topbar-user-copy">
-          <strong class="topbar-user-name">{{ displayName }}</strong>
-          <span class="topbar-user-role">{{ t(roleLabelKey) }}</span>
-        </span>
+        <PortraitAvatar :size="36" :name="displayName" />
+        <strong class="topbar-user-name">{{ displayName }}</strong>
       </RouterLink>
     </div>
   </header>
@@ -60,7 +57,7 @@ const ui = useUiStore()
 const route = useRoute()
 const { t: globalT } = useI18n({ useScope: 'global' })
 const { t } = useLocalMessages({ dashboard: dashboardMessages })
-const { role, roleLabelKey } = useLayoutRole()
+const { role } = useLayoutRole()
 
 const rolePath = computed(() => `/${role.value.toLowerCase()}`)
 

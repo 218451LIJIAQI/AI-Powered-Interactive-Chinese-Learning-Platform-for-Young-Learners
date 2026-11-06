@@ -15,6 +15,7 @@ function createAdminTestRouter(): Router {
       { path: '/admin/content', name: 'admin-content-review', component: Blank },
       { path: '/admin/ai', name: 'admin-ai-reports', component: Blank },
       { path: '/admin/ai/usage', name: 'admin-ai-usage', component: Blank },
+      { path: '/admin/ai/settings', name: 'admin-ai-settings', component: Blank },
       { path: '/admin/support', name: 'admin-support', component: Blank },
       { path: '/admin/analytics', name: 'admin-analytics', component: Blank },
       { path: '/admin/audit-log', name: 'admin-audit-log', component: Blank },

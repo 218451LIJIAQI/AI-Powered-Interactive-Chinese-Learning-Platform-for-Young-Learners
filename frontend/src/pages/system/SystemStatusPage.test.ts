@@ -25,10 +25,6 @@ function mountPage(kind: 'not-found' | 'unauthorized'): VueWrapper {
   })
 }
 
-function hrefs(wrapper: VueWrapper): string[] {
-  return wrapper.findAll('.system-link').map((link) => link.attributes('href') ?? '')
-}
-
 beforeEach(() => {
   mocks.push.mockReset()
   mocks.logout.mockReset()
@@ -37,15 +33,12 @@ beforeEach(() => {
 })
 
 describe('SystemStatusPage 404', () => {
-  it('says the page was not found, with 迷 mí · lost, home, classes, sign in and Help', () => {
+  it('says the page was not found, with home first and the classes next to it', () => {
     const wrapper = mountPage('not-found')
 
     expect(wrapper.get('h1').text()).toBe('This page could not be found')
-    expect(wrapper.get('.system-visual').attributes('aria-label')).toBe('404, 迷 mí, lost')
-    expect(wrapper.get('.system-tile').text()).toBe('迷')
-    expect(wrapper.get('[data-testid="system-home"]').attributes('href')).toBe('/')
-    expect(wrapper.find('a[href="/classes"]').exists()).toBe(true)
-    expect(hrefs(wrapper)).toEqual(['/auth', '/help'])
+    expect(wrapper.findAll('.btn').map((action) => action.attributes('href'))).toEqual(['/', '/classes'])
+    expect(wrapper.get('[data-testid="system-home"]').classes()).toContain('btn-primary')
   })
 
   it('sends a signed-in user to their own home', () => {
@@ -55,7 +48,6 @@ describe('SystemStatusPage 404', () => {
     const wrapper = mountPage('not-found')
 
     expect(wrapper.get('[data-testid="system-home"]').attributes('href')).toBe('/admin/dashboard')
-    expect(hrefs(wrapper)).toEqual(['/admin/dashboard', '/help'])
   })
 })
 
@@ -67,9 +59,7 @@ describe('SystemStatusPage 403', () => {
     const wrapper = mountPage('unauthorized')
 
     expect(wrapper.get('h1').text()).toBe('You don’t have access to this page')
-    expect(wrapper.get('.system-tile').text()).toBe('锁')
     expect(wrapper.get('[data-testid="system-home"]').attributes('href')).toBe('/student/home')
-    expect(hrefs(wrapper)).toEqual(['/classes', JSON.stringify({ path: '/help', hash: '#getting-started' })])
 
     await wrapper.get('[data-testid="system-switch-account"]').trigger('click')
     await flushPromises()
@@ -83,7 +73,7 @@ describe('SystemStatusPage 403', () => {
     const wrapper = mountPage('unauthorized')
 
     expect(wrapper.find('[data-testid="system-switch-account"]').exists()).toBe(false)
-    expect(wrapper.find('.system-actions a[href="/auth"]').exists()).toBe(true)
+    expect(wrapper.find('.btn-primary[href="/auth"]').exists()).toBe(true)
     expect(wrapper.get('[data-testid="system-home"]').attributes('href')).toBe('/')
   })
 })

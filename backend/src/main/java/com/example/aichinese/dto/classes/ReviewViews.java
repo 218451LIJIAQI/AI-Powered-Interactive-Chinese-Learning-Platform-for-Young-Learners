@@ -37,6 +37,7 @@ public final class ReviewViews {
             String description,
             String levelName,
             String topicName,
+            Integer bestAfterUnit,
             LearningType learningType,
             String teacherName,
             int unitCount,

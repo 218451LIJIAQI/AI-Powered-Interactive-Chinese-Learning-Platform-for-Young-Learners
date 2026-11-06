@@ -6,29 +6,52 @@ import { sidebar, signIn, signOut } from './support'
 // This file changes shared data, so it runs after the visitor, applicant and teacher files that expect the seeded
 // state: it approves Li Wei's in-review class and Mei Lin's application.
 const IN_REVIEW_CLASS = 'Chinese Culture and Festivals'
-const IN_REVIEW_REVISION = 'Ordering Food at the Canteen'
+const IN_REVIEW_UPDATE = 'Ordering Food at the Canteen'
 
 test.beforeEach(async ({ page }) => {
   await signIn(page, E2E_ACCOUNTS.admin)
   await expect(page).toHaveURL(/\/admin\/dashboard$/)
 })
 
-test('the dashboard shows what needs attention and the platform numbers', async ({ page }) => {
+test('the dashboard shows what needs attention, and Analytics has the platform numbers', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Teacher applications (2)' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Review queue (2)' })).toBeVisible()
+  const attention = page.getByRole('region', { name: 'Needs attention' })
+  await expect(attention.getByRole('heading', { name: 'Teacher applications (2)' })).toBeVisible()
+  await expect(attention.getByRole('heading', { name: 'Review queue (2)' })).toBeVisible()
+  await expect(attention.getByRole('heading', { name: 'AI reports (2)' })).toBeVisible()
+  await expect(attention.getByRole('heading', { name: 'Support (1)' })).toBeVisible()
+  await expect(attention.getByRole('link', { name: /^Mei Lin In review/ })).toBeVisible()
+  await expect(attention.getByRole('link', { name: new RegExp(`^${IN_REVIEW_CLASS} Class`) })).toBeVisible()
 
-  const numbers = page.getByRole('region', { name: 'The platform in numbers' })
-  await expect(numbers).toContainText(/Users\s*12\s*5 students · 6 teachers · 1 admin/)
-  await expect(numbers.getByRole('term')).toHaveText(['Users', 'Published content', 'AI requests', 'Audit events'])
+  await sidebar(page).getByRole('link', { name: 'Analytics' }).click()
+  await expect(page).toHaveURL(/\/admin\/analytics$/)
+  await expect(page.getByRole('heading', { name: 'Analytics', level: 1 })).toBeVisible()
+  const registrations = page.getByRole('region', { name: 'Registrations' })
+  await expect(registrations).toContainText('12 users')
+  await expect(registrations).toContainText('5 students · 6 teachers · 1 admin')
+  await expect(page.getByRole('region', { name: 'Learning activity' }).getByRole('term')).toHaveText([
+    'Lessons completed',
+    'Quiz average',
+    'Students active',
+    'Needs support',
+  ])
+  await expect(page.getByRole('region', { name: 'Content by status' }).getByRole('listitem')).toHaveText([
+    /^Published/,
+    /^In review/,
+    /^Changes requested/,
+    /^Draft/,
+    /^Archived/,
+  ])
+  await expect(page.getByRole('region', { name: 'AI requests' })).toContainText(/\d+ requests/)
 })
 
-test('Users lists the accounts and search finds a student', async ({ page }) => {
+test('Users lists the accounts, search finds a student and her row opens her account', async ({ page }) => {
   await sidebar(page)
     .getByRole('link', { name: /^Users/ })
     .click()
 
-  await expect(page).toHaveURL(/\/admin\/users$/)
+  // The first user of the list opens beside it (?user=<id>).
+  await expect(page).toHaveURL(/\/admin\/users(\?user=\d+)?$/)
   await expect(page.getByRole('heading', { name: 'Users', level: 1 })).toBeVisible()
   await expect(page.getByText('Showing 1–10 of 12')).toBeVisible()
   await expect(page.getByRole('row', { name: /^Li Wei teacher@fyp\.local Teacher Active Approved/ })).toBeVisible()
@@ -37,6 +60,12 @@ test('Users lists the accounts and search finds a student', async ({ page }) => 
   await expect(page.getByText('Showing 1–1 of 1')).toBeVisible()
   await expect(page.getByRole('row', { name: /^Amira Hassan student@fyp\.local Student Active/ })).toBeVisible()
   await expect(page.getByRole('row', { name: /^Li Wei / })).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Open Amira Hassan' }).click()
+  const person = page.getByRole('region', { name: 'Amira Hassan' })
+  await expect(person.getByRole('heading', { name: 'Amira Hassan', level: 2 })).toBeVisible()
+  await expect(person).toContainText('student@fyp.local')
+  await expect(person.getByRole('button', { name: 'Deactivate' })).toBeVisible()
 })
 
 test.describe.serial('content review', () => {
@@ -48,9 +77,9 @@ test.describe.serial('content review', () => {
     await expect(page).toHaveURL(/\/admin\/content$/)
     await expect(page.getByRole('heading', { name: 'Review queue', level: 1 })).toBeVisible()
     const classItem = page.getByRole('button', { name: new RegExp(`^${IN_REVIEW_CLASS} Class New class`) })
-    const revisionItem = page.getByRole('button', { name: new RegExp(`^${IN_REVIEW_REVISION} Lesson Revision`) })
+    const updateItem = page.getByRole('button', { name: new RegExp(`^${IN_REVIEW_UPDATE} Lesson Update`) })
     await expect(classItem).toBeVisible()
-    await expect(revisionItem).toBeVisible()
+    await expect(updateItem).toBeVisible()
 
     await classItem.click()
     await expect(page.getByRole('heading', { name: IN_REVIEW_CLASS, level: 2 })).toBeVisible()
@@ -62,7 +91,7 @@ test.describe.serial('content review', () => {
     await expect(dialog).toBeHidden()
     await expect(page.getByText(`"${IN_REVIEW_CLASS}" was approved.`)).toBeVisible()
     await expect(classItem).toHaveCount(0)
-    await expect(revisionItem).toBeVisible()
+    await expect(updateItem).toBeVisible()
     await expect(page.getByRole('link', { name: 'Review queue 1' })).toBeVisible()
 
     // The public catalogue now lists it with the 8 classes published before.
@@ -70,7 +99,7 @@ test.describe.serial('content review', () => {
     await expect(page.getByRole('heading', { name: '9 classes matched' })).toBeVisible()
     await page.getByRole('link', { name: IN_REVIEW_CLASS }).click()
     await expect(page.getByRole('heading', { name: IN_REVIEW_CLASS, level: 1 })).toBeVisible()
-    await expect(page.getByRole('complementary')).toContainText('Li Wei')
+    await expect(page.getByRole('main')).toContainText('Li Wei')
   })
 
   test('the audit log lists the approval', async ({ page }) => {
@@ -112,5 +141,5 @@ test('approving Mei Lin’s application unlocks her teacher tools after she sign
   await page.goto('/teacher/classes')
   await expect(page).toHaveURL(/\/teacher\/classes$/)
   await expect(page.getByRole('heading', { name: 'Classes', level: 1 })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'New class' }).first()).toBeVisible()
+  await expect(page.getByRole('button', { name: 'New class' })).toBeVisible()
 })

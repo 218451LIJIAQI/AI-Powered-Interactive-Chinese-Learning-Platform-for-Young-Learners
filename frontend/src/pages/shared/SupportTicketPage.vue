@@ -3,33 +3,39 @@
     <AppToast :message="toast" />
 
     <template v-if="detail">
-      <PageHeaderBlock :title="detail.request.subject">
-        <template #before>
+      <!-- The status sits beside the H1, a slot PageHeaderBlock does not have, so the header is written out here. -->
+      <header class="page-header">
+        <div class="page-header-before">
           <AppBreadcrumb
             :items="[
               { label: t('support.pageTitle'), to: { name: supportRouteName } },
               { label: `#${detail.request.number}` },
             ]"
           />
-        </template>
-        <template #meta>
-          <StatusPill :label="statusLabel" :tone="supportStatusTone(detail.request.status)" />
-          <span class="type-caption">
-            {{
-              t('support.ticketMeta', {
-                topic: t(supportTopicKey(detail.request.topic)),
-                date: formatDateTime(detail.request.createdAt),
-              })
-            }}
-          </span>
-        </template>
-      </PageHeaderBlock>
+        </div>
+        <div class="page-title">
+          <div class="page-title-copy">
+            <div class="support-ticket-heading">
+              <h1>{{ detail.request.subject }}</h1>
+              <StatusPill :label="status.label" :tone="status.tone" />
+            </div>
+            <p>
+              {{
+                t('support.ticketMeta', {
+                  number: detail.request.number,
+                  topic: t(supportTopicKey(detail.request.topic)),
+                  date: formatDateTime(detail.request.createdAt),
+                })
+              }}
+            </p>
+          </div>
+        </div>
+      </header>
 
       <DataNotice :error="actionError" />
 
-      <div class="support-layout">
-        <!-- The request as a conversation: support on the left with its mark, the requester on the right. -->
-        <section class="support-conversation" :aria-label="t('support.thread')">
+      <div class="support-ticket-layout">
+        <section class="panel support-conversation" :aria-label="t('support.thread')">
           <ol class="support-thread" data-testid="support-thread">
             <li
               v-for="message in detail.messages"
@@ -40,6 +46,7 @@
               <span v-if="message.fromSupport" class="support-message-avatar" aria-hidden="true">
                 <IconGlyph name="help" :size="18" />
               </span>
+              <PortraitAvatar v-else :name="message.authorName" :size="36" />
               <div class="support-message-body">
                 <p class="support-message-head">
                   <strong>{{
@@ -47,25 +54,24 @@
                   }}</strong>
                   <span>
                     <template v-if="message.fromSupport">{{ t('support.supportAuthor') }} · </template>
+                    <template v-else-if="message.authorName">{{ message.authorName }} · </template>
                     <time :datetime="message.createdAt">{{ formatDateTime(message.createdAt) }}</time>
                   </span>
                 </p>
                 <p class="support-message-text">{{ message.body }}</p>
                 <button
                   v-if="message.attachment"
-                  class="support-attachment"
+                  class="btn btn-secondary btn-sm support-message-attachment"
                   type="button"
                   @click="downloadAttachment(message.id, message.attachment.fileName)"
                 >
                   <IconGlyph name="attach" :size="14" />
-                  <span>
-                    {{
-                      t('support.attachment', {
-                        name: message.attachment.fileName,
-                        size: formatFileSize(message.attachment.fileSize),
-                      })
-                    }}
-                  </span>
+                  {{
+                    t('support.attachment', {
+                      name: message.attachment.fileName,
+                      size: formatFileSize(message.attachment.fileSize),
+                    })
+                  }}
                 </button>
               </div>
             </li>
@@ -83,8 +89,8 @@
               :aria-invalid="Boolean(replyError)"
               :aria-describedby="replyError ? 'support-reply-error' : undefined"
             />
-            <div class="support-reply-foot">
-              <p v-if="replyError" id="support-reply-error" class="field-error" role="alert">{{ replyError }}</p>
+            <p v-if="replyError" id="support-reply-error" class="field-error" role="alert">{{ replyError }}</p>
+            <div class="form-actions">
               <button
                 class="btn btn-primary"
                 type="submit"
@@ -92,51 +98,47 @@
                 :aria-busy="replying"
                 data-testid="support-send-reply"
               >
-                <IconGlyph name="send" :size="16" />
                 {{ t('support.sendReply') }}
               </button>
             </div>
           </form>
         </section>
 
-        <aside class="support-rail">
-          <section
-            v-if="solved"
-            class="support-status"
-            aria-labelledby="support-solved-title"
-            data-testid="support-solved"
+        <aside
+          v-if="solved"
+          class="support-side-card support-status"
+          aria-labelledby="support-solved-title"
+          data-testid="support-solved"
+        >
+          <h2 id="support-solved-title" class="card-title">{{ t('support.solvedTitle') }}</h2>
+          <p>
+            {{ t('support.solvedOnDate', { date: formatShortDate(detail.request.solvedAt) }) }}
+            <template v-if="detail.request.closedBy === 'AUTO'"> {{ t('support.solvedAutomatically') }}</template>
+          </p>
+          <p>{{ t('support.solvedAgain') }}</p>
+          <RouterLink class="btn btn-secondary" :to="{ name: supportRouteName }">{{
+            t('support.newRequest')
+          }}</RouterLink>
+        </aside>
+        <aside v-else class="support-side-card support-status" aria-labelledby="support-sorted-title">
+          <h2 id="support-sorted-title" class="card-title">{{ t('support.allSorted') }}</h2>
+          <p>
+            {{
+              detail.request.status === 'ANSWERED' && detail.request.closesAt
+                ? t('support.allSortedAnswered', { date: formatShortDate(detail.request.closesAt) })
+                : t('support.allSortedOpen')
+            }}
+          </p>
+          <button
+            class="btn btn-secondary"
+            type="button"
+            :disabled="solving"
+            :aria-busy="solving"
+            data-testid="support-solve"
+            @click="solve"
           >
-            <h2 id="support-solved-title" class="support-section-title">{{ t('support.solvedTitle') }}</h2>
-            <p class="support-rail-copy">
-              {{ t('support.solvedOnDate', { date: formatDate(detail.request.solvedAt) }) }}
-              <template v-if="detail.request.closedBy === 'AUTO'"> {{ t('support.solvedAutomatically') }}</template>
-            </p>
-            <p class="support-rail-copy">{{ t('support.solvedAgain') }}</p>
-            <RouterLink class="btn btn-secondary" :to="{ name: supportRouteName }">{{
-              t('support.newRequest')
-            }}</RouterLink>
-          </section>
-          <section v-else class="support-status" aria-labelledby="support-sorted-title">
-            <h2 id="support-sorted-title" class="support-section-title">{{ t('support.allSorted') }}</h2>
-            <p class="support-rail-copy">
-              {{
-                detail.request.status === 'ANSWERED' && detail.request.closesAt
-                  ? t('support.allSortedAnswered', { date: formatDate(detail.request.closesAt) })
-                  : t('support.allSortedOpen')
-              }}
-            </p>
-            <button
-              class="btn btn-secondary"
-              type="button"
-              :disabled="solving"
-              :aria-busy="solving"
-              data-testid="support-solve"
-              @click="solve"
-            >
-              <IconGlyph name="check" :size="16" />
-              {{ t('support.markSolved') }}
-            </button>
-          </section>
+            {{ t('support.markSolved') }}
+          </button>
         </aside>
       </div>
     </template>
@@ -163,16 +165,16 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { supportApi } from '@/api/ops'
 import AppBreadcrumb from '@/components/common/AppBreadcrumb.vue'
+import AppToast from '@/components/common/AppToast.vue'
 import DataNotice from '@/components/common/DataNotice.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
+import PortraitAvatar from '@/components/common/PortraitAvatar.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
-import StatusPill from '@/components/common/StatusPill.vue'
-import AppToast from '@/components/common/AppToast.vue'
-import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
+import StatusPill, { type PillTone } from '@/components/common/StatusPill.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { useResource } from '@/composables/useResource'
 import { useToast } from '@/composables/useToast'
@@ -180,12 +182,13 @@ import { opsLabelMessages } from '@/plugins/opsLabelMessages'
 import { supportMessages } from '@/plugins/supportMessages'
 import { resolveApiError } from '@/utils/apiError'
 import { saveBlobDownload } from '@/utils/download'
-import { formatDate, formatDateTime, formatFileSize } from '@/utils/format'
-import { requestStatusKey, supportStatusTone, supportTopicKey } from '@/utils/opsLabels'
+import { formatDateTime, formatFileSize, formatShortDate } from '@/utils/format'
+import { requestStatusKey, requestStatusTone, supportTopicKey } from '@/utils/opsLabels'
 import '@/styles/ops-account.css'
 
 const { t } = useLocalMessages({ support: supportMessages, opsLabels: opsLabelMessages })
 const route = useRoute()
+const router = useRouter()
 const { toast, showToast } = useToast()
 
 const ticketId = computed(() => Number(route.params.ticketId))
@@ -203,12 +206,14 @@ watch(ticketId, () => {
 const loadError = computed(() => resource.error.value ?? t('support.ticketErrorTitle'))
 const solved = computed(() => detail.value?.request.status === 'SOLVED')
 
-/** After the requester answers, the request waits for support again. */
-const statusLabel = computed(() => {
+/** After the requester answers, the request waits for support again: nothing is expected of them. */
+const status = computed<{ label: string; tone: PillTone }>(() => {
   const request = detail.value?.request
-  if (!request) return ''
-  if (request.status === 'OPEN' && request.lastSupportReplyAt) return t('support.waitingForSupport')
-  return t(requestStatusKey(request.status))
+  if (!request) return { label: '', tone: 'neutral' }
+  if (request.status === 'OPEN' && request.lastSupportReplyAt) {
+    return { label: t('support.waitingForSupport'), tone: 'info' }
+  }
+  return { label: t(requestStatusKey(request.status)), tone: requestStatusTone(request.status) }
 })
 
 const reply = ref('')
@@ -236,13 +241,14 @@ async function sendReply(): Promise<void> {
   }
 }
 
+/** A solved request is done with: back to the list, which confirms it (handed over in the history state). */
 async function solve(): Promise<void> {
   if (solving.value || !detail.value) return
   solving.value = true
   actionError.value = null
   try {
-    detail.value = await supportApi.solve(detail.value.request.id)
-    showToast(t('support.solvedToast', { number: detail.value.request.number }))
+    const solvedRequest = await supportApi.solve(detail.value.request.id)
+    await router.push({ name: supportRouteName.value, state: { supportSolved: solvedRequest.request.number } })
   } catch (reason) {
     actionError.value = resolveApiError(reason, t('support.solveError'))
   } finally {

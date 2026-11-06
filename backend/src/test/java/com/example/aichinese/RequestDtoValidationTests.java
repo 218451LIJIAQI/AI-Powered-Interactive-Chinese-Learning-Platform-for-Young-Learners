@@ -67,11 +67,19 @@ class RequestDtoValidationTests {
 
     @Test
     void contentRequestIdsMustBePositive() {
-        ClassRequests.ClassDetails details = new ClassRequests.ClassDetails("Class", "Description", 0L, -3L, null);
+        ClassRequests.ClassDetails details = new ClassRequests.ClassDetails("Class", "Description", 0L, -3L, null, null);
         ClassRequests.LessonContent content = new ClassRequests.LessonContent("Lesson", -1L, 0, null, List.of());
 
         assertViolationPathsContain(details, "levelId", "topicId");
         assertViolationPathsContain(content, "unitId", "minutes");
+    }
+
+    @Test
+    void bestAfterUnitIsOptionalAndOneToEight() {
+        assertThat(VALIDATOR.validate(new ClassRequests.ClassDetails("Class", null, null, null, null, null))).isEmpty();
+        assertThat(VALIDATOR.validate(new ClassRequests.ClassDetails("Class", null, null, null, null, 8))).isEmpty();
+        assertViolationPathsContain(new ClassRequests.ClassDetails("Class", null, null, null, null, 0), "bestAfterUnit");
+        assertViolationPathsContain(new ClassRequests.ClassDetails("Class", null, null, null, null, 9), "bestAfterUnit");
     }
 
     @Test
@@ -160,6 +168,7 @@ class RequestDtoValidationTests {
                 IDEOGRAPHIC_SPACE,
                 1L,
                 1L,
+                null,
                 null);
         ClassRequests.KeyPhrase keyPhrase = new ClassRequests.KeyPhrase(
                 ideographicWrapped("你好"), ideographicWrapped("nǐ hǎo"), ideographicWrapped("hello"));

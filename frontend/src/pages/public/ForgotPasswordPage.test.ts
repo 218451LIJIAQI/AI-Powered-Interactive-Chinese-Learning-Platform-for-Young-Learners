@@ -68,10 +68,26 @@ describe('ForgotPasswordPage (FRAUTH04)', () => {
     expect(wrapper.get('[data-testid="forgot-sent"]').text()).toContain('If an account exists for mei@example.com')
     expect(wrapper.get('[data-testid="toast"]').text()).toBe('')
 
-    await wrapper.get('[data-testid="send-again"]').trigger('click')
+    await wrapper.get('form').trigger('submit')
     await flushPromises()
 
     expect(mocks.forgotPassword).toHaveBeenCalledTimes(2)
     expect(wrapper.get('[data-testid="toast"]').text()).toBe('Link sent again. Check your inbox and spam folder.')
+  })
+
+  it('keeps the address editable after sending, so the link can go to a corrected one', async () => {
+    const wrapper = mountPage()
+
+    await wrapper.get('#forgot-email').setValue('mei@example.com')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="send-again"]').attributes('type')).toBe('submit')
+
+    await wrapper.get('#forgot-email').setValue('mei.tan@example.com')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(mocks.forgotPassword).toHaveBeenLastCalledWith('mei.tan@example.com')
+    expect(wrapper.get('[data-testid="forgot-sent"]').text()).toContain('mei.tan@example.com')
   })
 })

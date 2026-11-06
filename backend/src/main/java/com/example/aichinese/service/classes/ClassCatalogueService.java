@@ -169,6 +169,7 @@ public class ClassCatalogueService {
                     coursePackage.getDescription(),
                     TeacherClassService.levelName(coursePackage.getLevel()),
                     TeacherClassService.topicName(coursePackage.getCategory()),
+                    coursePackage.getBestAfterUnit(),
                     coursePackage.getLearningType(),
                     teacher(coursePackage.getTeacher()),
                     unitCount,

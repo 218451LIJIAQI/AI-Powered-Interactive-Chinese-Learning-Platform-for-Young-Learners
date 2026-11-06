@@ -2,13 +2,12 @@
 export const responsibleAiMessages = {
   en: {
     title: 'Responsible AI guidance',
-    intro: 'What the AI Helper does and does not do, how its answers are bounded and how your data is protected.',
     roleTitle: 'Optional support for beginners',
     roleCopy:
       'The AI Helper (talk with Xiaomei, ask SparkBot, quick quizzes, stories, pronunciation and handwriting practice) is optional support for Mandarin beginners. Lessons, practice and your teachers stay the main way to learn, and the AI Helper never earns XP.',
     limitsTitle: 'AI can be wrong',
     limitsCopy:
-      'AI responses may contain errors and do not replace your teacher. Check important answers against your lessons or ask your teacher. SparkBot never gives official grades.',
+      'Check important answers against your lessons or ask your teacher. SparkBot never gives official grades.',
     boundsTitle: 'How answers are bounded',
     boundsCopy:
       'Answers stay at beginner level (around HSK 1–2), short and about learning Mandarin. Requests about other things are politely refused. You can ask for explanations in English, Bahasa Melayu or Simplified Chinese, and there is a daily limit of AI requests.',
@@ -26,21 +25,17 @@ export const responsibleAiMessages = {
     reportTitle: 'Report an answer',
     reportCopy:
       'Every AI answer and score has a Report option. Choose a reason and add a note if you like. An admin reviews every report and tells you the outcome in your notifications.',
-    disclaimerLabel: 'Shown with every AI answer',
+    disclaimerLabel: 'Shown with every AI answer:',
     disclaimer: 'AI responses may contain errors and do not replace your teacher.',
-    signInForHelper: 'Students: sign in to use the AI Helper',
-    openHelper: 'Open the AI Helper',
   },
   ms: {
     title: 'Panduan AI Bertanggungjawab',
-    intro:
-      'Apa yang dilakukan dan tidak dilakukan oleh Pembantu AI, bagaimana jawapannya dihadkan dan bagaimana data anda dilindungi.',
     roleTitle: 'Sokongan pilihan untuk pemula',
     roleCopy:
       'Pembantu AI (berbual dengan Xiaomei, tanya SparkBot, kuiz ringkas, cerita, latihan sebutan dan tulisan tangan) ialah sokongan pilihan untuk pemula Mandarin. Pelajaran, latihan dan guru anda kekal sebagai cara utama untuk belajar, dan Pembantu AI tidak sekali-kali memberi XP.',
     limitsTitle: 'AI boleh tersilap',
     limitsCopy:
-      'Jawapan AI mungkin mengandungi kesilapan dan tidak menggantikan guru anda. Semak jawapan penting dengan pelajaran anda atau tanya guru anda. SparkBot tidak sekali-kali memberi gred rasmi.',
+      'Semak jawapan penting dengan pelajaran anda atau tanya guru anda. SparkBot tidak sekali-kali memberi gred rasmi.',
     boundsTitle: 'Bagaimana jawapan dihadkan',
     boundsCopy:
       'Jawapan kekal pada tahap pemula (sekitar HSK 1–2), ringkas dan berkaitan pembelajaran Mandarin. Permintaan tentang perkara lain ditolak dengan sopan. Anda boleh meminta penerangan dalam bahasa Inggeris, Bahasa Melayu atau Bahasa Cina Ringkas, dan terdapat had harian permintaan AI.',
@@ -58,20 +53,16 @@ export const responsibleAiMessages = {
     reportTitle: 'Laporkan jawapan',
     reportCopy:
       'Setiap jawapan dan skor AI mempunyai pilihan Laporkan. Pilih sebab dan tambah nota jika mahu. Pentadbir menyemak setiap laporan dan memaklumkan keputusannya dalam pemberitahuan anda.',
-    disclaimerLabel: 'Dipaparkan bersama setiap jawapan AI',
+    disclaimerLabel: 'Dipaparkan bersama setiap jawapan AI:',
     disclaimer: 'Jawapan AI mungkin mengandungi kesilapan dan tidak menggantikan guru anda.',
-    signInForHelper: 'Pelajar: log masuk untuk menggunakan Pembantu AI',
-    openHelper: 'Buka Pembantu AI',
   },
   'zh-CN': {
     title: '负责任的 AI 指南',
-    intro: 'AI 助手能做什么、不能做什么，它的回答受哪些限制，以及你的数据如何受到保护。',
     roleTitle: '为初学者提供的可选支持',
     roleCopy:
       'AI 助手（和小美聊天、向 SparkBot 提问、小测验、故事、发音和书写练习）是为中文初学者提供的可选支持。课程、练习和老师仍然是主要的学习方式，AI 助手不计 XP。',
     limitsTitle: 'AI 可能出错',
-    limitsCopy:
-      'AI 的回答可能有误，不能取代你的老师。重要的答案请对照课程内容或询问老师。SparkBot 绝不会给出正式成绩。',
+    limitsCopy: '重要的答案请对照课程内容或询问老师。SparkBot 绝不会给出正式成绩。',
     boundsTitle: '回答受到哪些限制',
     boundsCopy:
       '回答保持初学者水平（约 HSK 1–2），简短并与中文学习相关。与学习无关的请求会被礼貌地拒绝。你可以要求用英语、马来语或简体中文解释，AI 请求每天有使用上限。',
@@ -88,9 +79,7 @@ export const responsibleAiMessages = {
     reportTitle: '举报回答',
     reportCopy:
       '每个 AI 回答和评分都有“举报”选项。选择原因，并可添加备注。管理员会审核每条举报，并在通知中告诉你处理结果。',
-    disclaimerLabel: '每个 AI 回答都会显示',
+    disclaimerLabel: '每个 AI 回答都会显示：',
     disclaimer: 'AI 的回答可能有误，不能取代你的老师。',
-    signInForHelper: '学生：登录后使用 AI 助手',
-    openHelper: '打开 AI 助手',
   },
 }

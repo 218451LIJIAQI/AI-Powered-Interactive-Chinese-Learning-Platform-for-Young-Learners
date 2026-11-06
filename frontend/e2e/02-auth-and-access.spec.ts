@@ -6,6 +6,7 @@ import {
   NO_ACCESS_HEADING,
   apiToken,
   bearer,
+  expectHiddenPageTitle,
   expectSidebarItems,
   signIn,
   signOut,
@@ -81,6 +82,69 @@ test('a student gets the No access page for teacher and admin pages', async ({ p
     await expect(page).toHaveURL(/\/unauthorized$/)
     await expect(page.getByRole('heading', { name: NO_ACCESS_HEADING })).toBeVisible()
   }
+})
+
+test.describe('page titles', () => {
+  // A section root starts with its tabs or content, so its one h1 only speaks to assistive technology.
+  const SECTION_ROOTS = [
+    {
+      role: 'student',
+      account: E2E_ACCOUNTS.student,
+      pages: [
+        ['/student/home', 'Welcome back, Amira'],
+        ['/student/learn', 'Learn'],
+        ['/student/practice/flashcards', 'Practice'],
+        ['/student/ai/talk', 'AI Helper'],
+        ['/student/classes', 'My classes'],
+        ['/student/classes/find', 'Find classes'],
+        ['/student/classes/live', 'Live sessions'],
+        ['/student/progress', 'Progress'],
+      ],
+    },
+    {
+      role: 'teacher',
+      account: E2E_ACCOUNTS.teacher,
+      pages: [
+        ['/teacher/dashboard', 'Dashboard'],
+        ['/teacher/classes', 'Classes'],
+        ['/teacher/live-sessions', 'Live sessions'],
+        ['/teacher/students', 'Students'],
+        ['/teacher/profile', 'Teaching profile'],
+      ],
+    },
+    {
+      role: 'admin',
+      account: E2E_ACCOUNTS.admin,
+      pages: [
+        ['/admin/dashboard', 'Dashboard'],
+        ['/admin/users', 'Users'],
+        ['/admin/content', 'Review queue'],
+        ['/admin/analytics', 'Analytics'],
+        ['/admin/audit-log', 'Audit log'],
+      ],
+    },
+  ] as const
+
+  for (const { role, account, pages } of SECTION_ROOTS) {
+    test(`the ${role}’s section roots keep one h1 for assistive technology`, async ({ page }) => {
+      await signIn(page, account)
+      for (const [path, title] of pages) {
+        await page.goto(path)
+        await expectHiddenPageTitle(page, title)
+      }
+    })
+  }
+
+  test('a nested page shows its h1 under the breadcrumb', async ({ page }) => {
+    await signIn(page, E2E_ACCOUNTS.student)
+    await page.goto('/student/progress/plan')
+
+    const title = page.getByRole('heading', { level: 1 })
+    await expect(title).toHaveText('My learning plan')
+    await expect(page.getByRole('navigation', { name: 'Breadcrumb' })).toBeVisible()
+    await expect(title).not.toHaveClass(/sr-only/)
+    expect((await title.boundingBox())!.width).toBeGreaterThan(1)
+  })
 })
 
 test.describe('backend authorisation', () => {

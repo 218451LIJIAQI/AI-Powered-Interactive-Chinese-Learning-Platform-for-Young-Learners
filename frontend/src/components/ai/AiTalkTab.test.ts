@@ -18,7 +18,7 @@ const OPENER = '你好！我是小美。今天过得怎么样？'
 
 function mountTalk(blocked: 'limit' | 'unavailable' | null = null) {
   return mount(AiTalkTab, {
-    props: { blocked },
+    props: { blocked, aiNotice: 'AI can make mistakes.' },
     global: { plugins: [createPinia()], stubs: { IconGlyph: true, teleport: true } },
   })
 }
@@ -115,7 +115,7 @@ describe('AiTalkTab (Talk with Xiaomei)', () => {
     const wrapper = mountTalk()
     await typeAndSend(wrapper, '你好')
 
-    const cafe = wrapper.findAll('.ai-talk-scenario').find((button) => button.text() === 'Order at a café')!
+    const cafe = wrapper.findAll('.filter-chip').find((button) => button.text() === 'Order at a café')!
     await cafe.trigger('click')
 
     expect(wrapper.find('[data-testid="confirm-dialog-confirm"]').exists()).toBe(true)
@@ -126,6 +126,68 @@ describe('AiTalkTab (Talk with Xiaomei)', () => {
     const wrapper = mountTalk('limit')
 
     expect(wrapper.get<HTMLInputElement>('.ai-talk-type input').element.disabled).toBe(true)
+  })
+
+  it('keeps pinyin and English hidden until asked for, and the opener cannot be reported', async () => {
+    const wrapper = mountTalk()
+    const tools = () => wrapper.findAll('.ai-talk-tools button').map((button) => button.text())
+
+    expect(wrapper.text()).not.toContain('Nǐ hǎo! Wǒ shì Xiǎoměi.')
+    expect(tools()).not.toContain('Report')
+    expect(tools()).toContain('Pinyin')
+
+    const pinyin = wrapper.findAll('.ai-talk-tools button').find((button) => button.text() === 'Pinyin')!
+    await pinyin.trigger('click')
+
+    expect(wrapper.text()).toContain('Nǐ hǎo! Wǒ shì Xiǎoměi.')
+    expect(tools()).toContain('Hide pinyin')
+  })
+
+  it('shows the last reply on the stage and in the transcript, with its tip, and marks a reported line', async () => {
+    api.xiaomeiReply.mockResolvedValue({
+      status: 'SUCCESS',
+      reply: { chinese: '真棒！', pinyin: 'Zhēn bàng!', translation: 'Awesome!' },
+      naturalVersion: '我在学校学习中文。',
+      tip: 'Place comes before the verb.',
+    })
+    api.report.mockResolvedValue({ id: 3, status: 'PENDING_REVIEW' })
+    const wrapper = mountTalk()
+    await typeAndSend(wrapper, '我学习中文在学校。')
+
+    expect(wrapper.get('.ai-talk-said').text()).toContain('我学习中文在学校。')
+    expect(wrapper.get('[data-testid="ai-talk-tip"]').text()).toContain('Place comes before the verb.')
+    expect(wrapper.get('.ai-transcript li.is-student').text()).toContain('Tip: 我在学校学习中文。')
+
+    const report = wrapper.findAll('.ai-talk-tools button').find((button) => button.text() === 'Report')!
+    await report.trigger('click')
+    await wrapper.get('[data-testid="ai-report-form"]').trigger('submit')
+    await flushPromises()
+
+    expect(api.report.mock.calls.at(-1)![0]).toMatchObject({ featureKey: 'XIAOMEI_CONVERSATION' })
+    expect(wrapper.get('.ai-talk-tools .ai-reported').text()).toBe('Reported')
+    expect(wrapper.emitted('reported')).toHaveLength(1)
+  })
+
+  it('opens reply ideas and sends the one the student picks', async () => {
+    api.xiaomeiSuggestions.mockResolvedValue({
+      status: 'SUCCESS',
+      suggestions: [{ chinese: '我今天很忙。', translation: 'I was busy today.' }],
+    })
+    api.xiaomeiReply.mockClear()
+    api.xiaomeiReply.mockResolvedValue({ status: 'SUCCESS', reply: { chinese: '辛苦了！' } })
+    const wrapper = mountTalk()
+
+    const help = wrapper.findAll('.ai-talk-type button').find((button) => button.text() === 'Help me reply')!
+    await help.trigger('click')
+    await flushPromises()
+    expect(wrapper.get('.ai-suggest').text()).toContain('I was busy today.')
+    expect(help.attributes('aria-expanded')).toBe('true')
+
+    await wrapper.get('.ai-suggest-option').trigger('click')
+    await flushPromises()
+
+    expect(api.xiaomeiReply.mock.calls[0]![0]).toMatchObject({ message: '我今天很忙。' })
+    expect(wrapper.find('.ai-suggest').exists()).toBe(false)
   })
 })
 
@@ -160,8 +222,13 @@ class FakeRecognition {
 describe('AiTalkTab voice replies', () => {
   const scope = window as unknown as Record<string, unknown>
 
+  function dockButton(wrapper: ReturnType<typeof mountTalk>, label: string) {
+    return wrapper.findAll('.ai-talk-voice-dock button').find((button) => button.text() === label)!
+  }
+
   beforeEach(() => {
     scope.webkitSpeechRecognition = FakeRecognition
+    api.xiaomeiReply.mockReset()
     api.xiaomeiReply.mockResolvedValue({ status: 'SUCCESS', reply: { chinese: '真不错！' } })
   })
 
@@ -177,8 +244,7 @@ describe('AiTalkTab voice replies', () => {
     await flushPromises()
     expect(wrapper.get('[data-testid="ai-talk-listening"]').text()).toContain('我今天很好')
 
-    const send = wrapper.findAll('.ai-talk-listening-actions button')[1]!
-    await send.trigger('click')
+    await dockButton(wrapper, 'Send').trigger('click')
     await flushPromises()
 
     expect(api.xiaomeiReply).toHaveBeenCalledTimes(1)
@@ -205,10 +271,45 @@ describe('AiTalkTab voice replies', () => {
     await wrapper.get('[data-testid="ai-talk-mic"]').trigger('click')
     FakeRecognition.last!.hear('我很')
     await flushPromises()
-    await wrapper.findAll('.ai-talk-listening-actions button')[0]!.trigger('click')
+    await dockButton(wrapper, 'Cancel').trigger('click')
     await flushPromises()
 
     expect(api.xiaomeiReply).not.toHaveBeenCalled()
     expect(wrapper.find('[data-testid="ai-talk-listening"]').exists()).toBe(false)
+  })
+
+  it('offers the mic first, and Type instead and back switch the dock', async () => {
+    const wrapper = mountTalk()
+
+    expect(wrapper.get('[data-testid="ai-talk-mic"]').attributes('aria-label')).toBe('Speak your reply in Chinese')
+    expect(wrapper.find('.ai-talk-type').exists()).toBe(false)
+
+    await dockButton(wrapper, 'Type instead').trigger('click')
+    expect(wrapper.find('.ai-talk-type input').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="ai-talk-mic"]').exists()).toBe(false)
+
+    await wrapper.get('.ai-talk-hint-action').trigger('click')
+    expect(wrapper.find('[data-testid="ai-talk-mic"]').exists()).toBe(true)
+  })
+
+  it('turns the mic into a stop button that sends what was heard', async () => {
+    const wrapper = mountTalk()
+
+    await wrapper.get('[data-testid="ai-talk-mic"]').trigger('click')
+    expect(wrapper.get('[data-testid="ai-talk-mic"]').attributes('aria-label')).toBe('Stop listening')
+    FakeRecognition.last!.hear('我很好')
+    await flushPromises()
+    await wrapper.get('[data-testid="ai-talk-mic"]').trigger('click')
+    await flushPromises()
+
+    expect(api.xiaomeiReply).toHaveBeenCalledTimes(1)
+    expect(api.xiaomeiReply.mock.calls[0]![0]).toMatchObject({ message: '我很好' })
+  })
+
+  it('cannot reach the microphone while the AI is blocked', () => {
+    const wrapper = mountTalk('unavailable')
+
+    expect(wrapper.get<HTMLButtonElement>('[data-testid="ai-talk-mic"]').element.disabled).toBe(true)
+    expect(dockButton(wrapper, 'Type instead').element).toHaveProperty('disabled', true)
   })
 })

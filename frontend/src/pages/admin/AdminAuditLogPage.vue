@@ -1,6 +1,6 @@
 <template>
-  <div class="admin-audit page-stack">
-    <PageHeaderBlock :title="t('adminAudit.pageTitle')" :description="t('adminAudit.lede')">
+  <div class="page-stack">
+    <PageHeaderBlock :title="t('adminAudit.pageTitle')" hide-title>
       <template #actions>
         <button
           class="btn btn-secondary"
@@ -11,17 +11,17 @@
           @click="exportCsv"
         >
           <IconGlyph name="download" :size="16" />
-          {{ t('adminAudit.exportCsv') }}
+          <span>{{ t('adminAudit.exportCsv') }}</span>
         </button>
       </template>
     </PageHeaderBlock>
 
     <DataNotice :error="actionError" />
 
-    <section class="admin-sheet" aria-labelledby="admin-audit-table-title">
+    <section class="panel admin-table-card" aria-labelledby="admin-audit-table-title">
       <h2 id="admin-audit-table-title" class="sr-only">{{ t('adminAudit.tableLabel') }}</h2>
-      <form class="admin-toolbar" role="search" :aria-label="t('adminAudit.filtersLabel')" @submit.prevent>
-        <div class="field admin-toolbar-search">
+      <form class="admin-filters" role="search" :aria-label="t('adminAudit.filtersLabel')" @submit.prevent>
+        <div class="field is-search">
           <label class="field-label" for="admin-audit-search">{{ t('adminAudit.searchLabel') }}</label>
           <span class="input-with-icon">
             <IconGlyph class="input-icon" name="search" :size="16" />
@@ -71,7 +71,7 @@
             </option>
           </select>
         </div>
-        <div class="field admin-audit-actor">
+        <div class="field">
           <label class="field-label" for="admin-audit-actor">{{ t('adminAudit.actorLabel') }}</label>
           <input
             id="admin-audit-actor"
@@ -83,31 +83,43 @@
             data-testid="admin-audit-actor"
           />
         </div>
-        <p v-if="rangeError" id="admin-audit-range-error" class="field-error admin-audit-range-error" role="alert">
+        <p v-if="rangeError" id="admin-audit-range-error" class="field-error" role="alert">
           {{ rangeError }}
         </p>
       </form>
 
-      <div v-if="log.loading.value" class="admin-sheet-body">
-        <StatePanel tone="loading" :title="t('adminAudit.loading')" :message="t('adminAudit.loadingHint')" />
-      </div>
-      <div v-else-if="log.error.value && !entries.length" class="admin-sheet-body">
-        <StatePanel tone="error" icon="alert" :title="t('adminAudit.loadError')" :message="log.error.value">
-          <template #actions>
-            <button class="btn btn-primary" type="button" @click="log.reload">{{ t('adminAudit.retry') }}</button>
-          </template>
-        </StatePanel>
-      </div>
+      <StatePanel
+        v-if="log.loading.value"
+        tone="loading"
+        :title="t('adminAudit.loading')"
+        :message="t('adminAudit.loadingHint')"
+      />
+      <StatePanel
+        v-else-if="log.error.value && !entries.length"
+        tone="error"
+        icon="alert"
+        :title="t('adminAudit.loadError')"
+        :message="log.error.value"
+      >
+        <template #actions>
+          <button class="btn btn-primary" type="button" @click="log.reload">{{ t('adminAudit.retry') }}</button>
+        </template>
+      </StatePanel>
       <template v-else-if="entries.length">
-        <div class="data-table-wrap" role="region" :aria-label="t('adminAudit.tableLabel')" tabindex="0">
-          <table class="data-table admin-table">
+        <div
+          class="data-table-wrap admin-table-wrap"
+          role="region"
+          :aria-label="t('adminAudit.tableLabel')"
+          tabindex="0"
+        >
+          <table class="data-table admin-table admin-audit-table">
             <thead>
               <tr>
-                <th scope="col">{{ t('adminAudit.colEvent') }}</th>
-                <th scope="col">{{ t('adminAudit.colCategory') }}</th>
-                <th scope="col">{{ t('adminAudit.colActor') }}</th>
-                <th scope="col" class="col-numeric">{{ t('adminAudit.colTime') }}</th>
-                <th scope="col" class="col-actions">
+                <th scope="col" class="admin-audit-col-event">{{ t('adminAudit.colEvent') }}</th>
+                <th scope="col" class="admin-audit-col-category">{{ t('adminAudit.colCategory') }}</th>
+                <th scope="col" class="admin-audit-col-actor">{{ t('adminAudit.colActor') }}</th>
+                <th scope="col" class="admin-audit-col-time">{{ t('adminAudit.colTime') }}</th>
+                <th scope="col" class="col-actions admin-col-chevron">
                   <span class="sr-only">{{ t('adminAudit.whatHappened') }}</span>
                 </th>
               </tr>
@@ -121,18 +133,13 @@
                 @click="openEntry(entry.id)"
               >
                 <td>
-                  <span class="admin-cell-person">
-                    <span class="admin-kind-mark" aria-hidden="true">
-                      <IconGlyph :name="auditActionIcon(entry.actionType, entry.category)" :size="16" />
-                    </span>
-                    <span class="admin-cell-title">
-                      <strong>{{ actionLabel(entry.actionType) }}</strong>
-                      <span v-if="entry.targetLabel">{{ entry.targetLabel }}</span>
-                    </span>
+                  <span class="admin-cell-title">
+                    <strong>{{ actionLabel(entry.actionType) }}</strong>
+                    <span v-if="entry.targetLabel">{{ entry.targetLabel }}</span>
                   </span>
                 </td>
                 <td>
-                  <span class="tag">{{ categoryLabel(entry.category) }}</span>
+                  <span class="tag is-outline">{{ categoryLabel(entry.category) }}</span>
                 </td>
                 <td>
                   <span class="admin-cell-title">
@@ -140,9 +147,7 @@
                     <span v-if="entry.actorName && entry.actorEmail">{{ entry.actorEmail }}</span>
                   </span>
                 </td>
-                <td class="col-numeric admin-cell-date">
-                  {{ formatDateTime(entry.createdAt) }}
-                </td>
+                <td class="admin-cell-date">{{ formatDateTime(entry.createdAt) }}</td>
                 <td class="col-actions">
                   <button
                     class="btn btn-ghost btn-icon btn-sm"
@@ -157,27 +162,30 @@
             </tbody>
           </table>
         </div>
-        <div class="admin-sheet-foot">
-          <PaginationBar
-            :current-page="page + 1"
-            :total-pages="totalPages"
-            :info="t('adminAudit.showing', showingRange)"
-            :label="t('adminAudit.pagination')"
-            icon-only
-            test-id-prefix="admin-audit"
-            @update:current-page="goToPage($event - 1)"
-          />
-        </div>
+        <PaginationBar
+          :current-page="page + 1"
+          :total-pages="totalPages"
+          :info="t('adminAudit.showing', showingRange)"
+          :label="t('adminAudit.pagination')"
+          icon-only
+          test-id-prefix="admin-audit"
+          @update:current-page="goToPage($event - 1)"
+        />
       </template>
-      <div v-else-if="!rangeError" class="admin-sheet-body">
-        <StatePanel tone="empty" icon="search" :title="t('adminAudit.emptyTitle')" :message="t('adminAudit.emptyHint')">
-          <template #actions>
-            <button class="btn btn-secondary" type="button" @click="clearFilters">
-              {{ t('adminAudit.clearFilters') }}
-            </button>
-          </template>
-        </StatePanel>
-      </div>
+      <StatePanel
+        v-else-if="!rangeError"
+        tone="empty"
+        icon="search"
+        spacious
+        :title="t('adminAudit.emptyTitle')"
+        :message="t('adminAudit.emptyHint')"
+      >
+        <template #actions>
+          <button class="btn btn-primary" type="button" @click="clearFilters">
+            {{ t('adminAudit.clearFilters') }}
+          </button>
+        </template>
+      </StatePanel>
     </section>
 
     <AppOverlay
@@ -197,11 +205,11 @@
     >
       <p v-if="entryError" class="alert alert-danger" role="alert">{{ entryError }}</p>
       <template v-else-if="selectedEntry">
-        <section class="admin-audit-what" aria-labelledby="admin-audit-what-title">
-          <h3 id="admin-audit-what-title" class="admin-reader-label">{{ t('adminAudit.whatHappened') }}</h3>
-          <p>{{ whatHappened }}</p>
+        <section class="admin-section" aria-labelledby="admin-audit-what-title">
+          <h3 id="admin-audit-what-title" class="admin-section-title">{{ t('adminAudit.whatHappened') }}</h3>
+          <p class="admin-audit-what">{{ whatHappened }}</p>
         </section>
-        <dl class="kv-list admin-audit-facts">
+        <dl class="kv-list">
           <dt>{{ t('adminAudit.kvActor') }}</dt>
           <dd>
             <span class="admin-cell-title">
@@ -222,8 +230,8 @@
           <dt>{{ t('adminAudit.kvCategory') }}</dt>
           <dd>{{ categoryLabel(selectedEntry.category) }}</dd>
         </dl>
-        <p class="callout">
-          <IconGlyph name="lock" :size="18" />
+        <p class="callout is-compact">
+          <IconGlyph name="lock" :size="16" />
           <span>{{ t('adminAudit.immutable') }}</span>
         </p>
       </template>
@@ -266,7 +274,6 @@ import { auditActionMessages } from '@/plugins/auditActionMessages'
 import type { PageResponse } from '@/types/api'
 import type { AuditEntry, AuditQuery } from '@/types/ops'
 import { resolveApiError } from '@/utils/apiError'
-import { auditActionIcon } from '@/utils/auditActions'
 import { saveBlobDownload } from '@/utils/download'
 import { formatDateTime, formatFullDateTime } from '@/utils/format'
 import '@/styles/ops-admin.css'

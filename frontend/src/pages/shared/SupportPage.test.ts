@@ -57,8 +57,10 @@ describe('SupportPage', () => {
     expect(rows.text()).toContain('#1038 · Live session link didn’t open')
     expect(rows.text()).toContain('Answered · your turn')
     expect(rows.text()).toContain('Classes & live sessions')
-    expect(wrapper.text()).toContain('How do I book a live session?')
+    expect(wrapper.text()).toContain('How do I join a live session?')
+    expect(wrapper.text()).toContain('We reply within 2 working days.')
     expect(wrapper.find('h1').text()).toBe('Help & support')
+    expect(wrapper.find('h1').classes()).toContain('sr-only')
   })
 
   it('shows the empty state when there are no requests yet', async () => {
@@ -66,6 +68,16 @@ describe('SupportPage', () => {
     const wrapper = await mountPage()
 
     expect(wrapper.text()).toContain('No requests yet')
+    expect(wrapper.find('[data-testid="support-requests"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="support-new"]').exists()).toBe(true)
+  })
+
+  it('confirms a request marked as solved on its own page, once', async () => {
+    window.history.replaceState({ supportSolved: 1038 }, '')
+    const wrapper = await mountPage()
+
+    expect(wrapper.find('[data-testid="support-notice"]').text()).toBe('Marked #1038 as solved.')
+    expect((window.history.state as { supportSolved?: number }).supportSolved).toBeUndefined()
   })
 
   it('sends a new request and confirms it with its number', async () => {
@@ -83,7 +95,9 @@ describe('SupportPage', () => {
       message: 'It stops after 10 seconds.',
       screenshot: null,
     })
-    expect(wrapper.text()).toContain('Request #1042 sent.')
+    expect(wrapper.find('[data-testid="support-notice"]').text()).toBe(
+      'Request #1042 sent. We’ll reply within 2 working days.',
+    )
     expect(supportApi.list).toHaveBeenCalledTimes(2)
   })
 
@@ -111,6 +125,20 @@ describe('SupportPage', () => {
 
     await chooseFile(input, new File(['x'], 'notes.pdf', { type: 'application/pdf' }))
     expect(wrapper.find('#support-screenshot-error').text()).toBe('Choose a PNG or JPG image.')
+  })
+
+  it('shows the chosen screenshot beside Add a file and can remove it', async () => {
+    const wrapper = await mountPage()
+    await wrapper.find('[data-testid="support-new"]').trigger('click')
+    expect(wrapper.find('#support-screenshot-hint').text()).toBe('PNG or JPG · up to 5 MB')
+
+    await chooseFile(wrapper.find('#support-screenshot'), new File(['x'], 'screen.png', { type: 'image/png' }))
+    expect(wrapper.find('.support-file-name').text()).toBe('screen.png')
+    expect(wrapper.find('#support-screenshot-hint').exists()).toBe(false)
+
+    await wrapper.find('button[aria-label="Remove screenshot"]').trigger('click')
+    expect(wrapper.find('.support-file-name').exists()).toBe(false)
+    expect(wrapper.find('#support-screenshot-hint').exists()).toBe(true)
   })
 
   it('starts a teacher applicant on the verification topic with applicant answers', async () => {

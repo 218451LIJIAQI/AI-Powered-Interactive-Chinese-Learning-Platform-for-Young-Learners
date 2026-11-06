@@ -11,7 +11,7 @@ public final class DemoPersonas {
 
     /** The main student persona (her progress drives the student journey). */
     public static final Persona STUDENT = new Persona("student@fyp.local", "Amira Hassan");
-    /** Classmates in Li Wei's "Mandarin for Beginners" class. */
+    /** Classmates in Li Wei's "Mandarin for Campus Life" class. */
     public static final Persona CHEN_HAO = new Persona("chen.hao@fyp.local", "Chen Hao");
     public static final Persona ZHANG_YI = new Persona("zhang.yi@fyp.local", "Zhang Yi");
     public static final Persona NUR_AISYAH = new Persona("nur.aisyah@fyp.local", "Nur Aisyah");

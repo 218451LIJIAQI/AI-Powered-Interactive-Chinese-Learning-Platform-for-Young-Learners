@@ -31,7 +31,7 @@ export function usePracticeRun(set: () => PracticeSet, failure: () => string) {
     return run(() => practiceApi.check(current.type, current.id, { itemKey, answer }))
   }
 
-  /** Several checks at once (matching pairs, story questions), in the order given. */
+  /** Several checks at once (matching pairs), in the order given. */
   function checkAll(answers: readonly PracticeItemAnswer[]): Promise<AnswerCheck[] | null> {
     const current = set()
     return run(() => Promise.all(answers.map((answer) => practiceApi.check(current.type, current.id, answer))))

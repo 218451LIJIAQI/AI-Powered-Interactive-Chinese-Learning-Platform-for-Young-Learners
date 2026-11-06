@@ -15,7 +15,6 @@ import {
   formatWeekdayDate,
   parseDate,
   ratioPercent,
-  shareOfMax,
   stepProgress,
 } from './format'
 
@@ -51,13 +50,6 @@ describe('format numeric helpers', () => {
     expect(ratioPercent(1, 3)).toBe(33)
     expect(ratioPercent(1, 3, { digits: 1 })).toBe(33.3)
     expect(ratioPercent(2, 3, { digits: 2 })).toBe(66.67)
-  })
-
-  it('scales a value against the largest one, and an empty or all-zero list to 0', () => {
-    expect(shareOfMax(5, [5, 10, 2])).toBe(50)
-    expect(shareOfMax(10, [5, 10, 2])).toBe(100)
-    expect(shareOfMax(0, [0, 0])).toBe(0)
-    expect(shareOfMax(0, [])).toBe(0)
   })
 
   it('counts the current step once its answer is checked', () => {

@@ -59,7 +59,7 @@ public final class PlanRequests {
 
             boolean skipped,
 
-            @Size(max = 6, message = "The level check has at most 6 questions.")
+            @Size(max = 8, message = "The level check has at most 8 questions.")
             List<@Valid Answer> answers) {
 
         public LevelCheckInput {
@@ -95,7 +95,7 @@ public final class PlanRequests {
     public record RetakeRequest(
             MandarinLevel startLevel,
 
-            @Size(max = 6, message = "The level check has at most 6 questions.")
+            @Size(max = 8, message = "The level check has at most 8 questions.")
             List<@Valid Answer> answers,
 
             @Size(max = 20, message = "Language preference must not exceed 20 characters.")

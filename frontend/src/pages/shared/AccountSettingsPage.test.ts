@@ -15,6 +15,7 @@ const accountApi = vi.hoisted(() => ({ changePassword: vi.fn() }))
 const router = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }))
 const auth = vi.hoisted(() => ({
   activeRole: 'STUDENT' as 'STUDENT' | 'TEACHER' | 'ADMIN',
+  isApprovedTeacher: true,
   applyProfileUpdate: vi.fn(),
   replaceAccessToken: vi.fn(),
   clearSession: vi.fn(),
@@ -53,6 +54,7 @@ async function mountPage() {
 describe('AccountSettingsPage', () => {
   beforeEach(() => {
     auth.activeRole = 'STUDENT'
+    auth.isApprovedTeacher = true
     accountOpsApi.settings.mockResolvedValue(settings())
     accountOpsApi.updateProfile.mockResolvedValue({ id: 1, fullName: 'Amira H.' })
     accountOpsApi.updatePreferences.mockImplementation(async (change: object) => ({
@@ -88,6 +90,14 @@ describe('AccountSettingsPage', () => {
     await flushPromises()
     expect(xpApi.setDailyGoal).not.toHaveBeenCalled()
     expect(accountOpsApi.updateProfile).toHaveBeenCalled()
+  })
+
+  it('names the page for assistive technology only, and keeps a labelled Sign out', async () => {
+    const wrapper = await mountPage()
+
+    expect(wrapper.find('h1').classes()).toContain('sr-only')
+    expect(wrapper.find('h1').text()).toBe('Account')
+    expect(wrapper.find('[data-testid="account-sign-out"]').text()).toBe('Sign out')
   })
 
   it('saves a notification preference at once and rolls back on failure', async () => {
@@ -146,7 +156,20 @@ describe('AccountSettingsPage', () => {
     expect(router.replace).toHaveBeenCalledWith({ name: 'landing', query: { notice: 'account-deleted' } })
   })
 
-  it('lists a teacher’s published classes instead of deleting', async () => {
+  it('says what deleting removes for each kind of account', async () => {
+    const wrapper = await mountPage()
+    await wrapper.find('[data-testid="account-delete"]').trigger('click')
+    expect(wrapper.find('[data-testid="account-delete-dialog"]').text()).toContain('Your name, email, support requests')
+    wrapper.unmount()
+
+    auth.activeRole = 'TEACHER'
+    auth.isApprovedTeacher = false
+    const applicant = await mountPage()
+    await applicant.find('[data-testid="account-delete"]').trigger('click')
+    expect(applicant.find('[data-testid="account-delete-dialog"]').text()).toContain('your application is withdrawn')
+  })
+
+  it('points a teacher with one published class to that class instead of deleting', async () => {
     auth.activeRole = 'TEACHER'
     accountOpsApi.settings.mockResolvedValue(
       settings({
@@ -166,6 +189,33 @@ describe('AccountSettingsPage', () => {
     expect(blocked.text()).toContain('Mandarin for Beginners')
     expect(wrapper.find('[data-testid="account-delete-dialog"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="account-pref-contentReviews"]').exists()).toBe(true)
+    expect(blocked.findAll('a')).toHaveLength(1)
+    expect(blocked.find('a').text()).toBe('Open class')
+  })
+
+  it('lists several published classes with a way to each', async () => {
+    auth.activeRole = 'TEACHER'
+    accountOpsApi.settings.mockResolvedValue(
+      settings({
+        notifications: { liveSessionReminders: true, feedback: null, contentReviews: true, reviewQueues: null },
+        deletion: {
+          blockedBy: 'PUBLISHED_CLASSES',
+          publishedClasses: [
+            { id: 4, title: 'Mandarin for Beginners' },
+            { id: 5, title: 'Mandarin for Campus Life' },
+          ],
+        },
+      }),
+    )
+    const wrapper = await mountPage()
+
+    await wrapper.find('[data-testid="account-delete"]').trigger('click')
+
+    const blocked = wrapper.find('[data-testid="account-blocked-dialog"]')
+    expect(blocked.text()).toContain('You have 2 published classes.')
+    expect(blocked.text()).toContain('Archive your published classes first.')
+    expect(blocked.text()).toContain('Mandarin for Campus Life')
+    expect(blocked.findAll('a')).toHaveLength(2)
   })
 
   it('offers admins no deletion, only the note about deactivation', async () => {
@@ -194,6 +244,6 @@ describe('AccountSettingsPage', () => {
     await flushPromises()
 
     expect(auth.replaceAccessToken).toHaveBeenCalledWith('fresh-token')
-    expect(wrapper.find('[data-testid="toast"]').text()).toContain('Password changed.')
+    expect(wrapper.find('[data-testid="toast"]').text()).toBe('Password changed.')
   })
 })

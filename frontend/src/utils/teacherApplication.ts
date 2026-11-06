@@ -3,6 +3,7 @@
  * their status labels (namespace `verification`) and whether the application can be sent.
  */
 import type { PillTone } from '@/components/common/StatusPill.vue'
+import type { TeacherVerificationState } from '@/types/api'
 import type { TeacherDocument, TeacherDocumentStatus, TeacherDocumentType } from '@/types/ops'
 
 /** The teaching certificate and the identity document are required; the degree certificate is optional. */
@@ -20,10 +21,22 @@ const STATUS_KEYS: Record<TeacherDocumentStatus, string> = {
 }
 
 const STATUS_TONES: Record<TeacherDocumentStatus, PillTone> = {
-  READY: 'info',
+  READY: 'neutral',
   IN_REVIEW: 'info',
   VERIFIED: 'success',
   SENT: 'neutral',
+}
+
+const APPLICATION_TONES: Record<TeacherVerificationState, PillTone> = {
+  NOT_SUBMITTED: 'outline',
+  IN_REVIEW: 'info',
+  CHANGES_REQUESTED: 'strong',
+  APPROVED: 'success',
+}
+
+/** The badge tone of the applicant's own state: changes requested is the one that needs their action. */
+export function applicationTone(state: TeacherVerificationState): PillTone {
+  return APPLICATION_TONES[state]
 }
 
 export function documentStatusKey(status: TeacherDocumentStatus): string {

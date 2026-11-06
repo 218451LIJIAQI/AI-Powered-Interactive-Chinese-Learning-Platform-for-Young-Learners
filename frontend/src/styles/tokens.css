@@ -4,8 +4,7 @@
  * 田字格 lines), sunny yellow for the one hero action and count badges (with ink text), indigo ink on a cool, light page,
  * and the wordmark's orange. A small set of pigments gives each practice type and module its own colour. Usage guide:
  * DESIGN_SYSTEM.md. The app is laid out for desktop windows from --page-min-width up; the one width breakpoint is
- * (max-width: 1200px), for small laptops (breakpoints cannot be custom properties). The only other one
- * (DESIGN_SYSTEM.md §2.7) is (max-height: 820px).
+ * (max-width: 1200px), for small laptops (breakpoints cannot be custom properties).
  */
 :root {
   /* Colour: primary = Spark purple (buttons, links, focus, selection, progress, active navigation, seals).
@@ -102,7 +101,7 @@
   --color-white-a80: rgba(255, 255, 255, 0.8);
   --color-ink-a12: rgba(21, 32, 66, 0.12);
   --color-ink-a16: rgba(21, 32, 66, 0.16);
-  --color-ink-a48: rgba(21, 32, 66, 0.48);
+  --color-ink-a38: rgba(21, 32, 66, 0.38);
   --color-danger-a12: rgba(229, 72, 77, 0.12);
 
   /* Surfaces: content sits on the light page; white sheets are for things you act on. */
@@ -114,7 +113,7 @@
   --surface-hover: var(--color-primary-50);
   --surface-selected: var(--color-primary-100);
   --surface-inverse: var(--color-ink-900);
-  --surface-scrim: var(--color-ink-a48);
+  --surface-scrim: var(--color-ink-a38);
 
   /* Borders: hairlines, like the rules of a notebook */
   --border-subtle: #e8ebf5;
@@ -137,11 +136,13 @@
   --text-link-hover: var(--color-primary-700);
   --text-brand: var(--color-primary-600);
 
-  /* Typography: an editorial serif for display, a crisp humanist sans (designed in Jakarta) for the interface, a
-     Song serif for hanzi that are shown as characters to learn. */
-  --font-display: 'Fraunces', 'Noto Serif SC', Georgia, 'Times New Roman', serif;
-  --font-body: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  --font-cjk: 'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', 'Plus Jakarta Sans', sans-serif;
+  /* Typography (the prototype's rules): Nunito for the whole interface; Chinese is Noto Serif SC Bold at 20px and up
+     (--font-hanzi) and Noto Sans SC below 20px (--font-cjk). */
+  --font-display:
+    'Nunito', 'Noto Sans SC', system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-body:
+    'Nunito', 'Noto Sans SC', system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-cjk: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'Nunito', sans-serif;
   --font-hanzi: 'Noto Serif SC', 'Songti SC', 'STSong', 'SimSun', serif;
   --font-size-2xs: 0.6875rem; /* 11px */
   --font-size-xs: 0.75rem; /* 12px */
@@ -151,34 +152,41 @@
   --font-size-lg: 1.125rem; /* 18px */
   --font-size-xl: 1.25rem; /* 20px */
   --font-size-2xl: 1.5rem; /* 24px */
-  --font-size-3xl: 1.875rem; /* 30px */
-  --font-size-4xl: 2.25rem; /* 36px */
-  --font-size-5xl: 2.75rem; /* 44px */
-  --font-size-6xl: 3.5rem; /* 56px */
-  --font-size-7xl: 4.25rem; /* 68px */
-  --font-size-8xl: 5.5rem; /* 88px */
+  --font-size-3xl: 1.75rem; /* 28px */
+  --font-size-4xl: 2rem; /* 32px */
+  --font-size-5xl: 2.5rem; /* 40px */
+  --font-size-6xl: 3.25rem; /* 52px */
+  --font-size-7xl: 4rem; /* 64px, hanzi tiles only */
+  --font-size-8xl: 5.5rem; /* 88px, hanzi tiles only */
   --font-weight-regular: 400;
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
   --font-weight-bold: 700;
-  --line-height-tight: 1.1;
+  --font-weight-extrabold: 800;
+  --line-height-tight: 1.15;
   --line-height-snug: 1.3;
-  --line-height-normal: 1.55;
-  --line-height-relaxed: 1.7;
-  --letter-spacing-display: -0.025em;
-  --letter-spacing-wide: 0.08em;
+  --line-height-normal: 1.43;
+  --line-height-relaxed: 1.6;
+  --letter-spacing-display: -0.01em;
+  --letter-spacing-wide: 0.06em;
 
-  /* Typography: semantic roles. Display and page titles are serif; everything you scan is sans. */
-  --type-display-size: clamp(2.75rem, 1.9rem + 3vw, 4.75rem);
-  --type-h1-size: clamp(1.875rem, 1.5rem + 1.2vw, 2.625rem);
-  --type-h2-size: clamp(1.25rem, 1.1rem + 0.4vw, 1.5rem);
-  --type-body-size: var(--font-size-base);
-  --type-label-size: var(--font-size-md);
-  --type-caption-size: var(--font-size-sm);
+  /* Typography: semantic roles. Display 52 (public home hero) · H1 public 40 · H1 focus 32 (setup, Home hero) · H1 app 28
+     (nested pages) · question 24 · section 18 · card title 16 · body 14 · label 13 · caption 12 · overline 11. */
+  --type-display-size: var(--font-size-6xl);
+  --type-h1-public-size: var(--font-size-5xl);
+  --type-h1-focus-size: var(--font-size-4xl);
+  --type-h1-size: var(--font-size-3xl);
+  --type-question-size: var(--font-size-2xl);
+  --type-h2-size: var(--font-size-lg);
+  --type-card-title-size: var(--font-size-base);
+  --type-body-size: var(--font-size-md);
+  --type-label-size: var(--font-size-sm);
+  --type-caption-size: var(--font-size-xs);
   --type-overline-size: var(--font-size-2xs);
-  --type-stat-size: clamp(2rem, 1.6rem + 1.2vw, 2.75rem);
+  --type-stat-size: var(--font-size-3xl);
 
-  /* Spacing (4px base). Rhythm: 8 inside a group, 16 between groups, 24-32 between blocks, 48-64 between sections. */
+  /* Spacing (4px base). Rhythm: 4-8 icon to label and chip groups, 12-16 inside a card and button groups, 24 card padding,
+     card to card and section to section, 28 / 32 / 48 page padding (top / sides / bottom). */
   --space-0-5: 2px;
   --space-1: 4px;
   --space-1-5: 6px;
@@ -198,31 +206,44 @@
   --space-24: 96px;
 
   /* Layout rhythm (see DESIGN_SYSTEM.md for breakpoint values) */
-  --page-gutter: var(--space-10);
-  --page-gap: var(--space-10);
-  --section-gap: var(--space-5);
+  --page-gutter: var(--space-8);
+  --page-top: var(--space-7);
+  --page-bottom: var(--space-12);
+  --page-gap: var(--space-6);
+  --section-gap: var(--space-4);
   --card-padding: var(--space-6);
-  --grid-gap: var(--space-5);
-  --page-max: 1440px;
+  --grid-gap: var(--space-6);
+  /* The widest content column (1128px at a 1440px window: window - sidebar - gutters), kept readable on big monitors. */
+  --page-max: 1320px;
   --reading-max: 68ch;
-  --sidebar-width: 244px;
+  --sidebar-width: 248px;
   --topbar-height: 64px;
-  --topbar-control-size: 44px;
+  --topbar-control-size: 36px;
+  /* List and detail pages: list column 360, gap 24, detail fills the rest. */
+  --list-column: 360px;
+  /* Public pages: one 1376px width that lines up with the logo. */
+  --public-max: 1376px;
+  /* Focus mode: top bar 960 wide at y 36, one 600 column, a split footer under a rule. */
+  --focus-bar-width: 960px;
+  --focus-column: 600px;
+  --focus-bar-top: 36px;
+  --focus-footer-height: clamp(104px, 15.5vh, 140px);
   /* The narrowest window the pages are laid out for; narrower ones scroll sideways. */
   --page-min-width: 1024px;
 
-  /* Radius: crisp corners; pills only for chips, tags and segmented choices. */
+  /* Radius: small button 8 · input, inner row and button 10 · large button 12 · card 14 · dialog 20 · stage and hero 24. */
   --radius-xs: 4px;
   --radius-sm: 8px;
   --radius-md: 10px;
+  --radius-btn-lg: 12px;
   --radius-lg: 14px;
-  --radius-xl: 18px;
+  --radius-xl: 20px;
   --radius-2xl: 24px;
   --radius-pill: 999px;
   --radius-round: 50%;
 
   /* Shadows: soft, indigo-tinted, used sparingly (things you can pick up or that float). */
-  --shadow-xs: 0 1px 2px rgba(40, 52, 110, 0.06);
+  --shadow-xs: 0 1px 2px rgba(40, 52, 110, 0.04);
   --shadow-sm: 0 4px 12px rgba(40, 52, 110, 0.06);
   --shadow-md: 0 10px 24px rgba(40, 52, 110, 0.08);
   --shadow-overlay: 0 24px 64px rgba(21, 32, 66, 0.22);
@@ -252,15 +273,13 @@
 
   /* Control sizes */
   --control-height-sm: 32px;
-  --control-height-md: 42px;
-  --control-height-lg: 52px;
-}
-
-@media (max-width: 1200px) {
-  :root {
-    --page-gutter: var(--space-8);
-    --page-gap: var(--space-8);
-  }
+  --control-height-md: 40px;
+  --control-height-lg: 48px;
+  --chip-height: 32px;
+  --chip-height-sm: 26px;
+  --tab-height: 42px;
+  --badge-height: 24px;
+  --count-size: 18px;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,28 +1,33 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
-import ClassCatalogueFilters, { type CatalogueFilters } from './ClassCatalogueFilters.vue'
+import ClassCatalogueFilters from './ClassCatalogueFilters.vue'
 
-const DEFAULTS: CatalogueFilters = { keyword: '', topicId: null, levelId: null, learningType: null, sort: 'RECENT' }
-
-function mountFilters(modelValue: CatalogueFilters = DEFAULTS) {
+function mountFilters() {
   return mount(ClassCatalogueFilters, {
     props: {
-      modelValue,
-      summary: {
-        topics: [{ id: 4, name: 'Numbers' }],
-        levels: [{ id: 1, name: 'Beginner 1' }],
-      },
+      modelValue: null,
+      total: 3,
+      themes: [
+        { name: 'Travel', count: 2 },
+        { name: 'Daily life', count: 1 },
+      ],
     },
-    global: { stubs: { IconGlyph: true } },
   })
 }
 
 describe('ClassCatalogueFilters', () => {
-  it('emits the whole filter set when one select changes', async () => {
-    const wrapper = mountFilters()
-    await wrapper.findAll('select')[1]!.setValue('1')
+  it('shows All and each theme with its count', () => {
+    const chips = mountFilters().findAll('button')
 
-    expect(wrapper.emitted('update:modelValue')?.[0]?.[0]).toEqual({ ...DEFAULTS, levelId: 1 })
+    expect(chips.map((chip) => chip.text().replace(/\s+/g, ' '))).toEqual(['All · 3', 'Travel · 2', 'Daily life · 1'])
+    expect(chips[0]!.attributes('aria-pressed')).toBe('true')
+  })
+
+  it('emits the chosen theme', async () => {
+    const wrapper = mountFilters()
+    await wrapper.findAll('button')[1]!.trigger('click')
+
+    expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['Travel'])
   })
 })

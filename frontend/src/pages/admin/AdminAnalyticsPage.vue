@@ -1,6 +1,6 @@
 <template>
-  <div class="admin-insights page-stack">
-    <PageHeaderBlock :title="t('adminInsights.pageTitle')" :description="t('adminInsights.lede')">
+  <div class="page-stack">
+    <PageHeaderBlock :title="t('adminInsights.pageTitle')" hide-title>
       <template #actions>
         <SegmentedControl
           :model-value="days"
@@ -22,7 +22,7 @@
           @click="exportCsv"
         >
           <IconGlyph name="download" :size="16" />
-          {{ t('adminInsights.exportCsv') }}
+          <span>{{ t('adminInsights.exportCsv') }}</span>
         </button>
       </template>
     </PageHeaderBlock>
@@ -47,25 +47,11 @@
       </template>
     </StatePanel>
     <template v-else>
-      <section class="admin-insights-figures" :aria-label="t('adminInsights.figuresLabel')">
-        <dl class="admin-figures">
-          <div v-for="kpi in kpis" :key="kpi.label" class="admin-figure" data-testid="admin-insights-kpi">
-            <dt>{{ kpi.label }}</dt>
-            <dd>
-              <strong class="stat-figure">{{ kpi.value }}</strong>
-              <span>{{ kpi.detail }}</span>
-            </dd>
-          </div>
-        </dl>
-      </section>
-
-      <section class="admin-sheet admin-insights-chart" aria-labelledby="admin-insights-registrations-title">
-        <div class="admin-sheet-head">
-          <div>
-            <h2 id="admin-insights-registrations-title" class="admin-sheet-title">
-              {{ t('adminInsights.registrations') }}
-            </h2>
-            <p class="admin-sheet-caption" data-testid="admin-insights-registrations-detail">
+      <section class="panel admin-detail" aria-labelledby="admin-insights-registrations-title">
+        <header class="admin-section-head">
+          <div class="admin-list-head">
+            <h2 id="admin-insights-registrations-title" class="card-title">{{ t('adminInsights.registrations') }}</h2>
+            <p class="admin-meta" data-testid="admin-insights-registrations-detail">
               {{
                 t(
                   'adminInsights.registrationsDetail',
@@ -75,8 +61,14 @@
               }}
             </p>
           </div>
-        </div>
-        <div class="admin-sheet-body admin-insights-plot">
+          <div class="admin-list-head admin-insights-users" data-testid="admin-insights-users">
+            <strong class="row-list-title">
+              {{ t('adminInsights.usersTotal', { count: formatNumber(users.total) }, users.total) }}
+            </strong>
+            <p class="admin-meta">{{ usersBreakdown }}</p>
+          </div>
+        </header>
+        <div class="admin-insights-plot">
           <TrendChart :values="trend" :label="t('adminInsights.registrationsChart')" />
           <ol class="admin-insights-axis" aria-hidden="true">
             <li
@@ -92,23 +84,9 @@
       </section>
 
       <div class="admin-insights-grid">
-        <section class="admin-insights-block" aria-labelledby="admin-insights-learning-title">
-          <div class="admin-insights-head">
-            <h2 id="admin-insights-learning-title" class="admin-insights-title">{{ t('adminInsights.learning') }}</h2>
-            <p>{{ t('adminInsights.learningDetail') }}</p>
-          </div>
+        <section class="panel admin-detail" aria-labelledby="admin-insights-learning-title">
+          <h2 id="admin-insights-learning-title" class="card-title">{{ t('adminInsights.learning') }}</h2>
           <dl class="admin-insights-learning">
-            <div>
-              <dt>{{ t('adminInsights.activeStudents') }}</dt>
-              <dd>
-                {{
-                  t('adminInsights.activeOf', {
-                    active: formatNumber(data.learning.activeStudents),
-                    total: formatNumber(data.learning.totalStudents),
-                  })
-                }}
-              </dd>
-            </div>
             <div>
               <dt>{{ t('adminInsights.lessonsCompleted') }}</dt>
               <dd>{{ formatNumber(data.learning.lessonsCompleted) }}</dd>
@@ -124,20 +102,34 @@
               </dd>
             </div>
             <div>
-              <dt>{{ t('adminInsights.needsSupport') }}</dt>
+              <dt>{{ t('adminInsights.activeStudents') }}</dt>
               <dd>
-                {{ formatNumber(data.learning.needsSupport) }}
-                <span class="type-caption">{{ t('adminInsights.needsSupportHint') }}</span>
+                {{
+                  t('adminInsights.activeOf', {
+                    active: formatNumber(data.learning.activeStudents),
+                    total: formatNumber(data.learning.totalStudents),
+                  })
+                }}
               </dd>
+            </div>
+            <div>
+              <dt>{{ t('adminInsights.needsSupport') }}</dt>
+              <dd>{{ formatNumber(data.learning.needsSupport) }}</dd>
             </div>
           </dl>
         </section>
 
-        <section class="admin-insights-block" aria-labelledby="admin-insights-content-title">
-          <div class="admin-insights-head">
-            <h2 id="admin-insights-content-title" class="admin-insights-title">{{ t('adminInsights.content') }}</h2>
-            <p>{{ t('adminInsights.contentDetail', { total: formatNumber(contentTotal) }) }}</p>
-          </div>
+        <section class="panel admin-detail" aria-labelledby="admin-insights-content-title">
+          <header class="admin-section-head">
+            <div class="admin-list-head">
+              <h2 id="admin-insights-content-title" class="card-title">{{ t('adminInsights.content') }}</h2>
+              <p class="admin-meta">{{ t('adminInsights.contentDetail', { total: formatNumber(contentTotal) }) }}</p>
+            </div>
+            <RouterLink class="btn btn-ghost btn-sm admin-link-action" :to="{ name: 'admin-content-review' }">
+              {{ t('adminInsights.openContent') }}
+              <IconGlyph name="chevronRight" :size="16" />
+            </RouterLink>
+          </header>
           <ul class="admin-shares">
             <li v-for="row in contentRows" :key="row.label" data-testid="admin-insights-content-row">
               <span class="admin-share-head">
@@ -147,17 +139,19 @@
               <span class="admin-share-bar" aria-hidden="true"><span :style="{ width: `${row.percent}%` }" /></span>
             </li>
           </ul>
-          <RouterLink class="btn btn-link" :to="{ name: 'admin-content-review' }">
-            {{ t('adminInsights.openContent') }}
-            <IconGlyph name="chevronRight" :size="14" />
-          </RouterLink>
         </section>
 
-        <section class="admin-insights-block" aria-labelledby="admin-insights-ai-title">
-          <div class="admin-insights-head">
-            <h2 id="admin-insights-ai-title" class="admin-insights-title">{{ t('adminInsights.ai') }}</h2>
-            <p>{{ t('adminInsights.aiDetail', { total: formatNumber(aiTotal) }) }}</p>
-          </div>
+        <section class="panel admin-detail" aria-labelledby="admin-insights-ai-title">
+          <header class="admin-section-head">
+            <div class="admin-list-head">
+              <h2 id="admin-insights-ai-title" class="card-title">{{ t('adminInsights.ai') }}</h2>
+              <p class="admin-meta">{{ t('adminInsights.aiDetail', { total: formatNumber(aiTotal) }) }}</p>
+            </div>
+            <RouterLink class="btn btn-ghost btn-sm admin-link-action" :to="{ name: 'admin-ai-usage' }">
+              {{ t('adminInsights.openAiUsage') }}
+              <IconGlyph name="chevronRight" :size="16" />
+            </RouterLink>
+          </header>
           <ul class="admin-shares">
             <li v-for="row in aiRows" :key="row.label" data-testid="admin-insights-ai-row">
               <span class="admin-share-head">
@@ -167,10 +161,6 @@
               <span class="admin-share-bar" aria-hidden="true"><span :style="{ width: `${row.percent}%` }" /></span>
             </li>
           </ul>
-          <RouterLink class="btn btn-link" :to="{ name: 'admin-ai-usage' }">
-            {{ t('adminInsights.openAiUsage') }}
-            <IconGlyph name="chevronRight" :size="14" />
-          </RouterLink>
         </section>
       </div>
     </template>
@@ -184,11 +174,11 @@ import { computed, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import { adminOverviewApi } from '@/api/ops'
-import SegmentedControl from '@/components/common/SegmentedControl.vue'
+import AppToast from '@/components/common/AppToast.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
+import SegmentedControl from '@/components/common/SegmentedControl.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
 import TrendChart from '@/components/common/TrendChart.vue'
-import AppToast from '@/components/common/AppToast.vue'
 import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { useResource } from '@/composables/useResource'
@@ -225,6 +215,7 @@ const { toast, showToast } = useToast()
 const days = ref<Period>(7)
 const analytics = useResource(() => adminOverviewApi.analytics(days.value))
 const data = computed(() => analytics.data.value)
+const users = computed(() => data.value?.numbers.users ?? { total: 0, students: 0, teachers: 0, admins: 0 })
 
 function selectPeriod(period: Period): void {
   if (days.value === period) return
@@ -232,37 +223,13 @@ function selectPeriod(period: Period): void {
   void analytics.reload()
 }
 
-const kpis = computed(() => {
-  const value = data.value
-  if (!value) return []
-  const { users } = value.numbers
-  return [
-    {
-      label: t('adminInsights.kpiUsers'),
-      value: formatNumber(users.total),
-      detail: [
-        t('adminInsights.countStudents', { count: formatNumber(users.students) }, users.students),
-        t('adminInsights.countTeachers', { count: formatNumber(users.teachers) }, users.teachers),
-        t('adminInsights.countAdmins', { count: formatNumber(users.admins) }, users.admins),
-      ].join(' · '),
-    },
-    {
-      label: t('adminInsights.kpiRegistrations'),
-      value: formatNumber(value.newRegistrations),
-      detail: t('adminInsights.kpiRegistrationsDetail', { days: value.days }),
-    },
-    {
-      label: t('adminInsights.kpiPublished'),
-      value: formatNumber(value.numbers.publishedContent),
-      detail: t('adminInsights.kpiPublishedDetail', { total: formatNumber(value.numbers.totalContent) }),
-    },
-    {
-      label: t('adminInsights.kpiAi'),
-      value: formatNumber(value.numbers.aiRequests),
-      detail: t('adminInsights.kpiAiDetail', { successful: formatNumber(value.numbers.successfulAiRequests) }),
-    },
-  ]
-})
+const usersBreakdown = computed(() =>
+  [
+    t('adminInsights.countStudents', { count: formatNumber(users.value.students) }, users.value.students),
+    t('adminInsights.countTeachers', { count: formatNumber(users.value.teachers) }, users.value.teachers),
+    t('adminInsights.countAdmins', { count: formatNumber(users.value.admins) }, users.value.admins),
+  ].join(' · '),
+)
 
 const trend = computed<AnalyticsTrendPoint[]>(() =>
   (data.value?.registrations ?? []).map((day) => ({
@@ -312,13 +279,13 @@ function exportCsv(): void {
     [t('adminInsights.csvPeriod'), value.from, value.to],
     [],
     [t('adminInsights.csvMetric'), t('adminInsights.csvValue')],
-    [t('adminInsights.kpiUsers'), value.numbers.users.total],
+    [t('adminInsights.csvUsers'), value.numbers.users.total],
     [t('adminInsights.csvStudents'), value.numbers.users.students],
     [t('adminInsights.csvTeachers'), value.numbers.users.teachers],
     [t('adminInsights.csvAdmins'), value.numbers.users.admins],
-    [t('adminInsights.kpiRegistrations'), value.newRegistrations],
-    [t('adminInsights.kpiPublished'), value.numbers.publishedContent],
-    [t('adminInsights.kpiAi'), value.numbers.aiRequests],
+    [t('adminInsights.csvRegistrations'), value.newRegistrations],
+    [t('adminInsights.csvPublished'), value.numbers.publishedContent],
+    [t('adminInsights.csvAi'), value.numbers.aiRequests],
     [t('adminInsights.activeStudents'), value.learning.activeStudents],
     [t('adminInsights.lessonsCompleted'), value.learning.lessonsCompleted],
     [t('adminInsights.quizAverage'), value.learning.quizAverage],

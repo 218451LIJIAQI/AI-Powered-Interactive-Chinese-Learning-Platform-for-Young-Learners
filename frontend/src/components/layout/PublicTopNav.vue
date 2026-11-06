@@ -22,7 +22,7 @@
         {{ t('shell.openMyHome') }}
       </RouterLink>
       <template v-else>
-        <RouterLink class="btn btn-ghost" :to="SIGN_IN_ROUTE">
+        <RouterLink class="btn btn-secondary" :to="SIGN_IN_ROUTE">
           {{ t('shell.signIn') }}
         </RouterLink>
         <RouterLink class="btn btn-primary" :to="SIGN_UP_ROUTE">

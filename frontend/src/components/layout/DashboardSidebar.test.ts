@@ -83,14 +83,14 @@ describe('DashboardSidebar navigation', () => {
     expect(wrapper.get('[data-testid="sidebar-status"]').text()).toContain('In review')
   })
 
-  it('shows an approved teacher every tool and the verified card', async () => {
+  it('shows an approved teacher every tool and no status card', async () => {
     const wrapper = await mountAt(
       '/teacher/classes',
       signIn('TEACHER', { teacherProfile: { teacherStatus: 'APPROVED', verificationState: 'APPROVED' } }),
     )
     expect(wrapper.findAll('a.sidebar-link.is-locked')).toHaveLength(0)
     expect(activeLinks(wrapper)).toEqual(['/teacher/classes'])
-    expect(wrapper.get('[data-testid="sidebar-status"]').text()).toContain('Verified teacher')
+    expect(wrapper.find('[data-testid="sidebar-status"]').exists()).toBe(false)
   })
 })
 

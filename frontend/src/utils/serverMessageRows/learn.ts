@@ -206,8 +206,8 @@ export const LEARN_MESSAGES: readonly (readonly [en: string, ms: string, zh: str
     '这道题不属于水平测试。',
   ],
   [
-    'The level check has at most 6 questions.',
-    'Semakan tahap mempunyai paling banyak 6 soalan.',
-    '水平测试最多 6 道题。',
+    'The level check has at most 8 questions.',
+    'Semakan tahap mempunyai paling banyak 8 soalan.',
+    '水平测试最多 8 道题。',
   ],
 ]

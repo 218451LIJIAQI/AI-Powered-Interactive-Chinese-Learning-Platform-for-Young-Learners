@@ -127,7 +127,7 @@ describe('AdminAuditLogPage', () => {
     await wrapper.get('[data-testid="admin-audit-from"]').setValue('2026-05-10')
     await flushPromises()
 
-    expect(wrapper.get('.admin-audit-range-error').text()).toBe('The From date must be on or before the To date.')
+    expect(wrapper.get('#admin-audit-range-error').text()).toBe('The From date must be on or before the To date.')
     expect(wrapper.get('[data-testid="admin-audit-from"]').attributes('aria-invalid')).toBe('true')
     expect(overview.auditLog).not.toHaveBeenCalled()
     expect(wrapper.findAll('[data-testid="admin-audit-row"]')).toHaveLength(0)

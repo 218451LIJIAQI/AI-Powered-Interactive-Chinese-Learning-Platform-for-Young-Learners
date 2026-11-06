@@ -51,17 +51,17 @@ describe('TeacherLockedPage', () => {
     expect(wrapper.find('[data-testid="teacher-locked-status"]').text()).toContain(
       'Not submitted yet. Upload your documents to start.',
     )
-    expect(wrapper.text()).toContain('upload your verification documents')
+    expect(wrapper.text()).toContain('upload your documents')
   })
 
-  it('says since when the application is in review and that documents stay locked', async () => {
+  it('says since when the application is in review', async () => {
     teacherVerificationApi.profile.mockResolvedValue(
       profile({ verificationState: 'IN_REVIEW', submittedAt: '2026-05-14T09:00:00' }),
     )
     const wrapper = await mountPage()
 
     expect(wrapper.find('[data-testid="teacher-locked-status"]').text()).toContain('In review since')
-    expect(wrapper.text()).toContain('Documents stay locked while they are in review.')
+    expect(wrapper.text()).toContain('Until then you can edit your teaching profile.')
   })
 
   it('repeats the reason when changes were requested', async () => {

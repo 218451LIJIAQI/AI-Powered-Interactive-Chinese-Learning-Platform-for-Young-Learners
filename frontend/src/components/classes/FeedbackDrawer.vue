@@ -9,14 +9,6 @@
     @close="emit('close')"
   >
     <form :id="formId" class="form-grid" @submit.prevent="save">
-      <fieldset class="field-set">
-        <legend class="field-label">{{ t('teacherStudents.write.type') }}</legend>
-        <SegmentedControl
-          v-model="type"
-          class="feedback-types"
-          :options="FEEDBACK_TYPES.map((value) => ({ value, label: t(FEEDBACK_TYPE_KEYS[value]) }))"
-        />
-      </fieldset>
       <div v-if="targets" class="field">
         <label class="field-label" :for="`${formId}-about`">{{ t('teacherStudents.write.about') }}</label>
         <select :id="`${formId}-about`" v-model="targetKey" class="select" data-testid="feedback-about">
@@ -51,25 +43,14 @@
         />
         <div class="field-foot">
           <p :id="`${formId}-hint`" class="field-hint">{{ t('teacherStudents.write.messageHint') }}</p>
-          <p class="field-hint field-counter">{{ message.length }} / 2000</p>
+          <p class="field-hint field-counter">{{ t('teacherStudents.write.counter', { count: message.length }) }}</p>
         </div>
-      </div>
-      <div class="feedback-starters">
-        <span class="field-label">{{ t('teacherStudents.write.starters') }}</span>
-        <button
-          type="button"
-          class="chip"
-          :aria-label="t('teacherStudents.write.useStarter', { text: starter })"
-          @click="useStarter"
-        >
-          {{ starter }}
-        </button>
       </div>
       <p v-if="error" class="field-error" role="alert">{{ error }}</p>
     </form>
     <template #footer>
-      <button type="button" class="btn btn-ghost" :disabled="busy" @click="emit('close')">
-        {{ t('classes.cancel') }}
+      <button type="button" class="btn btn-secondary" :disabled="busy" @click="emit('close')">
+        {{ t('common.cancel') }}
       </button>
       <button
         type="submit"
@@ -79,24 +60,22 @@
         :aria-busy="busy"
         data-testid="feedback-send"
       >
-        {{ initial ? t('teacherStudents.history.save') : t('teacherStudents.write.send') }}
+        <IconGlyph name="send" :size="16" />{{ t('teacherStudents.write.send') }}
       </button>
     </template>
   </AppOverlay>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, useId, watch } from 'vue'
+import { ref, useId, watch } from 'vue'
 
-import { useLocalMessages } from '@/composables/useLocalMessages'
-import { classesMessages } from '@/plugins/classesMessages'
-import { teacherStudentsMessages } from '@/plugins/teacherStudentsMessages'
-import type { FeedbackRow, FeedbackTarget, FeedbackType } from '@/types/classes'
-import { FEEDBACK_TYPES, FEEDBACK_TYPE_KEYS } from '@/utils/classes'
-import { formatShortDate } from '@/utils/format'
-
-import SegmentedControl from '@/components/common/SegmentedControl.vue'
 import AppOverlay from '@/components/common/AppOverlay.vue'
+import IconGlyph from '@/components/common/IconGlyph.vue'
+import { useLocalMessages } from '@/composables/useLocalMessages'
+import { commonMessages } from '@/plugins/commonMessages'
+import { teacherStudentsMessages } from '@/plugins/teacherStudentsMessages'
+import type { FeedbackTarget, FeedbackType } from '@/types/classes'
+import { formatShortDate } from '@/utils/format'
 
 export interface FeedbackDraft {
   type: FeedbackType
@@ -104,57 +83,43 @@ export interface FeedbackDraft {
   target: FeedbackTarget | null
 }
 
-/** Write feedback to a student (about a quiz attempt, a lesson or in general), or edit feedback already sent. */
+/** The server still files feedback under a type; teachers no longer choose one. */
+const DEFAULT_FEEDBACK_TYPE: FeedbackType = 'ENCOURAGING'
+
+/** Write feedback to a student, about a quiz attempt, a lesson or in general. */
 const props = withDefaults(
   defineProps<{
     open: boolean
     title: string
     subtitle?: string
-    /** What the feedback can be about (writing only). */
+    /** What the feedback can be about. */
     targets?: readonly FeedbackTarget[] | null
-    /** The feedback being edited. */
-    initial?: FeedbackRow | null
     busy: boolean
     error: string | null
   }>(),
-  { subtitle: '', targets: null, initial: null },
+  { subtitle: '', targets: null },
 )
 const emit = defineEmits<{ save: [draft: FeedbackDraft]; close: [] }>()
 
-const { t } = useLocalMessages({ teacherStudents: teacherStudentsMessages, classes: classesMessages })
+const { t } = useLocalMessages({ teacherStudents: teacherStudentsMessages, common: commonMessages })
 const formId = useId()
 
-const STARTER_KEYS: Record<FeedbackType, string> = {
-  ENCOURAGING: 'teacherStudents.write.starter.ENCOURAGING',
-  LESSON: 'teacherStudents.write.starter.LESSON',
-  WEAK_AREA: 'teacherStudents.write.starter.WEAK_AREA',
-  CORRECTIVE: 'teacherStudents.write.starter.CORRECTIVE',
-  PROGRESS: 'teacherStudents.write.starter.PROGRESS',
-}
-
-const type = ref<FeedbackType>('ENCOURAGING')
 const message = ref('')
 const targetKey = ref('')
-const starter = computed(() => t(STARTER_KEYS[type.value]))
 
 watch(
-  () => [props.open, props.initial] as const,
-  ([open, initial]) => {
+  () => props.open,
+  (open) => {
     if (!open) return
-    type.value = initial?.type ?? 'ENCOURAGING'
-    message.value = initial?.message ?? ''
+    message.value = ''
     const latestAttempt = props.targets?.find((target) => target.kind === 'QUIZ_ATTEMPT')
     targetKey.value = latestAttempt ? `${latestAttempt.kind}-${latestAttempt.id}` : ''
   },
   { immediate: true },
 )
 
-function useStarter(): void {
-  message.value = message.value.trim() ? `${message.value.trim()} ${starter.value}` : starter.value
-}
-
 function save(): void {
   const target = props.targets?.find((item) => `${item.kind}-${item.id}` === targetKey.value) ?? null
-  emit('save', { type: type.value, message: message.value.trim(), target })
+  emit('save', { type: DEFAULT_FEEDBACK_TYPE, message: message.value.trim(), target })
 }
 </script>

@@ -54,9 +54,9 @@ function detailOf(user: AdminUserListItem, overrides: Partial<AdminUserDetail> =
   }
 }
 
-/** The queries of the page's list requests. */
+/** The queries of the page's list requests (the tabs ask for one row, for the number of accounts). */
 function listQueries(): unknown[] {
-  return usersApi.list.mock.calls.map(([query]) => query)
+  return usersApi.list.mock.calls.map(([query]) => query).filter((query) => query.size === 10)
 }
 
 describe('AdminUsersPage', () => {
@@ -82,6 +82,10 @@ describe('AdminUsersPage', () => {
     // The applications tab shows the sidebar's nav count of applications waiting.
     expect(navCounts).toHaveBeenCalledTimes(1)
     expect(wrapper.get('[data-testid="admin-users-tab-applications"] .route-tab-count').text()).toBe('3')
+    expect(wrapper.get('[data-testid="admin-users-tab-all"] .route-tab-count').text()).toBe('2')
+    // Without a choice in the address, the first user opens beside the list, not in a drawer.
+    expect(wrapper.get('[data-testid="admin-users-detail"]').attributes('role')).toBeUndefined()
+    expect(wrapper.get('[data-testid="admin-users-detail"]').text()).toContain('Farah Aziz')
 
     await wrapper.get('[data-testid="admin-users-search"]').setValue('  Farah ')
     vi.advanceTimersByTime(300)
@@ -106,7 +110,17 @@ describe('AdminUsersPage', () => {
       }),
     )
     usersApi.deactivate.mockResolvedValue({
-      user: detailOf({ ...farah, active: false }),
+      user: detailOf(
+        { ...farah, active: false },
+        {
+          deactivation: {
+            actorName: 'Nur Admin',
+            actorEmail: null,
+            reason: 'Repeated spam',
+            at: '2026-05-10T10:00:00',
+          },
+        },
+      ),
       cancelledSessions: 2,
       endedBookings: 5,
       itemsBackToDraft: 1,
@@ -144,7 +158,7 @@ describe('AdminUsersPage', () => {
 
     expect(usersApi.deactivate).toHaveBeenCalledWith(7, 'Repeated spam')
     expect(wrapper.find('[data-testid="admin-users-status-dialog"]').exists()).toBe(false)
-    expect(wrapper.text()).toContain('Farah Aziz is deactivated and signed out. Live sessions cancelled: 2')
+    expect(wrapper.text()).toContain('Farah Aziz is deactivated. Live sessions cancelled: 2.')
     expect(wrapper.text()).toContain('Reason: Repeated spam')
     expect(wrapper.find('[data-testid="admin-users-reactivate"]').exists()).toBe(true)
   })
@@ -200,7 +214,7 @@ describe('AdminUsersPage', () => {
     const dialog = wrapper.get('[data-testid="admin-users-status-dialog"]')
     expect(dialog.get('[role="alert"]').text()).toBe('The last admin stays active.')
 
-    // Cancel closes only the dialog; the user's drawer stays open.
+    // Cancel closes only the dialog; the person stays open beside the list.
     await wrapper.get('[data-testid="admin-users-status-dialog-cancel"]').trigger('click')
     expect(wrapper.find('[data-testid="admin-users-status-dialog"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="admin-users-detail"]').exists()).toBe(true)
@@ -214,6 +228,27 @@ describe('AdminUsersPage', () => {
 
     expect(wrapper.find('[data-testid="admin-users-deactivate"]').exists()).toBe(false)
     expect(wrapper.text()).toContain('This is your account.')
+  })
+
+  it('says what no search matched and clears it', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const { wrapper } = await mountAdminPage(AdminUsersPage, '/admin/users')
+    await flushPromises()
+
+    usersApi.list.mockResolvedValue(pageOf([]))
+    await wrapper.get('[data-testid="admin-users-search"]').setValue('Zhao Min')
+    vi.advanceTimersByTime(300)
+    await flushPromises()
+    expect(wrapper.text()).toContain('No users match “Zhao Min”')
+    expect(wrapper.find('[data-testid="admin-users-detail"]').exists()).toBe(false)
+
+    usersApi.list.mockResolvedValue(pageOf([farah, daniel]))
+    const clear = wrapper.findAll('button').find((button) => button.text() === 'Clear search')!
+    await clear.trigger('click')
+    vi.advanceTimersByTime(300)
+    await flushPromises()
+    expect(listQueries().at(-1)).toEqual({ page: 0, size: 10 })
+    expect(wrapper.findAll('[data-testid="admin-users-row"]')).toHaveLength(2)
   })
 
   it('invites an admin and lists the invites waiting for a password', async () => {
@@ -244,7 +279,7 @@ describe('AdminUsersPage', () => {
     expect(wrapper.find('[data-testid="admin-users-invite-drawer"]').exists()).toBe(false)
     expect(wrapper.text()).toContain('Invite sent to mei@example.com.')
     const invites = wrapper.get('[data-testid="admin-users-invites"]').text()
-    expect(invites).toContain('1 pending')
+    expect(invites).toContain('1 admin invite pending')
     expect(invites).toContain('mei@example.com')
   })
 })

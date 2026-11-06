@@ -1,17 +1,13 @@
 import { flushPromises } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { pageOf } from '@/test/helpers'
-import type { HealthStatusResponse } from '@/types/api'
-import type { AdminDashboardResponse, AuditEntry } from '@/types/ops'
+import type { AdminDashboardResponse } from '@/types/ops'
 
 import { mountAdminPage } from './adminPageTestSetup'
 
-const overview = vi.hoisted(() => ({ dashboard: vi.fn(), auditLog: vi.fn() }))
-const system = vi.hoisted(() => ({ health: vi.fn() }))
+const overview = vi.hoisted(() => ({ dashboard: vi.fn() }))
 
 vi.mock('@/api/ops', () => ({ adminOverviewApi: overview }))
-vi.mock('@/api/services', () => ({ systemApi: system }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ isAuthenticated: true }) }))
 
 import AdminDashboardPage from './AdminDashboardPage.vue'
@@ -19,7 +15,7 @@ import AdminDashboardPage from './AdminDashboardPage.vue'
 function dashboard(): AdminDashboardResponse {
   return {
     teacherApplications: {
-      count: 2,
+      count: 3,
       items: [
         {
           teacherId: 7,
@@ -94,112 +90,55 @@ function dashboard(): AdminDashboardResponse {
   }
 }
 
-function health(overrides: Partial<HealthStatusResponse> = {}): HealthStatusResponse {
-  return {
-    status: 'UP',
-    timestamp: new Date().toISOString(),
-    database: 'UP',
-    ai: 'AVAILABLE',
-    ...overrides,
-  }
-}
-
-const approval: AuditEntry = {
-  id: 90,
-  actionType: 'CLASS_APPROVED',
-  category: 'CONTENT',
-  actorName: 'Nur Admin',
-  actorEmail: 'nur@example.com',
-  targetType: 'CLASS',
-  targetLabel: 'Chinese Culture and Festivals',
-  targetUserId: null,
-  reason: null,
-  description: null,
-  createdAt: new Date().toISOString(),
-}
-
 describe('AdminDashboardPage', () => {
   beforeEach(() => {
     overview.dashboard.mockResolvedValue(dashboard())
-    overview.auditLog.mockResolvedValue(pageOf([approval], 0, 1, 6))
-    system.health.mockResolvedValue(health())
   })
 
-  it('shows every queue with its first items, links and an empty line', async () => {
+  it('shows the four queues in a fixed order with their counts, first items and links', async () => {
     const { wrapper } = await mountAdminPage(AdminDashboardPage, '/admin/dashboard')
     await flushPromises()
 
-    const applications = wrapper.get('[data-testid="admin-home-queue-applications"]')
-    expect(applications.text()).toContain('Teacher applications (2)')
-    expect(applications.text()).toContain('Farah Aziz')
-    expect(applications.text()).toContain('2 documents')
-    expect(applications.find('a[href="/admin/users/applications?teacher=7"]').exists()).toBe(true)
-
-    const review = wrapper.get('[data-testid="admin-home-queue-review"]')
-    expect(review.text()).toContain('Chinese Culture and Festivals')
-    expect(review.text()).toContain('Class · Li Wei')
-
-    expect(wrapper.get('[data-testid="admin-home-queue-reports"]').text()).toContain('Nothing waiting.')
-    // Queues with work come first; the clear one moves to the end.
+    expect(wrapper.get('h1').text()).toBe('Dashboard')
+    expect(wrapper.text()).toContain('Needs attention')
     const order = wrapper.findAll('[data-testid^="admin-home-queue-"]').map((queue) => queue.attributes('data-testid'))
     expect(order).toEqual([
       'admin-home-queue-applications',
       'admin-home-queue-review',
-      'admin-home-queue-support',
       'admin-home-queue-reports',
+      'admin-home-queue-support',
     ])
-    expect(wrapper.get('h1').text()).toBe('Dashboard')
-    expect(wrapper.text()).toContain('4 items waiting in 3 queues, oldest first.')
+
+    const applications = wrapper.get('[data-testid="admin-home-queue-applications"]')
+    expect(applications.get('h3').text()).toContain('Teacher applications')
+    expect(applications.get('.count-badge').text()).toBe('3')
+    expect(applications.findAll('.row-list li')).toHaveLength(2)
+    expect(applications.text()).toContain('Farah Aziz')
+    expect(applications.text()).toContain('2 documents')
+    expect(applications.find('a[href="/admin/users/applications?teacher=7"]').exists()).toBe(true)
+    expect(applications.find('a[href="/admin/users/applications"]').text()).toContain('View all')
+
+    const review = wrapper.get('[data-testid="admin-home-queue-review"]')
+    expect(review.text()).toContain('Chinese Culture and Festivals')
+    expect(review.text()).toContain('Class · Li Wei')
+    expect(review.find('a[href="/admin/content?item=class-3"]').exists()).toBe(true)
+
+    const reports = wrapper.get('[data-testid="admin-home-queue-reports"]')
+    expect(reports.text()).toContain('Nothing waiting.')
+    expect(reports.find('.count-badge').exists()).toBe(false)
+
     const support = wrapper.get('[data-testid="admin-home-queue-support"]')
     expect(support.text()).toContain('Visitor')
     expect(support.find('a[href="/admin/support?request=41"]').exists()).toBe(true)
   })
 
-  it('shows the platform numbers and last week’s registrations', async () => {
+  it('keeps the platform numbers, recent activity and system status off the dashboard', async () => {
     const { wrapper } = await mountAdminPage(AdminDashboardPage, '/admin/dashboard')
     await flushPromises()
 
-    const numbers = wrapper.get('[data-testid="admin-home-numbers"]').text()
-    expect(numbers).toContain('15')
-    expect(numbers).toContain('8 students · 6 teachers · 1 admin')
-    expect(numbers).toContain('Of 81 classes and lessons')
-    expect(numbers).toContain('1,236 successful')
-    expect(wrapper.text()).toContain('Last 7 days · 6 new accounts')
-    const bars = wrapper.findAll('[data-testid="admin-home-bars"] li')
-    expect(bars).toHaveLength(7)
-    expect(bars[3].text()).toContain('May 15 · 2')
-  })
-
-  it('lists the latest admin actions, each linking to its audit entry', async () => {
-    const { wrapper } = await mountAdminPage(AdminDashboardPage, '/admin/dashboard')
-    await flushPromises()
-
-    expect(overview.auditLog).toHaveBeenCalledWith({ page: 0, size: 6 })
-    const feed = wrapper.get('[data-testid="admin-home-activity"]')
-    expect(feed.text()).toContain('Chinese Culture and Festivals')
-    expect(feed.text()).toContain('Nur Admin')
-    expect(feed.find('a[href="/admin/audit-log?entry=90"]').exists()).toBe(true)
-  })
-
-  it('reports the system status from the health check', async () => {
-    const { wrapper } = await mountAdminPage(AdminDashboardPage, '/admin/dashboard')
-    await flushPromises()
-    expect(wrapper.get('[data-testid="admin-home-health"]').text()).toContain('All systems running')
-
-    system.health.mockResolvedValue(health({ ai: 'UNAVAILABLE' }))
-    await wrapper.get('.admin-home-status button').trigger('click')
-    await flushPromises()
-    expect(wrapper.get('[data-testid="admin-home-health"]').text()).toContain('Running without AI')
-
-    system.health.mockResolvedValue(health({ status: 'DOWN', database: 'DOWN' }))
-    await wrapper.get('.admin-home-status button').trigger('click')
-    await flushPromises()
-    expect(wrapper.get('[data-testid="admin-home-health"]').text()).toContain('Database unavailable')
-
-    system.health.mockRejectedValue(new Error('offline'))
-    await wrapper.get('.admin-home-status button').trigger('click')
-    await flushPromises()
-    expect(wrapper.get('[data-testid="admin-home-health"]').text()).toContain('Status check failed')
+    expect(wrapper.find('[data-testid="admin-home-numbers"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="admin-home-activity"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="admin-home-health"]').exists()).toBe(false)
   })
 
   it('offers a retry when the dashboard cannot be loaded', async () => {

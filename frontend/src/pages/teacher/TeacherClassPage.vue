@@ -1,25 +1,26 @@
 <template>
-  <div class="teacher-class-page page-stack">
+  <div class="page-stack teacher-class-page">
+    <AppToast :message="toast" />
+
     <template v-if="page">
-      <PageHeaderBlock :title="page.title" :description="facts">
+      <TeacherPageHeader :title="page.title" :description="facts">
         <template #before>
           <AppBreadcrumb
             :items="[{ label: t('teacherClasses.list.title'), to: { name: 'teacher-classes' } }, { label: page.title }]"
           />
         </template>
-        <template #meta>
-          <ClassStatusPill :status="page.status" :revision-status="page.revision?.status ?? null" />
-          <span class="type-caption">{{ t('teacherClasses.list.students', page.studentCount) }}</span>
+        <template #badge>
+          <TeacherStatusPill :status="page.status" :revision-status="page.revision?.status ?? null" />
         </template>
         <template #actions>
-          <button v-if="page.canDelete" type="button" class="btn btn-danger-soft" @click="dialog = 'delete'">
+          <button v-if="page.canDelete" type="button" class="btn btn-ghost" @click="dialog = 'delete'">
             <IconGlyph name="trash" :size="16" />{{ t('teacherClasses.page.delete') }}
           </button>
           <button v-if="page.status === 'ARCHIVED'" type="button" class="btn btn-secondary" @click="dialog = 'restore'">
-            <IconGlyph name="refresh" :size="16" />{{ t('teacherClasses.page.restore') }}
+            <IconGlyph name="archive" :size="16" />{{ t('teacherClasses.page.restore') }}
           </button>
           <button
-            v-else-if="page.status !== 'SUBMITTED'"
+            v-else-if="page.status !== 'SUBMITTED' && !page.canDelete"
             type="button"
             class="btn btn-ghost"
             data-testid="archive-class"
@@ -28,19 +29,15 @@
             <IconGlyph name="archive" :size="16" />{{ t('teacherClasses.page.archive') }}
           </button>
         </template>
-      </PageHeaderBlock>
+      </TeacherPageHeader>
 
-      <DataNotice :error="actionError" :success="actionSuccess" />
-      <p
-        v-if="page.status === 'REJECTED' && page.rejectionReason"
-        class="callout is-compact is-warning teacher-class-state"
-        role="note"
-      >
-        <IconGlyph name="alert" :size="16" />
-        <span>{{ t('teacherClasses.page.changesRequestedNoName', { reason: page.rejectionReason }) }}</span>
+      <DataNotice :error="actionError" />
+      <p v-if="page.status === 'REJECTED' && page.rejectionReason" class="callout" role="note">
+        <IconGlyph name="alert" :size="18" />
+        <span>{{ t('teacherClasses.page.changesRequested', { reason: page.rejectionReason }) }}</span>
       </p>
-      <p v-else-if="statusNotice" class="callout is-compact teacher-class-state" role="note">
-        <IconGlyph :name="statusIcon" :size="16" />
+      <p v-else-if="statusNotice" class="callout" role="note">
+        <IconGlyph :name="page.status === 'ARCHIVED' ? 'archive' : 'info'" :size="18" />
         <span>{{ statusNotice }}</span>
       </p>
 
@@ -52,119 +49,51 @@
         :units="activeUnits"
         :editable="structureEditable"
         @updated="resource.data.value = $event"
-        @notice="showSuccess"
-        @error="showError"
+        @notice="showToast"
       />
 
-      <div v-else-if="tab === 'details'" class="teacher-class-details">
-        <section class="panel teacher-class-form" aria-labelledby="teacher-class-details-title">
-          <div>
-            <h2 id="teacher-class-details-title" class="card-title">{{ t('teacherClasses.details.title') }}</h2>
-            <p class="card-subtitle">
-              {{
-                page.status === 'PUBLISHED'
-                  ? t('teacherClasses.details.publishedHint')
-                  : t('teacherClasses.details.draftHint')
-              }}
-            </p>
-          </div>
-          <p v-if="page.revision?.status === 'DRAFT'" class="callout is-compact is-warning">
-            <IconGlyph name="edit" :size="16" /><span>{{ t('teacherClasses.details.revisionDraft') }}</span>
+      <section v-else class="panel teacher-card" aria-labelledby="teacher-class-details-title">
+        <div class="teacher-card-head">
+          <h2 id="teacher-class-details-title" class="card-title">{{ t('teacherClasses.details.title') }}</h2>
+          <p class="type-caption">
+            {{
+              page.status === 'PUBLISHED' ? t('teacherClasses.details.publishedHint') : t('teacherClasses.details.hint')
+            }}
           </p>
-          <p v-else-if="page.revision?.status === 'SUBMITTED'" class="callout is-compact">
-            <IconGlyph name="history" :size="16" /><span>{{ t('teacherClasses.details.revisionSubmitted') }}</span>
-          </p>
-          <p v-else-if="page.revision?.status === 'REJECTED'" class="callout is-compact is-danger">
-            <IconGlyph name="alert" :size="16" />
-            <span>{{
-              t('teacherClasses.details.revisionRejected', { reason: page.revision.rejectionReason ?? '' })
-            }}</span>
-          </p>
-          <p v-if="!detailsEditable" class="callout is-compact">
-            <IconGlyph name="lock" :size="16" /><span>{{ t('teacherClasses.details.readOnly') }}</span>
-          </p>
-          <form :id="formId" @submit.prevent="saveDetails">
-            <ClassDetailsFields
-              v-model="form"
-              :levels="levels.data.value ?? []"
-              :topics="topics.data.value ?? []"
-              :disabled="!detailsEditable"
-            />
-          </form>
-          <div v-if="detailsEditable" class="card-footer">
-            <button
-              v-if="page.revision && page.revision.status !== 'SUBMITTED'"
-              type="button"
-              class="btn btn-ghost"
-              :disabled="saving"
-              @click="discardDetails"
-            >
-              {{ t('teacherClasses.details.discard') }}
-            </button>
-            <button type="submit" class="btn btn-secondary" :form="formId" :disabled="saving || !form.title.trim()">
-              {{
-                page.status === 'PUBLISHED' ? t('teacherClasses.details.saveDraft') : t('teacherClasses.details.save')
-              }}
-            </button>
-            <button
-              v-if="page.status === 'PUBLISHED'"
-              type="button"
-              class="btn btn-primary"
-              :disabled="saving || !form.title.trim()"
-              :aria-busy="saving"
-              data-testid="submit-details"
-              @click="submitDetails"
-            >
-              <IconGlyph name="send" :size="16" />{{ t('teacherClasses.details.submit') }}
-            </button>
-          </div>
-        </section>
-
-        <section class="teacher-class-note" aria-labelledby="teacher-class-note-title">
-          <div class="teacher-class-note-head">
-            <h2 id="teacher-class-note-title" class="card-title">{{ t('teacherClasses.note.title') }}</h2>
-            <p class="card-subtitle">{{ t('teacherClasses.note.hint') }}</p>
-          </div>
-          <div class="field">
-            <label class="field-label" :for="`${formId}-note`">{{ t('teacherClasses.note.label') }}</label>
-            <textarea
-              :id="`${formId}-note`"
-              v-model="note"
-              class="textarea"
-              rows="4"
-              maxlength="500"
-              :placeholder="t('teacherClasses.note.placeholder')"
-            />
-            <p class="field-hint field-counter">{{ note.length }} / 500</p>
-          </div>
-          <div class="form-actions">
-            <button type="button" class="btn btn-secondary" :disabled="saving" @click="saveNote">
-              {{ t('teacherClasses.note.save') }}
-            </button>
-          </div>
-        </section>
-      </div>
-
-      <section v-else class="teacher-class-history" aria-labelledby="teacher-class-history-title">
-        <h2 id="teacher-class-history-title" class="sr-only">{{ t('teacherClasses.page.tabHistory') }}</h2>
-        <StatePanel
-          v-if="history.loading.value"
-          tone="loading"
-          :title="t('classes.loading')"
-          :message="t('teacherClasses.page.tabHistory')"
-        />
-        <StatePanel
-          v-else-if="history.error.value"
-          tone="error"
-          icon="alert"
-          :title="t('classes.loadError')"
-          :message="history.error.value"
-        >
-          <template #actions>
-            <button class="btn btn-primary" type="button" @click="history.reload">{{ t('classes.retry') }}</button>
-          </template>
-        </StatePanel>
-        <div v-else class="panel"><ContentHistory :events="history.data.value ?? []" /></div>
+        </div>
+        <p v-if="page.revision?.status === 'SUBMITTED'" class="callout" role="note">
+          <IconGlyph name="history" :size="18" /><span>{{ t('teacherClasses.details.revisionSubmitted') }}</span>
+        </p>
+        <p v-else-if="page.revision?.status === 'REJECTED'" class="callout" role="note">
+          <IconGlyph name="alert" :size="18" />
+          <span>{{
+            t('teacherClasses.details.revisionRejected', { reason: page.revision.rejectionReason ?? '' })
+          }}</span>
+        </p>
+        <form :id="formId" @submit.prevent="saveDetails">
+          <ClassDetailsFields v-model="form" :themes="themes.data.value ?? []" :disabled="!detailsEditable" />
+        </form>
+        <div v-if="detailsEditable" class="card-footer">
+          <button
+            v-if="page.revision"
+            type="button"
+            class="btn btn-secondary"
+            :disabled="saving"
+            @click="discardDetails"
+          >
+            {{ t('teacherClasses.details.discard') }}
+          </button>
+          <button
+            type="submit"
+            class="btn btn-primary"
+            :form="formId"
+            :disabled="saving || !form.title.trim()"
+            :aria-busy="saving"
+            :data-testid="page.status === 'PUBLISHED' ? 'submit-details' : 'save-details'"
+          >
+            {{ t('teacherClasses.details.save') }}
+          </button>
+        </div>
       </section>
     </template>
 
@@ -188,7 +117,7 @@
         <template #actions>
           <button class="btn btn-secondary" type="button" @click="resource.reload">{{ t('classes.retry') }}</button>
           <RouterLink class="btn btn-primary" :to="{ name: 'teacher-classes' }">{{
-            t('teacherClasses.page.backToClasses')
+            t('teacherClasses.page.goToClasses')
           }}</RouterLink>
         </template>
       </StatePanel>
@@ -196,9 +125,10 @@
 
     <ConfirmDialog
       :open="dialog === 'archive'"
-      :title="t('teacherClasses.archive.title')"
-      :message="t('teacherClasses.archive.message', { title: page?.title ?? '' })"
+      :title="t('teacherClasses.archive.title', { title: page?.title ?? '' })"
+      :message="t('teacherClasses.archive.message')"
       :confirm-label="t('teacherClasses.archive.confirm')"
+      :cancel-label="t('teacherClasses.archive.keep')"
       tone="danger"
       :busy="saving"
       test-id="archive-class-dialog"
@@ -207,8 +137,8 @@
     />
     <ConfirmDialog
       :open="dialog === 'restore'"
-      :title="t('teacherClasses.archive.restoreTitle')"
-      :message="t('teacherClasses.archive.restoreMessage', { title: page?.title ?? '' })"
+      :title="t('teacherClasses.archive.restoreTitle', { title: page?.title ?? '' })"
+      :message="t('teacherClasses.archive.restoreMessage')"
       :confirm-label="t('teacherClasses.archive.restoreConfirm')"
       :busy="saving"
       @cancel="dialog = null"
@@ -216,9 +146,10 @@
     />
     <ConfirmDialog
       :open="dialog === 'delete'"
-      :title="t('teacherClasses.archive.deleteTitle')"
-      :message="t('teacherClasses.archive.deleteMessage', { title: page?.title ?? '' })"
+      :title="t('teacherClasses.archive.deleteTitle', { title: page?.title ?? '' })"
+      :message="t('teacherClasses.archive.deleteMessage')"
       :confirm-label="t('teacherClasses.archive.deleteConfirm')"
+      :cancel-label="t('teacherClasses.archive.keep')"
       tone="danger"
       :busy="saving"
       @cancel="dialog = null"
@@ -232,51 +163,45 @@ import { computed, ref, useId, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { publicClassesApi, teacherClassesApi } from '@/api/classes'
-import AppBreadcrumb from '@/components/common/AppBreadcrumb.vue'
 import ClassDetailsFields, { type ClassDetailsForm } from '@/components/classes/ClassDetailsFields.vue'
-import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
-import ClassStatusPill from '@/components/classes/ClassStatusPill.vue'
-import ContentHistory from '@/components/classes/ContentHistory.vue'
 import TeacherClassLessons from '@/components/classes/TeacherClassLessons.vue'
+import AppBreadcrumb from '@/components/common/AppBreadcrumb.vue'
+import AppToast from '@/components/common/AppToast.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import DataNotice from '@/components/common/DataNotice.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import RouteTabs, { type RouteTab } from '@/components/common/RouteTabs.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
-import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
+import TeacherPageHeader from '@/components/teacher/TeacherPageHeader.vue'
+import TeacherStatusPill from '@/components/teacher/TeacherStatusPill.vue'
 import { useActionFeedback } from '@/composables/useActionFeedback'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { useResource } from '@/composables/useResource'
+import { useToast } from '@/composables/useToast'
 import { classesMessages } from '@/plugins/classesMessages'
 import { teacherClassesMessages } from '@/plugins/teacherClassesMessages'
 import type { TeacherClassPage } from '@/types/classes'
-import { LEARNING_TYPE_KEYS } from '@/utils/classes'
-import '@/styles/classes.css'
+import { resolveApiError } from '@/utils/apiError'
+import '@/styles/classes-teacher.css'
 
 const { t } = useLocalMessages({ teacherClasses: teacherClassesMessages, classes: classesMessages })
 const route = useRoute()
 const router = useRouter()
-const { actionError, actionSuccess, runAction, showError, showSuccess } = useActionFeedback()
+const { actionError, clearFeedback, showError } = useActionFeedback()
+const { toast, showToast } = useToast()
 
 const classId = computed(() => Number(route.params.classId))
-const tab = computed(() =>
-  route.params.tab === 'details' || route.params.tab === 'history' ? route.params.tab : 'lessons',
-)
+const tab = computed(() => (route.params.tab === 'details' ? 'details' : 'lessons'))
 
 const resource = useResource(() => teacherClassesApi.classPage(classId.value))
 const page = computed(() => resource.data.value)
-const history = useResource(() => teacherClassesApi.history(classId.value), false)
-const levels = useResource(() => publicClassesApi.levels(), false)
-const topics = useResource(() => publicClassesApi.topics(), false)
+const themes = useResource(() => publicClassesApi.topics(), false)
 
 watch(classId, () => void resource.reload())
 watch(
   tab,
   (current) => {
-    if (current === 'history') void history.reload()
-    if (current === 'details') {
-      if (!levels.data.value) void levels.reload()
-      if (!topics.data.value) void topics.reload()
-    }
+    if (current === 'details' && !themes.data.value) void themes.reload()
   },
   { immediate: true },
 )
@@ -292,26 +217,21 @@ const detailsEditable = computed(
     page.value.revision?.status !== 'SUBMITTED',
 )
 
+/** "Study or exchange · best after Unit 3 · 2 units · 5 lessons" */
 const facts = computed(() => {
   const current = page.value
   if (!current) return ''
   return [
-    current.levelName,
     current.topicName,
-    current.learningType ? t(LEARNING_TYPE_KEYS[current.learningType]) : null,
-    t('classes.units', activeUnits.value.length),
-    t('classes.lessons', lessonCount.value),
+    current.bestAfterUnit ? t('teacherClasses.page.bestAfter', { unit: current.bestAfterUnit }) : null,
+    t('teacherClasses.page.units', activeUnits.value.length),
+    t('teacherClasses.page.lessons', lessonCount.value),
   ]
     .filter(Boolean)
     .join(' · ')
 })
 
-const statusIcon = computed(() =>
-  page.value?.status === 'ARCHIVED' ? 'archive' : page.value?.status === 'SUBMITTED' ? 'history' : 'info',
-)
-
 const statusNotice = computed(() => {
-  if (route.query.created) return null
   switch (page.value?.status) {
     case 'SUBMITTED':
       return t('teacherClasses.page.inReview')
@@ -329,25 +249,18 @@ const tabs = computed<RouteTab[]>(() => [
     label: t('teacherClasses.page.tabLessons'),
     to: { name: 'teacher-class', params: { classId: classId.value } },
     icon: 'checklist',
-    count: lessonCount.value,
   },
   {
     label: t('teacherClasses.page.tabDetails'),
     to: { name: 'teacher-class', params: { classId: classId.value, tab: 'details' } },
     icon: 'file',
   },
-  {
-    label: t('teacherClasses.page.tabHistory'),
-    to: { name: 'teacher-class', params: { classId: classId.value, tab: 'history' } },
-    icon: 'history',
-  },
 ])
 
 // ----- details -----
 
 const formId = useId()
-const form = ref<ClassDetailsForm>({ title: '', description: '', levelId: null, topicId: null, learningType: 'HYBRID' })
-const note = ref('')
+const form = ref<ClassDetailsForm>({ title: '', description: '', topicId: null, bestAfterUnit: null })
 const saving = ref(false)
 
 /** The form shows the pending details of a published class when there are some. */
@@ -356,50 +269,50 @@ function fillForm(current: TeacherClassPage): void {
   form.value = {
     title: source.title,
     description: source.description ?? '',
-    levelId: source.levelId,
     topicId: source.topicId,
-    learningType: source.learningType ?? 'HYBRID',
+    bestAfterUnit: source.bestAfterUnit ?? null,
   }
-  note.value = current.teacherNote ?? ''
 }
 
 watch(page, (current) => current && fillForm(current), { immediate: true })
 watch(page, (current, previous) => {
-  // A class just created from New class says so once, with what to do next.
-  if (current && !previous && route.query.created)
-    showSuccess(t('teacherClasses.form.created', { title: current.title }))
+  // A class just created from New class says so once.
+  if (current && !previous && route.query.created) showToast(t('teacherClasses.form.created', { title: current.title }))
 })
 
+/** Level and learning type are left out: the class keeps the values it has. */
 function detailsPayload() {
   return {
     title: form.value.title.trim(),
     description: form.value.description.trim() || null,
-    levelId: form.value.levelId,
     topicId: form.value.topicId,
-    learningType: form.value.learningType,
+    bestAfterUnit: form.value.bestAfterUnit,
   }
 }
 
+/** Runs one write; a success shows as a toast, a failure as the notice above the tabs. */
 async function run(fallback: string, action: () => Promise<string>): Promise<boolean> {
   saving.value = true
-  const done = await runAction(fallback, action)
-  saving.value = false
-  return done
+  clearFeedback()
+  try {
+    const message = await action()
+    if (message) showToast(message)
+    return true
+  } catch (reason) {
+    showError(resolveApiError(reason, fallback))
+    return false
+  } finally {
+    saving.value = false
+  }
 }
 
+/** A draft saves directly; a published class saves its changes and sends them for review in one step. */
 async function saveDetails(): Promise<void> {
   const published = page.value?.status === 'PUBLISHED'
   await run(t('teacherClasses.details.error'), async () => {
-    resource.data.value = await teacherClassesApi.saveDetails(classId.value, detailsPayload())
-    return published ? t('teacherClasses.details.savedDraft') : t('teacherClasses.details.saved')
-  })
-}
-
-async function submitDetails(): Promise<void> {
-  await run(t('teacherClasses.details.error'), async () => {
-    await teacherClassesApi.saveDetails(classId.value, detailsPayload())
-    resource.data.value = await teacherClassesApi.submitDetails(classId.value)
-    return t('teacherClasses.details.submitted')
+    const saved = await teacherClassesApi.saveDetails(classId.value, detailsPayload())
+    resource.data.value = published ? await teacherClassesApi.submitDetails(classId.value) : saved
+    return published ? t('teacherClasses.details.submitted') : t('teacherClasses.details.saved')
   })
 }
 
@@ -410,31 +323,22 @@ async function discardDetails(): Promise<void> {
   })
 }
 
-async function saveNote(): Promise<void> {
-  await run(t('teacherClasses.note.error'), async () => {
-    resource.data.value = await teacherClassesApi.saveNote(classId.value, note.value.trim())
-    return t('teacherClasses.note.saved')
-  })
-}
-
 // ----- archive, restore, delete -----
 
 const dialog = ref<'archive' | 'restore' | 'delete' | null>(null)
 
 async function archive(): Promise<void> {
-  const title = page.value?.title ?? ''
   await run(t('teacherClasses.archive.error'), async () => {
     resource.data.value = await teacherClassesApi.archive(classId.value)
-    return t('teacherClasses.archive.done', { title })
+    return t('teacherClasses.archive.done')
   })
   dialog.value = null
 }
 
 async function restore(): Promise<void> {
-  const title = page.value?.title ?? ''
   await run(t('teacherClasses.archive.restoreError'), async () => {
     resource.data.value = await teacherClassesApi.restore(classId.value)
-    return t('teacherClasses.archive.restored', { title })
+    return t('teacherClasses.archive.restored')
   })
   dialog.value = null
 }

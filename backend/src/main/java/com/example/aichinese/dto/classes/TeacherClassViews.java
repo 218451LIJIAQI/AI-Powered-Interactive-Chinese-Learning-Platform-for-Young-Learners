@@ -23,6 +23,7 @@ public final class TeacherClassViews {
             String revisionStatus,
             String levelName,
             String topicName,
+            Integer bestAfterUnit,
             LearningType learningType,
             int unitCount,
             int lessonCount,
@@ -59,6 +60,7 @@ public final class TeacherClassViews {
             String description,
             Long levelId,
             Long topicId,
+            Integer bestAfterUnit,
             LearningType learningType,
             String rejectionReason) {
     }
@@ -72,6 +74,7 @@ public final class TeacherClassViews {
             String levelName,
             Long topicId,
             String topicName,
+            Integer bestAfterUnit,
             LearningType learningType,
             String status,
             String rejectionReason,

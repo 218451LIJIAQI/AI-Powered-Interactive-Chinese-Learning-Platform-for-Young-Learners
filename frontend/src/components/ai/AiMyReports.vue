@@ -1,5 +1,11 @@
 <template>
-  <div class="ai-reports" data-testid="ai-my-reports">
+  <section class="panel ai-reports" :aria-labelledby="`${baseId}-title`" data-testid="ai-my-reports">
+    <header class="ai-reports-head">
+      <h2 :id="`${baseId}-title`" class="card-title">{{ t('aiHelper.myReports') }}</h2>
+      <p v-if="reports.length" class="card-subtitle">
+        {{ t('aiHelper.myReportsCount', { count: reports.length }, reports.length) }}
+      </p>
+    </header>
     <StatePanel
       v-if="loading"
       tone="loading"
@@ -18,35 +24,30 @@
         <button class="btn btn-secondary btn-sm" type="button" @click="emit('retry')">{{ t('aiHelper.retry') }}</button>
       </template>
     </StatePanel>
-    <template v-else-if="reports.length">
-      <p class="ai-reports-count">{{ t('aiHelper.myReportsCount', { count: reports.length }, reports.length) }}</p>
-      <ul class="ai-report-list">
-        <li v-for="report in reports" :key="report.id" class="ai-report-item">
-          <div class="ai-report-top">
-            <strong>{{ t(reportReasonKey(report.reasonCategory)) }}</strong>
-            <StatusPill :label="t(status(report).labelKey)" :tone="status(report).tone" :icon="status(report).icon" />
-          </div>
-          <p v-if="firstLine(report)" class="ai-report-quote cjk-text">“{{ firstLine(report) }}”</p>
-          <p class="ai-report-meta">
-            {{
-              t('aiHelper.reportSent', {
-                feature: t(reportFeatureKey(report.featureKey)),
-                time: formatDateTime(report.createdAt),
-              })
-            }}
+    <ul v-else-if="reports.length" class="row-list ai-report-list" tabindex="0" :aria-labelledby="`${baseId}-title`">
+      <li v-for="report in reports" :key="report.id" class="ai-report-item">
+        <div class="ai-report-top">
+          <strong>{{ t(reportReasonKey(report.reasonCategory)) }}</strong>
+          <StatusPill :label="t(status(report).labelKey)" :tone="status(report).tone" />
+        </div>
+        <p v-if="firstLine(report)" class="ai-report-meta">“{{ firstLine(report) }}”</p>
+        <p class="ai-report-meta">
+          {{
+            t('aiHelper.reportSent', {
+              feature: t(reportFeatureKey(report.featureKey)),
+              time: formatDateTime(report.createdAt),
+            })
+          }}
+        </p>
+        <p v-if="report.status === 'PENDING_REVIEW'" class="ai-report-meta">{{ t('aiHelper.reportWaiting') }}</p>
+        <div v-else-if="report.reviewerNote" class="ai-report-note">
+          <p class="ai-report-note-head">
+            {{ t('aiHelper.adminNote', { time: formatDateTime(report.reviewedAt) }) }}
           </p>
-          <p v-if="report.status === 'PENDING_REVIEW'" class="ai-report-waiting">
-            <IconGlyph name="clock" :size="14" />{{ t('aiHelper.reportWaiting') }}
-          </p>
-          <div v-else-if="report.reviewerNote" class="ai-report-note">
-            <p class="ai-report-note-head">
-              {{ t('aiHelper.adminNote', { time: formatDateTime(report.reviewedAt) }) }}
-            </p>
-            <p>{{ report.reviewerNote }}</p>
-          </div>
-        </li>
-      </ul>
-    </template>
+          <p>{{ report.reviewerNote }}</p>
+        </div>
+      </li>
+    </ul>
     <StatePanel
       v-else
       tone="empty"
@@ -54,11 +55,12 @@
       :title="t('aiHelper.noReportsTitle')"
       :message="t('aiHelper.noReports')"
     />
-  </div>
+  </section>
 </template>
 
 <script setup lang="ts">
-import IconGlyph from '@/components/common/IconGlyph.vue'
+import { useId } from 'vue'
+
 import StatePanel from '@/components/common/StatePanel.vue'
 import StatusPill from '@/components/common/StatusPill.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
@@ -69,7 +71,7 @@ import { formatDateTime } from '@/utils/format'
 
 import { REPORT_STATUS, reportFeatureKey, reportReasonKey } from './aiHelper'
 
-/** "My reports" (in a drawer of the AI Helper): every AI report of the student, with the admin's note once answered. */
+/** "My reports", the rail of Ask SparkBot: every AI report of the student, with the admin's note once answered. */
 defineProps<{
   reports: readonly StudentAiResponseReportResponse[]
   loading: boolean
@@ -78,6 +80,7 @@ defineProps<{
 const emit = defineEmits<{ retry: [] }>()
 
 const { t } = useLocalMessages({ aiHelper: aiHelperMessages, aiSafety: aiSafetyMessages })
+const baseId = useId()
 
 function status(report: StudentAiResponseReportResponse) {
   return REPORT_STATUS[report.status] ?? REPORT_STATUS.PENDING_REVIEW

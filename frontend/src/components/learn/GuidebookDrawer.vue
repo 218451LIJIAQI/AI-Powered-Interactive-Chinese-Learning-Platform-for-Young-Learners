@@ -25,23 +25,24 @@
       </template>
     </StatePanel>
     <template v-else-if="guide.data.value">
-      <h3 class="learn-guide-heading">{{ t('learn.keyPhrases') }}</h3>
-      <ul class="learn-guide-phrases">
-        <li v-for="phrase in guide.data.value.phrases" :key="phrase.hanzi" class="learn-guide-phrase">
-          <span class="hanzi-tile learn-guide-tile" lang="zh-CN" aria-hidden="true">{{
-            firstCharacter(phrase.hanzi)
-          }}</span>
-          <span class="learn-guide-phrase-copy">
-            <strong lang="zh-CN">{{ phrase.hanzi }}</strong>
-            <span class="learn-guide-phrase-meaning">{{ phrase.pinyin }} · {{ phrase.meaning }}</span>
-          </span>
-          <ListenButtons :text="phrase.hanzi" />
-        </li>
-      </ul>
-      <h3 class="learn-guide-heading">{{ t('learn.tips') }}</h3>
-      <ul class="learn-guide-tips">
-        <li v-for="tip in guide.data.value.tips" :key="tip">{{ tip }}</li>
-      </ul>
+      <template v-if="guide.data.value.phrases.length">
+        <h3 class="learn-guide-heading">{{ t('learn.keyPhrases') }}</h3>
+        <ul class="row-list learn-guide-phrases">
+          <li v-for="phrase in guide.data.value.phrases" :key="phrase.hanzi">
+            <span class="row-list-copy">
+              <strong class="learn-guide-phrase" lang="zh-CN">{{ phrase.hanzi }}</strong>
+              <span class="row-list-meta">{{ phrase.pinyin }} · {{ phrase.meaning }}</span>
+            </span>
+            <ListenButtons :text="phrase.hanzi" />
+          </li>
+        </ul>
+      </template>
+      <template v-if="guide.data.value.tips.length">
+        <h3 class="learn-guide-heading">{{ t('learn.tips') }}</h3>
+        <ul class="learn-guide-tips">
+          <li v-for="tip in guide.data.value.tips" :key="tip">{{ tip }}</li>
+        </ul>
+      </template>
     </template>
     <template #footer>
       <button class="btn btn-primary" type="button" data-testid="guidebook-done" @click="emit('close')">
@@ -88,8 +89,4 @@ watch(
     void guide.reload()
   },
 )
-
-function firstCharacter(text: string): string {
-  return Array.from(text)[0] ?? ''
-}
 </script>

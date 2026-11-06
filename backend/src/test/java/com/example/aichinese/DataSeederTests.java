@@ -51,7 +51,10 @@ class DataSeederTests {
     void shouldSeedEssentialReferenceDataWithoutDefaultAdmin() {
         assertThat(roleRepository.count()).isEqualTo(3);
         assertThat(learningLevelRepository.count()).isEqualTo(2);
-        assertThat(learningCategoryRepository.count()).isEqualTo(9);
+        assertThat(learningCategoryRepository.findAll().stream()
+                .sorted(java.util.Comparator.comparing(com.example.aichinese.entity.LearningCategory::getSortOrder))
+                .map(com.example.aichinese.entity.LearningCategory::getName))
+                .containsExactly("Travel", "Work and career", "Study or exchange", "Daily life", "Personal interest");
         // SDD 5.5: the seeded catalogue is exactly the badges the reward service awards.
         assertThat(badgeRepository.findAll())
                 .extracting(Badge::getName)

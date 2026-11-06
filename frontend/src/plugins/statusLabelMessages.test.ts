@@ -4,15 +4,6 @@ import { humanizeEnumValue, statusLabelKey, statusLabelMessages } from './status
 import { auditActionKey } from '@/utils/auditActions'
 
 describe('status label messages', () => {
-  it('labels every lesson mastery value in every language', () => {
-    for (const value of ['NOT_STARTED', 'IN_PROGRESS', 'COMPLETED', 'MASTERED']) {
-      expect(statusLabelKey('mastery', value), value).toBe(`mastery_${value}`)
-    }
-    expect(statusLabelKey('mastery', 'in_progress')).toBe('mastery_IN_PROGRESS')
-    expect(statusLabelMessages.ms.mastery_MASTERED).toBe('Dikuasai')
-    expect(statusLabelMessages['zh-CN'].mastery_NOT_STARTED).toBe('未开始')
-  })
-
   it('keeps names only for audit actions the audit-action table does not name (older entries)', () => {
     const fallbackCodes = Object.keys(statusLabelMessages.en)
       .filter((key) => key.startsWith('auditAction_'))
@@ -22,8 +13,8 @@ describe('status label messages', () => {
   })
 
   it('returns null for unknown values and humanises them as a fallback', () => {
-    expect(statusLabelKey('mastery', 'ABANDONED')).toBeNull()
-    expect(statusLabelKey('mastery', '')).toBeNull()
+    expect(statusLabelKey('auditAction', 'ABANDONED')).toBeNull()
+    expect(statusLabelKey('auditAction', '')).toBeNull()
     expect(humanizeEnumValue('WAITLISTED_LATE')).toBe('Waitlisted Late')
     expect(humanizeEnumValue(null)).toBe('')
   })

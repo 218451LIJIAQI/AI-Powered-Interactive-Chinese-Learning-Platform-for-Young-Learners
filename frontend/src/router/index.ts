@@ -37,6 +37,7 @@ const StudentClassPage = () => import('@/pages/student/StudentClassPage.vue')
 const StudentClassLessonPage = () => import('@/pages/student/StudentClassLessonPage.vue')
 const StudentClassActivityPage = () => import('@/pages/student/StudentClassActivityPage.vue')
 const StudentQuizPage = () => import('@/pages/student/StudentQuizPage.vue')
+const StudentQuizAttemptPage = () => import('@/pages/student/StudentQuizAttemptPage.vue')
 const StudentProgressPage = () => import('@/pages/student/StudentProgressPage.vue')
 const StudentPlanPage = () => import('@/pages/student/StudentPlanPage.vue')
 const StudentLevelCheckPage = () => import('@/pages/student/StudentLevelCheckPage.vue')
@@ -52,7 +53,6 @@ const TeacherClassPage = () => import('@/pages/teacher/TeacherClassPage.vue')
 const TeacherLessonEditorPage = () => import('@/pages/teacher/TeacherLessonEditorPage.vue')
 const TeacherLiveSessionsPage = () => import('@/pages/teacher/TeacherLiveSessionsPage.vue')
 const TeacherStudentsPage = () => import('@/pages/teacher/TeacherStudentsPage.vue')
-const TeacherFeedbackHistoryPage = () => import('@/pages/teacher/TeacherFeedbackHistoryPage.vue')
 const TeacherProfilePage = () => import('@/pages/teacher/TeacherProfilePage.vue')
 const TeacherLockedPage = () => import('@/pages/teacher/TeacherLockedPage.vue')
 
@@ -100,13 +100,19 @@ const legacyRedirects: RouteRecordRaw[] = [
   { path: '/student/ai-reports', redirect: { name: 'student-ai', params: { tab: 'ask' } } },
   { path: '/student/practice-submissions', redirect: { name: 'student-ai', params: { tab: 'voice' } } },
   { path: '/student/practice/wrong-answers', redirect: { name: 'student-practice', params: { type: 'mistakes' } } },
+  { path: '/student/practice/story', redirect: { name: 'student-practice', params: { type: 'flashcards' } } },
   { path: '/student/live-classes', redirect: { name: 'student-live-sessions' } },
   { path: '/teacher/content', redirect: { name: 'teacher-classes' } },
   { path: '/teacher/activities', redirect: { name: 'teacher-classes' } },
-  { path: '/teacher/feedback', redirect: { name: 'teacher-feedback-history' } },
+  { path: '/teacher/feedback', redirect: { name: 'teacher-students' } },
+  { path: '/teacher/students/feedback', redirect: { name: 'teacher-students' } },
+  {
+    path: '/teacher/classes/:classId(\\d+)/history',
+    redirect: (to) => ({ name: 'teacher-class', params: { classId: to.params.classId } }),
+  },
   { path: '/teacher/live-classes', redirect: { name: 'teacher-live-sessions' } },
   { path: '/teacher/recorded-lessons', redirect: { name: 'teacher-classes' } },
-  { path: '/teacher/moderation-records', redirect: { name: 'teacher-feedback-history' } },
+  { path: '/teacher/moderation-records', redirect: { name: 'teacher-students' } },
   { path: '/teacher/verification-status', redirect: { name: 'teacher-profile' } },
   { path: '/admin/teacher-verification', redirect: { name: 'admin-teacher-applications' } },
   { path: '/admin/teacher-approval', redirect: { name: 'admin-teacher-applications' } },
@@ -160,7 +166,7 @@ const router = createRouter({
           meta: { focus: true },
         },
         {
-          path: 'practice/:type(flashcards|quizzes|listening|tracing|drag-drop|matching|story|mistakes)?',
+          path: 'practice/:type(flashcards|quizzes|listening|tracing|drag-drop|matching|mistakes)?',
           name: 'student-practice',
           component: StudentPracticePage,
         },
@@ -185,6 +191,11 @@ const router = createRouter({
           meta: { focus: true },
         },
         { path: 'quiz/:quizId(\\d+)', name: 'student-quiz', component: StudentQuizPage, meta: { focus: true } },
+        {
+          path: 'quiz/:quizId(\\d+)/attempts/:attemptId(\\d+)',
+          name: 'student-quiz-attempt',
+          component: StudentQuizAttemptPage,
+        },
         { path: 'progress', name: 'student-progress', component: StudentProgressPage },
         { path: 'progress/plan', name: 'student-plan', component: StudentPlanPage },
         {
@@ -213,7 +224,7 @@ const router = createRouter({
           meta: { requiresApprovedTeacher: true },
         },
         {
-          path: 'classes/:classId(\\d+)/:tab(details|history)?',
+          path: 'classes/:classId(\\d+)/:tab(details)?',
           name: 'teacher-class',
           component: TeacherClassPage,
           meta: { requiresApprovedTeacher: true },
@@ -234,12 +245,6 @@ const router = createRouter({
           path: 'students',
           name: 'teacher-students',
           component: TeacherStudentsPage,
-          meta: { requiresApprovedTeacher: true },
-        },
-        {
-          path: 'students/feedback',
-          name: 'teacher-feedback-history',
-          component: TeacherFeedbackHistoryPage,
           meta: { requiresApprovedTeacher: true },
         },
         { path: 'profile', name: 'teacher-profile', component: TeacherProfilePage },
@@ -282,7 +287,9 @@ const router = createRouter({
     // Only a plain id is used as a selector (a crafted hash cannot inject one).
     if (SAFE_HASH_SELECTOR_PATTERN.test(to.hash)) {
       const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-      return { el: to.hash, behavior: reduceMotion ? 'auto' : 'smooth' }
+      // The router scrolls by coordinates, so html's scroll-padding (which clears the sticky header) is applied here.
+      const top = parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop) || 0
+      return { el: to.hash, top, behavior: reduceMotion ? 'auto' : 'smooth' }
     }
     return { top: 0 }
   },

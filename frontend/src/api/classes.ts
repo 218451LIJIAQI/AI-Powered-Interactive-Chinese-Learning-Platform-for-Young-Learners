@@ -156,9 +156,6 @@ export const studentClassesApi = {
   book(sessionId: number) {
     return apiPost<StudentSession>(`${STUDENT}/live-sessions/${sessionId}/book`)
   },
-  cancelBooking(sessionId: number) {
-    return apiPost<StudentSession>(`${STUDENT}/live-sessions/${sessionId}/cancel-booking`)
-  },
   /** The meeting link inside the join window; the server records attendance. */
   joinSession(sessionId: number) {
     return apiPost<{ meetingLink: string }>(`${STUDENT}/live-sessions/${sessionId}/join`)
@@ -190,9 +187,6 @@ export const teacherClassesApi = {
   discardDetails(classId: number) {
     return apiDelete<TeacherClassPage>(`${TEACHER}/classes/${classId}/pending-details`)
   },
-  saveNote(classId: number, note: string) {
-    return apiPut<TeacherClassPage>(`${TEACHER}/classes/${classId}/note`, { note })
-  },
   archive(classId: number) {
     return apiPost<TeacherClassPage>(`${TEACHER}/classes/${classId}/archive`)
   },
@@ -208,14 +202,8 @@ export const teacherClassesApi = {
   addUnit(classId: number, title: string) {
     return apiPost<TeacherClassPage>(`${TEACHER}/classes/${classId}/units`, { title })
   },
-  reorder(classId: number, units: { unitId: number; lessonIds: number[] }[]) {
-    return apiPut<TeacherClassPage>(`${TEACHER}/classes/${classId}/structure`, { units })
-  },
   renameUnit(unitId: number, title: string) {
     return apiPut<TeacherClassPage>(`${TEACHER}/units/${unitId}`, { title })
-  },
-  archiveUnit(unitId: number) {
-    return apiPost<TeacherClassPage>(`${TEACHER}/units/${unitId}/archive`)
   },
   addLesson(unitId: number, title: string) {
     return apiPost<LessonEditor>(`${TEACHER}/units/${unitId}/lessons`, { title })
@@ -244,41 +232,17 @@ export const lessonEditorApi = {
   updateActivity(lessonId: number, type: ClassActivityType, id: number, payload: ActivityPayload) {
     return apiPut<LessonEditor>(`${lessonPath(lessonId)}/activities/${activitySlug(type)}/${id}`, payload)
   },
-  deleteActivity(lessonId: number, type: ClassActivityType, id: number) {
-    return apiDelete<LessonEditor>(`${lessonPath(lessonId)}/activities/${activitySlug(type)}/${id}`)
-  },
-  duplicateActivity(lessonId: number, type: ClassActivityType, id: number) {
-    return apiPost<LessonEditor>(`${lessonPath(lessonId)}/activities/${activitySlug(type)}/${id}/duplicate`)
-  },
-  reorderActivities(lessonId: number, activities: { type: ClassActivityType; id: number }[]) {
-    return apiPut<LessonEditor>(`${lessonPath(lessonId)}/activity-order`, { activities })
-  },
   addQuiz(lessonId: number, payload: QuizPayload) {
     return apiPost<LessonEditor>(`${lessonPath(lessonId)}/quizzes`, payload)
   },
-  updateQuiz(lessonId: number, quizId: number, payload: QuizPayload) {
-    return apiPut<LessonEditor>(`${lessonPath(lessonId)}/quizzes/${quizId}`, payload)
-  },
-  archiveQuiz(lessonId: number, quizId: number) {
-    return apiPost<LessonEditor>(`${lessonPath(lessonId)}/quizzes/${quizId}/archive`)
-  },
-  duplicateQuiz(lessonId: number, quizId: number) {
-    return apiPost<LessonEditor>(`${lessonPath(lessonId)}/quizzes/${quizId}/duplicate`)
-  },
   addQuestion(lessonId: number, quizId: number, payload: QuestionPayload) {
     return apiPost<LessonEditor>(`${lessonPath(lessonId)}/quizzes/${quizId}/questions`, payload)
-  },
-  reorderQuestions(lessonId: number, quizId: number, questionIds: number[]) {
-    return apiPut<LessonEditor>(`${lessonPath(lessonId)}/quizzes/${quizId}/question-order`, { questionIds })
   },
   updateQuestion(lessonId: number, questionId: number, payload: QuestionPayload) {
     return apiPut<LessonEditor>(`${lessonPath(lessonId)}/questions/${questionId}`, payload)
   },
   deleteQuestion(lessonId: number, questionId: number) {
     return apiDelete<LessonEditor>(`${lessonPath(lessonId)}/questions/${questionId}`)
-  },
-  duplicateQuestion(lessonId: number, questionId: number) {
-    return apiPost<LessonEditor>(`${lessonPath(lessonId)}/questions/${questionId}/duplicate`)
   },
   submit(lessonId: number) {
     return apiPost<LessonEditor>(`${lessonPath(lessonId)}/submit`)
@@ -335,9 +299,6 @@ export const teacherStudentsApi = {
   },
   sendFeedback(payload: FeedbackPayload) {
     return apiPost<FeedbackRow>(`${TEACHER}/feedback`, payload)
-  },
-  updateFeedback(feedbackId: number, payload: { type: FeedbackType; message: string }) {
-    return apiPut<FeedbackRow>(`${TEACHER}/feedback/${feedbackId}`, payload)
   },
 }
 

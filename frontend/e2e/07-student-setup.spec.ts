@@ -7,8 +7,8 @@ import { expectFocusMode, expectLeaveStep, newStudent, registerStudent, sidebar,
 
 /** The e-mail banner of a new account on Home. */
 async function expectConfirmEmailBanner(page: Page, student: NewStudent): Promise<void> {
-  const banner = page.getByRole('status').filter({ hasText: 'Confirm your email.' })
-  await expect(banner).toContainText(`We sent a link to ${student.email}. You can keep learning meanwhile.`)
+  const banner = page.getByRole('status').filter({ hasText: 'Confirm your email' })
+  await expect(banner).toContainText(`we sent a link to ${student.email}.`)
   await expect(banner.getByRole('button', { name: 'Send the link again' })).toBeEnabled()
 }
 
@@ -25,11 +25,9 @@ test('a new student signs up, builds her plan from her answers and starts her pa
   // 1 Why
   await expect(page.getByText('Your plan · 1 of 5')).toBeVisible()
   await expect(next).toBeDisabled()
-  await page
-    .getByRole('group', { name: 'Main reason' })
-    .getByRole('button', { name: /^Travel/ })
-    .click()
-  await expect(page.getByText('Travel it is! We’ll focus on food, directions and getting around.')).toBeVisible()
+  const reason = page.getByRole('group', { name: 'Main reason' }).getByRole('button', { name: /^Travel/ })
+  await reason.click()
+  await expect(reason).toHaveAttribute('aria-pressed', 'true')
   await next.click()
 
   // 2 Goal
@@ -61,7 +59,7 @@ test('a new student signs up, builds her plan from her answers and starts her pa
   const dontKnow = page.getByRole('button', { name: 'I don’t know yet' })
   const enough = page.getByRole('heading', { name: 'That’s all we need!', level: 2 })
   for (let asked = 0; !(await enough.isVisible()); asked += 1) {
-    expect(asked, 'the level check stops after at most 6 questions').toBeLessThan(6)
+    expect(asked, 'the level check stops after at most 8 questions').toBeLessThan(8)
     await dontKnow.click()
     await expect(page.getByRole('status').filter({ hasText: 'No problem!' })).toBeVisible()
     await next.click()
@@ -88,11 +86,11 @@ test('a new student signs up, builds her plan from her answers and starts her pa
   await page.getByRole('button', { name: 'Yes, show my path' }).click()
 
   await expect(page.getByRole('heading', { name: 'Your path · Travel', level: 2 })).toBeVisible()
-  await expect(page.getByRole('status').filter({ hasText: 'Built from your answers.' })).toContainText(
-    'SparkBot isn’t available right now, so we used your choices and your level check',
+  await expect(page.getByRole('status').filter({ hasText: 'built from your answers' })).toContainText(
+    'SparkBot isn’t available, so this plan is built from your answers.',
   )
   const steps = page.getByRole('list', { name: 'The steps of your plan' })
-  await expect(steps).toContainText('Learn · Unit 1 · Say hello · 你好')
+  await expect(steps).toContainText('Learn · Unit 1 · Pinyin and tones · 拼音')
   await expect(steps).toContainText('matches your goal: Order food.')
   await expect(steps).toContainText('matches your goal: Ask for directions.')
   await page.getByRole('button', { name: 'Start my path' }).click()
@@ -105,10 +103,17 @@ test('a new student signs up, builds her plan from her answers and starts her pa
   await expect(homeGoal).toContainText('Travel')
   await expect(homeGoal).toContainText(/week 1 of \d+/)
   await expect(homeGoal.getByRole('link', { name: 'View my plan' })).toBeVisible()
-  const unit1 = page.getByRole('region', { name: 'Say hello · 你好' })
+  const unit1 = page.getByRole('region', { name: 'Pinyin and tones · 拼音' })
   await expect(unit1).toContainText('First in your plan · Learn · Unit 1')
   await expect(unit1.getByRole('link', { name: 'Start Unit 1' })).toBeVisible()
-  await expect(page.getByRole('region', { name: 'This week' })).toContainText('Start Say hello')
+  const thisWeek = page.getByRole('region', { name: 'This week' })
+  await expect(thisWeek).toContainText('Daily goal 20 XP')
+  await expect(
+    thisWeek
+      .getByRole('listitem')
+      .filter({ hasText: 'Say hi to Xiaomei' })
+      .getByRole('link', { name: 'Start talking' }),
+  ).toBeVisible()
   await expect(page.getByRole('region', { name: 'Build your learning plan' })).toHaveCount(0)
   await expectConfirmEmailBanner(page, student)
 })
@@ -135,7 +140,9 @@ test('a new student can set the plan up later and gets Home without a plan', asy
     page.getByRole('region', { name: 'Build your learning plan' }).getByRole('link', { name: 'Build my plan' }),
   ).toBeVisible()
   await expect(page.getByRole('region', { name: 'Your goal' })).toHaveCount(0)
-  await expect(page.getByRole('region', { name: 'Say hello · 你好' })).toContainText('Start here · Learn · Unit 1')
+  await expect(page.getByRole('region', { name: 'Pinyin and tones · 拼音' })).toContainText(
+    'Start here · Learn · Unit 1',
+  )
   const firstWeek = page.getByRole('region', { name: 'Your first week' })
   await expect(firstWeek.getByRole('group', { name: 'Daily goal' }).getByRole('button')).toHaveText([
     '10 XP',

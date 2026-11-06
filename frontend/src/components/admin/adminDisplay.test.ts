@@ -1,22 +1,60 @@
 import { describe, expect, it } from 'vitest'
 
-import { aiFeatureMessages } from '@/plugins/aiFeatureMessages'
+import {
+  accountTone,
+  adminReportTone,
+  adminSupportTone,
+  adminVerificationTone,
+  aiFeatureLabel,
+  practiceStatusTone,
+  teacherContentStatus,
+} from './adminDisplay'
 
-import { AI_FEATURE_MESSAGE_KEYS, aiFeatureLabel } from './adminDisplay'
+describe('aiFeatureLabel', () => {
+  const translate = (key: string) => `[${key}]`
 
-describe('admin display helpers', () => {
-  it('names AI features by their message keys, ignoring case, and humanises unknown values', () => {
-    const translate = (key: string) => `t:${key}`
-    expect(aiFeatureLabel('CHAT_TUTOR', translate)).toBe('t:aiFeatures.chatTutor')
-    expect(aiFeatureLabel(' learning_plan ', translate)).toBe('t:aiFeatures.learningPlan')
-    expect(aiFeatureLabel('SOMETHING_NEW', translate)).toBe('Something New')
+  it('names a known feature through the page translator, ignoring case and spaces', () => {
+    expect(aiFeatureLabel('CHAT_TUTOR', translate)).toBe('[aiFeatures.chatTutor]')
+    expect(aiFeatureLabel('  learning_plan ', translate)).toBe('[aiFeatures.learningPlan]')
   })
 
-  it('only points at full keys the aiFeatures bundle defines', () => {
-    // Key parity and non-empty text in every locale are checked for every bundle in messageBundles.test.ts.
-    for (const key of Object.values(AI_FEATURE_MESSAGE_KEYS)) {
-      expect(key).toMatch(/^aiFeatures\./)
-      expect(Object.keys(aiFeatureMessages.en)).toContain(key.replace('aiFeatures.', ''))
-    }
+  it('reads an unknown feature as title case', () => {
+    expect(aiFeatureLabel('SOMETHING_NEW', translate)).toBe('Something New')
+  })
+})
+
+describe('admin status tones', () => {
+  it('marks what waits for an admin as strong', () => {
+    expect(adminVerificationTone('IN_REVIEW')).toBe('strong')
+    expect(adminSupportTone('OPEN')).toBe('strong')
+    expect(adminReportTone('PENDING_REVIEW')).toBe('strong')
+  })
+
+  it('marks positive ends as success and what is inactive as outline', () => {
+    expect(accountTone(true)).toBe('success')
+    expect(accountTone(false)).toBe('outline')
+    expect(adminVerificationTone('APPROVED')).toBe('success')
+    expect(adminSupportTone('SOLVED')).toBe('success')
+    expect(adminReportTone('RESOLVED')).toBe('success')
+    expect(practiceStatusTone('PUBLISHED')).toBe('success')
+    expect(practiceStatusTone('DRAFT')).toBe('outline')
+    expect(practiceStatusTone('ARCHIVED')).toBe('outline')
+  })
+
+  it('gives a teacher’s item one status, a pending update replacing Published', () => {
+    expect(teacherContentStatus('PUBLISHED', null)).toEqual({
+      key: 'adminClasses.content.statuses.PUBLISHED',
+      tone: 'success',
+    })
+    expect(teacherContentStatus('PUBLISHED', 'SUBMITTED')).toEqual({
+      key: 'adminClasses.content.statuses.REVISION_SUBMITTED',
+      tone: 'strong',
+    })
+    expect(teacherContentStatus('PUBLISHED', 'REJECTED')).toEqual({
+      key: 'adminClasses.content.statuses.REVISION_REJECTED',
+      tone: 'outline',
+    })
+    expect(teacherContentStatus('SUBMITTED', null).tone).toBe('strong')
+    expect(teacherContentStatus('DRAFT', null).tone).toBe('outline')
   })
 })

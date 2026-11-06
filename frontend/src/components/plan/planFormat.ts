@@ -11,14 +11,9 @@ export function longDate(iso: string | null | undefined): string {
   return formatDate(iso, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-/** "18 Jul". */
-export function shortDate(iso: string | null | undefined): string {
-  return formatDate(iso, { day: 'numeric', month: 'short' })
-}
-
-/** "Monday, May 18" for the Home eyebrow. */
-export function weekdayDate(iso: string | null | undefined): string {
-  return formatDate(iso, { weekday: 'long', month: 'long', day: 'numeric' })
+/** "Sat 18 Jul". */
+export function shortDayDate(iso: string | null | undefined): string {
+  return formatDate(iso, { weekday: 'short', day: 'numeric', month: 'short' })
 }
 
 /** The local calendar date as yyyy-MM-dd. */

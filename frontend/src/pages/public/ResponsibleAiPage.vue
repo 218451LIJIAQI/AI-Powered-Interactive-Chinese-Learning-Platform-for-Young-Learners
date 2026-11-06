@@ -1,40 +1,16 @@
 <template>
-  <LegalDocument :title="t('responsibleAi.title')" :intro="t('responsibleAi.intro')" :sections="sections">
-    <template #lead>
-      <p class="legal-official-title">{{ t('legal.officialTitle') }}</p>
-    </template>
-    <template #links>
-      <RouterLink class="btn btn-link" :to="{ name: 'terms' }">{{ t('legal.termsLink') }}</RouterLink>
-      <RouterLink class="btn btn-link" :to="{ name: 'privacy' }">{{ t('legal.privacyLink') }}</RouterLink>
-      <RouterLink class="btn btn-link" :to="helperRoute" data-testid="ai-helper-link">{{ helperLabel }}</RouterLink>
-    </template>
-    <template #footer>
-      <aside class="callout legal-note">
-        <IconGlyph name="info" :size="18" />
-        <span>
-          <strong>{{ t('responsibleAi.disclaimerLabel') }}</strong>
-          <span>{{ t('responsibleAi.disclaimer') }}</span>
-        </span>
-      </aside>
-    </template>
-  </LegalDocument>
+  <LegalDocument :title="t('responsibleAi.title')" :sections="sections" />
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { RouterLink } from 'vue-router'
 
-import IconGlyph from '@/components/common/IconGlyph.vue'
-import LegalDocument from '@/components/public/LegalDocument.vue'
+import LegalDocument, { type LegalSection } from '@/components/public/LegalDocument.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
-import { legalMessages } from '@/plugins/legalMessages'
 import { responsibleAiMessages } from '@/plugins/responsibleAiMessages'
-import { useAuthStore } from '@/stores/auth'
 import { loadPublicPlatformSettings } from '@/utils/publicPlatformSettings'
-import { aiHelperEntryRoute } from '@/utils/role'
 
-const auth = useAuthStore()
-const { t } = useLocalMessages({ responsibleAi: responsibleAiMessages, legal: legalMessages })
+const { t } = useLocalMessages({ responsibleAi: responsibleAiMessages })
 
 const SECTIONS = [
   { id: 'responsible-ai-role', title: 'responsibleAi.roleTitle', copy: 'responsibleAi.roleCopy' },
@@ -46,12 +22,6 @@ const SECTIONS = [
   { id: 'responsible-ai-safety', title: 'responsibleAi.safetyTitle', copy: 'responsibleAi.safetyCopy' },
   { id: 'responsible-ai-report', title: 'responsibleAi.reportTitle', copy: 'responsibleAi.reportCopy' },
 ] as const
-
-const isStudent = computed(() => auth.isAuthenticated && auth.activeRole === 'STUDENT')
-const helperRoute = computed(() => aiHelperEntryRoute(isStudent.value))
-const helperLabel = computed(() =>
-  isStudent.value ? t('responsibleAi.openHelper') : t('responsibleAi.signInForHelper'),
-)
 
 /** The AI model configured on the server (`app.ai.model-name`); null while loading or when unset. */
 const aiModelName = ref<string | null>(null)
@@ -68,7 +38,15 @@ function dataCopy(): string {
     : t('responsibleAi.dataCopyNoModel')
 }
 
-const sections = computed(() =>
-  SECTIONS.map(({ id, title, copy }) => ({ id, title: t(title), paragraphs: [copy ? t(copy) : dataCopy()] })),
+const sections = computed<LegalSection[]>(() =>
+  SECTIONS.map(({ id, title, copy }) => ({
+    id,
+    title: t(title),
+    note:
+      id === 'responsible-ai-limits'
+        ? { label: t('responsibleAi.disclaimerLabel'), text: t('responsibleAi.disclaimer') }
+        : undefined,
+    paragraphs: [copy ? t(copy) : dataCopy()],
+  })),
 )
 </script>

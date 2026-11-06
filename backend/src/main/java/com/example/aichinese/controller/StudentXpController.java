@@ -14,10 +14,12 @@ import com.example.aichinese.dto.ApiResponse;
 import com.example.aichinese.dto.learn.DailyGoalRequest;
 import com.example.aichinese.dto.learn.DailyGoalResponse;
 import com.example.aichinese.dto.learn.ProgressOverviewResponse;
+import com.example.aichinese.dto.learn.SkillProgressResponse;
 import com.example.aichinese.dto.learn.TodayResponse;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.StudentLearningAccessService;
 import com.example.aichinese.service.learn.ProgressOverviewService;
+import com.example.aichinese.service.learn.SkillProgressService;
 import com.example.aichinese.service.learn.XpService;
 
 /** XP, the daily goal and the streak: today's summary, the daily goal setting and the Progress page. */
@@ -27,14 +29,17 @@ public class StudentXpController {
 
     private final XpService xpService;
     private final ProgressOverviewService progressOverviewService;
+    private final SkillProgressService skillProgressService;
     private final StudentLearningAccessService accessService;
 
     public StudentXpController(
             XpService xpService,
             ProgressOverviewService progressOverviewService,
+            SkillProgressService skillProgressService,
             StudentLearningAccessService accessService) {
         this.xpService = xpService;
         this.progressOverviewService = progressOverviewService;
+        this.skillProgressService = skillProgressService;
         this.accessService = accessService;
     }
 
@@ -64,5 +69,11 @@ public class StudentXpController {
             @RequestParam(value = "month", required = false) String month) {
         return ApiResponse.success("Progress retrieved successfully.", progressOverviewService.overview(
                 accessService.requireStudent(currentUser), LearnParams.optionalMonth(month)));
+    }
+
+    @GetMapping("/progress/skills")
+    public ApiResponse<SkillProgressResponse> progressSkills(@AuthenticationPrincipal SecurityUserDetails currentUser) {
+        return ApiResponse.success("Skills retrieved successfully.",
+                skillProgressService.skills(accessService.requireStudent(currentUser)));
     }
 }

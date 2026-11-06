@@ -29,19 +29,16 @@ describe('StudentHomePage', () => {
     api.home.mockResolvedValue(homeView())
   })
 
-  it('makes the next lesson of the plan the one big action, with the goal under it and today’s plan beside it', async () => {
+  it('shows the goal as a strip, the next lesson as the one big action, and today’s plan beside it', async () => {
     const { wrapper } = await mountPage()
 
+    // The h1 is for screen readers: the header bar names the page.
     expect(wrapper.get('h1').text()).toBe('Welcome back, Amira')
-    const streak = wrapper.get('[data-testid="home-streak"]')
-    expect(streak.text()).toContain('7')
-    // The week as seals: stamped for a reached goal, outlined for today while it is still open.
-    expect(streak.findAll('.learn-week-seal:not(.is-outline):not(.is-muted)')).toHaveLength(6)
-    expect(streak.findAll('.learn-week-seal.is-outline')).toHaveLength(1)
-    expect(streak.findAll('.learn-week-seal').at(-1)!.text()).toBe('一')
+    expect(wrapper.get('h1').classes()).toContain('sr-only')
     const goal = wrapper.get('[data-testid="home-goal"]')
     expect(goal.text()).toContain('Travel to Shanghai')
     expect(goal.text()).toContain('18% of your plan · week 2 of 8 · on track')
+    expect(goal.get('a').attributes('href')).toBe('/student/progress/plan')
 
     const next = wrapper.get('[data-testid="home-next"]')
     expect(next.text()).toContain('Next in your plan · Learn · Unit 1 · Say hello')
@@ -49,41 +46,51 @@ describe('StudentHomePage', () => {
     expect(next.text()).toContain('Lesson 3 of 7 · about 4 minutes · +10 XP')
     expect(next.text()).toContain('You’ll learn: “My name is Xiaomei.”')
     expect(next.get('[data-testid="home-continue"]').attributes('href')).toBe('/student/learn/lessons/103')
-    expect(next.findAll('.home-next-stops li.is-done')).toHaveLength(2)
-    expect(next.get('.home-next-stops li.is-current').attributes('aria-label')).toBe('Lesson 3: next')
+    expect(next.get('[data-testid="home-continue"]').classes()).toContain('btn-accent')
+    // Numbered steps, never Chinese numerals: a check when done.
+    expect(next.findAll('.home-steps li.is-done')).toHaveLength(2)
+    expect(next.get('.home-steps li.is-current').attributes('aria-label')).toBe('Lesson 3: next')
+    expect(next.get('.home-steps li.is-current').text()).toBe('3')
 
     const todayPlan = wrapper.get('[data-testid="home-today"]')
     expect(todayPlan.text()).toContain('20 / 30 XP')
-    expect(todayPlan.text()).toContain('10 more XP reaches today’s goal and keeps your 7-day streak.')
+    expect(todayPlan.text()).toContain('10 more XP keeps your 7-day streak.')
     expect(todayPlan.text()).toContain('Fix 6 mistakes')
-    expect(todayPlan.text()).toContain('Live session · Greetings 问候')
-    expect(todayPlan.text()).toContain('With Li Wei · Mandarin for Beginners · you’re booked')
+    expect(todayPlan.text()).toContain('Greetings 问候')
+    expect(todayPlan.text()).toContain('Live session with Li Wei')
     expect(todayPlan.text()).toContain('Talk with Xiaomei')
+    // The next lesson is the big card; the rail does not repeat it, and every row has one small action.
+    expect(todayPlan.text()).not.toContain('Introduce yourself')
+    expect(todayPlan.findAll('.home-timeline-item').every((row) => row.find('a.btn-secondary.btn-sm').exists())).toBe(
+      true,
+    )
     expect(wrapper.find('[data-testid="home-email"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="home-build"]').exists()).toBe(false)
   })
 
-  it('shows the first week of the plan on the first day', async () => {
+  it('shows the goal and the first week in the rail on the first day', async () => {
     api.home.mockResolvedValue(
       homeView({ firstTime: true, today: today({ todayXp: 0, currentStreak: 0, mistakesWaiting: 0 }) }),
     )
     const { wrapper } = await mountPage()
 
     expect(wrapper.get('h1').text()).toBe('Welcome to MandarinSpark, Amira')
-    // The goal is there from day one: the levels it leads between and the first week.
-    expect(wrapper.get('[data-testid="home-goal"]').text()).toContain('Beginner 1 → Beginner 2 · week 2 of 8')
+    expect(wrapper.find('.home-strip').exists()).toBe(false)
+    const goal = wrapper.get('.home-rail [data-testid="home-goal"]')
+    expect(goal.text()).toContain('Travel to Shanghai')
+    expect(goal.text()).toContain('week 2 of 8')
+    expect(goal.text()).toContain('18% of your plan')
     expect(wrapper.find('[data-testid="home-today"]').exists()).toBe(false)
     const next = wrapper.get('[data-testid="home-next"]')
     expect(next.text()).toContain('First in your plan · Learn · Unit 1')
-    expect(next.text()).toContain('Unit 1 is a quick review')
+    expect(next.text()).toContain('A quick review:')
     expect(next.get('[data-testid="home-continue"]').text()).toBe('Start Unit 1')
     const rail = wrapper.get('[data-testid="home-week"]').text()
     expect(rail).toContain('This week')
-    expect(rail).toContain('Review Say hello')
     expect(rail).toContain('Listening set: At the Café')
     expect(rail).toContain('Say hi to Xiaomei')
     expect(rail).toContain('Everyday Conversations')
-    expect(rail).toContain('Class · live practice from week 2')
+    expect(rail).toContain('Class · from week 2')
   })
 
   it('offers the plan, the daily goal and a first week without a plan, and confirms the e-mail address', async () => {
@@ -106,13 +113,13 @@ describe('StudentHomePage', () => {
     expect(wrapper.get('[data-testid="home-week"]').text()).toContain('Join a class')
     expect(wrapper.find('[data-testid="home-goal"]').exists()).toBe(false)
 
-    await wrapper.get('.home-goal-picker button:nth-child(3)').trigger('click')
+    await wrapper.get('.filter-chips button:nth-child(3)').trigger('click')
     await flushPromises()
     expect(api.setDailyGoal).toHaveBeenCalledWith(30)
     expect(api.home).toHaveBeenCalledTimes(2)
 
     const banner = wrapper.get('[data-testid="home-email"]')
-    expect(banner.text()).toContain('We sent a link to new@example.com')
+    expect(banner.text()).toContain('we sent a link to new@example.com')
     await banner.get('[data-testid="send-again"]').trigger('click')
     await flushPromises()
     expect(api.resend).toHaveBeenCalledOnce()

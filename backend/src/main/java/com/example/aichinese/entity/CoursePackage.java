@@ -65,6 +65,10 @@ public class CoursePackage extends TeacherArchivableContent {
     @Column(name = "learning_type", nullable = false, length = 20)
     private LearningType learningType = LearningType.HYBRID;
 
+    /** The Learn unit (1 to 8) the class works best after: a label for students, never a lock. Null when not set. */
+    @Column(name = "best_after_unit")
+    private Integer bestAfterUnit;
+
     /** Short note from the teacher on the class page ("Note from Li Wei"); shown to joined students only. */
     @Column(name = "teacher_note", length = 500)
     private String teacherNote;
@@ -92,6 +96,9 @@ public class CoursePackage extends TeacherArchivableContent {
     @Enumerated(EnumType.STRING)
     @Column(name = "pending_learning_type", length = 20)
     private LearningType pendingLearningType;
+
+    @Column(name = "pending_best_after_unit")
+    private Integer pendingBestAfterUnit;
 
     /** Null while the approved details have no pending change. */
     @Enumerated(EnumType.STRING)

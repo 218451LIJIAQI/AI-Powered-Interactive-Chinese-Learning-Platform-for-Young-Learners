@@ -22,6 +22,7 @@ public final class ClassViews {
             String description,
             String levelName,
             String topicName,
+            Integer bestAfterUnit,
             LearningType learningType,
             TeacherView teacher,
             int unitCount,

@@ -1,5 +1,5 @@
 <template>
-  <div data-testid="level-check">
+  <div class="focus-stage plan-check" :class="layoutClass" data-testid="level-check">
     <StatePanel
       v-if="error && !current"
       tone="error"
@@ -19,14 +19,16 @@
       :message="t('plan.check.loadingHint')"
       spacious
     />
-    <QuestionStage v-else v-model="choice" :question="question!" :locked="verdict !== null" :check="verdict" />
+    <template v-else>
+      <p v-if="eyebrow" class="page-eyebrow" data-testid="level-check-skill">{{ eyebrow }}</p>
+      <QuestionStage v-model="choice" :question="question!" :locked="verdict !== null" :check="verdict" />
+    </template>
 
     <CheckBar
       v-if="current"
       :check="verdict"
       :can-check="choice !== null"
       :checking="pending"
-      :hint="t('plan.check.adaptiveHint')"
       :skip-label="t('plan.check.dontKnow')"
       :wrong-title="skipped ? t('plan.check.noProblem') : t('plan.check.almost')"
       :continue-label="t('plan.common.continue')"
@@ -34,7 +36,7 @@
       @skip="answer(null)"
       @continue="next"
     />
-    <p v-if="error && current" class="alert alert-danger learn-player-error" role="alert">{{ error }}</p>
+    <p v-if="error && current" class="alert alert-danger" role="alert">{{ error }}</p>
   </div>
 </template>
 
@@ -51,10 +53,12 @@ import type { AnswerCheck, LevelCheckStep, MandarinLevel, QuestionView } from '@
 import type { LevelCheckAnswer } from '@/types/plan'
 import { resolveApiError } from '@/utils/apiError'
 
+import { SKILL_EYEBROW_KEYS } from './planLabels'
+
 /**
- * The adaptive level check (setup step 4 and the retake from My learning plan): one question at a time with
- * "I don't know yet", friendly feedback after each answer, until the server says the level is clear. The server
- * grades every answer and grades them all again when the plan is saved, so nothing here decides the level.
+ * The level check (setup step 4 and the retake from My learning plan): one question per skill with "I don't know yet",
+ * friendly feedback after each answer, until the server says it is done. The server grades every answer and grades them
+ * all again when the plan is saved, so nothing here decides the level. The idioms question is the stretch one.
  */
 const props = defineProps<{ startLevel: MandarinLevel }>()
 
@@ -87,6 +91,20 @@ const question = computed<QuestionView | null>(() => {
     options: next.options.map((option) => ({ text: option.text, pinyin: null })),
     tiles: [],
   }
+})
+
+const eyebrow = computed(() => {
+  const skill = current.value?.next?.skill
+  if (!skill) return ''
+  const label = t(SKILL_EYEBROW_KEYS[skill])
+  return skill === 'IDIOMS' ? t('plan.check.stretch', { skill: label }) : label
+})
+
+/** Single characters sit on four tiles, short Chinese answers in two columns, everything else in rows. */
+const layoutClass = computed(() => {
+  const options = current.value?.next?.options ?? []
+  if (!options.length || !options.every((option) => /^\p{Script=Han}+$/u.test(option.text))) return undefined
+  return options.every((option) => [...option.text].length === 1) ? 'has-tiles' : 'has-pairs'
 })
 
 const selectedOptionId = computed(

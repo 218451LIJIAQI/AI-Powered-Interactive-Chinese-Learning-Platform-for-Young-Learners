@@ -40,7 +40,8 @@ class LevelCheckIntegrationTests extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.data.feedback").doesNotExist())
                 .andExpect(jsonPath("$.data.done").value(false))
                 .andExpect(jsonPath("$.data.answeredCount").value(0))
-                .andExpect(jsonPath("$.data.maxQuestions").value(6))
+                .andExpect(jsonPath("$.data.maxQuestions").value(8))
+                .andExpect(jsonPath("$.data.next.skill").value("VOCABULARY"))
                 .andReturn());
         assertThat(first.toString()).doesNotContain("correct").doesNotContain("explanation");
         assertThat(levelOf(first)).isEqualTo(LevelCheckLevel.BEGINNER_1);
@@ -52,7 +53,26 @@ class LevelCheckIntegrationTests extends ApiIntegrationTest {
     }
 
     @Test
-    void rightAnswersGoHarderAndSixAnswersPlaceTheStudent() throws Exception {
+    void theCheckAsksOneQuestionPerSkillInOrderUpToEight() throws Exception {
+        // A first answer wrong and the rest right never makes the level clear early: every skill gets its question.
+        String token = api.registerStudent(uniqueEmail("check-skills"));
+        List<Map<String, Object>> answers = new ArrayList<>();
+        List<String> skills = new ArrayList<>();
+        JsonNode step = next(token, answers);
+        while (!step.path("done").asBoolean()) {
+            skills.add(step.path("next").path("skill").asText());
+            long questionId = step.path("next").path("id").asLong();
+            answers.add(answer(questionId, skills.size() % 2 == 1 ? null : rightOption(questionId)));
+            step = next(token, answers);
+        }
+        assertThat(skills).containsExactly(
+                "VOCABULARY", "LISTENING", "CHARACTERS", "NUMBERS", "PINYIN", "GRAMMAR", "SENTENCES", "IDIOMS");
+        assertThat(step.path("answeredCount").asInt()).isEqualTo(8);
+        assertThat(step.path("result").path("answeredCount").asInt()).isEqualTo(8);
+    }
+
+    @Test
+    void rightAnswersGoHarderAndAnEarlyClearLevelPlacesTheStudent() throws Exception {
         String token = api.registerStudent(uniqueEmail("check-right"));
         List<Map<String, Object>> answers = new ArrayList<>();
         JsonNode step = next(token, answers);
@@ -62,7 +82,7 @@ class LevelCheckIntegrationTests extends ApiIntegrationTest {
             step = next(token, answers);
             assertThat(step.path("feedback").path("correct").asBoolean()).isTrue();
         }
-        assertThat(answers.size()).isBetween(3, 6);
+        assertThat(answers.size()).isBetween(3, 8);
         assertThat(step.path("result").path("level").asText()).isEqualTo("BEGINNER_2");
         assertThat(step.path("result").path("headStart").asBoolean()).isTrue();
         assertThat(step.path("result").path("newSkills").size()).isZero();

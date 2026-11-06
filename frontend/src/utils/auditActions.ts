@@ -1,6 +1,6 @@
 /**
  * How the admin audit log shows an entry: the action's name (full keys of `auditActionMessages`, namespace
- * `auditActions`), its category label and an icon. Codes this bundle does not know fall back to the shared
+ * `auditActions`), and its category label. Codes this bundle does not know fall back to the shared
  * `statusLabels.auditAction_*` labels and finally to a readable form of the code.
  */
 import type { AuditCategory } from '@/types/ops'
@@ -84,34 +84,7 @@ const CATEGORY_KEYS: Record<AuditCategory, string> = {
   SYSTEM: 'auditActions.categorySystem',
 }
 
-const CATEGORY_ICONS: Record<AuditCategory, string> = {
-  ACCOUNT: 'profile',
-  CONTENT: 'content',
-  AI: 'ai',
-  SUPPORT: 'support',
-  LEARNING: 'learn',
-  SYSTEM: 'audit',
-}
-
 /** Icons for what happened, checked in order against the action code; the category icon is the fallback. */
-const ACTION_ICONS: readonly (readonly [RegExp, string])[] = [
-  [/REACTIVATE/, 'unlock'],
-  [/DEACTIVATE|LOCKOUT/, 'lock'],
-  [/DELETED/, 'trash'],
-  [/INVITE/, 'userPlus'],
-  [/EMAIL/, 'mail'],
-  [/PASSWORD/, 'key'],
-  [/LOGOUT/, 'logout'],
-  [/SETTINGS/, 'settings'],
-  [/APPLICATION_SUBMITTED|RESUBMIT|UPLOAD/, 'upload'],
-  [/REPLY/, 'reply'],
-  [/DOCUMENT_VIEW|FILE_VIEWED/, 'eye'],
-  [/REJECT|REVISION/, 'edit'],
-  [/APPROVE|REVIEW|SOLVED|ACCEPTED|RESTORE/, 'check'],
-  [/ARCHIVE/, 'archive'],
-  [/SUBMIT|REPORT_CREATE/, 'send'],
-]
-
 /** The full key of the action's name, or null when this bundle does not name it. */
 export function auditActionKey(actionType: string): string | null {
   return ACTION_KEYS[actionType] ?? null
@@ -119,8 +92,4 @@ export function auditActionKey(actionType: string): string | null {
 
 export function auditCategoryKey(category: AuditCategory): string {
   return CATEGORY_KEYS[category]
-}
-
-export function auditActionIcon(actionType: string, category: AuditCategory): string {
-  return ACTION_ICONS.find(([pattern]) => pattern.test(actionType))?.[1] ?? CATEGORY_ICONS[category]
 }

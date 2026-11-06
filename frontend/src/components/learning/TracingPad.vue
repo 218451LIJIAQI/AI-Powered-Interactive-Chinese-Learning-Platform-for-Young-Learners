@@ -2,7 +2,7 @@
   <canvas
     ref="canvas"
     v-bind="$attrs"
-    tabindex="0"
+    :tabindex="disabled ? -1 : 0"
     role="application"
     :aria-label="label"
     :aria-describedby="keysId"
@@ -28,9 +28,16 @@ import { moveCursor, toCanvasPoint, type StrokePoint } from '@/utils/tracing'
  * faint model glyph under the strokes. The strokes are the v-model: the caller counts, undoes and clears them. Draw
  * with a mouse, a finger or a pen; keyboard: Space (or Enter) starts or ends a stroke, the arrow keys draw. The caller
  * styles the canvas through its class (keep `touch-action: none` there, so a finger draws instead of scrolling).
+ * `disabled` keeps the strokes on show and takes no more input.
  */
 defineOptions({ inheritAttrs: false })
-const props = defineProps<{ characters: string; showModel: boolean; label: string; cellSize: number }>()
+const props = defineProps<{
+  characters: string
+  showModel: boolean
+  label: string
+  cellSize: number
+  disabled?: boolean
+}>()
 const strokes = defineModel<StrokePoint[][]>('strokes', { required: true })
 
 const KEY_STEP = 10
@@ -127,6 +134,7 @@ function pointOf(event: PointerEvent): StrokePoint {
 }
 
 function onPointerDown(event: PointerEvent): void {
+  if (props.disabled) return
   canvas.value?.setPointerCapture?.(event.pointerId)
   current = [pointOf(event)]
 }
@@ -149,6 +157,7 @@ function cancelStroke(): void {
 }
 
 function onKeydown(event: KeyboardEvent): void {
+  if (props.disabled) return
   if (event.key === ' ' || event.key === 'Enter') {
     event.preventDefault()
     if (current) endStroke()

@@ -61,7 +61,7 @@ describe('ConfirmDialog', () => {
 
     const leave = byTestId('confirm-dialog-confirm')
     const keepGoing = byTestId('confirm-dialog-cancel')
-    expect(leave.classList).toContain('btn-outline')
+    expect(leave.classList).toContain('btn-secondary')
     expect(keepGoing.classList).toContain('btn-primary')
     expect(document.activeElement).toBe(keepGoing)
 

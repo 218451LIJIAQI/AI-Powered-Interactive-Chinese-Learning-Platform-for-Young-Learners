@@ -1,0 +1,768 @@
+/* Teacher console: dashboard, applicant pages, classes, lesson editor, live sessions, students. */
+
+.content-change-list {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding-left: var(--space-5);
+  list-style: disc;
+  color: var(--text-secondary);
+  font-size: var(--font-size-md);
+}
+
+/* ----- Teacher console: shared pieces ----- */
+
+/* A card's content: 16 between blocks, inside the card's padding box. */
+.teacher-card {
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+}
+
+.teacher-card-head {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.teacher-card-head p,
+.teacher-callout-copy p,
+.teacher-student-who p,
+.teacher-locked-copy p,
+.teacher-locked-status p {
+  margin: 0;
+}
+
+/* Divider rows: the first row's padding is the gap under the head, the last row's is taken back from the card's. */
+.teacher-card > .row-list {
+  margin-block: calc(-1 * var(--space-3));
+}
+
+/* A ghost button's text, not its hover fill, lines up with the edge of the card or the page. */
+.section-header > .btn-ghost,
+.teacher-unit-head > .btn-ghost,
+.page-header-actions > .btn-ghost:last-child {
+  margin-right: calc(-1 * var(--space-2));
+}
+
+.lesson-footer-note > .btn-ghost {
+  margin-left: calc(-1 * var(--space-2));
+}
+
+/* An H1 or a name with its status badge, centred on one row. */
+.teacher-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  min-width: 0;
+}
+
+/* The number or small icon that leads a row. */
+.teacher-tile {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--control-height-sm);
+  height: var(--control-height-sm);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  color: var(--text-primary);
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-bold);
+}
+
+.teacher-tile.is-sm {
+  height: var(--badge-height);
+}
+
+.teacher-tile.is-filled {
+  background: var(--color-primary-500);
+  color: var(--text-on-primary);
+}
+
+.teacher-callout-copy {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/* Nothing yet: one card down to the page's bottom padding, its message centred. */
+.teacher-empty-page {
+  display: grid;
+  align-content: center;
+  min-height: calc(100vh - var(--topbar-height) - var(--page-top) - var(--page-bottom));
+}
+
+/* ----- Dashboard ----- */
+
+.teacher-todo.row-list {
+  margin-top: 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.teacher-dash-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--grid-gap);
+}
+
+/* The whole row opens the student or the session. */
+.teacher-dash-link {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.teacher-dash-link .row-list-copy {
+  flex: 1;
+}
+
+.teacher-dash-link:hover .row-list-title {
+  color: var(--text-brand);
+}
+
+.teacher-dash-chevron {
+  flex: none;
+  color: var(--text-secondary);
+}
+
+/* ----- Applicant dashboard: the two cards in the middle of the page ----- */
+
+.applicant-dashboard {
+  justify-content: center;
+  min-height: calc(100vh - var(--topbar-height) - var(--page-top) - var(--page-bottom));
+}
+
+.applicant-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--list-column);
+  gap: var(--grid-gap);
+}
+
+.applicant-status-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+}
+
+.applicant-action {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+}
+
+.applicant-steps > li {
+  justify-content: flex-start;
+  gap: var(--space-3);
+}
+
+/* ----- Teaching profile ----- */
+
+.teaching-profile-layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--grid-gap);
+}
+
+.teaching-verification-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.teaching-state-copy {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--type-caption-size);
+  line-height: 18px;
+}
+
+.teacher-card > .teaching-documents {
+  margin-block: calc(-1 * var(--space-1)) 0;
+}
+
+.teaching-documents > li {
+  justify-content: flex-start;
+  gap: var(--space-3);
+}
+
+.teaching-document-copy {
+  flex: 1;
+}
+
+.teaching-document-optional {
+  color: var(--text-secondary);
+  font-size: var(--type-caption-size);
+  font-weight: var(--font-weight-semibold);
+}
+
+.teaching-document-file {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--type-caption-size);
+  line-height: 18px;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.teaching-document-file:hover {
+  color: var(--text-link);
+  text-decoration: underline;
+}
+
+.teaching-file-rule {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--type-caption-size);
+}
+
+.teaching-submit {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.teaching-consent-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  width: fit-content;
+}
+
+/* ----- Locked page: one column in the middle of the page ----- */
+
+.teacher-locked {
+  display: grid;
+  align-content: center;
+  gap: var(--page-gap);
+  width: min(100%, 760px);
+  min-height: calc(100vh - var(--topbar-height) - var(--page-top) - var(--page-bottom));
+  margin-inline: auto;
+}
+
+.teacher-locked-card {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.teacher-locked-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.teacher-locked-tile {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--control-height-lg);
+  height: var(--control-height-lg);
+  border-radius: var(--radius-btn-lg);
+  background: var(--color-primary-500);
+  color: var(--text-on-primary);
+}
+
+.teacher-locked-copy {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.teacher-locked-status {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+}
+
+.teacher-locked-status .type-caption {
+  overflow-wrap: anywhere;
+}
+
+.teacher-locked-status-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.teacher-locked-status-title {
+  font-size: var(--type-caption-size);
+  font-weight: var(--font-weight-bold);
+}
+
+.teacher-locked-actions {
+  justify-content: flex-end;
+}
+
+/* ----- Classes ----- */
+
+.teacher-class-copy {
+  gap: var(--space-2);
+}
+
+.teacher-class-copy p {
+  margin: 0;
+}
+
+.teacher-class-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+/* ----- A class: numbered units, their lessons under the unit's title ----- */
+
+.teacher-units {
+  display: grid;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.teacher-unit + .teacher-unit {
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.teacher-unit-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.teacher-unit-head .row-list-copy {
+  flex: 1;
+}
+
+.teacher-unit-body {
+  padding-left: calc(var(--control-height-sm) + var(--space-3));
+}
+
+.teacher-unit-body .row-list {
+  margin-top: var(--space-3);
+}
+
+.teacher-unit-body .row-list > li {
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* Edit and Open share one width, so the status badges line up across the rows. */
+.teacher-unit-body .row-list-actions .btn {
+  min-width: calc(var(--space-12) + var(--space-8));
+}
+
+.teacher-unit-add {
+  padding-top: var(--space-3);
+}
+
+/* ----- Lesson editor ----- */
+
+.lesson-review {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.lesson-review-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.lesson-review-note {
+  align-items: center;
+  font-size: var(--type-label-size);
+}
+
+/* Content and Quiz: the main card with a rail beside it. */
+.lesson-with-rail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--list-column);
+  align-items: start;
+  gap: var(--grid-gap);
+}
+
+.lesson-with-rail.is-single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.lesson-phrases {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.lesson-phrase-row {
+  display: grid;
+  grid-template-columns:
+    var(--control-height-sm) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.3fr)
+    var(--control-height-sm);
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.lesson-phrase-row.is-head {
+  color: var(--text-secondary);
+  font-size: var(--type-caption-size);
+}
+
+.lesson-video-file {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.lesson-activity-lead {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* The footer card: a note on the left, Save draft and Submit on the right. */
+.lesson-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-6);
+  padding: var(--space-4) var(--space-6);
+}
+
+.lesson-footer-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  min-width: 0;
+}
+
+.lesson-footer-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--type-caption-size);
+}
+
+/* Activity and question drawers. */
+.lesson-activity-kind {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.lesson-rows-set {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.lesson-rows-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.lesson-rows-head .btn {
+  flex: none;
+}
+
+.lesson-rows-box {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.lesson-rows-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1.5fr) var(--control-height-sm);
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.lesson-rows-grid.is-head {
+  color: var(--text-secondary);
+  font-size: var(--type-caption-size);
+}
+
+.lesson-option-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) var(--control-height-sm);
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Quiz: number, the question with its options and explanation, Edit and Delete. */
+.lesson-questions > li {
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: var(--space-3);
+}
+
+.lesson-question-copy {
+  display: grid;
+  flex: 1;
+  justify-items: start;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.lesson-question-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* Submit dialog. */
+.lesson-checklist {
+  margin-bottom: var(--space-3);
+}
+
+.lesson-checklist > li {
+  justify-content: flex-start;
+  gap: var(--space-3);
+}
+
+/* Preview: the lesson as students meet it. */
+.lesson-preview-note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  color: var(--text-secondary);
+  font-size: var(--type-caption-size);
+}
+
+.lesson-preview-sheet {
+  gap: var(--space-6);
+}
+
+.lesson-preview-head {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.lesson-preview-head p {
+  margin: 0;
+}
+
+.lesson-preview-title {
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: var(--type-question-size);
+  font-weight: var(--font-weight-extrabold);
+  line-height: 32px;
+}
+
+.lesson-preview-section {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.lesson-preview-video {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.lesson-preview-video-tile {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: calc(var(--list-column) * 0.7);
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+}
+
+.row-list > .lesson-preview-row {
+  justify-content: flex-start;
+  gap: var(--space-3);
+}
+
+/* ----- Live sessions ----- */
+
+.teacher-session-row {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.teacher-session-row.is-cancelled .row-list-title,
+.teacher-session-row.is-cancelled .row-list-meta {
+  color: var(--text-secondary);
+}
+
+.teacher-session-row.is-cancelled .row-list-title {
+  font-weight: var(--font-weight-semibold);
+}
+
+/* Date, start and end on one row. */
+.teacher-session-when {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+/* ----- Students ----- */
+
+.teacher-roster {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.teacher-roster-row {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-3);
+}
+
+.teacher-roster-copy {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.teacher-roster-top {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.teacher-student-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+.teacher-student-who {
+  display: grid;
+  flex: 1;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.teacher-student-class {
+  max-width: var(--list-column);
+  margin-top: var(--space-2);
+}
+
+.teacher-figures {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+/* The numbers line up across the three even when one label wraps. */
+.teacher-figure {
+  display: grid;
+  align-content: space-between;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+}
+
+.teacher-figure dt {
+  color: var(--text-secondary);
+  font-size: var(--type-caption-size);
+  font-weight: var(--font-weight-bold);
+}
+
+.teacher-figure dd {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: var(--type-h2-size);
+  font-weight: var(--font-weight-extrabold);
+  line-height: 24px;
+}
+
+.teacher-student-lessons > li {
+  display: grid;
+  justify-content: stretch;
+  gap: var(--space-2);
+}
+
+.teacher-student-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
+  min-width: 0;
+}
+
+.teacher-student-lesson {
+  font-size: var(--type-caption-size);
+}
+
+.feedback-list-message {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+/* Rails and pairs of cards stack on narrower windows. */
+@media (max-width: 1200px) {
+  .applicant-layout,
+  .teaching-profile-layout,
+  .teacher-dash-pair,
+  .lesson-with-rail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .teacher-students {
+    --list-column: 280px;
+  }
+
+  /* The list column is narrow here: Write feedback drops under the name when they do not fit beside each other. */
+  .teacher-student-head {
+    flex-wrap: wrap;
+  }
+
+  .teacher-student-who {
+    flex-basis: 40%;
+  }
+}

@@ -59,8 +59,8 @@ interface Props {
   open?: boolean
   subtitle?: string
   variant?: 'dialog' | 'drawer'
-  /** Dialog: sm 440px, md 560px, lg 680px. Drawer: md 480px, lg 720px (editors with tables). */
-  size?: 'sm' | 'md' | 'lg'
+  /** Dialog: md 520px, lg 720px (session forms). Drawer: md 480px, lg 720px (editors with tables). */
+  size?: 'md' | 'lg'
   /** Shows the × button in the header (confirm dialogs close through their own buttons). */
   closable?: boolean
   /** True while an action runs: the overlay cannot be closed meanwhile. */

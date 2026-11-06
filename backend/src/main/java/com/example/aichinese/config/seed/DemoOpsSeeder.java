@@ -201,7 +201,7 @@ public class DemoOpsSeeder implements CommandLineRunner {
         SupportRequest linkRequest = request(1038, student, SupportRequesterRole.STUDENT, SupportTopic.CLASSES,
                 "Live session link didn't open", daysAgo(2, 15, 52));
         message(linkRequest, student, false,
-                "The Join button for “Greetings 问候” didn't open Zoom. It just kept loading.",
+                "The Join button for “Meeting Classmates 认识同学” didn't open Zoom. It just kept loading.",
                 daysAgo(2, 15, 52));
         answer(linkRequest, admin,
                 "Thanks for telling us. The join link opens 15 minutes before the start, so it couldn't open at "
@@ -219,7 +219,7 @@ public class DemoOpsSeeder implements CommandLineRunner {
         SupportRequest lengthRequest = request(1040, teacher, SupportRequesterRole.TEACHER, SupportTopic.CLASSES,
                 "Can a live session be longer than 60 minutes?", daysAgo(3, 14, 10));
         message(lengthRequest, teacher, false,
-                "I'd like to run a 90-minute Tones Clinic. Is there a time limit for live sessions?", daysAgo(3, 14, 10));
+                "I'd like to run a 90-minute Campus Q&A. Is there a time limit for live sessions?", daysAgo(3, 14, 10));
         answer(lengthRequest, admin,
                 "Yes. A session can run up to 120 minutes. Open it in Live sessions › Edit and change the end "
                         + "time; booked students are told about the new time automatically.",
@@ -288,10 +288,10 @@ public class DemoOpsSeeder implements CommandLineRunner {
 
     private void seedNotifications(User admin, User student, User teacher, User meiLin, User farah) {
         notify(student, NotificationType.LIVE_CLASS_REMINDER, "Live session starts soon",
-                "“Greetings 问候” begins in 30 minutes.", "/student/classes/live",
+                "“Meeting Classmates 认识同学” begins in 30 minutes.", "/student/classes/live",
                 LocalDateTime.now().minusMinutes(20), false);
         notify(student, NotificationType.TEACHER_FEEDBACK, "New feedback from Li Wei",
-                "Li Wei left feedback on your “Lesson quiz: Greetings”.", "/student/classes",
+                "Li Wei left feedback on your “Lesson quiz: Meeting Classmates”.", "/student/classes",
                 LocalDateTime.now().minusHours(3), false);
         notify(student, NotificationType.LIVE_CLASS_REMINDER, "Live session cancelled",
                 "Li Wei cancelled “Finding Places 问路”. Your booking was cancelled.",
@@ -303,15 +303,15 @@ public class DemoOpsSeeder implements CommandLineRunner {
                 "An admin checked the SparkBot answer you reported and resolved it.", "/student/ai/ask",
                 daysAgo(1, 9, 0), true);
         notify(student, NotificationType.LIVE_CLASS_REMINDER, "Live session rescheduled",
-                "“Tones Clinic” now starts one hour later.", "/student/classes/live", daysAgo(2, 17, 0), true);
+                "“Campus Q&A” now starts one hour later.", "/student/classes/live", daysAgo(2, 17, 0), true);
 
         notify(teacher, NotificationType.LIVE_CLASS_REMINDER, "New booking",
-                "Chen Hao booked “Greetings 问候”.", "/teacher/live-sessions", daysAgo(1, 16, 0), false);
+                "Chen Hao booked “Meeting Classmates 认识同学”.", "/teacher/live-sessions", daysAgo(1, 16, 0), false);
         notify(teacher, NotificationType.SUPPORT_REQUEST, "Support replied to your request",
                 admin.getDisplayName() + " answered #1040 “Can a live session be longer than 60 minutes?”.",
                 supportPath("/teacher", 1040), daysAgo(2, 9, 30), true);
         notify(teacher, NotificationType.CLASS_ENROLMENT, "New student",
-                "Nur Aisyah joined “Mandarin for Beginners”. You can follow her progress in Students.",
+                "Nur Aisyah joined “Mandarin for Campus Life”. You can follow her progress in Students.",
                 "/teacher/students", daysAgo(2, 10, 0), true);
         notify(teacher, NotificationType.CONTENT_REVIEW, "Changes requested: University Life",
                 "An admin asked for changes to your revision of “University Life”.", "/teacher/classes",
@@ -380,7 +380,8 @@ public class DemoOpsSeeder implements CommandLineRunner {
         audit(teacher, "CONTENT_SUBMIT", "Lesson", null, "University Life (revision)", null,
                 "Teacher submitted a lesson revision for review.", daysAgo(4, 16, 0));
         audit(admin, "CONTENT_REJECT", "Lesson", null, "University Life (revision)",
-                "Add pinyin under the new words in the short story.", "Admin requested changes.", daysAgo(3, 15, 30));
+                "Add pinyin to the Campus Places matching cards and under each new word in the key phrases.",
+                "Admin requested changes.", daysAgo(3, 15, 30));
         audit(admin, "AI_RESPONSE_REPORT_REVIEW", "AiResponseReport", null, "Report from Amira Hassan · Chat", null,
                 "Admin resolved an AI answer report.", daysAgo(1, 9, 0));
         audit(teacher, "CONTENT_SUBMIT", "CoursePackage", null, "Chinese Culture and Festivals", null,

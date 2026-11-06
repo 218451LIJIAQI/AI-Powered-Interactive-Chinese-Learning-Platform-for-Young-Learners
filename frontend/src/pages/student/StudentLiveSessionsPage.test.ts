@@ -1,5 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { classesTestRouter } from '@/test/classRoutes'
 import type { StudentSession, StudentSessions } from '@/types/classes'
@@ -8,7 +8,6 @@ const api = vi.hoisted(() => ({
   liveSessions: vi.fn(),
   myClasses: vi.fn(),
   book: vi.fn(),
-  cancelBooking: vi.fn(),
   joinSession: vi.fn(),
 }))
 
@@ -16,10 +15,13 @@ vi.mock('@/api/classes', () => ({ studentClassesApi: api }))
 
 import StudentLiveSessionsPage from './StudentLiveSessionsPage.vue'
 
-const inTwoDays = new Date(Date.now() + 2 * 24 * 3_600_000)
+const MINUTE = 60_000
+
+function atOffset(minutes: number): string {
+  return new Date(Date.now() + minutes * MINUTE).toISOString()
+}
 
 function session(overrides: Partial<StudentSession>): StudentSession {
-  const startsAt = inTwoDays.toISOString()
   return {
     id: 1,
     title: 'Greetings 问候',
@@ -28,9 +30,9 @@ function session(overrides: Partial<StudentSession>): StudentSession {
     lessonId: 11,
     lessonTitle: 'Greetings',
     teacherName: 'Li Wei',
-    startsAt,
-    endsAt: new Date(inTwoDays.getTime() + 45 * 60_000).toISOString(),
-    joinOpensAt: new Date(inTwoDays.getTime() - 15 * 60_000).toISOString(),
+    startsAt: atOffset(2 * 24 * 60),
+    endsAt: atOffset(2 * 24 * 60 + 45),
+    joinOpensAt: atOffset(2 * 24 * 60 - 15),
     platform: 'ZOOM',
     status: 'SCHEDULED',
     rescheduledFrom: null,
@@ -48,6 +50,11 @@ function session(overrides: Partial<StudentSession>): StudentSession {
   }
 }
 
+/** A session in its join window: started five minutes ago. */
+function openNow(overrides: Partial<StudentSession> = {}): StudentSession {
+  return session({ startsAt: atOffset(-5), endsAt: atOffset(40), joinOpensAt: atOffset(-20), ...overrides })
+}
+
 function sessions(upcoming: StudentSession[], past: StudentSession[] = []): StudentSessions {
   return { upcoming, past, bookedCount: upcoming.filter((item) => item.booked).length }
 }
@@ -59,7 +66,13 @@ async function mountPage() {
   return wrapper
 }
 
+function joinButton(wrapper: Awaited<ReturnType<typeof mountPage>>, id = 1) {
+  return wrapper.get(`[data-testid="session-${id}"]`).get('button')
+}
+
 describe('StudentLiveSessionsPage', () => {
+  let tab: { opener: unknown; location: { href: string }; close: ReturnType<typeof vi.fn> }
+
   beforeEach(() => {
     Object.values(api).forEach((fn) => fn.mockReset())
     api.myClasses.mockResolvedValue({
@@ -69,76 +82,94 @@ describe('StudentLiveSessionsPage', () => {
       moreTeachers: [],
       upcomingLiveSessionCount: 1,
     })
+    api.joinSession.mockResolvedValue({ meetingLink: 'https://example.com/meet' })
+    tab = { opener: {}, location: { href: '' }, close: vi.fn() }
+    vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window)
   })
 
-  it('books a seat and confirms it', async () => {
-    api.liveSessions
-      .mockResolvedValueOnce(sessions([session({})]))
-      .mockResolvedValue(sessions([session({ booked: true, canBook: false, bookedCount: 4, seatsLeft: 21 })]))
-    api.book.mockResolvedValue(session({ booked: true }))
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('joins in one click, booking the seat first when she has none', async () => {
+    api.liveSessions.mockResolvedValue(sessions([openNow()]))
+    api.book.mockResolvedValue(openNow({ booked: true }))
     const wrapper = await mountPage()
 
-    expect(wrapper.text()).toContain('22 seats left')
-    await wrapper
-      .findAll('button')
-      .find((button) => button.text() === 'Book')!
-      .trigger('click')
+    expect(wrapper.text()).not.toContain('Book')
+    await joinButton(wrapper).trigger('click')
     await flushPromises()
 
     expect(api.book).toHaveBeenCalledWith(1)
-    expect(wrapper.text()).toContain('You booked Greetings 问候.')
-    expect(wrapper.text()).toContain('Booked')
-    expect(wrapper.text()).toContain('15 minutes before the start')
+    expect(api.joinSession).toHaveBeenCalledWith(1)
+    expect(tab.location.href).toBe('https://example.com/meet')
+    expect(api.book.mock.invocationCallOrder[0]).toBeLessThan(api.joinSession.mock.invocationCallOrder[0]!)
   })
 
-  it('groups the upcoming sessions by day, a booked one marked as booked', async () => {
-    const morning = new Date(inTwoDays)
-    morning.setHours(10, 0, 0, 0)
-    const later = new Date(morning.getTime() + 5 * 3_600_000)
-    const nextWeek = new Date(morning.getTime() + 7 * 24 * 3_600_000)
+  it('does not book again when she already has a seat', async () => {
+    api.liveSessions.mockResolvedValue(sessions([openNow({ booked: true, canBook: false, canJoin: true })]))
+    const wrapper = await mountPage()
+
+    await joinButton(wrapper).trigger('click')
+    await flushPromises()
+
+    expect(api.book).not.toHaveBeenCalled()
+    expect(api.joinSession).toHaveBeenCalledWith(1)
+  })
+
+  it('closes the tab and says why when joining fails', async () => {
+    api.liveSessions.mockResolvedValue(sessions([openNow()]))
+    api.book.mockRejectedValue(new Error('nope'))
+    const wrapper = await mountPage()
+
+    await joinButton(wrapper).trigger('click')
+    await flushPromises()
+
+    expect(tab.close).toHaveBeenCalled()
+    expect(api.joinSession).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('You could not join this session.')
+  })
+
+  it('shows Join disabled on the day before its window opens, and says when it opens', async () => {
+    const start = new Date()
+    start.setHours(23, 50, 0, 0)
+    // Late in the evening "today" has no room for a window that has not opened, so this case needs a clock.
+    vi.useFakeTimers({ now: new Date(start.getFullYear(), start.getMonth(), start.getDate(), 9, 0, 0) })
+    const startsAt = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 16, 0, 0)
     api.liveSessions.mockResolvedValue(
       sessions([
-        session({ id: 1, booked: true, canBook: false, startsAt: morning.toISOString() }),
-        session({ id: 2, title: 'Tones Clinic', startsAt: later.toISOString(), endsAt: later.toISOString() }),
-        session({ id: 3, title: 'Numbers', startsAt: nextWeek.toISOString(), endsAt: nextWeek.toISOString() }),
+        session({
+          startsAt: startsAt.toISOString(),
+          endsAt: new Date(startsAt.getTime() + 45 * MINUTE).toISOString(),
+          joinOpensAt: new Date(startsAt.getTime() - 15 * MINUTE).toISOString(),
+        }),
+      ]),
+    )
+    const wrapper = await mountPage()
+    vi.useRealTimers()
+
+    expect(joinButton(wrapper).attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('Join opens at')
+  })
+
+  it('gives later days no action, a cancelled session its status and a full one without her seat its status', async () => {
+    api.liveSessions.mockResolvedValue(
+      sessions([
+        session({ id: 1 }),
+        session({ id: 2, status: 'CANCELLED', canBook: false }),
+        session({ id: 3, status: 'FULL', canBook: false }),
       ]),
     )
     const wrapper = await mountPage()
 
-    const days = wrapper.findAll('[role="group"]')
-    expect(days).toHaveLength(2)
-    expect(days[0]!.findAll('li')).toHaveLength(2)
-    expect(days[1]!.findAll('li')).toHaveLength(1)
-    expect(wrapper.get('[data-testid="session-1"]').classes()).toContain('is-booked')
-    expect(wrapper.get('[data-testid="session-1"]').text()).toContain('Booked')
-    expect(wrapper.get('[data-testid="session-2"]').classes()).not.toContain('is-booked')
+    expect(wrapper.get('[data-testid="session-1"]').find('button').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="session-2"]').text()).toContain('Cancelled')
+    expect(wrapper.get('[data-testid="session-3"]').text()).toContain('Full')
+    // Cancelled sessions do not count.
+    expect(wrapper.text()).toContain('2 sessions')
   })
 
-  it('cancels a booking after the dialog says what happens', async () => {
-    const booked = session({ booked: true, canBook: false })
-    api.liveSessions
-      .mockResolvedValueOnce(sessions([booked]))
-      .mockResolvedValue(sessions([session({ bookingCancelled: true })]))
-    api.cancelBooking.mockResolvedValue(session({ bookingCancelled: true }))
-    const wrapper = await mountPage()
-
-    await wrapper
-      .findAll('button')
-      .find((button) => button.text().startsWith('Details'))!
-      .trigger('click')
-    await wrapper
-      .findAll('button')
-      .find((button) => button.text() === 'Cancel booking')!
-      .trigger('click')
-    expect(wrapper.text()).toContain('Your seat for Greetings 问候')
-    await wrapper.get('[data-testid="confirm-dialog-confirm"]').trigger('click')
-    await flushPromises()
-
-    expect(api.cancelBooking).toHaveBeenCalledWith(1)
-    expect(wrapper.text()).toContain('Your booking for Greetings 问候 was cancelled.')
-  })
-
-  it('shows past sessions with their recordings and attendance', async () => {
+  it('shows past sessions with their recordings and no attendance', async () => {
     const past = session({
       id: 2,
       title: 'Numbers 数字',
@@ -153,8 +184,18 @@ describe('StudentLiveSessionsPage', () => {
     api.liveSessions.mockResolvedValue(sessions([], [past]))
     const wrapper = await mountPage()
 
-    expect(wrapper.text()).toContain('1 recording · sessions you booked')
-    expect(wrapper.text()).toContain('Attended')
-    expect(wrapper.find('a[href="https://example.com/recording"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('1 recording')
+    expect(wrapper.text()).not.toContain('Attended')
+    const link = wrapper.get('a[href="https://example.com/recording"]')
+    expect(link.text()).toContain('Watch recording')
+    expect(link.attributes('aria-label')).toBe('Watch the recording of Numbers 数字 (opens in a new tab)')
+  })
+
+  it('offers Find classes when there are no sessions at all', async () => {
+    api.liveSessions.mockResolvedValue(sessions([]))
+    const wrapper = await mountPage()
+
+    expect(wrapper.text()).toContain('No live sessions yet')
+    expect(wrapper.text()).toContain('Find classes')
   })
 })

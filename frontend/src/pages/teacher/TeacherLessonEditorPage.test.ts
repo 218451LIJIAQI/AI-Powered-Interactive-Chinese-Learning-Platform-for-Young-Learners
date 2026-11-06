@@ -2,25 +2,35 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { classesTestRouter } from '@/test/classRoutes'
-import type { LessonEditor } from '@/types/classes'
+import type { EditorActivity, LessonEditor } from '@/types/classes'
 
 const api = vi.hoisted(() => ({
   get: vi.fn(),
   saveContent: vi.fn(),
   submit: vi.fn(),
+  addActivity: vi.fn(),
+  updateActivity: vi.fn(),
 }))
 
-const classesApi = vi.hoisted(() => ({ classPage: vi.fn() }))
-
-vi.mock('@/api/classes', () => ({ lessonEditorApi: api, teacherClassesApi: classesApi }))
+vi.mock('@/api/classes', () => ({ lessonEditorApi: api }))
 
 import TeacherLessonEditorPage from './TeacherLessonEditorPage.vue'
+
+function activity(type: EditorActivity['type'], title: string, number: number): EditorActivity {
+  return { type, id: number, title, stage: 'GUIDED', number, characters: [], pairs: [] }
+}
+
+const THREE_ACTIVITIES = [
+  activity('FLASHCARDS', 'University Life Phrases', 1),
+  activity('TRACING', 'Trace 学', 2),
+  activity('MATCHING', 'Campus Places', 3),
+]
 
 function editor(overrides: Partial<LessonEditor> = {}): LessonEditor {
   return {
     lessonId: 11,
     classId: 7,
-    classTitle: 'Mandarin for Beginners',
+    classTitle: 'Mandarin for Campus Life',
     classStatus: 'PUBLISHED',
     unitId: 1,
     unitTitle: 'First Conversations',
@@ -43,8 +53,13 @@ function editor(overrides: Partial<LessonEditor> = {}): LessonEditor {
   }
 }
 
-async function mountEditor() {
-  const router = await classesTestRouter('/teacher/classes/7/lessons/11')
+const READY: Partial<LessonEditor> = {
+  activities: THREE_ACTIVITIES,
+  checklist: { activityCount: 3, quizCount: 1, questionCount: 5, quizzesReady: true, pinyinComplete: true },
+}
+
+async function mountEditor(path = '/teacher/classes/7/lessons/11') {
+  const router = await classesTestRouter(path)
   const wrapper = mount(TeacherLessonEditorPage, {
     global: { plugins: [router], stubs: { teleport: true, TeacherAiDraftPanel: true } },
   })
@@ -55,100 +70,117 @@ async function mountEditor() {
 describe('TeacherLessonEditorPage', () => {
   beforeEach(() => {
     Object.values(api).forEach((fn) => fn.mockReset())
-    classesApi.classPage.mockResolvedValue({
-      id: 7,
-      units: [
-        {
-          id: 1,
-          title: 'First Conversations',
-          archived: false,
-          lessons: [
-            { id: 11, title: 'University Life', status: 'PUBLISHED', revisionStatus: 'REJECTED' },
-            { id: 12, title: 'Finding Places', status: 'DRAFT', revisionStatus: null },
-          ],
-        },
-      ],
-    })
   })
 
-  it('shows that students keep the published lesson and the admin note of the revision', async () => {
+  it('shows that students keep the published lesson and the admin note of the update', async () => {
     api.get.mockResolvedValue(editor())
     const wrapper = await mountEditor()
 
-    expect(wrapper.text()).toContain('Published · Revision: changes requested')
-    expect(wrapper.text()).toContain('Students see the published version while you fix this revision.')
-    expect(wrapper.text()).toContain('Olivia Tan, May 15: Add pinyin under the new words.')
+    const review = wrapper.get('[data-testid="lesson-review"]').text()
+    expect(review).toContain('Changes requested')
+    expect(review).toContain('Students keep the published version until this is approved.')
+    expect(review).toContain('Olivia Tan, May 15: Add pinyin under the new words.')
+    expect(wrapper.text()).toContain('Mandarin for Campus Life · Unit 1: First Conversations')
   })
 
-  it('lists the class’s lessons beside the editor with the open lesson marked', async () => {
+  it('has no lesson rail, no live preview and no archive', async () => {
     api.get.mockResolvedValue(editor())
     const wrapper = await mountEditor()
 
-    const rail = wrapper.get('nav.lesson-editor-rail')
-    const links = rail.findAll('a')
-    expect(links.map((link) => link.text())).toEqual([
-      expect.stringContaining('University Life'),
-      expect.stringContaining('Finding Places'),
-    ])
-    expect(links[0]!.attributes('aria-current')).toBe('page')
-    expect(links[1]!.attributes('href')).toBe('/teacher/classes/7/lessons/12')
+    expect(wrapper.find('nav.lesson-editor-rail').exists()).toBe(false)
+    expect(wrapper.find('#lesson-summary').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('Archive lesson')
   })
 
-  it('previews the edits as they are typed', async () => {
+  it('saves edited content as a draft and keeps the fields it no longer shows', async () => {
     api.get.mockResolvedValue(editor())
+    api.saveContent.mockResolvedValue(editor({ title: 'University Life 2' }))
     const wrapper = await mountEditor()
 
-    await wrapper.get('#lesson-summary').setValue('Places and routines on campus.')
-    expect(wrapper.get('.lesson-editor-live').text()).toContain('Places and routines on campus.')
-  })
+    const save = wrapper.get('[data-testid="save-draft"]')
+    expect(save.attributes('disabled')).toBeDefined()
+    await wrapper.get('#lesson-title').setValue('University Life 2')
+    expect(save.attributes('disabled')).toBeUndefined()
 
-  it('saves edited content as a draft', async () => {
-    api.get.mockResolvedValue(editor())
-    api.saveContent.mockResolvedValue(editor({ summary: 'Places and routines on campus.' }))
-    const wrapper = await mountEditor()
-
-    expect(wrapper.text()).toContain('All changes saved')
-    await wrapper.get('#lesson-summary').setValue('Places and routines on campus.')
-    expect(wrapper.text()).toContain('Unsaved changes')
-
-    await wrapper
-      .findAll('button')
-      .find((button) => button.text().includes('Save draft'))!
-      .trigger('click')
+    await save.trigger('click')
     await flushPromises()
 
     expect(api.saveContent).toHaveBeenCalledWith(11, {
-      title: 'University Life',
+      title: 'University Life 2',
       unitId: 1,
       minutes: 14,
-      summary: 'Places and routines on campus.',
+      summary: 'Places on campus.',
       keyPhrases: [{ chinese: '大学生', pinyin: 'dàxuéshēng', meaning: 'university student' }],
     })
     expect(wrapper.text()).toContain('Your changes were saved.')
   })
 
-  it('only submits when the checklist is complete', async () => {
+  it('keeps Submit disabled with the reason until the checklist is complete', async () => {
     api.get.mockResolvedValue(editor())
+    const wrapper = await mountEditor()
+
+    expect(wrapper.get('[data-testid="open-submit"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('Add practice and a quiz to submit')
+
+    api.get.mockResolvedValue(
+      editor({
+        activities: [THREE_ACTIVITIES[0]!],
+        checklist: { activityCount: 1, quizCount: 1, questionCount: 5, quizzesReady: true, pinyinComplete: true },
+      }),
+    )
+    const oneActivity = await mountEditor()
+    expect(oneActivity.text()).toContain('Add all 3 practice activities to submit')
+  })
+
+  it('does not offer to submit a published lesson with nothing changed', async () => {
+    api.get.mockResolvedValue(editor({ ...READY, revisionStatus: null, reviewNote: null }))
+    const wrapper = await mountEditor()
+
+    expect(wrapper.get('[data-testid="open-submit"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('Change something to submit an update')
+  })
+
+  it('submits from the checklist and turns read-only', async () => {
+    api.get.mockResolvedValue(editor(READY))
+    api.submit.mockResolvedValue(editor({ ...READY, revisionStatus: 'SUBMITTED', editable: false, reviewNote: null }))
     const wrapper = await mountEditor()
 
     await wrapper.get('[data-testid="open-submit"]').trigger('click')
     const dialog = wrapper.get('[data-testid="submit-dialog"]')
-    expect(dialog.text()).toContain('At least one practice activity')
-    expect(dialog.get('[data-testid="submit-dialog-confirm"]').attributes('disabled')).toBeDefined()
+    expect(dialog.text()).toContain('Submit "University Life" for review?')
+    expect(dialog.text()).toContain('All 3 practice activities')
+    expect(dialog.text()).toContain('published version')
 
-    api.get.mockResolvedValue(
-      editor({
-        checklist: { activityCount: 3, quizCount: 1, questionCount: 5, quizzesReady: true, pinyinComplete: true },
-      }),
-    )
-    api.submit.mockResolvedValue(editor({ revisionStatus: 'SUBMITTED', editable: false, reviewNote: null }))
-    const ready = await mountEditor()
-    await ready.get('[data-testid="open-submit"]').trigger('click')
-    await ready.get('[data-testid="submit-dialog-confirm"]').trigger('click')
+    await dialog.get('[data-testid="submit-dialog-confirm"]').trigger('click')
     await flushPromises()
 
     expect(api.submit).toHaveBeenCalledWith(11)
-    expect(ready.text()).toContain('The lesson was sent for review.')
-    expect(ready.text()).toContain('Read only while the lesson is in review')
+    expect(wrapper.text()).toContain('Submitted for review: University Life.')
+    expect(wrapper.text()).toContain('Read-only while in review')
+  })
+
+  it('lists exactly the three activities and creates a missing one from its Edit', async () => {
+    api.get.mockResolvedValue(editor({ activities: [THREE_ACTIVITIES[0]!] }))
+    api.addActivity.mockResolvedValue(editor({ activities: THREE_ACTIVITIES.slice(0, 2) }))
+    const wrapper = await mountEditor('/teacher/classes/7/lessons/11/activities')
+
+    const edits = wrapper.findAll('button').filter((button) => button.text() === 'Edit')
+    expect(edits).toHaveLength(3)
+    expect(wrapper.text()).toContain('University Life Phrases')
+    expect(wrapper.text()).toContain('Not set up yet')
+    expect(wrapper.text()).not.toContain('Add activity')
+
+    await edits[1]!.trigger('click')
+    const drawer = wrapper.get('[data-testid="activity-drawer"]')
+    expect(drawer.text()).toContain('Activity 2 of 3 in this lesson')
+    await drawer.get('[data-testid="activity-title"]').setValue('Trace 学')
+    await drawer.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(api.addActivity).toHaveBeenCalledWith(
+      11,
+      expect.objectContaining({ type: 'TRACING', title: 'Trace 学', stage: 'GUIDED' }),
+    )
+    expect(api.updateActivity).not.toHaveBeenCalled()
   })
 })

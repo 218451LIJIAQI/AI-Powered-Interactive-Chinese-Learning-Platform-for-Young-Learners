@@ -1,246 +1,168 @@
-/* Student Progress page: growth told as a story. The XP level as one big figure with the five levels stamped on a
-   path, the streak as a month of seals, where the XP comes from, and the seal wall of badges. Hairlines, not boxes;
-   ochre (--module-progress) for the module's accents, purple seals for anything earned. */
-
-.progress-page {
-  --progress-color: var(--module-progress);
-}
+/* Progress: "Am I improving?" The plan strip (plan.css), the skills beside the XP level, then the streak calendar beside
+   the badges. Page-prefixed classes only (`.progress-*`); tokens only. */
 
 .progress-sections {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-12);
-}
-
-.progress-overline {
-  margin: 0;
-  color: var(--module-progress);
-  font-size: var(--type-overline-size);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: var(--letter-spacing-wide);
-  text-transform: uppercase;
-}
-
-.progress-section-title {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--type-h2-size);
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: var(--letter-spacing-display);
-}
-
-.progress-empty {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-md);
-}
-
-/* ----- The level ----- */
-
-.progress-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
-  align-items: end;
-  gap: var(--space-8) var(--space-16);
-  padding-bottom: var(--space-12);
-  border-bottom: 1px solid var(--border-subtle);
+  gap: var(--page-gap);
+  min-width: 0;
 }
 
-.progress-hero-copy {
+/* Two rows of one column: the wide card and the 380 card line up from row to row. */
+.progress-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  align-items: stretch;
+  gap: var(--grid-gap);
+}
+
+.progress-row > .panel {
+  border-radius: var(--radius-2xl);
+}
+
+.progress-card-head {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.progress-card-head .type-caption {
+  margin: 0;
+}
+
+/* Skills */
+.progress-skills {
+  display: grid;
+  align-content: space-between;
   gap: var(--space-4);
-  min-width: 0;
 }
 
-.progress-hero-level {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--space-5);
-  min-width: 0;
-}
-
-/* Sized up from .stat-figure: the one big number of the page. */
-.progress-hero-number {
-  font-size: var(--font-size-8xl);
-  line-height: 0.82;
-}
-
-.progress-hero-name {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  min-width: 0;
-  padding-bottom: var(--space-1);
-}
-
-.progress-hero-name p {
-  margin: 0;
-}
-
-.progress-hero-title {
-  font-family: var(--font-display);
-  font-size: var(--font-size-3xl);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-tight);
-  letter-spacing: var(--letter-spacing-display);
-  overflow-wrap: anywhere;
-}
-
-.progress-hero-xp {
-  color: var(--text-secondary);
-  font-variant-numeric: tabular-nums;
-}
-
-.progress-hero-hint {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-md);
-}
-
-/* Five seals on one path: the reached levels stamped and joined by a solid line, the next one outlined, the rest
-   grey; "You" stands above the student's seal. */
-.progress-ladder {
-  --ladder-seal: 56px;
+.progress-skill-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4) var(--space-6);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-/* Rows keep their own height when a neighbouring level's name wraps, so every label sits on one line. */
-.progress-ladder li {
-  position: relative;
+.progress-skill {
   display: grid;
-  grid-template-rows: var(--space-6) auto auto;
-  align-content: start;
-  justify-items: center;
-  row-gap: var(--space-2);
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-3);
   min-width: 0;
-  text-align: center;
 }
 
-.progress-ladder li + li::before {
-  position: absolute;
-  top: calc(var(--space-6) + var(--space-2) + var(--ladder-seal) / 2 - 1px);
-  right: calc(50% + var(--ladder-seal) / 2 + var(--space-1-5));
-  left: calc(-50% + var(--ladder-seal) / 2 + var(--space-1-5));
-  border-top: var(--border-width-thick) dashed var(--border-strong);
-  content: '';
-}
-
-.progress-ladder li.is-reached + li.is-reached::before {
-  border-top-style: solid;
-  border-top-color: var(--color-primary-500);
-}
-
-.progress-ladder-you {
-  grid-row: 1;
-  align-self: end;
-  padding: var(--space-0-5) var(--space-2);
-  border-radius: var(--radius-pill);
-  background: var(--color-primary-500);
-  color: var(--text-on-dark);
-  font-size: var(--font-size-2xs);
+.progress-skill-name {
+  font-size: var(--type-label-size);
   font-weight: var(--font-weight-bold);
-  letter-spacing: var(--letter-spacing-wide);
-  text-transform: uppercase;
+  line-height: 20px;
 }
 
-.progress-ladder .progress-ladder-seal {
-  --seal-size: var(--ladder-seal);
-  grid-row: 2;
+.progress-skill-change {
+  margin: 0;
+  white-space: nowrap;
 }
 
-.progress-ladder li.is-you .progress-ladder-seal {
-  outline: var(--border-width-thick) solid var(--color-ink-900);
-  outline-offset: var(--space-1);
+.progress-skill-percent {
+  font-size: var(--type-body-size);
+  font-weight: var(--font-weight-extrabold);
+  font-variant-numeric: tabular-nums;
+  line-height: 20px;
 }
 
-.progress-ladder-title {
-  grid-row: 3;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-0-5);
-  max-width: 100%;
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-  line-height: var(--line-height-snug);
-  overflow-wrap: anywhere;
+.progress-skill-bar {
+  grid-column: 1 / -1;
 }
 
-.progress-ladder-number {
-  font-size: var(--font-size-2xs);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: var(--letter-spacing-wide);
-  text-transform: uppercase;
-}
-
-.progress-ladder li.is-you .progress-ladder-title {
-  color: var(--text-primary);
-  font-weight: var(--font-weight-bold);
-}
-
-/* ----- Momentum: the streak and where the XP comes from ----- */
-
-.progress-momentum {
-  display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
-  align-items: start;
-}
-
-.progress-streak {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-6);
-  min-width: 0;
-  padding-right: var(--space-12);
-}
-
-.progress-xp {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  min-width: 0;
-  padding-left: var(--space-12);
-  border-left: 1px solid var(--border-subtle);
-}
-
-.progress-streak-head {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.progress-streak-title {
+.progress-skills-foot {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--space-1) var(--space-3);
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--type-h2-size);
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: var(--letter-spacing-display);
-}
-
-.progress-streak-number {
-  font-size: var(--font-size-7xl);
-  line-height: 0.85;
-}
-
-.progress-streak-hint {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-md);
-}
-
-/* The month: each reached goal is a seal, today the outlined seal still to earn, a missed day a grey square. */
-.progress-calendar {
-  display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
   gap: var(--space-3);
+}
+
+.progress-skills-foot > :only-child {
+  margin-left: auto;
+}
+
+.progress-skills-foot p {
+  margin: 0;
+  font-size: var(--type-body-size);
+  line-height: 20px;
+}
+
+/* The XP level */
+.progress-level {
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+}
+
+.progress-level-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.progress-level-head .type-caption,
+.progress-level-title {
+  margin: 0;
+}
+
+.progress-level-title {
+  font-size: var(--type-card-title-size);
+  font-weight: var(--font-weight-extrabold);
+  line-height: 22px;
+}
+
+.progress-level-next {
+  margin: 0;
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-bold);
+  line-height: 20px;
+}
+
+.progress-level-steps {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.progress-level-steps li {
+  display: grid;
+  place-items: center;
+  height: var(--control-height-sm);
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-bold);
+}
+
+.progress-level-steps li.is-reached {
+  border: 0;
+  background: var(--color-primary-500);
+  color: var(--text-on-primary);
+}
+
+/* The streak */
+.progress-streak {
+  display: grid;
+}
+
+/* The month fills the card, however many rows it has. */
+.progress-calendar {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: var(--space-4);
+  min-height: 100%;
 }
 
 .progress-calendar-head {
@@ -250,310 +172,229 @@
   gap: var(--space-3);
 }
 
-.progress-calendar-month {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
+.progress-streak-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
 }
 
-.progress-calendar-nav {
+.progress-streak-head .type-caption {
+  margin: 0;
+}
+
+.progress-calendar-month {
   display: flex;
-  gap: var(--space-1);
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .progress-calendar-grid {
-  width: 100%;
+  height: 100%;
+  border-spacing: var(--space-1-5);
   border-collapse: separate;
-  border-spacing: 0 var(--space-1-5);
+  margin: calc(-1 * var(--space-1-5));
+  width: calc(100% + 2 * var(--space-1-5));
   table-layout: fixed;
-  transition: opacity var(--duration-fast) var(--ease-standard);
 }
 
 .progress-calendar-grid.is-busy {
-  opacity: 0.5;
+  opacity: 0.6;
 }
 
 .progress-calendar-grid th {
   padding-bottom: var(--space-1);
   color: var(--text-secondary);
-  font-size: var(--font-size-xs);
+  font-size: var(--type-caption-size);
   font-weight: var(--font-weight-bold);
   text-align: center;
 }
 
 .progress-calendar-grid td {
-  text-align: center;
+  height: 1px;
+  padding: 0;
 }
 
-.progress-calendar .progress-day {
-  --seal-size: 38px;
-  display: inline-grid;
+.progress-day {
+  display: grid;
   place-items: center;
-  width: var(--seal-size);
-  height: var(--seal-size);
-  border-radius: var(--radius-xs);
-  color: var(--color-ink-500);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
+  height: 100%;
+  min-height: var(--control-height-sm);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  font-size: var(--type-caption-size);
+  font-weight: var(--font-weight-bold);
   font-variant-numeric: tabular-nums;
 }
 
-.progress-calendar .progress-day.seal {
-  color: var(--color-white);
-  font-family: var(--font-body);
-  font-size: var(--font-size-sm);
+.progress-day.is-learned,
+.progress-day.is-learned-today {
+  border-color: var(--color-primary-500);
+  background: var(--color-primary-500);
+  color: var(--text-on-primary);
 }
 
-.progress-calendar .progress-day.seal.is-outline {
-  color: var(--color-primary-600);
+.progress-day.is-today,
+.progress-day.is-learned-today {
+  box-shadow: inset 0 0 0 2px var(--color-primary-500);
 }
 
-.progress-day.is-missed {
-  background: var(--surface-sunken);
-  color: var(--text-secondary);
+.progress-day.is-learned-today {
+  box-shadow:
+    inset 0 0 0 2px var(--color-primary-500),
+    inset 0 0 0 3px var(--surface-card);
+}
+
+.progress-day.is-today {
+  border-color: var(--color-primary-500);
 }
 
 .progress-day.is-before {
-  color: var(--color-ink-400);
+  border-color: var(--border-subtle);
+  color: var(--text-secondary);
+}
+
+.progress-day.is-future {
+  border: 1px dashed var(--border-default);
+  color: var(--color-ink-500);
 }
 
 .progress-calendar-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2) var(--space-5);
+  gap: var(--space-4);
   margin: 0;
   padding: 0;
   color: var(--text-secondary);
-  font-size: var(--font-size-sm);
+  font-size: var(--type-caption-size);
+  line-height: 18px;
   list-style: none;
 }
 
 .progress-calendar-legend li {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: var(--space-2);
 }
 
-.progress-calendar-legend .progress-day {
-  --seal-size: 16px;
+.progress-legend-dot {
+  width: var(--space-3);
+  height: var(--space-3);
+  border: 1px solid var(--border-default);
+  border-radius: 50%;
 }
 
-/* Where the XP comes from: one quiet bar per source, the way to earn more beside it. */
-.progress-source-list {
-  display: flex;
-  flex-direction: column;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+.progress-legend-dot.is-learned {
+  border-color: var(--color-primary-500);
+  background: var(--color-primary-500);
 }
 
-.progress-source {
+.progress-legend-dot.is-today {
+  border: 2px solid var(--color-primary-500);
+}
+
+/* Badges: 3 × 3 */
+.progress-badges {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--space-2) var(--space-4);
-  padding: var(--space-3) 0;
+  align-content: start;
+  gap: var(--space-4);
 }
 
-.progress-source + .progress-source {
-  border-top: 1px solid var(--border-subtle);
-}
-
-.progress-source-label {
-  grid-column: 1;
-  min-width: 0;
-  font-weight: var(--font-weight-semibold);
-  overflow-wrap: anywhere;
-}
-
-.progress-source-xp {
-  grid-column: 3;
-  font-variant-numeric: tabular-nums;
-}
-
-.progress-source-bar {
-  grid-column: 1 / -1;
-}
-
-.progress-source-link {
-  grid-column: 2;
-  justify-self: start;
-}
-
-.progress-recent-title {
-  margin: var(--space-4) 0 0;
-  color: var(--text-secondary);
-  font-size: var(--type-overline-size);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: var(--letter-spacing-wide);
-  text-transform: uppercase;
-}
-
-/* The latest XP as a ledger: what, when, and the XP in purple on the right. */
-.progress-recent {
-  display: flex;
-  flex-direction: column;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.progress-recent li {
+.progress-badge-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: baseline;
-  gap: var(--space-3);
-  padding: var(--space-2-5) 0;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.progress-recent-what {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.progress-recent-when {
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-  white-space: nowrap;
-}
-
-.progress-recent-xp {
-  min-width: var(--space-10);
-  color: var(--color-primary-600);
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-}
-
-/* ----- The seal wall ----- */
-
-.progress-seals {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-6);
-  padding-top: var(--space-12);
-  border-top: 1px solid var(--border-subtle);
-}
-
-.progress-seals-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-2) var(--space-6);
-}
-
-.progress-seals-meta {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-md);
-}
-
-.progress-seal-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--space-2) var(--space-4);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .progress-badge {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-4);
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: var(--space-1);
   width: 100%;
   height: 100%;
-  padding: var(--space-3);
+  padding: var(--space-2) var(--space-1);
   border: 0;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--text-primary);
   font: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: background var(--duration-fast) var(--ease-standard);
+  text-align: center;
 }
 
 .progress-badge:hover {
   background: var(--surface-hover);
 }
 
-.progress-badge:active {
-  background: var(--surface-sunken);
+.progress-badge-icon {
+  display: grid;
+  place-items: center;
+  width: calc(var(--space-12) + var(--space-2));
+  height: calc(var(--space-12) + var(--space-2));
+  margin-bottom: var(--space-1);
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  color: var(--text-secondary);
 }
 
-.progress-badge .progress-badge-seal {
-  --seal-size: 56px;
-  transition: transform var(--duration-base) var(--ease-spring);
+.progress-badge-icon.is-lg {
+  width: 72px;
+  height: 72px;
+  flex: 0 0 auto;
 }
 
-.progress-badge.is-earned:hover .progress-badge-seal {
-  transform: rotate(-6deg);
-}
-
-.progress-badge-copy {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-0-5);
-  min-width: 0;
+.is-earned > .progress-badge-icon {
+  border: 0;
+  background: var(--color-primary-500);
+  color: var(--text-on-primary);
 }
 
 .progress-badge-name {
+  font-size: var(--type-label-size);
   font-weight: var(--font-weight-bold);
-  overflow-wrap: anywhere;
+  line-height: 18px;
 }
 
 .progress-badge-when {
   color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-  line-height: var(--line-height-snug);
+  font-size: var(--type-caption-size);
+  line-height: 16px;
 }
 
-.progress-badge:not(.is-earned) .progress-badge-name {
-  color: var(--text-secondary);
-}
-
-/* The badge drawer: the seal large, with the character it is stamped with. */
+/* The badge's dialog */
 .progress-badge-detail {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-5);
+  display: grid;
+  gap: var(--space-4);
 }
 
-.progress-badge-figure {
+.progress-badge-rule {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-4);
+}
+
+.progress-badge-rule .progress-badge-icon {
   margin: 0;
 }
 
-.progress-badge-seal.is-large {
-  --seal-size: 96px;
+.progress-badge-rule-copy {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-2);
+  min-width: 0;
 }
 
-.progress-badge-figure figcaption {
-  display: flex;
-  flex-direction: column;
-  color: var(--text-secondary);
-  font-size: var(--font-size-md);
+.progress-badge-rule-copy p:last-child {
+  margin: 0;
+  font-size: var(--type-body-size);
 }
-
-.progress-badge-figure .hanzi {
-  color: var(--text-primary);
-  font-size: var(--font-size-3xl);
-}
-
-.progress-badge-detail .kv-list {
-  width: 100%;
-}
-
-/* ----- Responsive ----- */
 
 @media (max-width: 1200px) {
-  .progress-seal-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .progress-row {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

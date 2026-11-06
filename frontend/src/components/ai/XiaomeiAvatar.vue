@@ -45,19 +45,14 @@
       />
       <ellipse class="ai-xiaomei-mouth" cx="100" cy="119" rx="8" ry="5" fill="#b5485a" />
     </svg>
-    <span v-if="state === 'thinking'" class="ai-xiaomei-thinking">
-      <span />
-      <span />
-      <span />
-    </span>
   </div>
 </template>
 
 <script setup lang="ts">
 /**
  * Xiaomei, drawn as a friendly illustrated student (not a photo). She smiles at rest, moves her mouth while she
- * speaks, is ringed in plum while she listens, shows thinking dots while SparkBot writes her reply and rests with her
- * eyes closed while the AI is away. Decorative only: the page announces her state in text. Size it with CSS.
+ * speaks, is ringed in purple while she listens and rests with her eyes closed while the AI is away. Decorative only:
+ * the page announces her state in text. Size it with CSS.
  */
 export type XiaomeiState = 'idle' | 'speaking' | 'listening' | 'thinking' | 'away'
 

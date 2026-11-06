@@ -1,15 +1,13 @@
 <template>
-  <div class="admin-teacher-classes-page page-stack">
-    <div class="admin-head">
-      <PageHeaderBlock :title="t('adminClasses.content.title')" :description="t('adminClasses.content.lede')" />
-      <AdminContentTabs />
-    </div>
-    <DataNotice :error="actionError" :success="actionSuccess" />
+  <div class="page-stack">
+    <PageHeaderBlock :title="t('adminClasses.content.title')" hide-title />
+    <AdminContentTabs />
+    <DataNotice :error="actionError" />
 
-    <section class="admin-sheet" aria-labelledby="admin-teacher-classes-list">
+    <section class="panel admin-table-card" aria-labelledby="admin-teacher-classes-list">
       <h2 id="admin-teacher-classes-list" class="sr-only">{{ t('adminClasses.content.tableLabel') }}</h2>
-      <form class="admin-toolbar" role="search" @submit.prevent>
-        <div class="field admin-toolbar-search">
+      <form class="admin-filters" role="search" @submit.prevent>
+        <div class="field is-search">
           <label class="field-label" for="content-search">{{ t('adminClasses.content.search') }}</label>
           <div class="input-with-icon">
             <IconGlyph name="search" class="input-icon" :size="16" />
@@ -49,32 +47,42 @@
         </div>
       </form>
 
-      <div v-if="resource.loading.value" class="admin-sheet-body">
-        <StatePanel tone="loading" :title="t('classes.loading')" :message="t('adminClasses.content.title')" />
-      </div>
-      <div v-else-if="resource.error.value && !items.length" class="admin-sheet-body">
-        <StatePanel
-          tone="error"
-          icon="alert"
-          :title="t('adminClasses.content.loadErrorTitle')"
-          :message="resource.error.value"
-        >
-          <template #actions>
-            <button class="btn btn-primary" type="button" @click="resource.reload">{{ t('classes.retry') }}</button>
-          </template>
-        </StatePanel>
-      </div>
+      <StatePanel
+        v-if="resource.loading.value"
+        tone="loading"
+        :title="t('adminClasses.content.loadingTitle')"
+        :message="t('adminClasses.content.title')"
+      />
+      <StatePanel
+        v-else-if="resource.error.value && !items.length"
+        tone="error"
+        icon="alert"
+        :title="t('adminClasses.content.loadErrorTitle')"
+        :message="resource.error.value"
+      >
+        <template #actions>
+          <button class="btn btn-primary" type="button" @click="resource.reload">
+            {{ t('adminClasses.review.retry') }}
+          </button>
+        </template>
+      </StatePanel>
       <template v-else-if="items.length">
-        <div class="data-table-wrap" role="region" :aria-label="t('adminClasses.content.tableLabel')" tabindex="0">
-          <table class="data-table admin-table admin-content-table">
+        <div
+          class="data-table-wrap admin-table-wrap"
+          role="region"
+          :aria-label="t('adminClasses.content.tableLabel')"
+          tabindex="0"
+        >
+          <table class="data-table admin-table admin-classes-table">
             <thead>
               <tr>
-                <th scope="col">{{ t('adminClasses.content.colTitle') }}</th>
-                <th scope="col">{{ t('adminClasses.content.colType') }}</th>
-                <th scope="col">{{ t('adminClasses.content.colTeacher') }}</th>
-                <th scope="col">{{ t('adminClasses.content.colStatus') }}</th>
-                <th scope="col" class="col-numeric">{{ t('adminClasses.content.colUpdated') }}</th>
-                <th scope="col" class="col-actions">
+                <th scope="col" class="admin-classes-col-title">{{ t('adminClasses.content.colTitle') }}</th>
+                <th scope="col" class="admin-classes-col-type">{{ t('adminClasses.content.colType') }}</th>
+                <th scope="col" class="admin-classes-col-class">{{ t('adminClasses.content.colClass') }}</th>
+                <th scope="col" class="admin-classes-col-teacher">{{ t('adminClasses.content.colTeacher') }}</th>
+                <th scope="col" class="admin-classes-col-status">{{ t('adminClasses.content.colStatus') }}</th>
+                <th scope="col" class="admin-classes-col-updated">{{ t('adminClasses.content.colUpdated') }}</th>
+                <th scope="col" class="col-actions admin-col-open">
                   <span class="sr-only">{{ t('adminClasses.content.colActions') }}</span>
                 </th>
               </tr>
@@ -86,159 +94,154 @@
                 :class="{ 'is-selected': detail?.row.type === row.type && detail?.row.id === row.id }"
                 @click="open(row)"
               >
+                <td class="admin-cell-strong">{{ row.title }}</td>
                 <td>
-                  <span class="admin-cell-title">
-                    <strong>{{ row.title }}</strong>
-                    <span v-if="row.type === 'LESSON'">{{ row.classTitle }}</span>
-                  </span>
+                  <span class="tag is-outline">{{ typeLabel(row.type) }}</span>
                 </td>
-                <td>
-                  <span class="tag">{{
-                    row.type === 'CLASS' ? t('adminClasses.content.typeClass') : t('adminClasses.content.typeLesson')
-                  }}</span>
-                </td>
-                <td class="admin-teacher-classes-teacher">
-                  {{ row.teacherName }}
-                </td>
-                <td><ClassStatusPill :status="row.status" :revision-status="row.revisionStatus" plain /></td>
-                <td class="col-numeric admin-cell-date">
-                  {{ formatShortDate(row.updatedAt) }}
-                </td>
+                <td class="admin-cell-muted">{{ row.classTitle ?? '—' }}</td>
+                <td class="admin-cell-muted">{{ row.teacherName }}</td>
+                <td><StatusPill v-bind="statusPill(row)" /></td>
+                <td class="admin-cell-date">{{ formatShortDate(row.updatedAt) }}</td>
                 <td class="col-actions">
                   <button
                     type="button"
-                    class="btn btn-ghost btn-icon btn-sm"
+                    class="btn btn-secondary btn-sm"
                     :aria-label="t('adminClasses.content.openLabel', { title: row.title })"
                     @click.stop="open(row)"
                   >
-                    <IconGlyph name="chevronRight" :size="16" />
+                    {{ t('adminClasses.content.open') }}
                   </button>
                 </td>
               </tr>
             </tbody>
           </table>
         </div>
-        <div class="admin-sheet-foot">
-          <PaginationBar
-            :current-page="page + 1"
-            :total-pages="totalPages"
-            :label="t('adminClasses.content.pagination')"
-            :info="t('adminClasses.content.showing', range)"
-            icon-only
-            @update:current-page="goToPage($event - 1)"
-          />
-        </div>
-      </template>
-      <div v-else class="admin-sheet-body">
-        <StatePanel
-          tone="empty"
-          icon="search"
-          :title="t('adminClasses.content.emptyTitle')"
-          :message="t('adminClasses.content.emptyMessage')"
+        <PaginationBar
+          :current-page="page + 1"
+          :total-pages="totalPages"
+          :label="t('adminClasses.content.pagination')"
+          :info="t('adminClasses.content.showing', range)"
+          icon-only
+          @update:current-page="goToPage($event - 1)"
         />
-      </div>
+      </template>
+      <StatePanel
+        v-else
+        tone="empty"
+        icon="search"
+        spacious
+        :title="t('adminClasses.content.emptyTitle')"
+        :message="t('adminClasses.content.emptyMessage')"
+      >
+        <template #actions>
+          <button class="btn btn-primary" type="button" @click="clearFilters">
+            {{ t('adminClasses.content.clearFilters') }}
+          </button>
+        </template>
+      </StatePanel>
     </section>
 
     <AppOverlay
       variant="drawer"
       :open="detail !== null"
       :title="detail?.row.title ?? ''"
-      :subtitle="
-        detail
-          ? t('adminClasses.content.detail.teacherLine', {
-              teacher: detail.row.teacherName,
-              date: formatShortDate(detail.row.updatedAt),
-            })
-          : ''
-      "
+      :subtitle="drawerSubtitle"
       :busy="busy"
       test-id="content-detail"
       @close="detail = null"
     >
       <template v-if="detail">
-        <div class="admin-reader-tags">
-          <span class="tag">{{
-            detail.row.type === 'CLASS' ? t('adminClasses.content.typeClass') : t('adminClasses.content.typeLesson')
-          }}</span>
-          <ClassStatusPill :status="detail.row.status" :revision-status="detail.row.revisionStatus" />
+        <StatusPill v-bind="statusPill(detail.row)" />
+        <div v-if="detail.reviewNote" class="callout">
+          <IconGlyph name="edit" :size="16" />
+          <div class="admin-callout-copy">
+            <strong>{{ t('adminClasses.content.detail.reviewNote') }}</strong>
+            <span>{{ reviewNoteText }}</span>
+          </div>
         </div>
-        <p class="admin-teacher-classes-facts">
-          <template v-if="detail.row.type === 'CLASS'">
-            {{
-              t('adminClasses.content.detail.classFacts', {
-                units: t('classes.units', detail.unitCount),
-                lessons: t('classes.lessons', detail.lessonCount),
-                students: t('adminClasses.content.detail.students', detail.studentCount),
-              })
-            }}
-          </template>
-          <template v-else>
-            {{ detail.row.classTitle }} ·
-            {{
-              t('adminClasses.content.detail.lessonFacts', {
-                unit: detail.unitTitle ?? '',
-                activities: t('classes.activities', detail.activityCount),
-                questions: t('classes.questions', detail.questionCount),
-              })
-            }}
-          </template>
-        </p>
-        <section v-if="detail.reviewNote" class="admin-drawer-section" aria-labelledby="content-detail-note">
-          <h3 id="content-detail-note" class="admin-reader-label">
-            {{ t('adminClasses.content.detail.reviewNote') }}
+        <section class="admin-section" aria-labelledby="content-detail-preview">
+          <h3 id="content-detail-preview" class="admin-section-title">
+            {{ t('adminClasses.content.detail.preview') }}
           </h3>
-          <p class="callout is-warning">
-            <IconGlyph name="info" :size="18" />
-            <span
-              >{{ detail.reviewNoteBy ? `${detail.reviewNoteBy}, ${formatShortDate(detail.reviewNoteAt)}: ` : ''
-              }}{{ detail.reviewNote }}</span
-            >
-          </p>
+          <dl class="kv-list">
+            <template v-if="detail.row.type === 'CLASS'">
+              <dt>{{ t('adminClasses.content.detail.units') }}</dt>
+              <dd>{{ detail.unitCount }}</dd>
+              <dt>{{ t('adminClasses.content.detail.lessons') }}</dt>
+              <dd>{{ detail.lessonCount }}</dd>
+              <dt>{{ t('adminClasses.content.detail.studentsLabel') }}</dt>
+              <dd>{{ detail.studentCount }}</dd>
+            </template>
+            <template v-else>
+              <dt>{{ t('adminClasses.content.detail.class') }}</dt>
+              <dd>{{ detail.row.classTitle }}</dd>
+              <dt>{{ t('adminClasses.content.detail.unit') }}</dt>
+              <dd>{{ detail.unitTitle ?? '—' }}</dd>
+              <dt>{{ t('adminClasses.content.detail.practice') }}</dt>
+              <dd>{{ t('adminClasses.review.activities', detail.activityCount) }}</dd>
+              <dt>{{ t('adminClasses.content.detail.quiz') }}</dt>
+              <dd>{{ t('adminClasses.review.questions', detail.questionCount) }}</dd>
+            </template>
+            <dt>{{ t('adminClasses.content.detail.teacher') }}</dt>
+            <dd>{{ detail.row.teacherName }}</dd>
+            <dt>{{ t('adminClasses.content.detail.updated') }}</dt>
+            <dd>{{ formatDate(detail.row.updatedAt) }}</dd>
+          </dl>
         </section>
-        <section class="admin-drawer-section" aria-labelledby="content-detail-history">
-          <h3 id="content-detail-history" class="admin-reader-label">{{ t('classHistory.title') }}</h3>
-          <ContentHistory :events="detail.history" />
+        <section class="admin-section" aria-labelledby="content-detail-history">
+          <h3 id="content-detail-history" class="admin-section-title">{{ t('classHistory.title') }}</h3>
+          <AdminContentHistory :events="detail.history" />
         </section>
       </template>
       <template v-if="detail" #footer>
+        <p v-if="detail.canArchive" class="admin-drawer-note">{{ t('adminClasses.content.detail.archiveNote') }}</p>
         <RouterLink
           v-if="detail.row.status === 'SUBMITTED' || detail.row.revisionStatus === 'SUBMITTED'"
           class="btn btn-secondary"
           :to="{ name: 'admin-content-review' }"
         >
           {{ t('adminClasses.content.detail.openInReview') }}
+          <IconGlyph name="chevronRight" :size="16" />
         </RouterLink>
-        <button v-if="detail.canRestore" type="button" class="btn btn-primary" @click="confirm = 'restore'">
-          <IconGlyph name="refresh" :size="16" />{{ t('adminClasses.content.detail.restore') }}
+        <button v-if="detail.canRestore" type="button" class="btn btn-secondary" @click="confirm = 'restore'">
+          <IconGlyph name="archive" :size="16" />
+          <span>{{ t('adminClasses.content.detail.restore') }}</span>
         </button>
         <button
           v-if="detail.canArchive"
           type="button"
-          class="btn btn-danger-soft"
+          class="btn btn-secondary"
           data-testid="admin-archive"
           @click="confirm = 'archive'"
         >
-          <IconGlyph name="archive" :size="16" />{{ t('adminClasses.content.detail.archive') }}
+          <IconGlyph name="archive" :size="16" />
+          <span>{{ t('adminClasses.content.detail.archive') }}</span>
         </button>
       </template>
     </AppOverlay>
 
-    <ConfirmDialog
+    <AdminDecisionDialog
       :open="confirm !== null"
       :title="
         confirm === 'archive'
           ? t('adminClasses.content.archiveTitle', { title: detail?.row.title ?? '' })
           : t('adminClasses.content.restoreTitle', { title: detail?.row.title ?? '' })
       "
-      :message="confirmMessage"
-      :confirm-label="
-        confirm === 'archive' ? t('adminClasses.content.detail.archive') : t('adminClasses.content.detail.restore')
+      :confirm-label="confirmLabel"
+      :confirm-icon="confirm === 'archive' ? 'close' : 'archive'"
+      :cancel-label="
+        detail?.row.type === 'CLASS' ? t('adminClasses.content.keepClass') : t('adminClasses.content.keepLesson')
       "
       :tone="confirm === 'archive' ? 'danger' : 'primary'"
       :busy="busy"
+      test-id="content-confirm"
       @cancel="confirm = null"
       @confirm="applyConfirm"
-    />
+    >
+      <p class="overlay-message">{{ confirmMessage }}</p>
+    </AdminDecisionDialog>
+
+    <AppToast :message="toast" />
   </div>
 </template>
 
@@ -247,36 +250,34 @@ import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
 import { adminClassesApi } from '@/api/classes'
+import AdminContentHistory from '@/components/admin/AdminContentHistory.vue'
 import AdminContentTabs from '@/components/admin/AdminContentTabs.vue'
-import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
+import AdminDecisionDialog from '@/components/admin/AdminDecisionDialog.vue'
+import { teacherContentStatus } from '@/components/admin/adminDisplay'
 import AppOverlay from '@/components/common/AppOverlay.vue'
-import ClassStatusPill from '@/components/classes/ClassStatusPill.vue'
-import ContentHistory from '@/components/classes/ContentHistory.vue'
+import AppToast from '@/components/common/AppToast.vue'
 import DataNotice from '@/components/common/DataNotice.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import PaginationBar from '@/components/common/PaginationBar.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
+import StatusPill from '@/components/common/StatusPill.vue'
 import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useActionFeedback } from '@/composables/useActionFeedback'
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { useResource, useServerPage } from '@/composables/useResource'
+import { useToast } from '@/composables/useToast'
 import { adminClassesMessages } from '@/plugins/adminClassesMessages'
 import { classHistoryMessages } from '@/plugins/classHistoryMessages'
-import { classesMessages } from '@/plugins/classesMessages'
 import type { TeacherContentDetail, TeacherContentRow } from '@/types/classes'
 import { resolveApiError } from '@/utils/apiError'
-import { formatShortDate } from '@/utils/format'
-import '@/styles/classes.css'
+import { formatDate, formatDateTime, formatShortDate } from '@/utils/format'
 import '@/styles/ops-admin.css'
 
-const { t } = useLocalMessages({
-  adminClasses: adminClassesMessages,
-  classHistory: classHistoryMessages,
-  classes: classesMessages,
-})
+const { t } = useLocalMessages({ adminClasses: adminClassesMessages, classHistory: classHistoryMessages })
 const route = useRoute()
-const { actionError, actionSuccess, runAction, showError } = useActionFeedback()
+const { actionError, clearFeedback, showError } = useActionFeedback()
+const { toast, showToast } = useToast()
 
 const PAGE_SIZE = 10
 const STATUSES = [
@@ -299,7 +300,7 @@ const STATUS_KEYS: Record<StatusFilter, string> = {
   REVISION_REJECTED: 'adminClasses.content.statuses.REVISION_REJECTED',
 }
 
-const { searchTerm: keyword, keyword: debouncedKeyword } = useDebouncedSearch()
+const { searchTerm: keyword, keyword: debouncedKeyword, clear: clearSearch } = useDebouncedSearch()
 // The review queue links here with ?keyword=<class title>.
 if (typeof route.query.keyword === 'string') {
   keyword.value = route.query.keyword
@@ -328,6 +329,24 @@ watch([debouncedKeyword, type, status, teacherId], () => {
   void resource.reload()
 })
 
+function clearFilters(): void {
+  clearSearch()
+  type.value = null
+  status.value = null
+  teacherId.value = null
+}
+
+function typeLabel(rowType: 'CLASS' | 'LESSON'): string {
+  return rowType === 'CLASS' ? t('adminClasses.content.typeClass') : t('adminClasses.content.typeLesson')
+}
+
+function statusPill(row: TeacherContentRow) {
+  const view = teacherContentStatus(row.status, row.revisionStatus)
+  return { label: t(view.key), tone: view.tone }
+}
+
+// ----- one item, in a drawer -----
+
 const detail = ref<TeacherContentDetail | null>(null)
 const busy = ref(false)
 const confirm = ref<'archive' | 'restore' | null>(null)
@@ -339,6 +358,31 @@ async function open(row: TeacherContentRow): Promise<void> {
     showError(resolveApiError(reason, t('adminClasses.content.loadErrorTitle')))
   }
 }
+
+const drawerSubtitle = computed(() => {
+  const row = detail.value?.row
+  if (!row) return ''
+  return row.classTitle ? `${typeLabel(row.type)} · ${row.classTitle}` : typeLabel(row.type)
+})
+
+const reviewNoteText = computed(() => {
+  const current = detail.value
+  if (!current?.reviewNote) return ''
+  return current.reviewNoteBy
+    ? t('adminClasses.content.detail.reviewNoteBy', {
+        name: current.reviewNoteBy,
+        date: formatDateTime(current.reviewNoteAt),
+        note: current.reviewNote,
+      })
+    : current.reviewNote
+})
+
+const confirmLabel = computed(() => {
+  if (confirm.value === 'restore') return t('adminClasses.content.detail.restore')
+  return detail.value?.row.type === 'CLASS'
+    ? t('adminClasses.content.archiveClass')
+    : t('adminClasses.content.archiveLesson')
+})
 
 const confirmMessage = computed(() => {
   const current = detail.value
@@ -355,18 +399,22 @@ async function applyConfirm(): Promise<void> {
   const action = confirm.value
   if (!current || !action) return
   busy.value = true
-  await runAction(t('adminClasses.content.actionError'), async () => {
+  clearFeedback()
+  try {
     detail.value =
       action === 'archive'
         ? await adminClassesApi.archive(current.row.type, current.row.id)
         : await adminClassesApi.restore(current.row.type, current.row.id)
     await resource.reload()
     const values = { title: current.row.title, teacher: current.row.teacherName }
-    return action === 'archive'
-      ? t('adminClasses.content.archived', values)
-      : t('adminClasses.content.restored', values)
-  })
-  busy.value = false
-  confirm.value = null
+    showToast(
+      action === 'archive' ? t('adminClasses.content.archived', values) : t('adminClasses.content.restored', values),
+    )
+  } catch (reason) {
+    showError(resolveApiError(reason, t('adminClasses.content.actionError')))
+  } finally {
+    busy.value = false
+    confirm.value = null
+  }
 }
 </script>

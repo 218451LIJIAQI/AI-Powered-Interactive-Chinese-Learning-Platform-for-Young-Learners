@@ -7,8 +7,8 @@
 
 <script setup lang="ts">
 /**
- * The red 印章 every finished task is stamped with, landing with a short press: 棒 (bàng, great job) after a lesson,
- * 好 (hǎo, well done) after practice, 加 (jiā yóu, keep going) when it is not passed yet.
+ * The seal every finished task is stamped with, landing with a short press: 棒 (bàng, great job) after a lesson, 加
+ * (jiā yóu, keep going) when it is not passed yet. The caption always gives its pinyin and meaning.
  */
 defineProps<{
   character: string

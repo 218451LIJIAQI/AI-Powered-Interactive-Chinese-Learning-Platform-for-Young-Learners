@@ -1,116 +1,117 @@
 <template>
-  <div class="learn-page page-stack">
-    <PageHeaderBlock :title="t('learn.pageTitle')" :description="t('learn.pageLede')" />
+  <div class="learn-page">
+    <PageHeaderBlock :title="t('learn.pageTitle')" hide-title />
 
-    <DataNotice v-if="finished" :success="finishedMessage" :success-title="t('learn.lessonCompleteTitle')" />
+    <DataNotice
+      v-if="finished"
+      class="learn-notice"
+      :success="finishedMessage"
+      :success-title="t('learn.lessonCompleteTitle')"
+    />
 
     <ResourceSection class="learn-layout" :loading="path.loading.value" :error="path.error.value" @retry="reloadAll">
-      <div v-if="path.data.value" class="learn-main">
-        <StatePanel
-          v-if="!path.data.value.levels.length"
-          tone="empty"
-          icon="route"
-          spacious
-          :title="t('learn.emptyPathTitle')"
-          :message="t('learn.emptyPathMessage')"
-        />
-        <div v-for="level in path.data.value.levels" :key="level.level" class="learn-level">
-          <div class="learn-level-head">
-            <h2 class="learn-level-title">{{ levelTitle(level) }}</h2>
-            <span class="learn-level-meta">
-              <IconGlyph v-if="isLockedLevel(level)" name="lock" :size="14" />
-              {{
-                isLockedLevel(level)
-                  ? t('learn.lockedUntilCheckpoint', { level: level.level - 1 })
-                  : t('learn.levelMeta', { units: level.units.length, lessons: level.lessonCount })
-              }}
-            </span>
-          </div>
-
-          <ul v-if="isLockedLevel(level)" class="learn-level-preview" data-testid="locked-level">
-            <li v-for="unit in level.units" :key="unit.id">
-              <span class="learn-level-preview-number" aria-hidden="true">{{ unit.number }}</span>
-              <span class="learn-level-preview-title">
-                {{ t('learn.unitShort', { number: unit.number, title: unit.title }) }} ·
-                <span class="cjk-text" lang="zh-CN">{{ unit.titleZh }}</span>
-              </span>
-              <span class="learn-level-preview-count">{{
-                t('learn.lessonCount', { count: unit.lessonCount }, unit.lessonCount)
-              }}</span>
-            </li>
-          </ul>
-          <template v-else>
-            <LearnUnitChapter
-              v-for="unit in level.units"
-              :key="unit.id"
-              :ref="(component) => setChapterRef(unit, component)"
-              :unit="unit"
-              @guidebook="guidebookUnit = $event"
-            />
-          </template>
-
-          <section
-            v-if="level.checkpoint"
-            class="learn-checkpoint"
-            :class="`is-${level.checkpoint.state.toLowerCase()}`"
-            :aria-labelledby="`learn-checkpoint-${level.level}`"
-            data-testid="checkpoint"
-          >
-            <span
-              class="seal learn-checkpoint-seal"
-              :class="{
-                'is-outline': level.checkpoint.state === 'AVAILABLE',
-                'is-muted': level.checkpoint.state === 'LOCKED',
-              }"
-              lang="zh-CN"
-              aria-hidden="true"
-              >关</span
-            >
-            <div class="learn-checkpoint-copy">
-              <p class="learn-checkpoint-overline">
-                {{ t('learn.checkpointOverline', { level: level.level }) }} ·
-                <span class="cjk-text" lang="zh-CN">关卡</span>
-              </p>
-              <h3 :id="`learn-checkpoint-${level.level}`" class="learn-checkpoint-title">
-                {{ t('learn.checkpointTitle', { next: level.level + 1 }) }}
-              </h3>
-              <p class="learn-checkpoint-meta">
-                {{
-                  t('learn.checkpointMeta', {
-                    questions: level.checkpoint.questionCount,
-                    units: unitRange(level),
-                    xp: level.checkpoint.xpReward,
-                  })
-                }}
-              </p>
+      <StatePanel
+        v-if="path.data.value && !path.data.value.levels.length"
+        tone="empty"
+        icon="route"
+        spacious
+        :title="t('learn.emptyPathTitle')"
+        :message="t('learn.emptyPathMessage')"
+      />
+      <template v-else-if="path.data.value && pinnedUnit && pinnedLevel">
+        <div class="learn-path">
+          <!-- Pinned: the level and the unit the student is on. Only the road below scrolls. -->
+          <header class="learn-path-header">
+            <div class="learn-level-band">
+              <h2 class="learn-level-title">{{ levelTitle(pinnedLevel) }}</h2>
+              <span class="learn-level-meta">{{ levelMeta(pinnedLevel) }}</span>
             </div>
-            <StatusPill
-              v-if="level.checkpoint.state === 'LOCKED'"
-              :label="t('learn.locked')"
-              tone="neutral"
-              icon="lock"
-            />
-            <StatusPill
-              v-else-if="level.checkpoint.state === 'DONE'"
-              :label="t('learn.passed')"
-              tone="success"
-              icon="check"
-            />
-            <RouterLink
-              v-else
-              class="btn btn-primary"
-              :to="{ name: 'student-learn-lesson', params: { lessonId: level.checkpoint.id } }"
-              data-testid="checkpoint-start"
-            >
-              {{ t('learn.startWithXp', { xp: level.checkpoint.xpReward }) }}
-            </RouterLink>
-          </section>
-        </div>
-      </div>
+            <LearnUnitBanner :unit="pinnedUnit" here @guidebook="guidebookUnit = $event" />
+          </header>
 
-      <div v-if="path.data.value" class="learn-side">
+          <div
+            ref="scroller"
+            class="learn-path-scroll"
+            role="region"
+            tabindex="0"
+            :aria-label="t('learn.pathScrollLabel')"
+          >
+            <div class="learn-path-road">
+              <template v-for="(level, levelIndex) in path.data.value.levels" :key="level.level">
+                <div v-if="levelIndex > 0 || level !== pinnedLevel" class="learn-level-band">
+                  <h2 class="learn-level-title">{{ levelTitle(level) }}</h2>
+                  <span class="learn-level-meta">{{ levelMeta(level) }}</span>
+                </div>
+
+                <ul v-if="isLockedLevel(level)" class="learn-level-overview" data-testid="locked-level">
+                  <li v-for="unit in level.units" :key="unit.id">
+                    <IconGlyph name="lock" :size="14" />
+                    <span class="learn-level-overview-title">
+                      {{ t('learn.unitShort', { number: unit.number, title: unit.title }) }} ·
+                      <span lang="zh-CN">{{ unit.titleZh }}</span>
+                    </span>
+                    <span class="learn-level-overview-count">{{
+                      t('learn.lessonCount', { count: unit.lessonCount }, unit.lessonCount)
+                    }}</span>
+                  </li>
+                </ul>
+                <template v-else>
+                  <LearnUnitChapter
+                    v-for="(unit, unitIndex) in level.units"
+                    :key="unit.id"
+                    :unit="unit"
+                    :is-pinned-unit="unit.id === pinnedUnit.id"
+                    :banner-pinned="unit.id === pinnedUnit.id && levelIndex === 0 && unitIndex === 0"
+                    @guidebook="guidebookUnit = $event"
+                  />
+                </template>
+
+                <section
+                  v-if="level.checkpoint"
+                  class="learn-checkpoint"
+                  :class="`is-${level.checkpoint.state.toLowerCase()}`"
+                  :aria-labelledby="`learn-checkpoint-${level.level}`"
+                  data-testid="checkpoint"
+                >
+                  <span class="learn-checkpoint-tile" aria-hidden="true"><IconGlyph name="trophy" :size="22" /></span>
+                  <div class="learn-checkpoint-copy">
+                    <p class="learn-checkpoint-overline">
+                      {{ t('learn.checkpointOverline', { level: level.level }) }} ·
+                      <span lang="zh-CN">关卡</span>
+                    </p>
+                    <h3 :id="`learn-checkpoint-${level.level}`" class="learn-checkpoint-title">
+                      {{ t('learn.checkpointTitle', { next: level.level + 1 }) }}
+                    </h3>
+                    <p class="learn-checkpoint-meta">{{ checkpointMeta(level) }}</p>
+                  </div>
+                  <StatusPill
+                    v-if="level.checkpoint.state === 'LOCKED'"
+                    :label="t('learn.locked')"
+                    tone="outline"
+                    icon="lock"
+                  />
+                  <StatusPill
+                    v-else-if="level.checkpoint.state === 'DONE'"
+                    :label="t('learn.passed')"
+                    tone="success"
+                    icon="check"
+                  />
+                  <RouterLink
+                    v-else
+                    class="btn btn-accent"
+                    :to="{ name: 'student-learn-lesson', params: { lessonId: level.checkpoint.id } }"
+                    data-testid="checkpoint-start"
+                  >
+                    {{ t('learn.startWithXp', { xp: level.checkpoint.xpReward }) }}
+                  </RouterLink>
+                </section>
+              </template>
+            </div>
+          </div>
+        </div>
+
         <LearnPathRail :path="path.data.value" :today="today.data.value" />
-      </div>
+      </template>
     </ResourceSection>
 
     <GuidebookDrawer :unit="guidebookUnit" @close="guidebookUnit = null" />
@@ -118,7 +119,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch, type ComponentPublicInstance } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import { learnApi, xpApi } from '@/api/learn'
@@ -129,6 +130,7 @@ import StatusPill from '@/components/common/StatusPill.vue'
 import ResourceSection from '@/components/dashboard/ResourceSection.vue'
 import GuidebookDrawer from '@/components/learn/GuidebookDrawer.vue'
 import LearnPathRail from '@/components/learn/LearnPathRail.vue'
+import LearnUnitBanner from '@/components/learn/LearnUnitBanner.vue'
 import LearnUnitChapter from '@/components/learn/LearnUnitChapter.vue'
 import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
@@ -138,15 +140,15 @@ import type { LessonResult, PathLevel, PathUnit } from '@/types/learn'
 import '@/styles/learn.css'
 
 /**
- * The Learn path as the table of contents of a book: each level a part, each unit a chapter (the open one shows its
- * lessons on an ink thread), each level closed by its checkpoint; a level that is still locked is a quiet list of
- * what comes next. The rail beside it says what the next lessons unlock, how far the path is and today's goal.
+ * The Learn path: the level and the unit the student is on stay pinned, the road of lessons scrolls under them (the
+ * following units, the level's checkpoint and the locked level after it), and the side column stays beside it.
  */
 const { t } = useLocalMessages({ learn: learnMessages })
 
 const path = useResource(() => learnApi.path())
 const today = useResource(() => xpApi.today())
 const guidebookUnit = ref<PathUnit | null>(null)
+const scroller = ref<HTMLElement | null>(null)
 
 function reloadAll(): void {
   void path.reload()
@@ -181,6 +183,25 @@ const finishedMessage = computed(() => {
   return parts.join(' ')
 })
 
+// ----- what is pinned: the next lesson's unit, else the furthest unit reached -----
+
+const pinnedUnit = computed<PathUnit | null>(() => {
+  const data = path.data.value
+  if (!data) return null
+  const units = data.levels.flatMap((level) => level.units)
+  const next = data.nextLesson
+  return (
+    units.find((unit) => unit.id === next?.unitId) ??
+    [...units].reverse().find((unit) => unit.state !== 'LOCKED') ??
+    units[0] ??
+    null
+  )
+})
+
+const pinnedLevel = computed<PathLevel | null>(
+  () => path.data.value?.levels.find((level) => level.units.some((unit) => unit.id === pinnedUnit.value?.id)) ?? null,
+)
+
 // ----- headings -----
 
 function isLockedLevel(level: PathLevel): boolean {
@@ -195,27 +216,40 @@ function levelTitle(level: PathLevel): string {
   })
 }
 
-function unitRange(level: PathLevel): string {
-  const numbers = level.units.map((unit) => unit.number)
-  return numbers.length ? t('learn.unitsRange', { from: numbers[0], to: numbers[numbers.length - 1] }) : ''
+function levelMeta(level: PathLevel): string {
+  const counts = t('learn.levelMeta', { units: level.units.length, lessons: level.lessonCount })
+  return isLockedLevel(level) ? `${t('learn.lockedUntilCheckpoint', { level: level.level - 1 })} · ${counts}` : counts
 }
 
-// ----- bring the current lesson into view when it is further down the path -----
-
-const chapters = new Map<number, InstanceType<typeof LearnUnitChapter>>()
-
-function setChapterRef(unit: PathUnit, component: Element | ComponentPublicInstance | null): void {
-  if (component) chapters.set(unit.id, component as InstanceType<typeof LearnUnitChapter>)
-  else chapters.delete(unit.id)
+function checkpointMeta(level: PathLevel): string {
+  const checkpoint = level.checkpoint
+  const first = level.units[0]
+  const last = level.units[level.units.length - 1]
+  if (!checkpoint || !first || !last) return ''
+  const values = {
+    questions: checkpoint.questionCount,
+    units: t('learn.unitsRange', { from: first.number, to: last.number }),
+    xp: checkpoint.xpReward,
+  }
+  return checkpoint.state === 'LOCKED'
+    ? t('learn.checkpointMetaLocked', { ...values, last: last.number })
+    : t('learn.checkpointMeta', values)
 }
+
+// ----- bring the current stop (or the open checkpoint) into view when it is further down the road -----
 
 watch(
-  () => path.data.value?.nextLesson,
-  async (next) => {
-    if (!next || next.unitNumber <= 1) return
+  () => path.data.value,
+  async (data) => {
+    if (!data) return
     await nextTick()
-    const node = chapters.get(next.unitId)?.currentNode()
-    node?.scrollIntoView({ block: 'center' })
+    const road = scroller.value
+    // On a small window the whole page scrolls: it stays at the top while a banner has something to say.
+    if (!road || (finished.value && road.scrollHeight <= road.clientHeight)) return
+    const target = road.querySelector('.learn-node.is-current button, .learn-checkpoint.is-available')
+    if (target && target.getBoundingClientRect().bottom > window.innerHeight) {
+      target.scrollIntoView?.({ block: 'center' })
+    }
   },
 )
 </script>

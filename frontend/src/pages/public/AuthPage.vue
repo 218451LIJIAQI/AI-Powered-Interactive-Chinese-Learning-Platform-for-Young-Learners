@@ -1,6 +1,8 @@
 <template>
-  <AuthShell :variant="activeTab === 'register' ? 'register' : 'signin'">
-    <div class="tabs" role="tablist" :aria-label="t('auth.views')" @keydown="onTabKeydown">
+  <AuthShell>
+    <h1 class="sr-only">{{ activeTab === 'register' ? t('auth.registerTitle') : t('auth.signInTitle') }}</h1>
+
+    <div class="tabs auth-tabs" role="tablist" :aria-label="t('auth.views')" @keydown="onTabKeydown">
       <button
         id="auth-tab-signin"
         class="tab-button"
@@ -11,7 +13,7 @@
         :tabindex="activeTab === 'signin' ? 0 : -1"
         @click="showTab('signin')"
       >
-        <IconGlyph name="profile" :size="18" />
+        <IconGlyph name="profile" :size="16" />
         <span>{{ t('auth.signInTab') }}</span>
       </button>
       <button
@@ -24,7 +26,7 @@
         :tabindex="activeTab === 'register' ? 0 : -1"
         @click="showTab('register')"
       >
-        <IconGlyph name="userPlus" :size="18" />
+        <IconGlyph name="userPlus" :size="16" />
         <span>{{ t('auth.registerTab') }}</span>
       </button>
     </div>
@@ -38,36 +40,43 @@
       novalidate
       @submit.prevent="submitLogin"
     >
-      <header class="auth-form-head">
-        <h1>{{ t('auth.signInTitle') }}</h1>
-        <p>{{ t('auth.signInCopy') }}</p>
-      </header>
-
-      <div v-if="notice" class="alert alert-success" role="status" data-testid="auth-notice">
-        <IconGlyph name="check" :size="18" />
-        <p>
+      <div v-if="notice" class="callout is-success auth-notice" role="status" data-testid="auth-notice">
+        <IconGlyph name="correct" :size="18" />
+        <span>
           <strong>{{ t(notice.title) }}</strong>
-          {{ t(notice.copy) }}
-        </p>
+          <span>{{ t(notice.copy) }}</span>
+        </span>
       </div>
-      <div v-else-if="accountCreated" class="alert alert-success" role="status">
-        <IconGlyph name="check" :size="18" />
-        <p>{{ t('auth.createdSignIn') }}</p>
+      <div v-else-if="accountCreated" class="callout is-success auth-notice" role="status">
+        <IconGlyph name="correct" :size="18" />
+        <span>
+          <strong>{{ t('auth.createdSignIn') }}</strong>
+        </span>
       </div>
-      <div v-if="lockedMinutes" id="login-locked" class="alert alert-warning" role="alert" data-testid="auth-locked">
+      <div
+        v-if="lockedMinutes"
+        id="login-locked"
+        class="callout is-warning auth-notice"
+        role="alert"
+        data-testid="auth-locked"
+      >
         <IconGlyph name="lock" :size="18" />
-        <p>
+        <span>
           <strong>{{ t('auth.lockedTitle', { minutes: lockedMinutes }) }}</strong>
-          {{ t('auth.lockedCopy') }}
-          <RouterLink to="/forgot-password" @click="rememberRecoveryEmail">{{ t('auth.resetPassword') }}</RouterLink>
-        </p>
+          <span>{{ t('auth.lockedCopy') }}</span>
+        </span>
       </div>
-      <div v-else-if="loginError" id="login-error" class="alert alert-danger" role="alert" data-testid="auth-error">
+      <div
+        v-else-if="loginError"
+        id="login-error"
+        class="callout is-danger auth-notice"
+        role="alert"
+        data-testid="auth-error"
+      >
         <IconGlyph name="alert" :size="18" />
-        <p>
-          <strong>{{ loginError.title }}</strong>
-          {{ loginError.copy }}
-        </p>
+        <span>
+          <strong>{{ loginError }}</strong>
+        </span>
       </div>
 
       <div class="field">
@@ -82,7 +91,7 @@
           autocomplete="email"
           required
           :placeholder="t('auth.emailPlaceholder')"
-          :aria-invalid="Boolean(loginError)"
+          :aria-invalid="Boolean(loginError) && !isValidEmail(login.email.trim())"
           :aria-describedby="loginDescribedBy"
         />
       </div>
@@ -100,7 +109,7 @@
             autocomplete="current-password"
             required
             :placeholder="t('auth.passwordPlaceholder')"
-            :aria-invalid="Boolean(loginError)"
+            :aria-invalid="Boolean(loginError) && !login.password"
             :aria-describedby="loginDescribedBy"
           />
           <button
@@ -110,17 +119,17 @@
             :aria-pressed="showLoginPassword"
             @click="showLoginPassword = !showLoginPassword"
           >
-            <IconGlyph :name="showLoginPassword ? 'eyeOff' : 'eye'" :size="18" />
+            <IconGlyph :name="showLoginPassword ? 'eyeOff' : 'eye'" :size="16" />
           </button>
         </div>
       </div>
 
       <div class="auth-form-row">
-        <label class="choice">
+        <label class="choice auth-choice">
           <input v-model="login.keepSignedIn" type="checkbox" data-testid="keep-signed-in" />
           <span>{{ t('auth.keepSignedIn') }}</span>
         </label>
-        <RouterLink class="btn btn-link" to="/forgot-password" @click="rememberRecoveryEmail">
+        <RouterLink class="btn btn-link auth-text-link" to="/forgot-password" @click="rememberRecoveryEmail">
           {{ t('auth.forgotPassword') }}
         </RouterLink>
       </div>
@@ -132,6 +141,7 @@
         :aria-busy="auth.loading"
         data-testid="login-submit"
       >
+        <IconGlyph v-if="lockedMinutes" name="lock" :size="18" />
         <span>{{ loginSubmitLabel }}</span>
         <IconGlyph v-if="!lockedMinutes" name="chevronRight" :size="18" />
       </button>
@@ -146,29 +156,28 @@
       novalidate
       @submit.prevent="submitRegister"
     >
-      <header class="auth-form-head">
-        <h1>{{ t('auth.registerTitle') }}</h1>
-        <p>{{ t('auth.registerCopy') }}</p>
-      </header>
-
       <div
         v-if="errorCount"
         id="register-summary"
         ref="summaryRef"
-        class="alert alert-danger"
+        class="callout is-danger auth-notice"
         role="alert"
         tabindex="-1"
         data-testid="register-summary"
       >
         <IconGlyph name="alert" :size="18" />
-        <p>
+        <span>
           <strong>{{ t('auth.errorSummaryTitle') }}</strong>
-          {{ errorCount === 1 ? t('auth.errorSummaryOne') : t('auth.errorSummary', { count: errorCount }) }}
-        </p>
+          <span>{{
+            errorCount === 1 ? t('auth.errorSummaryOne') : t('auth.errorSummary', { count: errorCount })
+          }}</span>
+        </span>
       </div>
-      <div v-else-if="registerError" class="alert alert-danger" role="alert">
+      <div v-else-if="registerError" class="callout is-danger auth-notice" role="alert">
         <IconGlyph name="alert" :size="18" />
-        <p>{{ registerError }}</p>
+        <span>
+          <strong>{{ registerError }}</strong>
+        </span>
       </div>
 
       <fieldset class="field-set">
@@ -188,13 +197,9 @@
               <strong>{{ t(card.title) }}</strong>
               <small>{{ t(card.caption) }}</small>
             </span>
-            <IconGlyph name="check" :size="18" class="auth-role-check" />
+            <IconGlyph name="correct" :size="20" class="auth-role-check" />
           </label>
         </div>
-        <p v-if="register.role === 'TEACHER'" class="callout is-compact auth-teacher-note">
-          <IconGlyph name="info" :size="16" />
-          <span>{{ t('auth.teacherNote') }}</span>
-        </p>
       </fieldset>
 
       <div class="field">
@@ -212,7 +217,9 @@
           :aria-invalid="Boolean(errors.fullName)"
           :aria-describedby="errors.fullName ? 'register-full-name-error' : undefined"
         />
-        <p v-if="errors.fullName" id="register-full-name-error" class="field-error">{{ errors.fullName }}</p>
+        <p v-if="errors.fullName" id="register-full-name-error" class="field-error">
+          <IconGlyph name="alert" :size="14" />{{ errors.fullName }}
+        </p>
       </div>
 
       <div class="field">
@@ -231,47 +238,55 @@
           :aria-invalid="Boolean(errors.email)"
           :aria-describedby="errors.email ? 'register-email-error' : undefined"
         />
-        <p v-if="errors.email" id="register-email-error" class="field-error">{{ errors.email }}</p>
+        <p v-if="errors.email" id="register-email-error" class="field-error">
+          <IconGlyph name="alert" :size="14" />{{ errors.email }}
+        </p>
       </div>
 
-      <div class="form-grid two">
-        <div class="field">
-          <label class="field-label" for="register-password">
-            {{ t('auth.password') }}<span class="required-mark" aria-hidden="true">*</span>
-          </label>
-          <input
-            id="register-password"
-            v-model="register.password"
-            class="input"
-            type="password"
-            autocomplete="new-password"
-            required
-            :placeholder="t('auth.createPassword')"
-            :aria-invalid="Boolean(errors.password)"
-            :aria-describedby="errors.password ? 'register-password-error' : 'register-password-hint'"
-          />
-          <p v-if="errors.password" id="register-password-error" class="field-error">{{ errors.password }}</p>
-          <p v-else id="register-password-hint" class="field-hint">{{ t('auth.passwordHint') }}</p>
+      <div class="auth-passwords">
+        <div class="form-grid two">
+          <div class="field">
+            <label class="field-label" for="register-password">
+              {{ t('auth.password') }}<span class="required-mark" aria-hidden="true">*</span>
+            </label>
+            <input
+              id="register-password"
+              v-model="register.password"
+              class="input"
+              type="password"
+              autocomplete="new-password"
+              required
+              :placeholder="t('auth.createPassword')"
+              :aria-invalid="Boolean(errors.password)"
+              :aria-describedby="passwordDescribedBy"
+            />
+            <p v-if="errors.password" id="register-password-error" class="field-error">
+              <IconGlyph name="alert" :size="14" />{{ errors.password }}
+            </p>
+          </div>
+          <div class="field">
+            <label class="field-label" for="register-confirm-password">
+              {{ t('auth.confirmPassword') }}<span class="required-mark" aria-hidden="true">*</span>
+            </label>
+            <input
+              id="register-confirm-password"
+              v-model="register.confirmPassword"
+              class="input"
+              type="password"
+              autocomplete="new-password"
+              required
+              :placeholder="t('auth.confirmPasswordPlaceholder')"
+              :aria-invalid="Boolean(errors.confirmPassword)"
+              :aria-describedby="errors.confirmPassword ? 'register-confirm-error' : undefined"
+            />
+            <p v-if="errors.confirmPassword" id="register-confirm-error" class="field-error">
+              <IconGlyph name="alert" :size="14" />{{ errors.confirmPassword }}
+            </p>
+          </div>
         </div>
-        <div class="field">
-          <label class="field-label" for="register-confirm-password">
-            {{ t('auth.confirmPassword') }}<span class="required-mark" aria-hidden="true">*</span>
-          </label>
-          <input
-            id="register-confirm-password"
-            v-model="register.confirmPassword"
-            class="input"
-            type="password"
-            autocomplete="new-password"
-            required
-            :placeholder="t('auth.confirmPasswordPlaceholder')"
-            :aria-invalid="Boolean(errors.confirmPassword)"
-            :aria-describedby="errors.confirmPassword ? 'register-confirm-error' : undefined"
-          />
-          <p v-if="errors.confirmPassword" id="register-confirm-error" class="field-error">
-            {{ errors.confirmPassword }}
-          </p>
-        </div>
+        <p v-if="showPasswordHint" id="register-password-hint" class="field-hint auth-hint">
+          <IconGlyph name="info" :size="14" />{{ t('auth.passwordHint') }}
+        </p>
       </div>
 
       <div v-if="register.role === 'TEACHER'" class="field">
@@ -293,11 +308,13 @@
           <p id="register-bio-hint" class="field-hint">{{ t('auth.teacherBioHint') }}</p>
           <p class="field-hint field-counter">{{ t('auth.bioCount', { count: register.bio.trim().length }) }}</p>
         </div>
-        <p v-if="errors.bio" id="register-bio-error" class="field-error">{{ errors.bio }}</p>
+        <p v-if="errors.bio" id="register-bio-error" class="field-error">
+          <IconGlyph name="alert" :size="14" />{{ errors.bio }}
+        </p>
       </div>
 
-      <div class="field">
-        <label class="choice auth-consent">
+      <div class="auth-consent-field">
+        <label class="choice auth-choice auth-consent">
           <input
             v-model="register.consent"
             type="checkbox"
@@ -313,10 +330,12 @@
             {{ t('auth.and') }}
             <a href="/privacy" target="_blank" rel="noopener">
               {{ t('auth.privacy') }}<span class="sr-only"> {{ t('auth.newTab') }}</span> </a
-            >.
+            >{{ t('auth.consentEnd') }}
           </span>
         </label>
-        <p v-if="errors.consent" id="register-consent-error" class="field-error">{{ errors.consent }}</p>
+        <p v-if="errors.consent" id="register-consent-error" class="field-error">
+          <IconGlyph name="alert" :size="14" />{{ errors.consent }}
+        </p>
       </div>
 
       <button
@@ -329,6 +348,11 @@
         <span>{{ registerSubmitting ? t('auth.creating') : t('auth.createAccount') }}</span>
         <IconGlyph name="chevronRight" :size="18" />
       </button>
+
+      <p v-if="register.role === 'TEACHER'" class="callout auth-notice auth-teacher-note">
+        <IconGlyph name="info" :size="18" />
+        <span>{{ t('auth.teacherNote') }}</span>
+      </p>
     </form>
   </AuthShell>
 </template>
@@ -380,9 +404,9 @@ const router = useRouter()
 const { t } = useLocalMessages({ auth: authMessages })
 
 const activeTab = ref<AuthTab>('signin')
-const login = reactive({ email: '', password: '', keepSignedIn: true })
+const login = reactive({ email: '', password: '', keepSignedIn: false })
 const showLoginPassword = ref(false)
-const loginError = ref<{ title: string; copy: string } | null>(null)
+const loginError = ref<string | null>(null)
 const lockedMinutes = ref<number | null>(null)
 const accountCreated = ref(false)
 
@@ -413,6 +437,12 @@ const loginDescribedBy = computed(() =>
 const loginSubmitLabel = computed(() => {
   if (lockedMinutes.value) return t('auth.lockedButton', { minutes: lockedMinutes.value })
   return auth.loading ? t('auth.signingIn') : t('auth.signIn')
+})
+/** One hint under both password fields; a field's own error takes its place. */
+const showPasswordHint = computed(() => !errors.password && !errors.confirmPassword)
+const passwordDescribedBy = computed(() => {
+  if (errors.password) return 'register-password-error'
+  return showPasswordHint.value ? 'register-password-hint' : undefined
 })
 
 watch(
@@ -495,12 +525,18 @@ function retryAfterMinutes(reason: unknown): number {
   return Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds / 60) : DEFAULT_LOCK_MINUTES
 }
 
+/** After a failed sign-in the password is empty again and the cursor waits in the field to fix. */
+function focusLoginField(id: 'login-email' | 'login-password'): void {
+  void nextTick(() => document.getElementById(id)?.focus())
+}
+
 async function submitLogin(): Promise<void> {
   if (lockedMinutes.value || auth.loading) return
   loginError.value = null
   const email = login.email.trim().toLowerCase()
   if (!isValidEmail(email) || !login.password) {
-    loginError.value = { title: t('auth.wrongCredentials'), copy: t('auth.wrongCredentialsHint') }
+    loginError.value = t('auth.wrongCredentials')
+    focusLoginField(isValidEmail(email) ? 'login-password' : 'login-email')
     return
   }
   try {
@@ -511,12 +547,14 @@ async function submitLogin(): Promise<void> {
     if (status === 429) {
       lockedMinutes.value = retryAfterMinutes(reason)
     } else if (status === 403) {
-      loginError.value = { title: t('auth.accountUnavailable'), copy: '' }
+      loginError.value = t('auth.accountUnavailable')
     } else if (status === 401) {
-      loginError.value = { title: t('auth.wrongCredentials'), copy: t('auth.wrongCredentialsHint') }
+      loginError.value = t('auth.wrongCredentials')
     } else {
-      loginError.value = { title: resolveApiError(reason, t('auth.signInFailed')), copy: '' }
+      loginError.value = resolveApiError(reason, t('auth.signInFailed'))
     }
+    login.password = ''
+    focusLoginField('login-password')
   }
 }
 

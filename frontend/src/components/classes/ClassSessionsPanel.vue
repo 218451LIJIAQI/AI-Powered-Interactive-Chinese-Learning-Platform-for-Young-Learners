@@ -1,7 +1,7 @@
 <template>
-  <section class="class-sessions" :aria-labelledby="headingId">
-    <div class="class-sessions-head">
-      <h2 :id="headingId" class="class-sessions-title">{{ title }}</h2>
+  <section class="panel class-sessions" :aria-labelledby="headingId">
+    <div class="class-card-head">
+      <h2 :id="headingId" class="card-title">{{ t('studentClasses.classPage.sessionsTitle') }}</h2>
       <RouterLink
         class="btn btn-link"
         :to="{ name: 'student-live-sessions' }"
@@ -10,35 +10,21 @@
         {{ t('studentClasses.classPage.allSessions') }}<IconGlyph name="chevronRight" :size="16" />
       </RouterLink>
     </div>
-    <p v-if="!sessions.length" class="class-sessions-empty">
-      {{ empty || t('studentClasses.classPage.noSessions') }}
-    </p>
-    <ul v-else class="class-sessions-list">
+    <p v-if="!sessions.length" class="type-caption">{{ t('studentClasses.classPage.noSessions') }}</p>
+    <ul v-else class="row-list">
       <li v-for="session in sessions" :key="session.id">
-        <RouterLink
-          class="class-sessions-item"
-          :class="{ 'is-cancelled': session.status === 'CANCELLED' }"
-          :to="{ name: 'student-live-sessions' }"
-        >
-          <SessionDateTile :at="session.startsAt" :muted="session.status === 'CANCELLED'" show-month />
-          <span class="class-sessions-copy">
-            <strong class="class-sessions-name">{{ session.title }}</strong>
-            <span class="type-caption">
-              <span class="sr-only">{{ formatWeekdayDate(session.startsAt) }} · </span>
+        <RouterLink class="class-sessions-item" :to="{ name: 'student-live-sessions' }">
+          <SessionDateTile :at="session.startsAt" />
+          <span class="row-list-copy">
+            <strong class="row-list-title"><CjkText :text="session.title" /></strong>
+            <span class="row-list-meta">
+              {{ formatShortDate(session.startsAt) }} ·
               {{
                 t('classes.session.timeRange', { start: formatTime(session.startsAt), end: formatTime(session.endsAt) })
               }}
-              · {{ t(PLATFORM_KEYS[session.platform]) }}
-            </span>
-            <span v-if="session.booked || session.status !== 'SCHEDULED'" class="class-sessions-state">
-              <StatusPill v-if="session.booked" :label="t('classes.session.booked')" tone="success" icon="check" />
-              <StatusPill
-                v-if="session.status !== 'SCHEDULED'"
-                :label="t(SESSION_STATUS_KEYS[session.status])"
-                :tone="SESSION_STATUS_TONES[session.status]"
-              />
             </span>
           </span>
+          <IconGlyph class="class-row-chevron" name="chevronRight" :size="16" />
         </RouterLink>
       </li>
     </ul>
@@ -50,21 +36,17 @@ import { useId } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import IconGlyph from '@/components/common/IconGlyph.vue'
-import StatusPill from '@/components/common/StatusPill.vue'
+import CjkText from '@/components/learning/CjkText.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { classesMessages } from '@/plugins/classesMessages'
 import { studentClassesMessages } from '@/plugins/studentClassesMessages'
 import type { SessionBrief } from '@/types/classes'
-import { PLATFORM_KEYS, SESSION_STATUS_KEYS, SESSION_STATUS_TONES } from '@/utils/classes'
-import { formatTime, formatWeekdayDate } from '@/utils/format'
+import { formatShortDate, formatTime } from '@/utils/format'
 
 import SessionDateTile from './SessionDateTile.vue'
 
-/**
- * The timetable of a class or a lesson: upcoming live sessions under date tiles, each linking to the student's Live
- * sessions page where they are booked and joined.
- */
-withDefaults(defineProps<{ sessions: readonly SessionBrief[]; title: string; empty?: string }>(), { empty: '' })
+/** The right rail of a class: its upcoming live sessions, each opening the Live sessions page where they are joined. */
+defineProps<{ sessions: readonly SessionBrief[] }>()
 
 const { t } = useLocalMessages({ studentClasses: studentClassesMessages, classes: classesMessages })
 const headingId = useId()

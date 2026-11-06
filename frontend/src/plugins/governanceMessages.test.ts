@@ -12,7 +12,6 @@ describe('content review wording', () => {
       ...Object.values(adminClassesMessages.en.review.approveMessage),
     ].join(' ')
     expect(copy).not.toMatch(/publish(es)? directly|goes live immediately/i)
-    expect(Object.keys(classesMessages.en.status)).not.toContain('APPROVED')
   })
 
   it('says that students keep the published lesson while a revision is open', () => {
@@ -20,9 +19,7 @@ describe('content review wording', () => {
     expect(lessonEditorMessages.en.submit.revisionMessage).toMatch(/published version/)
   })
 
-  it('uses the agreed stage, unit and lesson terminology', () => {
-    expect(classesMessages.en.stage.SCAFFOLDED).toBe('Supported')
-    expect(classesMessages.en.stage.INDEPENDENT).toBe('Independent')
+  it('uses the agreed unit and lesson terminology', () => {
     expect(adminClassesMessages['zh-CN'].review.typeLesson).toBe('课时')
     expect(classesMessages['zh-CN'].units).toContain('单元')
   })

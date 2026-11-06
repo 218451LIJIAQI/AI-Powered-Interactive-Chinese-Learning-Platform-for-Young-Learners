@@ -2,6 +2,7 @@
 export const aiSafetyMessages = {
   en: {
     aiAssisted: 'AI-assisted',
+    aiShort: 'AI',
     disclaimer: 'AI responses may contain errors and do not replace your teacher.',
     guidanceLink: 'Responsible AI Guidance',
     reasonIncorrect: 'Incorrect content',
@@ -12,6 +13,7 @@ export const aiSafetyMessages = {
   },
   ms: {
     aiAssisted: 'Berbantukan AI',
+    aiShort: 'AI',
     disclaimer: 'Jawapan AI mungkin mengandungi kesilapan dan tidak menggantikan guru anda.',
     guidanceLink: 'Panduan AI Bertanggungjawab',
     reasonIncorrect: 'Kandungan tidak tepat',
@@ -22,6 +24,7 @@ export const aiSafetyMessages = {
   },
   'zh-CN': {
     aiAssisted: 'AI 辅助',
+    aiShort: 'AI',
     disclaimer: 'AI 回答可能有错误，不能替代您的教师。',
     guidanceLink: '负责任 AI 使用指南',
     reasonIncorrect: '内容不正确',

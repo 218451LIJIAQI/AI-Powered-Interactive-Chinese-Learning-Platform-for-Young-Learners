@@ -8,36 +8,21 @@
         : t('lessonEditor.question.drawerNew')
     "
     :busy="busy"
-    size="lg"
     test-id="question-drawer"
     @close="emit('close')"
   >
     <form :id="formId" class="form-grid" @submit.prevent="save">
-      <div class="form-grid two">
-        <div class="field">
-          <label class="field-label" :for="`${formId}-type`">{{ t('lessonEditor.question.type') }}</label>
-          <select
-            :id="`${formId}-type`"
-            v-model="type"
-            class="select"
-            data-testid="question-type"
-            @change="adjustOptions"
-          >
-            <option v-for="value in QUESTION_TYPES" :key="value" :value="value">{{ t(questionTypeKey(value)) }}</option>
-          </select>
-        </div>
-        <div class="field">
-          <label class="field-label" :for="`${formId}-points`">{{ t('lessonEditor.question.points') }}</label>
-          <input
-            :id="`${formId}-points`"
-            v-model.number="points"
-            class="input"
-            type="number"
-            min="1"
-            max="100"
-            required
-          />
-        </div>
+      <div class="field">
+        <label class="field-label" :for="`${formId}-type`">{{ t('lessonEditor.question.type') }}</label>
+        <select
+          :id="`${formId}-type`"
+          v-model="type"
+          class="select"
+          data-testid="question-type"
+          @change="adjustOptions"
+        >
+          <option v-for="value in QUESTION_TYPES" :key="value" :value="value">{{ t(questionTypeKey(value)) }}</option>
+        </select>
       </div>
       <div class="field">
         <label class="field-label" :for="`${formId}-text`">
@@ -82,9 +67,19 @@
         </label>
         <input :id="`${formId}-answer`" v-model="correctAnswerText" class="input cjk-text" maxlength="1000" required />
       </div>
-      <fieldset v-else class="form-section">
-        <legend class="form-section-title">{{ t('lessonEditor.question.options') }}</legend>
-        <div v-for="(option, index) in options" :key="index" class="lesson-editor-row is-option">
+      <div v-else class="lesson-rows-set" role="group" :aria-labelledby="`${formId}-options`">
+        <div class="lesson-rows-head">
+          <span :id="`${formId}-options`" class="field-label">{{ t('lessonEditor.question.options') }}</span>
+          <button
+            v-if="type !== 'TRUE_FALSE' && options.length < 6"
+            type="button"
+            class="btn btn-secondary btn-sm"
+            @click="options.push({ text: '' })"
+          >
+            <IconGlyph name="plus" :size="16" />{{ t('lessonEditor.question.addOption') }}
+          </button>
+        </div>
+        <div v-for="(option, index) in options" :key="index" class="lesson-option-row">
           <label class="choice">
             <input v-model="correctIndex" type="radio" :name="`${formId}-correct`" :value="index" />
             <span class="sr-only">{{ t('lessonEditor.question.correct') }} {{ index + 1 }}</span>
@@ -109,15 +104,7 @@
           </button>
         </div>
         <p class="field-hint">{{ t('lessonEditor.question.correct') }}: {{ options[correctIndex]?.text || '—' }}</p>
-        <button
-          v-if="type !== 'TRUE_FALSE' && options.length < 6"
-          type="button"
-          class="btn btn-outline btn-sm"
-          @click="options.push({ text: '' })"
-        >
-          <IconGlyph name="plus" :size="16" />{{ t('lessonEditor.question.addOption') }}
-        </button>
-      </fieldset>
+      </div>
 
       <div class="field">
         <label class="field-label" :for="`${formId}-explanation`">{{ t('lessonEditor.question.explanation') }}</label>
@@ -145,8 +132,8 @@
       <p v-if="error" class="field-error" role="alert">{{ error }}</p>
     </form>
     <template #footer>
-      <button type="button" class="btn btn-ghost" :disabled="busy" @click="emit('close')">
-        {{ t('classes.cancel') }}
+      <button type="button" class="btn btn-secondary" :disabled="busy" @click="emit('close')">
+        {{ t('common.cancel') }}
       </button>
       <button
         type="submit"
@@ -165,25 +152,27 @@
 <script setup lang="ts">
 import { ref, useId, watch } from 'vue'
 
+import AppOverlay from '@/components/common/AppOverlay.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { classesMessages } from '@/plugins/classesMessages'
+import { commonMessages } from '@/plugins/commonMessages'
 import { lessonEditorMessages } from '@/plugins/lessonEditorMessages'
 import type { EditorQuestion, QuestionPayload } from '@/types/classes'
 import { QUESTION_TYPES, isTypedQuestion, questionTypeKey } from '@/utils/classes'
-
-import AppOverlay from '@/components/common/AppOverlay.vue'
 
 /** Add or edit a quiz question of any type, with its options or typed answer, explanation and hint. */
 const props = defineProps<{ open: boolean; question: EditorQuestion | null; busy: boolean; error: string | null }>()
 const emit = defineEmits<{ save: [payload: QuestionPayload]; close: [] }>()
 
-const { t } = useLocalMessages({ lessonEditor: lessonEditorMessages, classes: classesMessages })
+const { t } = useLocalMessages({ lessonEditor: lessonEditorMessages, classes: classesMessages, common: commonMessages })
 const formId = useId()
+
+/** Teachers no longer set marks: every new question is worth the same, and an edited one keeps what it had. */
+const DEFAULT_POINTS = 2
 
 const type = ref('MULTIPLE_CHOICE')
 const text = ref('')
-const points = ref(2)
 const options = ref<{ text: string }[]>([])
 const correctIndex = ref(0)
 const correctAnswerText = ref('')
@@ -202,7 +191,6 @@ watch(
     if (!open) return
     type.value = question?.type ?? 'MULTIPLE_CHOICE'
     text.value = question?.text ?? ''
-    points.value = question?.points ?? 2
     options.value = question?.options.length
       ? question.options.map((option) => ({ text: option.text }))
       : [{ text: '' }, { text: '' }, { text: '' }]
@@ -235,7 +223,7 @@ function save(): void {
   emit('save', {
     questionType: type.value,
     questionText: text.value.trim(),
-    points: Number(points.value) || 1,
+    points: props.question?.points ?? DEFAULT_POINTS,
     correctAnswerText: typed ? correctAnswerText.value.trim() : null,
     explanation: explanation.value.trim() || null,
     hint: hint.value.trim() || null,

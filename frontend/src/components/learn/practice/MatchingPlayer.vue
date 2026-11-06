@@ -1,16 +1,6 @@
 <template>
   <div class="practice-player" data-testid="matching-player">
-    <div class="practice-meter">
-      <span class="practice-counter" aria-live="polite">
-        {{ t('practice.pairedOf', { paired: pairs.size, total: set.items.length }) }}
-      </span>
-      <ProgressBar
-        :progress="ratioPercent(pairs.size, set.items.length)"
-        :label="t('practice.setProgress')"
-        class="is-sm practice-meter-bar"
-      />
-    </div>
-    <p class="practice-hint practice-match-hint">{{ t('practice.matchingHint') }}</p>
+    <PracticeProgress :dots="dots" :label="counterLabel" :list-label="t('practice.setProgress')" />
 
     <div class="practice-match">
       <ul class="practice-match-column" :aria-label="t('practice.words')">
@@ -25,9 +15,16 @@
             @click="selectWord(item.key)"
           >
             <span class="practice-match-index" aria-hidden="true">{{ pairNumber(item.key) }}</span>
-            <span class="hanzi practice-match-hanzi" lang="zh-CN">{{ item.hanzi }}</span>
-            <span class="practice-match-pinyin">{{ item.pinyin }}</span>
-            <IconGlyph v-if="checked" :name="results.get(item.key) ? 'correct' : 'incorrect'" :size="18" />
+            <span class="practice-match-word">
+              <span class="hanzi practice-match-hanzi" lang="zh-CN">{{ item.hanzi }}</span>
+              <span class="practice-match-pinyin">{{ item.pinyin }}</span>
+            </span>
+            <IconGlyph
+              v-if="checked"
+              class="practice-match-mark"
+              :name="results.get(item.key) ? 'correct' : 'incorrect'"
+              :size="16"
+            />
           </button>
         </li>
       </ul>
@@ -42,59 +39,80 @@
             :data-testid="`meaning-${meaning}`"
             @click="pairWith(meaning)"
           >
-            <span v-if="ownerOf(meaning)" class="practice-match-index" aria-hidden="true">
-              {{ pairNumber(ownerOf(meaning)!) }}
-            </span>
-            {{ meaning }}
+            <span class="practice-match-index" aria-hidden="true">{{ ownerNumber(meaning) }}</span>
+            <span class="practice-match-word">{{ meaning }}</span>
+            <IconGlyph
+              v-if="checked && ownerOf(meaning)"
+              class="practice-match-mark"
+              :name="results.get(ownerOf(meaning)!) ? 'correct' : 'incorrect'"
+              :size="16"
+            />
           </button>
         </li>
       </ul>
     </div>
 
-    <div class="practice-footer">
-      <button class="btn btn-ghost" type="button" :disabled="!pairs.size || checked" @click="reset">
-        <IconGlyph name="undo" :size="16" />{{ t('practice.reset') }}
-      </button>
-      <button
-        v-if="!checked"
-        class="btn btn-primary"
-        type="button"
-        :disabled="pairs.size < set.items.length || run.busy.value"
-        :aria-busy="run.busy.value"
-        data-testid="matching-check"
-        @click="checkPairs"
-      >
-        {{ t('practice.check') }}
-      </button>
-      <button v-else class="btn btn-primary" type="button" :disabled="run.busy.value" @click="finish">
-        {{ t('practice.seeResult') }}
-      </button>
-    </div>
-    <p v-if="checked" class="practice-feedback" role="status">
-      {{ t('practice.pairsRight', { right: rightCount, total: set.items.length }) }}
-    </p>
+    <PracticeFeedback
+      v-if="checked"
+      :correct="rightCount === set.items.length"
+      :title="t('practice.pairsRight', { right: rightCount, total: set.items.length })"
+      :xp="rightCount === set.items.length && !set.done ? set.xpReward : 0"
+    />
     <p v-if="run.error.value" class="field-error" role="alert">{{ run.error.value }}</p>
+
+    <div class="practice-footer">
+      <div v-if="!checked" class="btn-group">
+        <button class="btn btn-secondary" type="button" :disabled="!pairs.size" data-testid="reset" @click="reset">
+          {{ t('practice.reset') }}
+        </button>
+      </div>
+      <div class="practice-footer-end">
+        <button
+          v-if="!checked"
+          class="btn btn-primary"
+          type="button"
+          :disabled="pairs.size < set.items.length || run.busy.value"
+          :aria-busy="run.busy.value"
+          data-testid="matching-check"
+          @click="checkPairs"
+        >
+          <IconGlyph name="check" :size="16" />{{ t('practice.check') }}
+        </button>
+        <button
+          v-else
+          ref="resultButton"
+          class="btn btn-primary"
+          type="button"
+          :disabled="run.busy.value"
+          :aria-busy="run.busy.value"
+          data-testid="continue"
+          @click="finish"
+        >
+          {{ t('practice.seeResult') }}
+        </button>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 
 import IconGlyph from '@/components/common/IconGlyph.vue'
-import ProgressBar from '@/components/common/ProgressBar.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { practiceMessages } from '@/plugins/practiceMessages'
 import type { PracticeResult, PracticeSet } from '@/types/learn'
-import { ratioPercent } from '@/utils/format'
 
+import PracticeFeedback from './PracticeFeedback.vue'
+import PracticeProgress, { type PracticeDot } from './PracticeProgress.vue'
 import { usePracticeRun } from './usePracticeRun'
 
 /**
- * Matching: click a word, then its meaning; each pair carries a number, so pairs read without colour. Check grades every
- * pair on the server (a wrong pair becomes a mistake) and marks it right or wrong.
+ * Matching: click a word, then its meaning; each pair carries a number, so pairs read across the two columns and without
+ * colour. Check grades every pair on the server (a wrong pair becomes a mistake) and marks it right or wrong.
  */
 const props = defineProps<{ set: PracticeSet }>()
-const emit = defineEmits<{ finished: [result: PracticeResult] }>()
+const emit = defineEmits<{ finished: [result: PracticeResult, recap: string] }>()
 
 const { t } = useLocalMessages({ practice: practiceMessages })
 const run = usePracticeRun(
@@ -106,9 +124,19 @@ const selected = ref<string | null>(null)
 const pairs = ref(new Map<string, string>())
 const results = ref(new Map<string, boolean>())
 const checked = ref(false)
+const resultButton = ref<HTMLButtonElement | null>(null)
 
 const order = computed(() => [...pairs.value.keys()])
 const rightCount = computed(() => [...results.value.values()].filter(Boolean).length)
+
+const dots = computed<PracticeDot[]>(() =>
+  props.set.items.map((_, position) => (position < pairs.value.size ? 'seen' : 'ahead')),
+)
+
+const counterLabel = computed(() => {
+  const paired = t('practice.pairedOf', { paired: pairs.value.size, total: props.set.items.length })
+  return checked.value ? paired : `${paired} · ${t('practice.matchingHint')}`
+})
 
 function pairNumber(key: string): string {
   const position = order.value.indexOf(key)
@@ -118,6 +146,11 @@ function pairNumber(key: string): string {
 function ownerOf(meaning: string): string | null {
   for (const [key, value] of pairs.value) if (value === meaning) return key
   return null
+}
+
+function ownerNumber(meaning: string): string {
+  const owner = ownerOf(meaning)
+  return owner ? pairNumber(owner) : ''
 }
 
 function selectWord(key: string): void {
@@ -172,10 +205,14 @@ async function checkPairs(): Promise<void> {
   if (!verdicts) return
   results.value = new Map(props.set.items.map((item, index) => [item.key, verdicts[index]?.correct === true]))
   checked.value = true
+  await nextTick()
+  resultButton.value?.focus()
 }
 
 async function finish(): Promise<void> {
   const result = await run.complete(answers.value)
-  if (result) emit('finished', result)
+  if (!result) return
+  const recap = props.set.items.map((item) => `${item.hanzi} ${pairs.value.get(item.key) ?? ''}`.trim()).join(' · ')
+  emit('finished', result, recap)
 }
 </script>

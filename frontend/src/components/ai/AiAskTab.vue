@@ -1,102 +1,94 @@
 <template>
-  <section class="ai-stage" :aria-labelledby="`${baseId}-title`">
-    <h2 :id="`${baseId}-title`" class="sr-only">{{ t('aiHelper.askTitle') }}</h2>
+  <div class="ai-ask is-fill">
+    <section class="panel ai-ask-chat" :aria-labelledby="`${baseId}-title`">
+      <header class="section-header">
+        <h2 :id="`${baseId}-title`" class="card-title">{{ t('aiHelper.askTitle') }}</h2>
+        <button
+          v-if="exchanges.length"
+          class="btn btn-secondary btn-sm"
+          type="button"
+          :disabled="asking"
+          @click="newChat"
+        >
+          {{ t('aiHelper.newChat') }}
+        </button>
+      </header>
 
-    <aside class="ai-presence is-bot">
-      <span class="ai-bot-mark" aria-hidden="true"><IconGlyph name="ai" :size="28" /></span>
-      <div class="ai-presence-who">
-        <p class="ai-presence-name"><span class="ai-presence-latin">SparkBot</span></p>
-        <p class="ai-presence-role">{{ t('aiHelper.askSubtitle') }}</p>
-        <p class="ai-presence-state" :class="`is-${botState}`">
-          <span class="ai-presence-dot" aria-hidden="true" />
-          {{ botStateLabel }}
-        </p>
-      </div>
-      <button
-        v-if="exchanges.length"
-        class="btn btn-secondary btn-sm"
-        type="button"
-        :disabled="asking"
-        @click="newChat"
-      >
-        <IconGlyph name="plus" :size="16" />
-        {{ t('aiHelper.newChat') }}
-      </button>
-    </aside>
-
-    <div class="ai-chat">
-      <div ref="thread" class="ai-thread" aria-live="polite" data-testid="ai-ask-thread">
-        <div v-if="!exchanges.length" class="ai-thread-empty">
-          <p class="ai-thread-empty-lead">{{ t('aiHelper.askEmpty') }}</p>
-          <ul class="ai-samples">
-            <li v-for="key in SAMPLE_KEYS" :key="key">
-              <button class="ai-sample" type="button" :disabled="Boolean(blocked)" @click="ask(t(key))">
-                <IconGlyph name="chat" :size="16" />
-                <span>{{ t(key) }}</span>
-              </button>
-            </li>
-          </ul>
-        </div>
+      <div ref="thread" class="ai-thread" tabindex="0" aria-live="polite" data-testid="ai-ask-thread">
+        <StatePanel
+          v-if="!exchanges.length"
+          class="ai-thread-empty"
+          tone="empty"
+          icon="chat"
+          :title="t('aiHelper.askEmptyTitle')"
+          :message="t('aiHelper.askEmpty')"
+        >
+          <template #actions>
+            <button
+              v-for="key in SAMPLE_KEYS"
+              :key="key"
+              class="btn btn-secondary btn-sm"
+              type="button"
+              :disabled="Boolean(blocked)"
+              @click="ask(t(key))"
+            >
+              {{ t(key) }}
+            </button>
+          </template>
+        </StatePanel>
         <template v-for="exchange in exchanges" :key="exchange.id">
           <div class="ai-message is-you">
-            <p class="ai-bubble">
-              <span class="sr-only">{{ t('aiHelper.you') }}: </span>{{ exchange.question }}
-            </p>
+            <p class="ai-message-who">{{ t('aiHelper.you') }}</p>
+            <p class="ai-bubble">{{ exchange.question }}</p>
           </div>
           <div class="ai-message is-bot" :aria-busy="exchange.pending">
-            <p class="sr-only">SparkBot</p>
-            <div
-              v-if="exchange.pending && !exchange.answer"
-              class="ai-answer is-thinking"
-              data-testid="ai-ask-thinking"
-            >
-              <span class="skeleton skeleton-line" aria-hidden="true" />
-              <span class="skeleton skeleton-line is-short" aria-hidden="true" />
-              <span class="ai-thinking"
-                ><span class="spinner is-sm" aria-hidden="true" />{{ t('aiHelper.sparkbotThinking') }}</span
-              >
-            </div>
-            <p v-else class="ai-answer cjk-text" :class="{ 'is-problem': !exchange.answered && !exchange.pending }">
+            <p class="ai-message-who">
+              SparkBot
+              <AiResultLabel v-if="exchange.answered" short />
+            </p>
+            <p v-if="exchange.pending && !exchange.answer" class="ai-answer is-thinking" data-testid="ai-ask-thinking">
+              <IconGlyph name="clock" :size="16" />
+              {{ t('aiHelper.sparkbotThinking') }}
+              <span class="ai-dots" aria-hidden="true"><span /><span /><span /></span>
+            </p>
+            <p v-else class="ai-answer" :class="{ 'is-problem': !exchange.answered && !exchange.pending }">
               {{ exchange.answer }}
             </p>
-            <div v-if="exchange.answered" class="ai-line-actions ai-message-actions">
-              <AiResultLabel />
-              <template v-if="exchange.messageId">
-                <button v-if="!exchange.reported" class="ai-line-action" type="button" @click="report(exchange)">
-                  <IconGlyph name="flag" :size="14" />
-                  {{ t('aiHelper.report') }}
-                </button>
-                <span v-else class="ai-reported"
-                  ><IconGlyph name="status" :size="14" />{{ t('aiHelper.reported') }}</span
-                >
-              </template>
+            <div v-if="exchange.answered && exchange.messageId" class="ai-message-actions">
+              <button v-if="!exchange.reported" class="btn btn-ghost btn-sm" type="button" @click="report(exchange)">
+                <IconGlyph name="flag" :size="16" />
+                {{ t('aiHelper.report') }}
+              </button>
+              <span v-else class="ai-reported"><IconGlyph name="status" :size="14" />{{ t('aiHelper.reported') }}</span>
             </div>
           </div>
         </template>
       </div>
 
-      <div class="ai-composer" :class="{ 'is-idle': blocked }">
-        <p v-if="notice" class="callout is-compact" role="status">{{ notice }}</p>
+      <div class="ai-ask-composer">
         <p v-if="error" class="callout is-compact is-danger" role="alert">{{ error }}</p>
         <div class="ai-quick-start">
-          <button
-            class="ai-help-chip"
-            type="button"
-            :disabled="Boolean(blocked)"
-            @click="startWith(t('aiHelper.explainWordStart'))"
-          >
-            <IconGlyph name="language" :size="14" />
-            {{ t('aiHelper.explainWord') }}
-          </button>
-          <button
-            class="ai-help-chip"
-            type="button"
-            :disabled="Boolean(blocked)"
-            @click="startWith(t('aiHelper.checkSentenceStart'))"
-          >
-            <IconGlyph name="checklist" :size="14" />
-            {{ t('aiHelper.checkSentence') }}
-          </button>
+          <span class="ai-quick-start-label">{{ t('aiHelper.quickStart') }}</span>
+          <div class="btn-group is-sm">
+            <button
+              class="btn btn-secondary btn-sm"
+              type="button"
+              :disabled="Boolean(blocked) || asking"
+              @click="startWith(t('aiHelper.explainWordStart'))"
+            >
+              <IconGlyph name="language" :size="16" />
+              {{ t('aiHelper.explainWord') }}
+            </button>
+            <button
+              class="btn btn-secondary btn-sm"
+              type="button"
+              :disabled="Boolean(blocked) || asking"
+              @click="startWith(t('aiHelper.checkSentenceStart'))"
+            >
+              <IconGlyph name="checklist" :size="16" />
+              {{ t('aiHelper.checkSentence') }}
+            </button>
+          </div>
         </div>
         <form class="ai-ask-bar" @submit.prevent="ask(question)">
           <label class="sr-only" :for="`${baseId}-question`">{{ t('aiHelper.askLabel') }}</label>
@@ -105,7 +97,7 @@
             ref="input"
             v-model="question"
             class="textarea"
-            rows="2"
+            rows="1"
             :maxlength="MAX_QUESTION"
             :disabled="Boolean(blocked) || asking"
             :placeholder="blockedPlaceholder || t('aiHelper.askPlaceholder')"
@@ -117,14 +109,18 @@
             :disabled="Boolean(blocked) || asking || !question.trim()"
             :aria-busy="asking"
           >
+            {{ asking ? t('aiHelper.thinking') : t('aiHelper.send') }}
             <IconGlyph v-if="!asking" name="send" :size="16" />
-            {{ t('aiHelper.send') }}
           </button>
         </form>
-        <AiNotice :text="aiNotice" />
       </div>
+    </section>
+
+    <div class="ai-ask-rail">
+      <slot name="rail" />
+      <AiNotice :text="aiNotice" guidance />
     </div>
-  </section>
+  </div>
 
   <AiReportDialog v-if="reportTarget" :target="reportTarget" @close="reportTarget = null" @sent="onReported" />
 </template>
@@ -134,6 +130,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId } from 'vue'
 
 import { aiHelperApi } from '@/api/ai'
 import IconGlyph from '@/components/common/IconGlyph.vue'
+import StatePanel from '@/components/common/StatePanel.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { aiHelperMessages } from '@/plugins/aiHelperMessages'
 import { useUiStore } from '@/stores/ui'
@@ -146,10 +143,9 @@ import AiResultLabel from './AiResultLabel.vue'
 import type { AiBlockedReason, AiReportTarget } from './aiHelper'
 
 /**
- * Ask SparkBot: short explanations and examples for beginners, streamed as they are written. SparkBot sits beside
- * the chat (ready, writing, away); a visit keeps one chat session so follow-up questions have context; "Explain a
- * word" and "Check a sentence" start a question for the student to finish, and `?q=` (from a class or practice page)
- * fills the box.
+ * Ask SparkBot: short explanations and examples for beginners, streamed as they are written. A visit keeps one chat
+ * session so follow-up questions have context; "Explain a word" and "Check a sentence" start a question for the student
+ * to finish, and `?q=` (from a class or practice page) fills the box. The page puts My reports in the `rail` slot.
  */
 const props = defineProps<{
   blocked: AiBlockedReason
@@ -181,18 +177,14 @@ const exchanges = ref<Exchange[]>([])
 const sessionId = ref<number | null>(null)
 const asking = ref(false)
 const error = ref<string | null>(null)
-const notice = ref<string | null>(null)
 const reportTarget = ref<AiReportTarget | null>(null)
 const reportingId = ref<number | null>(null)
 let stream: AbortController | null = null
 let nextId = 1
 
-const blockedPlaceholder = computed(() => (props.blocked ? t('aiHelper.blockedPlaceholder') : ''))
-const botState = computed(() => (asking.value ? 'thinking' : props.blocked ? 'away' : 'idle'))
-const botStateLabel = computed(() => {
-  if (asking.value) return t('aiHelper.sparkbotThinking')
-  if (props.blocked === 'limit') return t('aiHelper.stateBackTomorrow')
-  return props.blocked ? t('aiHelper.stateAway') : t('aiHelper.stateReady')
+const blockedPlaceholder = computed(() => {
+  if (props.blocked === 'limit') return t('aiHelper.limitPlaceholder')
+  return props.blocked ? t('aiHelper.blockedPlaceholder') : ''
 })
 
 onMounted(() => {
@@ -206,16 +198,15 @@ async function startWith(prefix: string): Promise<void> {
   input.value?.setSelectionRange(prefix.length, prefix.length)
 }
 
-/** Keeps the newest message in view above the pinned composer while the answer streams in. */
+/** Keeps the newest message in view above the composer while the answer streams in. */
 function scrollToEnd(): void {
-  thread.value?.lastElementChild?.scrollIntoView?.({ block: 'nearest' })
+  if (thread.value) thread.value.scrollTop = thread.value.scrollHeight
 }
 
 async function ask(text: string): Promise<void> {
   const message = text.trim()
   if (!message || asking.value || props.blocked) return
   error.value = null
-  notice.value = null
   question.value = ''
   asking.value = true
   const exchange: Exchange = {
@@ -238,7 +229,7 @@ async function ask(text: string): Promise<void> {
       {
         onDelta: (chunk) => {
           current.answer += chunk
-          scrollToEnd()
+          void nextTick(scrollToEnd)
         },
         signal: stream.signal,
       },
@@ -257,6 +248,7 @@ async function ask(text: string): Promise<void> {
     current.pending = false
     asking.value = false
     emit('used')
+    void nextTick(scrollToEnd)
   }
 }
 
@@ -265,7 +257,6 @@ function newChat(): void {
   exchanges.value = []
   sessionId.value = null
   error.value = null
-  notice.value = null
 }
 
 function report(exchange: Exchange): void {
@@ -275,6 +266,7 @@ function report(exchange: Exchange): void {
     payload: { featureKey: 'CHAT_TUTOR', chatMessageId: exchange.messageId },
     titleKey: 'aiHelper.reportAnswerTitle',
     attachedKey: 'aiHelper.reportAnswerAttached',
+    leadKey: 'aiHelper.reportLeadHere',
   }
 }
 
@@ -282,7 +274,6 @@ function onReported(): void {
   const reported = exchanges.value.find((item) => item.id === reportingId.value)
   if (reported) reported.reported = true
   reportTarget.value = null
-  notice.value = t('aiHelper.reportSentNotice')
   emit('reported')
 }
 

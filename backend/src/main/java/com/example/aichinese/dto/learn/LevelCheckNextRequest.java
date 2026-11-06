@@ -15,7 +15,7 @@ import com.example.aichinese.entity.enums.MandarinLevel;
 public record LevelCheckNextRequest(
         MandarinLevel startLevel,
 
-        @Size(max = 6, message = "The level check has at most 6 questions.")
+        @Size(max = 8, message = "The level check has at most 8 questions.")
         List<@Valid Answer> answers) {
 
     public LevelCheckNextRequest {

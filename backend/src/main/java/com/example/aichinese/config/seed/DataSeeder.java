@@ -42,17 +42,13 @@ public class DataSeeder implements CommandLineRunner {
             RoleName.ADMIN, "Admin role for platform management and moderation.");
     /** Mandarin levels of classes and students: Beginner 1 is HSK 1, Beginner 2 is HSK 2. */
     private static final List<String> LEARNING_LEVELS = List.of("Beginner 1", "Beginner 2");
-    /** Class topics. */
+    /** Class themes (the "topics" of the class catalogue API). */
     private static final List<String> LEARNING_CATEGORIES = List.of(
-            "Pinyin",
-            "Tones",
-            "Vocabulary",
-            "Characters",
-            "Listening",
-            "Speaking",
-            "Sentences",
-            "Numbers",
-            "Culture");
+            "Travel",
+            "Work and career",
+            "Study or exchange",
+            "Daily life",
+            "Personal interest");
 
     private final RoleRepository roleRepository;
     private final LearningLevelRepository learningLevelRepository;

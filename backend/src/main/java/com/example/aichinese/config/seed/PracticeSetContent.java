@@ -6,11 +6,13 @@ import java.util.List;
 import com.example.aichinese.dto.learn.ChoiceOption;
 import com.example.aichinese.dto.learn.PracticeItemData;
 import com.example.aichinese.dto.learn.PracticeSetRequest;
-import com.example.aichinese.dto.learn.StoryLine;
 import com.example.aichinese.entity.enums.LearningStage;
 import com.example.aichinese.entity.enums.PracticeType;
 
-/** The Practice library that comes with the platform: five beginner sets of each of the seven types. */
+/**
+ * The Practice library that comes with the platform: five beginner sets of each type the Practice page shows. Practice
+ * has no stories any more (AI Helper keeps Story), so the Story type is left without seeded sets.
+ */
 final class PracticeSetContent {
 
     private static final LearningStage GUIDED = LearningStage.GUIDED;
@@ -31,7 +33,6 @@ final class PracticeSetContent {
         sets.addAll(tracing());
         sets.addAll(dragDrop());
         sets.addAll(matching());
-        sets.addAll(stories());
         return sets;
     }
 
@@ -280,72 +281,6 @@ final class PracticeSetContent {
                         pair("星期五", "xīngqīwǔ", "Friday"), pair("星期天", "xīngqītiān", "Sunday"))));
     }
 
-    // ===== Stories =====
-
-    private static List<SetSpec> stories() {
-        return List.of(
-                story("A Day at the Library", SUPPORTED, 2,
-                        List.of(
-                                line("早上我去图书馆。", "Zǎoshang wǒ qù túshūguǎn.", "In the morning I go to the library."),
-                                line("我看书，也写汉字。", "Wǒ kàn shū, yě xiě Hànzì.", "I read and I also write characters."),
-                                line("中午我和朋友吃饭。", "Zhōngwǔ wǒ hé péngyou chīfàn.", "At noon I eat with a friend.")),
-                        List.of(
-                                quiz("Where does she go in the morning?", null, null,
-                                        "早上我去图书馆: in the morning she goes to the library.",
-                                        0, text("Library"), text("Canteen"), text("Classroom")),
-                                quiz("What does she do at noon?", null, null,
-                                        "中午我和朋友吃饭: at noon she eats with a friend.",
-                                        1, text("Reads"), text("Eats with a friend"), text("Writes")))),
-                story("Lunch at the Canteen", SUPPORTED, 1,
-                        List.of(
-                                line("我饿了。", "Wǒ è le.", "I'm hungry."),
-                                line("我和小美去食堂。", "Wǒ hé Xiǎoměi qù shítáng.", "Xiaomei and I go to the canteen."),
-                                line("我要一碗面条，她要米饭。", "Wǒ yào yì wǎn miàntiáo, tā yào mǐfàn.",
-                                        "I want a bowl of noodles; she wants rice."),
-                                line("面条很好吃！", "Miàntiáo hěn hǎochī!", "The noodles are tasty!")),
-                        List.of(
-                                quiz("Where do they go?", null, null, "我和小美去食堂: they go to the canteen.",
-                                        0, text("The canteen"), text("The library"), text("A café")),
-                                quiz("What does Xiaomei want?", null, null, "她要米饭: she wants rice.",
-                                        1, text("Noodles"), text("Rice"), text("Tea")))),
-                story("Taking the LRT", SUPPORTED, 2,
-                        List.of(
-                                line("今天我坐轻快铁去学校。", "Jīntiān wǒ zuò qīngkuàitiě qù xuéxiào.", "Today I take the LRT to school."),
-                                line("车站离我家很近。", "Chēzhàn lí wǒ jiā hěn jìn.", "The station is close to my home."),
-                                line("我买了一张票。", "Wǒ mǎi le yì zhāng piào.", "I bought a ticket."),
-                                line("二十分钟以后，我到了。", "Èrshí fēnzhōng yǐhòu, wǒ dào le.", "Twenty minutes later, I arrived.")),
-                        List.of(
-                                quiz("How does he go to school?", null, null, "坐轻快铁 is to take the LRT.",
-                                        0, text("By LRT"), text("By taxi"), text("On foot")),
-                                quiz("How long is the trip?", null, null, "二十分钟 is twenty minutes.",
-                                        2, text("10 minutes"), text("2 hours"), text("20 minutes")))),
-                story("At the Pasar Malam", INDEPENDENT, 2,
-                        List.of(
-                                line("星期五晚上，我们去夜市。", "Xīngqīwǔ wǎnshang, wǒmen qù yèshì.",
-                                        "On Friday evening we go to the night market."),
-                                line("夜市很热闹。", "Yèshì hěn rènao.", "The night market is lively."),
-                                line("我买了两斤苹果。", "Wǒ mǎi le liǎng jīn píngguǒ.", "I bought a kilo of apples."),
-                                line("朋友说：“太便宜了！”", "Péngyou shuō: “Tài piányi le!”", "My friend says: “So cheap!”")),
-                        List.of(
-                                quiz("When do they go?", null, null, "星期五晚上 is Friday evening.",
-                                        0, text("Friday evening"), text("Saturday morning"), text("Sunday afternoon")),
-                                quiz("What does the friend think?", null, null, "太便宜了 means it is very cheap.",
-                                        1, text("It's too expensive"), text("It's very cheap"), text("It's too busy")))),
-                story("My Weekend", INDEPENDENT, 2,
-                        List.of(
-                                line("周末我不上课。", "Zhōumò wǒ bú shàngkè.", "At the weekend I have no classes."),
-                                line("星期六我在咖啡店打工。", "Xīngqīliù wǒ zài kāfēidiàn dǎgōng.",
-                                        "On Saturday I work part-time at a café."),
-                                line("星期天我和家人去海边。", "Xīngqītiān wǒ hé jiārén qù hǎibiān.",
-                                        "On Sunday I go to the beach with my family."),
-                                line("天气很好，我很高兴。", "Tiānqì hěn hǎo, wǒ hěn gāoxìng.", "The weather is nice and I'm happy.")),
-                        List.of(
-                                quiz("What does she do on Saturday?", null, null, "星期六我在咖啡店打工: she works at a café.",
-                                        0, text("Works at a café"), text("Goes to class"), text("Goes to the beach")),
-                                quiz("Who goes to the beach on Sunday?", null, null, "我和家人: she and her family.",
-                                        2, text("Her classmates"), text("Only her"), text("She and her family")))));
-    }
-
     // ===== Builders =====
 
     private static SetSpec set(PracticeType type, String title, LearningStage stage, int hsk, int xp, List<PracticeItemData> items) {
@@ -356,10 +291,6 @@ final class PracticeSetContent {
         PracticeItemData item = new PracticeItemData(null, characters, pinyin, meaning, null, null, null, null, List.of(),
                 null, null, null);
         return new SetSpec(PracticeType.TRACING, new PracticeSetRequest(title, stage, 1, 10, List.of(item), List.of(), strokes));
-    }
-
-    private static SetSpec story(String title, LearningStage stage, int hsk, List<StoryLine> lines, List<PracticeItemData> questions) {
-        return new SetSpec(PracticeType.STORY, new PracticeSetRequest(title, stage, hsk, 20, questions, lines, null));
     }
 
     private static PracticeItemData card(String hanzi, String pinyin, String meaning, String example, String exampleMeaning) {
@@ -385,10 +316,6 @@ final class PracticeSetContent {
 
     private static PracticeItemData pair(String hanzi, String pinyin, String meaning) {
         return new PracticeItemData(null, hanzi, pinyin, meaning, null, null, null, null, List.of(), null, null, null);
-    }
-
-    private static StoryLine line(String hanzi, String pinyin, String translation) {
-        return new StoryLine(hanzi, pinyin, translation);
     }
 
     private static ChoiceOption text(String text) {

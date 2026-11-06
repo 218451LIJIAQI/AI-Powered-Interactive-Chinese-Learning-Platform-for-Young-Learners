@@ -32,7 +32,7 @@ and is designed for desktop browsers (Chrome, Edge, Firefox, Safari; 1024 px wid
   badges.
 - **Teacher-made classes**: units and lessons with key phrases, a video, practice activities and quizzes, plus
   scheduled live sessions. Classes are free to join.
-- **Personal learning plan** built from the student's goal, pace and an adaptive level check.
+- **Personal learning plan** built from the student's goal, pace and a level check.
 - **AI Helper** for extra practice: a conversation partner, a tutor, quizzes, stories, and pronunciation and
   handwriting feedback. AI never gives XP or marks.
 - **Admin review and oversight**: teacher verification, class review, platform content, AI reports and settings,
@@ -41,35 +41,35 @@ and is designed for desktop browsers (Chrome, Edge, Firefox, Safari; 1024 px wid
 ### Public visitors
 
 - Landing page with featured classes and how the platform works.
-- Class catalogue with search and filters, and a class page with its teacher, units and lessons.
+- Class catalogue filtered by Theme, and a class page with its teacher, units and lessons.
 - Student registration (18+) and teacher registration; sign-in, forgot and reset password, e-mail confirmation.
 - Help page with a contact form, Safety centre, Responsible AI guidance, Terms of Service and Privacy Notice.
 
 ### Students
 
-| Area            | What students can do                                                                                |
-| --------------- | --------------------------------------------------------------------------------------------------- |
-| Home            | See the streak week, the next lesson, today's plan and the plan goal                                |
-| First-run setup | Choose a goal and pace, take a short adaptive level check and get a personal learning plan          |
-| Learn           | Follow the learning path unit by unit in a full-screen lesson player                                |
-| Practice        | Play sets of the seven practice types and review waiting mistakes                                   |
-| AI Helper       | Talk with Xiaomei, ask SparkBot, make a quick quiz or story, check pronunciation and handwriting    |
-| Classes         | Find and join free classes, study lessons (video, key phrases, activities, quizzes), see feedback   |
-| Live sessions   | Book a seat, cancel a booking, join from 15 minutes before the start and watch recordings           |
-| Progress        | XP level, streak calendar, badges and the learning plan (update the goal or retake the level check) |
-| Account & help  | Profile, daily goal, notifications, e-mail and password changes, account deletion, Help & support   |
+| Area            | What students can do                                                                                   |
+| --------------- | ------------------------------------------------------------------------------------------------------ |
+| Home            | See the plan goal, the next lesson and today's plan                                                    |
+| First-run setup | Choose a goal and pace, take an eight-question level check and get a personal learning plan            |
+| Learn           | Follow the learning path unit by unit in a full-screen lesson player                                   |
+| Practice        | Play sets of the six activity types and review waiting mistakes                                        |
+| AI Helper       | Talk with Xiaomei, ask SparkBot, make a quick quiz or story, check pronunciation and handwriting       |
+| Classes         | Find and join free classes, study lessons (video, key phrases, activities, quizzes), see feedback      |
+| Live sessions   | Join from 15 minutes before the start and watch recordings                                             |
+| Progress        | Skills and their weekly change, XP level, streak, badges, and the plan (update it or retake the check) |
+| Account & help  | Profile, daily goal, notifications, e-mail and password changes, account deletion, Help & support      |
 
 ### Teachers
 
-| Area          | What teachers can do                                                                                 |
-| ------------- | ---------------------------------------------------------------------------------------------------- |
-| Verification  | Complete a teaching profile, upload verification documents and send the application for approval     |
-| Dashboard     | See a to-do list, class numbers, students who need support and upcoming live sessions                |
-| Classes       | Create classes, add and reorder units and lessons, write a note to students, archive and restore     |
-| Lesson editor | Add key phrases, a video, flashcard / tracing / matching activities and quizzes; preview and submit  |
-| Quizzes       | Write questions with hints, learning stages and an optional time limit; generate an AI quiz draft    |
-| Live sessions | Schedule sessions (Zoom, Google Meet, Microsoft Teams or another link), edit, cancel, add recordings |
-| Students      | Follow each student's progress, quiz results and weak areas, and send feedback                       |
+| Area          | What teachers can do                                                                               |
+| ------------- | -------------------------------------------------------------------------------------------------- |
+| Verification  | Complete a teaching profile, upload verification documents and send the application for approval   |
+| Dashboard     | See a to-do list, students who need support and upcoming live sessions                             |
+| Classes       | Create classes with a Theme and a "Best after Unit N" label, add units and lessons, archive        |
+| Lesson editor | Add key phrases, a video, flashcard / tracing / matching activities and a quiz; preview and submit |
+| Quizzes       | Write questions with hints; generate an AI quiz draft                                              |
+| Live sessions | Schedule sessions with a meeting link, edit, cancel, add recordings                                |
+| Students      | Follow each student's progress by lesson and send feedback                                         |
 
 New classes, new lessons and edits to published content go through admin review; students keep seeing the approved
 version until a change is approved.
@@ -78,7 +78,7 @@ version until a change is approved.
 
 | Area                 | What admins can do                                                                                  |
 | -------------------- | --------------------------------------------------------------------------------------------------- |
-| Dashboard            | System status, items waiting for a decision and the platform in numbers                             |
+| Dashboard            | Items waiting for a decision: applications, reviews, AI reports and support                         |
 | Users                | Search, inspect, deactivate or reactivate accounts, and invite other admins                         |
 | Teacher applications | Review documents and approve a teacher or request changes                                           |
 | Content              | Review teacher classes and lessons, manage the Learn path, the level check and the Practice library |

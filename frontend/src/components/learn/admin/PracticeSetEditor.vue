@@ -1,7 +1,6 @@
 <template>
   <AppOverlay
     variant="drawer"
-    size="lg"
     :open="open"
     :title="existing ? t('adminLearning.editActivity') : t('adminLearning.newActivity')"
     :subtitle="subtitle"
@@ -9,23 +8,25 @@
     @close="emit('close')"
   >
     <form :id="formId" class="form-grid admin-learning-form" novalidate @submit.prevent="save">
-      <p v-if="existing" class="type-caption">
-        {{
-          t(
-            'adminLearning.createdByPlayed',
-            { author: existing.createdBy ?? t('adminLearning.platformTeam'), count: existing.playedBy },
-            existing.playedBy,
-          )
-        }}
-      </p>
+      <div v-if="existing" class="admin-tags">
+        <span class="tag is-outline">{{ t(practiceTypeKey(existing.type)) }}</span>
+        <span class="admin-meta">
+          {{
+            t(
+              'adminLearning.createdByPlayed',
+              { author: existing.createdBy ?? t('adminLearning.platformTeam'), count: existing.playedBy },
+              existing.playedBy,
+            )
+          }}
+        </span>
+      </div>
       <div v-else class="field">
         <label class="field-label" :for="`${formId}-type`">{{ t('adminLearning.type') }}</label>
         <select :id="`${formId}-type`" v-model="type" class="select" data-testid="editor-type" @change="changeType">
-          <option v-for="option in PRACTICE_TYPES" :key="option" :value="option">
+          <option v-for="option in EDITOR_TYPES" :key="option" :value="option">
             {{ t(practiceTypeKey(option)) }}
           </option>
         </select>
-        <p class="field-hint">{{ t('adminLearning.typeFirstHint') }}</p>
       </div>
 
       <div class="field">
@@ -43,32 +44,18 @@
         />
       </div>
 
-      <fieldset class="form-section">
-        <legend class="form-section-title">{{ t('adminLearning.stage') }}</legend>
-        <SegmentedControl
-          v-model="form.stage"
-          :label="t('adminLearning.stage')"
-          :options="STAGES.map((stage) => ({ value: stage, label: t(stageKey(stage)) }))"
-        />
-        <p class="field-hint">{{ t('classes.stageHint') }}</p>
-      </fieldset>
-
-      <div class="form-grid two">
-        <div class="field">
-          <label class="field-label" :for="`${formId}-level`">{{ t('adminLearning.level') }}</label>
-          <select :id="`${formId}-level`" v-model.number="form.hskLevel" class="select">
-            <option v-for="level in 6" :key="level" :value="level">HSK {{ level }}</option>
-          </select>
-        </div>
-        <div class="field">
-          <label class="field-label" :for="`${formId}-xp`">{{ t('adminLearning.xp') }}</label>
-          <input :id="`${formId}-xp`" v-model.number="form.xpReward" class="input" type="number" min="0" max="100" />
-        </div>
+      <div class="field">
+        <label class="field-label" :for="`${formId}-level`">
+          {{ t('adminLearning.level') }}<span class="required-mark" aria-hidden="true">*</span>
+        </label>
+        <select :id="`${formId}-level`" v-model.number="form.hskLevel" class="select">
+          <option v-for="level in 6" :key="level" :value="level">{{ t('adminLearning.hskLevel', { level }) }}</option>
+        </select>
       </div>
 
       <!-- Tracing: one set of characters -->
-      <fieldset v-if="type === 'TRACING'" class="form-section">
-        <legend class="form-section-title">{{ t('adminLearning.characters') }}</legend>
+      <fieldset v-if="type === 'TRACING'" class="field-set">
+        <legend>{{ t('adminLearning.characters') }}</legend>
         <div class="form-grid two">
           <div class="field">
             <label class="field-label" :for="`${formId}-chars`">
@@ -106,81 +93,18 @@
         </div>
       </fieldset>
 
-      <!-- Story lines -->
-      <fieldset v-if="type === 'STORY'" class="form-section">
-        <legend class="form-section-title">
-          {{ t('adminLearning.storyLines', { count: form.storyLines.length }) }}
-        </legend>
-        <div v-for="(line, index) in form.storyLines" :key="`line-${index}`" class="admin-learning-item">
-          <div class="admin-learning-item-head">
-            <strong>{{ t('adminLearning.lineNumber', { number: index + 1 }) }}</strong>
-            <button
-              class="btn btn-ghost btn-icon btn-sm"
-              type="button"
-              :disabled="form.storyLines.length <= 1"
-              :aria-label="t('adminLearning.removeLine', { number: index + 1 })"
-              @click="form.storyLines.splice(index, 1)"
-            >
-              <IconGlyph name="trash" :size="16" />
-            </button>
-          </div>
-          <input
-            v-model="line.hanzi"
-            class="input cjk-text"
-            lang="zh-CN"
-            maxlength="300"
-            :aria-label="t('adminLearning.chineseFor', { number: index + 1 })"
-            :placeholder="t('adminLearning.chinese')"
-          />
-          <input
-            v-model="line.pinyin"
-            class="input"
-            maxlength="500"
-            :aria-label="t('adminLearning.pinyinFor', { number: index + 1 })"
-            :placeholder="t('adminLearning.pinyin')"
-          />
-          <input
-            v-model="line.translation"
-            class="input"
-            maxlength="500"
-            :aria-label="t('adminLearning.translationFor', { number: index + 1 })"
-            :placeholder="t('adminLearning.translation')"
-          />
-        </div>
-        <button
-          class="btn btn-secondary btn-sm"
-          type="button"
-          :disabled="form.storyLines.length >= 20"
-          @click="form.storyLines.push(emptyLine())"
-        >
-          <IconGlyph name="plus" :size="14" />{{ t('adminLearning.addLine') }}
-        </button>
-      </fieldset>
-
       <!-- Items of every other type -->
-      <fieldset v-if="type !== 'TRACING'" class="form-section">
-        <legend class="form-section-title">{{ t(itemKeys.count, { count: form.items.length }) }}</legend>
-        <div
-          v-for="(item, index) in form.items"
-          :key="`item-${index}`"
-          class="admin-learning-item"
-          data-testid="editor-item"
-        >
-          <div class="admin-learning-item-head">
-            <strong>{{ t(itemKeys.number, { number: index + 1 }) }}</strong>
-            <button
-              class="btn btn-ghost btn-icon btn-sm"
-              type="button"
-              :disabled="form.items.length <= 1"
-              :aria-label="t('adminLearning.removeItem', { number: index + 1 })"
-              @click="form.items.splice(index, 1)"
-            >
-              <IconGlyph name="trash" :size="16" />
-            </button>
-          </div>
+      <fieldset v-if="type !== 'TRACING'" class="field-set">
+        <legend>{{ t(itemKeys.count, { count: form.items.length }) }}</legend>
 
-          <template v-if="usesWords">
-            <div class="admin-learning-item-row">
+        <template v-if="usesWords">
+          <div
+            v-for="(item, index) in form.items"
+            :key="`item-${index}`"
+            class="admin-learning-words"
+            data-testid="editor-item"
+          >
+            <div class="admin-learning-word-row" :class="{ 'is-sentence': type === 'DRAG_DROP' }">
               <input
                 v-model="item.hanzi"
                 class="input cjk-text"
@@ -207,23 +131,15 @@
                 :aria-label="t('adminLearning.meaningFor', { number: index + 1 })"
                 :placeholder="t('adminLearning.meaning')"
               />
-            </div>
-            <div v-if="type === 'FLASHCARDS'" class="admin-learning-item-row is-two">
-              <input
-                v-model="item.example"
-                class="input cjk-text"
-                lang="zh-CN"
-                maxlength="200"
-                :aria-label="t('adminLearning.exampleFor', { number: index + 1 })"
-                :placeholder="t('adminLearning.example')"
-              />
-              <input
-                v-model="item.exampleMeaning"
-                class="input"
-                maxlength="300"
-                :aria-label="t('adminLearning.exampleMeaningFor', { number: index + 1 })"
-                :placeholder="t('adminLearning.exampleMeaning')"
-              />
+              <button
+                class="btn btn-ghost btn-icon btn-sm"
+                type="button"
+                :disabled="form.items.length <= 1"
+                :aria-label="t('adminLearning.removeItem', { number: index + 1 })"
+                @click="form.items.splice(index, 1)"
+              >
+                <IconGlyph name="trash" :size="16" />
+              </button>
             </div>
             <input
               v-if="type === 'DRAG_DROP'"
@@ -234,9 +150,28 @@
               :aria-label="t('adminLearning.extraTilesFor', { number: index + 1 })"
               :placeholder="t('adminLearning.extraTiles')"
             />
-          </template>
+          </div>
+        </template>
 
-          <template v-else>
+        <template v-else>
+          <div
+            v-for="(item, index) in form.items"
+            :key="`item-${index}`"
+            class="admin-learning-item"
+            data-testid="editor-item"
+          >
+            <div class="admin-learning-item-head">
+              <strong>{{ t(itemKeys.number, { number: index + 1 }) }}</strong>
+              <button
+                class="btn btn-ghost btn-icon btn-sm"
+                type="button"
+                :disabled="form.items.length <= 1"
+                :aria-label="t('adminLearning.removeItem', { number: index + 1 })"
+                @click="form.items.splice(index, 1)"
+              >
+                <IconGlyph name="trash" :size="16" />
+              </button>
+            </div>
             <input
               v-model="item.prompt"
               class="input"
@@ -244,7 +179,7 @@
               :aria-label="t('adminLearning.questionFor', { number: index + 1 })"
               :placeholder="t('adminLearning.question')"
             />
-            <div v-if="type === 'QUIZZES'" class="admin-learning-item-row is-two">
+            <div v-if="type === 'QUIZZES'" class="admin-learning-item-row">
               <input
                 v-model="item.hanzi"
                 class="input cjk-text"
@@ -275,7 +210,7 @@
               role="radiogroup"
               :aria-label="t('adminLearning.answersFor', { number: index + 1 })"
             >
-              <div v-for="(option, optionIndex) in item.options" :key="optionIndex" class="admin-learning-answer">
+              <div v-for="(option, optionIndex) in item.options" :key="optionIndex" class="admin-learning-option">
                 <label class="choice">
                   <input
                     v-model="item.correctIndex"
@@ -293,7 +228,6 @@
                   :placeholder="t('adminLearning.answer')"
                 />
                 <input
-                  v-if="type !== 'STORY'"
                   v-model="option.pinyin"
                   class="input"
                   maxlength="200"
@@ -311,12 +245,13 @@
                 </button>
               </div>
               <button
-                class="btn btn-ghost btn-sm"
+                class="btn btn-secondary btn-sm"
                 type="button"
                 :disabled="item.options.length >= 6"
                 @click="item.options.push({ text: '', pinyin: null })"
               >
-                <IconGlyph name="plus" :size="14" />{{ t('adminLearning.addAnswer') }}
+                <IconGlyph name="plus" :size="14" />
+                <span>{{ t('adminLearning.addAnswer') }}</span>
               </button>
             </div>
             <input
@@ -326,8 +261,9 @@
               :aria-label="t('adminLearning.explanationFor', { number: index + 1 })"
               :placeholder="t('adminLearning.explanation')"
             />
-          </template>
-        </div>
+          </div>
+        </template>
+
         <button
           class="btn btn-secondary btn-sm"
           type="button"
@@ -335,18 +271,16 @@
           data-testid="editor-add"
           @click="form.items.push(emptyItem(type))"
         >
-          <IconGlyph name="plus" :size="14" />{{ t(itemKeys.add) }}
+          <IconGlyph name="plus" :size="14" />
+          <span>{{ t(itemKeys.add) }}</span>
         </button>
       </fieldset>
 
-      <p class="field-hint">
-        <template v-if="form.stage === 'GUIDED'">{{ t('adminLearning.guidedNote') }} </template>
-        {{ t('adminLearning.xpRule', { xp: form.xpReward ?? 0 }) }}
-      </p>
+      <p class="field-hint">{{ t('adminLearning.xpRule', { xp: form.xpReward ?? 0 }) }}</p>
       <p v-if="formError" class="field-error" role="alert">{{ formError }}</p>
     </form>
     <template #footer>
-      <button class="btn btn-ghost" type="button" @click="emit('close')">{{ t('adminLearning.cancel') }}</button>
+      <button class="btn btn-secondary" type="button" @click="emit('close')">{{ t('adminLearning.cancel') }}</button>
       <button
         class="btn btn-primary"
         type="submit"
@@ -365,24 +299,25 @@
 import { computed, reactive, ref, useId, watch } from 'vue'
 
 import { adminLearningApi } from '@/api/learn'
-import SegmentedControl from '@/components/common/SegmentedControl.vue'
-import IconGlyph from '@/components/common/IconGlyph.vue'
 import AppOverlay from '@/components/common/AppOverlay.vue'
+import IconGlyph from '@/components/common/IconGlyph.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { adminLearningMessages } from '@/plugins/adminLearningMessages'
-import { classesMessages } from '@/plugins/classesMessages'
 import type { LearningStage } from '@/types/api'
 import type { AdminPracticeSetDetail, PracticeItemData, PracticeType } from '@/types/learn'
 import { resolveApiError } from '@/utils/apiError'
-import { PRACTICE_TYPES, practiceTypeKey, STAGES, stageKey } from '@/utils/learnLabels'
+import { PRACTICE_TYPES, practiceTypeKey } from '@/utils/learnLabels'
 
 /**
  * New or edited Practice set. The type is chosen first (a new set only) and decides the items: cards, questions with
- * answers, characters to trace, sentences, pairs or a story with questions. The server checks every type's rules.
+ * answers, characters to trace, sentences or pairs. The server checks every type's rules. The form no longer asks for a
+ * stage or XP: a new set is sent as Guided with its type's usual XP, an edited one keeps what it has.
  */
 const props = defineProps<{ open: boolean; existing: AdminPracticeSetDetail | null }>()
 const emit = defineEmits<{ close: []; saved: [set: AdminPracticeSetDetail] }>()
 
+const EDITOR_TYPES = PRACTICE_TYPES.filter((option) => option !== 'STORY')
+const NEW_SET_STAGE: LearningStage = 'GUIDED'
 const DEFAULT_XP: Readonly<Record<PracticeType, number>> = {
   FLASHCARDS: 10,
   QUIZZES: 15,
@@ -393,17 +328,16 @@ const DEFAULT_XP: Readonly<Record<PracticeType, number>> = {
   STORY: 20,
 }
 
-const { t } = useLocalMessages({ adminLearning: adminLearningMessages, classes: classesMessages })
+const { t } = useLocalMessages({ adminLearning: adminLearningMessages })
 const formId = `set-${useId()}`
 
 const type = ref<PracticeType>('FLASHCARDS')
 const form = reactive({
   title: '',
-  stage: 'GUIDED' as LearningStage | null,
+  stage: NEW_SET_STAGE as LearningStage | null,
   hskLevel: 1 as number | null,
   xpReward: 10 as number | null,
   items: [] as PracticeItemData[],
-  storyLines: [] as { hanzi: string; pinyin: string | null; translation: string | null }[],
   strokeCount: null as number | null,
 })
 const saving = ref(false)
@@ -460,13 +394,8 @@ function emptyItem(forType: PracticeType): PracticeItemData {
   }
 }
 
-function emptyLine() {
-  return { hanzi: '', pinyin: null, translation: null }
-}
-
 function changeType(): void {
   form.items = [emptyItem(type.value)]
-  form.storyLines = type.value === 'STORY' ? [emptyLine()] : []
   form.strokeCount = null
   form.xpReward = DEFAULT_XP[type.value]
 }
@@ -479,7 +408,7 @@ watch(
     const existing = props.existing
     if (!existing) {
       type.value = 'FLASHCARDS'
-      Object.assign(form, { title: '', stage: 'GUIDED', hskLevel: 1 })
+      Object.assign(form, { title: '', stage: NEW_SET_STAGE, hskLevel: 1 })
       changeType()
       return
     }
@@ -490,7 +419,6 @@ watch(
       hskLevel: existing.hskLevel ?? 1,
       xpReward: existing.xpReward,
       items: existing.items.map((item) => ({ ...item, options: item.options.map((option) => ({ ...option })) })),
-      storyLines: existing.storyLines.map((line) => ({ ...line })),
       strokeCount: existing.strokeCount,
     })
     if (!form.items.length) form.items = [emptyItem(existing.type)]
@@ -523,14 +451,8 @@ async function save(): Promise<void> {
       hskLevel: form.hskLevel,
       xpReward: form.xpReward,
       strokeCount: type.value === 'TRACING' ? form.strokeCount : null,
-      storyLines:
-        type.value === 'STORY'
-          ? form.storyLines.map((line) => ({
-              hanzi: line.hanzi.trim(),
-              pinyin: clean(line.pinyin),
-              translation: clean(line.translation),
-            }))
-          : [],
+      // A story from an older database keeps its lines; new sets have none.
+      storyLines: props.existing?.storyLines.map((line) => ({ ...line })) ?? [],
       items: form.items.map((item) => ({
         ...item,
         hanzi: clean(item.hanzi),

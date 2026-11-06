@@ -10,6 +10,7 @@ import java.util.function.Function;
 
 import com.example.aichinese.config.seed.LearnPathContent.LessonSpec;
 import com.example.aichinese.config.seed.LearnPathContent.Sentence;
+import com.example.aichinese.config.seed.LearnPathContent.SoundDrill;
 import com.example.aichinese.config.seed.LearnPathContent.UnitSpec;
 import com.example.aichinese.config.seed.LearnPathContent.Word;
 import com.example.aichinese.dto.learn.ChoiceOption;
@@ -19,13 +20,18 @@ import com.example.aichinese.service.learn.LearnAnswers;
 
 /**
  * Builds the questions of a Learn stop from its words and sentences: meaning, pinyin, character and listening choices
- * with distractors from the same unit, and sentence building from word tiles plus two extra tiles. Everything is
- * deterministic, so seeding twice gives the same path.
+ * and sentence building from word tiles plus two extra tiles. A pronunciation lesson asks only for the correct pinyin
+ * and what you hear. Distractors come only from what was taught up to that stop: the unit so far, then the earlier
+ * units. Everything is deterministic, so seeding twice gives the same path.
  */
 final class LearnQuestionGenerator {
 
     private static final int DISTRACTORS = 2;
     private static final int EXTRA_TILES = 2;
+    private static final int WORD_ONLY_QUESTIONS = 6;
+    private static final int SOUND_QUESTIONS = 6;
+    private static final int SOUND_BONUS_QUESTIONS = 5;
+    private static final int REVIEW_QUESTIONS = 8;
 
     private LearnQuestionGenerator() {
     }
@@ -43,23 +49,49 @@ final class LearnQuestionGenerator {
     }
 
     static List<Question> questionsFor(UnitSpec unit, LessonSpec lesson, List<UnitSpec> path) {
-        Pool unitPool = Pool.of(List.of(unit));
-        Pool pathPool = Pool.of(path);
+        Pool unitPool = Pool.taughtUpTo(unit, lesson);
+        Pool earlier = Pool.earlierUnits(path, unit);
         return switch (lesson.kind()) {
-            case LESSON -> lesson(lesson, unitPool, pathPool);
-            case BONUS -> bonus(lesson, unitPool, pathPool);
-            case REVIEW -> review(unit, unitPool, pathPool);
-            case CHECKPOINT -> checkpoint(path, unit.level(), pathPool);
+            case LESSON -> lesson.isPronunciation() ? pronunciation(lesson, unitPool, earlier) : lesson(lesson, unitPool, earlier);
+            case BONUS -> lesson.isPronunciation() ? soundBonus(lesson, unitPool, earlier) : bonus(lesson, unitPool, earlier);
+            case REVIEW -> review(unit, lesson, unitPool, earlier);
+            case CHECKPOINT -> checkpoint(path, unit.level());
         };
     }
 
     // ===== Stops =====
 
-    private static List<Question> lesson(LessonSpec lesson, Pool unit, Pool path) {
+    /** The correct pinyin and what you hear, nothing else: "Select the correct pinyin", then "Tap what you hear". */
+    private static List<Question> pronunciation(LessonSpec lesson, Pool unit, Pool earlier) {
+        Generator g = new Generator(unit, earlier, 0);
+        List<Word> words = lesson.words();
+        List<Question> questions = new ArrayList<>();
+        questions.add(g.pinyin(words.get(0)));
+        if (lesson.drill() != null) {
+            questions.add(g.drill(lesson.drill()));
+        }
+        for (int index = 1; questions.size() < SOUND_QUESTIONS; index++) {
+            Word word = words.get(index % words.size());
+            questions.add(index % 2 == 1 ? g.listenSound(word) : g.pinyin(word));
+        }
+        return questions;
+    }
+
+    private static List<Question> lesson(LessonSpec lesson, Pool unit, Pool earlier) {
         List<Word> words = lesson.words();
         List<Sentence> sentences = lesson.sentences();
-        Generator g = new Generator(unit, path, lesson.title().length());
+        Generator g = new Generator(unit, earlier, lesson.title().length());
         List<Question> questions = new ArrayList<>();
+        if (sentences.isEmpty()) {
+            List<Word> picks = spread(words, WORD_ONLY_QUESTIONS);
+            questions.add(g.meaning(picks.get(0)));
+            questions.add(g.listenChoose(picks.get(1)));
+            questions.add(g.pinyin(picks.get(2)));
+            questions.add(g.hanzi(picks.get(3)));
+            questions.add(g.meaning(picks.get(4)));
+            questions.add(g.listenChoose(picks.get(5)));
+            return questions;
+        }
         questions.add(g.meaning(words.get(0)));
         questions.add(g.listenChoose(words.get(1 % words.size())));
         questions.add(g.pinyin(words.get(2 % words.size())));
@@ -72,62 +104,114 @@ final class LearnQuestionGenerator {
         return questions;
     }
 
-    private static List<Question> bonus(LessonSpec lesson, Pool unit, Pool path) {
-        List<Word> words = lesson.words();
-        Generator g = new Generator(unit, path, 3);
-        return List.of(
-                g.meaning(words.get(0)),
-                g.listenChoose(words.get(1 % words.size())),
-                g.hanzi(words.get(2 % words.size())),
-                g.sentenceMeaning(lesson.sentences().get(0)),
-                g.listenBuild(lesson.sentences().get(0)));
+    private static List<Question> soundBonus(LessonSpec lesson, Pool unit, Pool earlier) {
+        Generator g = new Generator(unit, earlier, 3);
+        List<Question> questions = new ArrayList<>();
+        for (int index = 0; index < SOUND_BONUS_QUESTIONS; index++) {
+            Word word = lesson.words().get(index % lesson.words().size());
+            questions.add(index % 2 == 0 ? g.pinyin(word) : g.listenSound(word));
+        }
+        return questions;
     }
 
-    /** Eight questions spread over the whole unit (bonus words aside). */
-    private static List<Question> review(UnitSpec unit, Pool unitPool, Pool path) {
+    private static List<Question> bonus(LessonSpec lesson, Pool unit, Pool earlier) {
+        List<Word> words = lesson.words();
+        Generator g = new Generator(unit, earlier, 3);
+        List<Question> questions = new ArrayList<>();
+        questions.add(g.meaning(words.get(0)));
+        questions.add(g.listenChoose(words.get(1 % words.size())));
+        questions.add(g.hanzi(words.get(2 % words.size())));
+        if (lesson.sentences().isEmpty()) {
+            questions.add(g.pinyin(words.get(3 % words.size())));
+            questions.add(g.meaning(words.get(4 % words.size())));
+        } else {
+            questions.add(g.sentenceMeaning(lesson.sentences().get(0)));
+            questions.add(g.listenBuild(lesson.sentences().get(0)));
+        }
+        return questions;
+    }
+
+    /**
+     * Eight questions spread over the whole unit (bonus words aside), starting with what the review itself adds: the
+     * earlier sounds and sentences it brings back.
+     */
+    private static List<Question> review(UnitSpec unit, LessonSpec review, Pool unitPool, Pool earlier) {
         List<Word> words = new ArrayList<>();
-        List<Sentence> sentences = new ArrayList<>();
+        List<Sentence> sentences = new ArrayList<>(review.sentences());
         unit.lessons().stream().filter(lesson -> lesson.kind() == LearnLessonKind.LESSON).forEach(lesson -> {
             words.addAll(lesson.words());
             sentences.addAll(lesson.sentences());
         });
+        Generator g = new Generator(unitPool, earlier, unit.number());
+        List<Question> questions = new ArrayList<>();
+        if (sentences.isEmpty()) {
+            List<Word> picks = new ArrayList<>(review.words());
+            picks.addAll(spread(words, REVIEW_QUESTIONS - review.words().size()));
+            for (int index = 0; index < picks.size(); index++) {
+                questions.add(index % 2 == 0 ? g.pinyin(picks.get(index)) : g.listenSound(picks.get(index)));
+            }
+            return questions;
+        }
+        review.words().forEach(word -> questions.add(g.pinyin(word)));
         int step = Math.max(1, words.size() / 5);
-        Generator g = new Generator(unitPool, path, unit.number());
-        return List.of(
+        List<Question> mixed = List.of(
                 g.meaning(words.get(0)),
                 g.hanzi(words.get(step % words.size())),
-                g.pinyin(words.get((2 * step) % words.size())),
-                g.listenChoose(words.get((3 * step) % words.size())),
                 g.sentenceMeaning(sentences.get(1 % sentences.size())),
                 g.listenBuild(sentences.get(2 % sentences.size())),
-                g.translateBuild(sentences.get(sentences.size() - 1)),
+                g.translateBuild(sentences.get(0)),
+                g.listenChoose(words.get((3 * step) % words.size())),
+                g.pinyin(words.get((2 * step) % words.size())),
                 g.meaning(words.get((4 * step) % words.size())));
+        questions.addAll(mixed.subList(0, REVIEW_QUESTIONS - questions.size()));
+        return questions;
     }
 
     /** Ten questions from every unit of the level: a word and a sentence per unit, then listening and pinyin. */
-    private static List<Question> checkpoint(List<UnitSpec> path, int level, Pool pathPool) {
+    private static List<Question> checkpoint(List<UnitSpec> path, int level) {
         List<UnitSpec> units = path.stream().filter(unit -> unit.level() == level).toList();
+        Pool levelPool = Pool.of(units);
         List<Question> questions = new ArrayList<>();
         for (UnitSpec unit : units) {
             List<LessonSpec> lessons = unit.lessons().stream()
                     .filter(lesson -> lesson.kind() == LearnLessonKind.LESSON)
                     .toList();
-            Generator g = new Generator(Pool.of(List.of(unit)), pathPool, unit.number() * 7);
-            questions.add(g.meaning(lessons.get(0).words().get(1)));
-            questions.add(g.translateBuild(lessons.get(1).sentences().get(0)));
+            Generator g = new Generator(Pool.of(List.of(unit)), levelPool, unit.number() * 7);
+            if (lessons.get(0).isPronunciation()) {
+                questions.add(g.pinyin(lessons.get(2).words().get(0)));
+                questions.add(g.listenSound(lessons.get(3).words().get(1)));
+            } else {
+                questions.add(g.meaning(lessons.get(0).words().get(1)));
+                Sentence sentence = lessons.stream()
+                        .filter(lesson -> !lesson.sentences().isEmpty())
+                        .findFirst()
+                        .orElseThrow()
+                        .sentences()
+                        .get(0);
+                questions.add(g.translateBuild(sentence));
+            }
         }
         UnitSpec second = units.get(Math.min(1, units.size() - 1));
         UnitSpec third = units.get(Math.min(2, units.size() - 1));
-        questions.add(new Generator(Pool.of(List.of(second)), pathPool, 11)
-                .listenChoose(second.lessons().get(2).words().get(0)));
-        questions.add(new Generator(Pool.of(List.of(third)), pathPool, 13)
+        questions.add(new Generator(Pool.of(List.of(second)), levelPool, 11)
+                .listenChoose(second.lessons().get(1).words().get(0)));
+        questions.add(new Generator(Pool.of(List.of(third)), levelPool, 13)
                 .pinyin(third.lessons().get(3).words().get(1)));
         return questions;
     }
 
+    /** {@code count} items spread evenly over the list; the list repeats when it is shorter. */
+    private static List<Word> spread(List<Word> words, int count) {
+        List<Word> picks = new ArrayList<>();
+        for (int index = 0; index < count; index++) {
+            picks.add(words.get(index * words.size() / count % words.size()));
+        }
+        return picks;
+    }
+
     // ===== Question types =====
 
-    /** The words and sentences distractors are drawn from: the unit first, then the whole path. */
+    /** The words and sentences distractors are drawn from: what was taught, never what is still to come. */
     private record Pool(List<Word> words, List<Sentence> sentences) {
 
         static Pool of(List<UnitSpec> units) {
@@ -139,17 +223,35 @@ final class LearnQuestionGenerator {
             }));
             return new Pool(List.copyOf(words), List.copyOf(sentences));
         }
+
+        /** The unit's stops up to and including {@code stop}. */
+        static Pool taughtUpTo(UnitSpec unit, LessonSpec stop) {
+            List<Word> words = new ArrayList<>();
+            List<Sentence> sentences = new ArrayList<>();
+            for (LessonSpec lesson : unit.lessons()) {
+                words.addAll(lesson.words());
+                sentences.addAll(lesson.sentences());
+                if (lesson == stop) {
+                    break;
+                }
+            }
+            return new Pool(List.copyOf(words), List.copyOf(sentences));
+        }
+
+        static Pool earlierUnits(List<UnitSpec> path, UnitSpec unit) {
+            return of(path.stream().filter(other -> other.number() < unit.number()).toList());
+        }
     }
 
     private static final class Generator {
 
         private final Pool unit;
-        private final Pool path;
+        private final Pool earlier;
         private int seed;
 
-        Generator(Pool unit, Pool path, int seed) {
+        Generator(Pool unit, Pool earlier, int seed) {
             this.unit = unit;
-            this.path = path;
+            this.earlier = earlier;
             this.seed = seed;
         }
 
@@ -160,11 +262,31 @@ final class LearnQuestionGenerator {
                     word.meaning(), word.hanzi() + " (" + word.pinyin() + ") means “" + word.meaning() + "”.");
         }
 
+        /** "Select the correct pinyin": a sound drill word offers its own wrong pinyin, other words those of the pool. */
         Question pinyin(Word word) {
-            List<String> options = choices(word.pinyin(), others(word, Word::pinyin));
+            List<String> options = word.isSoundDrill()
+                    ? placed(word.pinyin(), word.wrongPinyin())
+                    : choices(word.pinyin(), others(word, Word::pinyin));
             return new Question(LearnQuestionType.PINYIN, word.hanzi(), word.pinyin(), word.meaning(), word.hanzi(),
                     LearnAnswers.writeOptions(options.stream().map(text -> new ChoiceOption(text, null)).toList()),
-                    word.pinyin(), word.hanzi() + " is read " + word.pinyin() + ": “" + word.meaning() + "”.");
+                    word.pinyin(), withNote(word.hanzi() + " is read " + word.pinyin() + ": “" + word.meaning() + "”.", word.note()));
+        }
+
+        /** "Tap what you hear" before characters are taught: the word is spoken and the answers are its pinyin. */
+        Question listenSound(Word word) {
+            List<String> options = placed(word.pinyin(), word.wrongPinyin());
+            return new Question(LearnQuestionType.LISTEN_CHOOSE, word.hanzi(), word.pinyin(), word.meaning(), word.hanzi(),
+                    LearnAnswers.writeOptions(options.stream().map(text -> new ChoiceOption(text, null)).toList()),
+                    word.pinyin(), withNote("You heard " + word.pinyin() + ": " + word.hanzi() + ", “" + word.meaning() + "”.", word.note()));
+        }
+
+        /** "Tap what you hear" with syllable tiles. {@code hanzi} holds the spaced syllables so the answer shows them. */
+        Question drill(SoundDrill drill) {
+            List<String> answer = LearnAnswers.tiles(drill.answer());
+            List<String> tiles = new ArrayList<>(answer);
+            tiles.addAll(LearnAnswers.tiles(drill.extras()));
+            return new Question(LearnQuestionType.LISTEN_BUILD, drill.answer(), null, drill.meaning(), drill.audio(),
+                    LearnAnswers.writeTiles(mixed(tiles, answer, drill.answer().length())), drill.answer(), drill.note());
         }
 
         Question hanzi(Word word) {
@@ -194,7 +316,7 @@ final class LearnQuestionGenerator {
         }
 
         private Question wordChoice(LearnQuestionType type, Word word, String explanation) {
-            List<Word> distractors = pickWords(word);
+            List<Word> distractors = pickWords(word, type == LearnQuestionType.LISTEN_CHOOSE);
             List<Word> ordered = place(word, distractors);
             return new Question(type, word.hanzi(), word.pinyin(), word.meaning(), word.hanzi(),
                     LearnAnswers.writeOptions(ordered.stream().map(item -> new ChoiceOption(item.hanzi(), item.pinyin())).toList()),
@@ -204,7 +326,7 @@ final class LearnQuestionGenerator {
         private Question build(LearnQuestionType type, Sentence sentence) {
             List<String> answer = LearnAnswers.tiles(sentence.tiles());
             List<String> tiles = new ArrayList<>(answer);
-            for (Word word : rotate(unit.words())) {
+            for (Word word : preferUnit(unit.words(), earlier.words())) {
                 if (tiles.size() >= answer.size() + EXTRA_TILES) {
                     break;
                 }
@@ -212,18 +334,27 @@ final class LearnQuestionGenerator {
                     tiles.add(word.hanzi());
                 }
             }
+            return new Question(type, sentence.hanzi(), sentence.pinyin(), sentence.meaning(), sentence.hanzi(),
+                    LearnAnswers.writeTiles(mixed(tiles, answer, sentence.tiles().length())), String.join(" ", answer),
+                    explain(sentence));
+        }
+
+        /** The tiles in a seed-dependent order that is never already the answer. */
+        private List<String> mixed(List<String> tiles, List<String> answer, int salt) {
             List<String> mixed = new ArrayList<>(tiles);
-            Collections.shuffle(mixed, new Random(seed++ * 31L + sentence.tiles().length()));
+            Collections.shuffle(mixed, new Random(seed++ * 31L + salt));
             if (mixed.subList(0, answer.size()).equals(answer)) {
                 Collections.rotate(mixed, 1);
             }
-            return new Question(type, sentence.hanzi(), sentence.pinyin(), sentence.meaning(), sentence.hanzi(),
-                    LearnAnswers.writeTiles(mixed), String.join(" ", answer), explain(sentence));
+            return mixed;
         }
 
         private static String explain(Sentence sentence) {
-            String base = sentence.hanzi() + " means “" + sentence.meaning() + "”.";
-            return sentence.note() == null ? base : base + " " + sentence.note();
+            return withNote(sentence.hanzi() + " means “" + sentence.meaning() + "”.", sentence.note());
+        }
+
+        private static String withNote(String base, String note) {
+            return note == null ? base : base + " " + note;
         }
 
         /** The answer with two distractors, the answer moving through the three places. */
@@ -235,17 +366,24 @@ final class LearnQuestionGenerator {
                     unique.putIfAbsent(key, candidate);
                 }
             }
-            List<String> options = new ArrayList<>(unique.values());
+            return placed(answer, List.copyOf(unique.values()));
+        }
+
+        private List<String> placed(String answer, List<String> distractors) {
+            List<String> options = new ArrayList<>(distractors);
             options.add(Math.floorMod(seed++, options.size() + 1), answer);
             return options;
         }
 
-        private List<Word> pickWords(Word word) {
+        /** Two other words; a listening question also leaves out words that sound the same (他 and 她). */
+        private List<Word> pickWords(Word word, boolean heard) {
             List<Word> picked = new ArrayList<>();
-            for (Word candidate : preferUnit(unit.words(), path.words())) {
+            for (Word candidate : preferUnit(unit.words(), earlier.words())) {
                 boolean clash = candidate.hanzi().equals(word.hanzi())
                         || candidate.meaning().equalsIgnoreCase(word.meaning())
-                        || picked.stream().anyMatch(other -> other.hanzi().equals(candidate.hanzi()));
+                        || (heard && candidate.pinyin().equalsIgnoreCase(word.pinyin()))
+                        || picked.stream().anyMatch(other -> other.hanzi().equals(candidate.hanzi())
+                                || (heard && other.pinyin().equalsIgnoreCase(candidate.pinyin())));
                 if (!clash && picked.size() < DISTRACTORS) {
                     picked.add(candidate);
                 }
@@ -260,14 +398,14 @@ final class LearnQuestionGenerator {
         }
 
         private List<String> others(Word word, Function<Word, String> field) {
-            return preferUnit(unit.words(), path.words()).stream()
+            return preferUnit(unit.words(), earlier.words()).stream()
                     .filter(other -> !other.hanzi().equals(word.hanzi()))
                     .map(field)
                     .toList();
         }
 
         private List<Sentence> otherSentences(Sentence sentence) {
-            return preferUnit(unit.sentences(), path.sentences()).stream()
+            return preferUnit(unit.sentences(), earlier.sentences()).stream()
                     .filter(other -> !other.tiles().equals(sentence.tiles()))
                     .toList();
         }
@@ -281,10 +419,10 @@ final class LearnQuestionGenerator {
             return rotated;
         }
 
-        /** The unit's items first, then the rest of the path, each part starting at a seed-dependent place. */
-        private <T> List<T> preferUnit(List<T> unitItems, List<T> pathItems) {
+        /** The unit's items first, then the earlier units', each part starting at a seed-dependent place. */
+        private <T> List<T> preferUnit(List<T> unitItems, List<T> earlierItems) {
             List<T> all = new ArrayList<>(rotate(unitItems));
-            all.addAll(rotate(pathItems.stream().filter(item -> !unitItems.contains(item)).toList()));
+            all.addAll(rotate(earlierItems.stream().filter(item -> !unitItems.contains(item)).toList()));
             return all;
         }
     }

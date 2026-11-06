@@ -40,11 +40,6 @@ export function ratioPercent(
   return clampPercent((toFiniteNumber(numerator) / divisor) * 100, options)
 }
 
-/** `value` as a share of the largest of `values` (0-100), for bars scaled to the longest one. */
-export function shareOfMax(value: number, values: readonly number[]): number {
-  return ratioPercent(value, Math.max(0, ...values))
-}
-
 /** Progress through `total` steps on step `index` (0-based); the current step counts once its answer is checked. */
 export function stepProgress(index: number, total: number, checked: boolean): number {
   return ratioPercent(index + (checked ? 1 : 0), total)

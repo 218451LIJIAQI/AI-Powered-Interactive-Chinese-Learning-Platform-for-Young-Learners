@@ -1,68 +1,58 @@
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 
-import type { CatalogueFilters } from '@/components/classes/ClassCatalogueFilters.vue'
-import { useResource, useServerPage } from '@/composables/useResource'
+import { publicClassesApi } from '@/api/classes'
+import { useResource } from '@/composables/useResource'
 import type { PageResponse } from '@/types/api'
 import type { CatalogueQuery, ClassCard } from '@/types/classes'
 
 const PAGE_SIZE = 12
-const SEARCH_DELAY_MS = 300
+/** The catalogue is small, so it is loaded whole: the theme chips count it and filter it without a round trip. */
+const CATALOGUE_SIZE = 100
 
-const EMPTY_FILTERS: CatalogueFilters = {
-  keyword: '',
-  topicId: null,
-  levelId: null,
-  learningType: null,
-  sort: 'RECENT',
+export interface CatalogueTheme {
+  name: string
+  count: number
 }
 
 /**
- * A server-side class catalogue page: the filters reload the first page (typing waits for a pause), and
- * `goToPage` moves through the result pages.
+ * A class catalogue page (public Classes, Find classes): the whole catalogue, the themes in it with their counts (in
+ * the order the API lists them), the selected theme (null is All) and the page of matching cards.
  */
 export function useClassCatalogue(loader: (query: CatalogueQuery) => Promise<PageResponse<ClassCard>>) {
-  const filters = ref<CatalogueFilters>({ ...EMPTY_FILTERS })
+  const resource = useResource(() => loader({ page: 0, size: CATALOGUE_SIZE }))
+  const summary = useResource(() => publicClassesApi.summary())
+  const theme = ref<string | null>(null)
   const page = ref(0)
 
-  const resource = useResource(() =>
-    loader({
-      keyword: filters.value.keyword.trim() || undefined,
-      topicId: filters.value.topicId ?? undefined,
-      levelId: filters.value.levelId ?? undefined,
-      learningType: filters.value.learningType ?? undefined,
-      sort: filters.value.sort,
-      page: page.value,
-      size: PAGE_SIZE,
-    }),
-  )
-  const { items, totalItems, totalPages, goToPage } = useServerPage(resource, page)
+  const allCards = computed(() => resource.data.value?.items ?? [])
 
-  let timer: ReturnType<typeof setTimeout> | null = null
-  watch(filters, (next, previous) => {
-    if (timer) clearTimeout(timer)
-    const reload = () => {
-      timer = null
-      page.value = 0
-      void resource.reload()
+  const themes = computed<CatalogueTheme[]>(() => {
+    const counts = new Map<string, number>()
+    for (const card of allCards.value) {
+      if (card.topicName) counts.set(card.topicName, (counts.get(card.topicName) ?? 0) + 1)
     }
-    if (next.keyword !== previous.keyword) timer = setTimeout(reload, SEARCH_DELAY_MS)
-    else reload()
-  })
-  onBeforeUnmount(() => {
-    if (timer) clearTimeout(timer)
+    const order = (summary.data.value?.topics ?? []).map((topic) => topic.name)
+    const position = (name: string) => (order.includes(name) ? order.indexOf(name) : order.length)
+    return [...counts.keys()]
+      .sort((a, b) => position(a) - position(b))
+      .map((name) => ({ name, count: counts.get(name) ?? 0 }))
   })
 
-  const filtered = computed(
-    () =>
-      Boolean(filters.value.keyword.trim()) ||
-      filters.value.topicId !== null ||
-      filters.value.levelId !== null ||
-      filters.value.learningType !== null,
+  const matching = computed(() =>
+    theme.value === null ? allCards.value : allCards.value.filter((card) => card.topicName === theme.value),
   )
+  const totalItems = computed(() => matching.value.length)
+  const totalPages = computed(() => Math.ceil(totalItems.value / PAGE_SIZE))
+  const items = computed(() => matching.value.slice(page.value * PAGE_SIZE, (page.value + 1) * PAGE_SIZE))
 
-  function clearFilters(): void {
-    filters.value = { ...EMPTY_FILTERS }
+  function selectTheme(next: string | null): void {
+    theme.value = next
+    page.value = 0
   }
 
-  return { filters, page, resource, items, totalItems, totalPages, goToPage, filtered, clearFilters }
+  function goToPage(next: number): void {
+    page.value = next
+  }
+
+  return { resource, allCards, themes, theme, selectTheme, page, items, totalItems, totalPages, goToPage }
 }

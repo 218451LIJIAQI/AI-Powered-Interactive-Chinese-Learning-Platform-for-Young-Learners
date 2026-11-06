@@ -40,9 +40,9 @@ import com.example.aichinese.service.plan.PlanComposer;
 /**
  * Demo learning plans as in the prototype. Amira built "Travel to Shanghai" with SparkBot a week ago (week 2 of 8,
  * Regular pace, Beginner 1 with a head start, focus listening and conversation): Unit 1 (in progress), her class
- * Mandarin for Beginners, Unit 2, the optional Everyday Conversations and Unit 3. Chen Hao's plan was built from
- * rules while SparkBot was unavailable; Zhang Yi and Nur Aisyah set the plan up later. Every seeded account counts as
- * having a confirmed e-mail address.
+ * Mandarin for Campus Life, Units 2 and 3, the optional Travel Mandarin, Unit 4 and the optional Shopping and Prices.
+ * Chen Hao's plan was built from rules while SparkBot was unavailable; Zhang Yi and Nur Aisyah set the plan up later.
+ * Every seeded account counts as having a confirmed e-mail address.
  */
 @Component
 @Order(6)
@@ -108,24 +108,29 @@ public class DemoPlanSeeder implements CommandLineRunner {
         LocalDateTime builtAt = today.minusDays(7).atTime(LocalTime.of(20, 15));
         PlanComposer.Goal goal = new PlanComposer.Goal(PlanReason.TRAVEL, null,
                 List.of(PlanGoal.INTRODUCE_MYSELF, PlanGoal.ORDER_FOOD, PlanGoal.ASK_DIRECTIONS, PlanGoal.GET_AROUND,
-                        PlanGoal.SHORT_CHATS),
+                        PlanGoal.SHORT_CHATS, PlanGoal.UNDERSTAND_PRICES, PlanGoal.GO_SHOPPING),
                 "I'm going to Shanghai with friends. I want to order food, ask for directions and chat a little.",
                 builtAt.toLocalDate().plusWeeks(8).minusDays(1), PlanPace.REGULAR,
                 List.of(PlanFocus.LISTENING, PlanFocus.CONVERSATION));
         PlanComposer.Placement placement = new PlanComposer.Placement(PlanSelfLevel.A_LITTLE, MandarinLevel.BEGINNER_1,
-                true, List.of(LevelCheckSkill.VOCABULARY, LevelCheckSkill.CHARACTERS),
-                List.of(LevelCheckSkill.LISTENING, LevelCheckSkill.PINYIN), 3, true);
+                true, List.of(LevelCheckSkill.VOCABULARY, LevelCheckSkill.CHARACTERS, LevelCheckSkill.PINYIN,
+                        LevelCheckSkill.SENTENCES),
+                List.of(LevelCheckSkill.LISTENING), 8, true);
         List<PlanComposer.DraftStep> steps = new ArrayList<>();
         unit(1).ifPresent(id -> steps.add(new PlanComposer.DraftStep(PlanStepKind.LEARN_UNIT, id,
-                "You know the greetings already, so finish numbers and polite phrases.")));
-        classId("Mandarin for Beginners").ifPresent(id -> steps.add(new PlanComposer.DraftStep(PlanStepKind.CLASS, id,
-                "You already have this class. Its Greetings and Numbers lessons back up Unit 1.")));
+                "You know a few words already, so a quick review of the sounds comes first.")));
+        classId("Mandarin for Campus Life").ifPresent(id -> steps.add(new PlanComposer.DraftStep(PlanStepKind.CLASS, id,
+                "You already have this class. It puts what you learn to use in real conversations.")));
         unit(2).ifPresent(id -> steps.add(new PlanComposer.DraftStep(PlanStepKind.LEARN_UNIT, id,
-                "Ordering food is the first thing you'll need in Shanghai.")));
-        classId("Everyday Conversations").ifPresent(id -> steps.add(new PlanComposer.DraftStep(PlanStepKind.CLASS, id,
-                "Live practice for short chats with people you meet. You can also Talk with Xiaomei.")));
+                "First words, people and numbers: you'll use them from your first day in Shanghai.")));
         unit(3).ifPresent(id -> steps.add(new PlanComposer.DraftStep(PlanStepKind.LEARN_UNIT, id,
-                "Asking for directions and taking the metro on your trip.")));
+                "First sentences let you say who you are and order what you want.")));
+        classId("Travel Mandarin").ifPresent(id -> steps.add(new PlanComposer.DraftStep(PlanStepKind.CLASS, id,
+                "Airport, hotel, metro and restaurant scenes for your trip. Best after Unit 3.")));
+        unit(4).ifPresent(id -> steps.add(new PlanComposer.DraftStep(PlanStepKind.LEARN_UNIT, id,
+                "Asking where things are and how much they cost, for getting around Shanghai.")));
+        classId("Shopping and Prices").ifPresent(id -> steps.add(new PlanComposer.DraftStep(PlanStepKind.CLASS, id,
+                "Bargain and pay at the market. Best after Unit 4.")));
         PlanComposer.AiDraft draft = new PlanComposer.AiDraft(
                 "Travel to Shanghai",
                 "You want enough Mandarin for your trip: order food, ask for directions, get around on the metro and"

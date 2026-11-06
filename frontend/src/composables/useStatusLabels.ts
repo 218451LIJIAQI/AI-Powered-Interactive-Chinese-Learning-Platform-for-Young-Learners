@@ -3,7 +3,7 @@ import { useI18n } from 'vue-i18n'
 import { humanizeEnumValue, statusLabelKey, type StatusLabelGroup } from '@/plugins/statusLabelMessages'
 
 /**
- * Translates API enum values (lesson mastery, actions of older audit entries) into the current UI language. Unknown
+ * Translates API enum values (actions of older audit entries) into the current UI language. Unknown
  * values fall back to a readable title case.
  */
 export function useStatusLabels() {

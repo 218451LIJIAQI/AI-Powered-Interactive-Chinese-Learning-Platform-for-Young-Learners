@@ -2,7 +2,6 @@
 export const adminAuditMessages = {
   en: {
     pageTitle: 'Audit log',
-    lede: 'Every admin action, newest first. Entries can’t be edited or deleted.',
     exportCsv: 'Export CSV',
     csvDownloaded: 'CSV downloaded.',
     exportFailed: 'The CSV could not be downloaded.',
@@ -46,7 +45,6 @@ export const adminAuditMessages = {
   },
   ms: {
     pageTitle: 'Log audit',
-    lede: 'Setiap tindakan pentadbir, yang terbaharu dahulu. Entri tidak boleh disunting atau dipadam.',
     exportCsv: 'Eksport CSV',
     csvDownloaded: 'CSV dimuat turun.',
     exportFailed: 'CSV tidak dapat dimuat turun.',
@@ -90,7 +88,6 @@ export const adminAuditMessages = {
   },
   'zh-CN': {
     pageTitle: '审计日志',
-    lede: '所有管理操作，最新的在前。记录无法编辑或删除。',
     exportCsv: '导出 CSV',
     csvDownloaded: 'CSV 已下载。',
     exportFailed: '无法下载 CSV。',

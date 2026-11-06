@@ -1,526 +1,239 @@
 /* Admin console pages: dashboard, users and teacher applications, content review and teacher classes, AI reports,
-   usage and settings, support, analytics and audit log. The patterns every admin page shares (sheet, toolbar, table,
-   inbox, reader, figures) are in the Admin console block of main.css; this file holds each page's own parts. */
+   usage and settings, support, analytics and audit log. The patterns every admin page shares (filters, table card,
+   list and detail, sections, shares) are in the Admin console block of main.css; this file holds each page's own parts. */
 
-/* ----- Dashboard: what needs a decision, the platform's health and its numbers ----- */
+/* ----- Dashboard: what needs attention, four equal cards ----- */
 
-.admin-home-status {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-1) var(--space-3);
-}
-
-.admin-home-health {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-1) var(--space-2);
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.admin-home-health strong {
-  color: var(--text-primary);
-  font-weight: var(--font-weight-semibold);
-}
-
-.admin-home-health-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: var(--radius-round);
-  background: var(--color-ink-400);
-}
-
-.admin-home-health.is-ok .admin-home-health-dot {
-  background: var(--color-success);
-}
-
-.admin-home-health.is-warn .admin-home-health-dot {
-  background: var(--color-warning);
-}
-
-.admin-home-grid {
+.admin-home {
   display: grid;
-  grid-template-columns: minmax(0, 1.75fr) minmax(260px, 1fr);
-  grid-template-rows: auto 1fr auto;
-  grid-template-areas:
-    'attention activity'
-    'attention registrations'
-    'numbers numbers';
-  gap: var(--space-10);
-  align-items: start;
-}
-
-.admin-home-attention {
-  display: grid;
-  grid-area: attention;
   gap: var(--section-gap);
   min-width: 0;
 }
 
-.admin-home-queues {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  background: var(--surface-card);
-  box-shadow: var(--shadow-xs);
-}
-
-.admin-home-queues > li + li {
-  border-top: 1px solid var(--border-subtle);
-}
-
-.admin-home-queue {
+.admin-home-grid {
   display: grid;
-  grid-template-columns: var(--space-12) minmax(0, 1fr) auto;
-  grid-template-areas:
-    'count head action'
-    '. items items';
-  align-items: center;
-  gap: var(--space-2) var(--space-4);
-  padding: var(--space-5) var(--space-6);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
+  gap: var(--grid-gap);
 }
 
-.admin-home-queue-count {
-  grid-area: count;
-  font-size: var(--font-size-4xl);
-  text-align: right;
-}
-
-.admin-home-queue-head {
-  grid-area: head;
+.admin-home-card {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: var(--space-2);
   min-width: 0;
 }
 
-.admin-home-queue h3 {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-snug);
-}
-
-.admin-home-queue-action {
-  grid-area: action;
-}
-
-.admin-home-queue.is-clear {
-  padding-block: var(--space-3);
-}
-
-.admin-home-queue.is-clear .admin-home-queue-count {
-  color: var(--color-ink-500);
-  font-size: var(--font-size-2xl);
-}
-
-.admin-home-queue.is-clear h3 {
-  color: var(--text-secondary);
-  font-size: var(--font-size-base);
-}
-
-.admin-home-queue-clear {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1-5);
-  margin: var(--space-0-5) 0 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.admin-home-queue-items {
-  display: grid;
-  grid-area: items;
-  margin: 0 0 0 calc(-1 * var(--space-2));
-  padding: 0;
-  list-style: none;
-}
-
-.admin-home-queue-item {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0 var(--space-2);
-  padding: var(--space-1-5) var(--space-2);
-  border-radius: var(--radius-sm);
-  color: var(--text-primary);
-  font-size: var(--font-size-md);
-  text-decoration: none;
-  overflow-wrap: anywhere;
-  transition: background var(--duration-fast) var(--ease-standard);
-}
-
-.admin-home-queue-item:hover {
-  background: var(--surface-hover);
-}
-
-.admin-home-queue-item strong {
-  font-weight: var(--font-weight-semibold);
-}
-
-.admin-home-queue-item span {
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.admin-home-activity,
-.admin-home-registrations {
-  display: grid;
+.admin-home-card > .row-list {
   align-content: start;
+}
+
+/* A row that opens its item: the whole row is the link, its chevron on the card's padding edge. */
+.row-list > li:has(> .admin-home-row) {
+  padding: 0;
+}
+
+.admin-home-row {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
   gap: var(--space-3);
   min-width: 0;
-}
-
-.admin-home-activity {
-  grid-area: activity;
-}
-
-.admin-home-side-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-1) var(--space-3);
-  padding-bottom: var(--space-2);
-  border-bottom: 1px solid var(--border-default);
-}
-
-.admin-home-side-title {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
-}
-
-.admin-home-side-note {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.admin-home-feed {
-  margin: calc(-1 * var(--space-3)) 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.admin-home-feed > li + li {
-  border-top: 1px solid var(--border-subtle);
-}
-
-.admin-home-feed-item {
-  display: grid;
-  gap: var(--space-0-5);
   padding: var(--space-3) 0;
   color: var(--text-primary);
-  font-size: var(--font-size-md);
   text-decoration: none;
+}
+
+.admin-home-row > .row-list-copy {
+  flex: 1 1 auto;
   overflow-wrap: anywhere;
 }
 
-.admin-home-feed-item:hover strong {
+.admin-home-row:hover .row-list-title {
   text-decoration: underline;
 }
 
-.admin-home-feed-what strong {
-  font-weight: var(--font-weight-semibold);
-}
+/* ----- Users: the table beside the person ----- */
 
-.admin-home-feed-meta {
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.admin-home-numbers {
-  grid-area: numbers;
-  min-width: 0;
-  padding-top: var(--space-6);
-  border-top: 1px solid var(--border-default);
-}
-
-.admin-home-registrations {
-  grid-area: registrations;
-}
-
-.admin-home-bars {
+.admin-users {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  align-items: end;
-  gap: var(--space-2);
-  margin: var(--space-2) 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.admin-home-bars li {
-  display: grid;
-  justify-items: center;
-  gap: var(--space-1);
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: var(--grid-gap);
   min-width: 0;
 }
 
-.admin-home-bar-count,
-.admin-home-bar-day {
-  color: var(--text-secondary);
-  font-size: var(--font-size-xs);
-  font-variant-numeric: tabular-nums;
+.admin-users.has-detail {
+  grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
 }
 
-.admin-home-bar-track {
-  display: flex;
-  align-items: flex-end;
+/* The table's card answers to its own width: with the person beside it, a narrow one drops the avatars and Joined. */
+.admin-users .admin-table-card {
+  container-type: inline-size;
+}
+
+.admin-users-side {
+  display: grid;
+  gap: var(--grid-gap);
+  min-width: 0;
+}
+
+.admin-users-side:focus {
+  outline: none;
+}
+
+.admin-users-table {
+  min-width: 0;
+}
+
+/* The other columns hug their badges; the person takes the rest. */
+.admin-users-col-user {
   width: 100%;
-  height: var(--space-16);
-  border-bottom: 1px solid var(--border-default);
 }
 
-.admin-home-bar {
-  display: block;
-  width: 100%;
-  min-height: 2px;
-  border-radius: var(--radius-xs) var(--radius-xs) 0 0;
-  background: var(--color-primary-500);
+.admin-users-table .admin-cell-title {
+  overflow-wrap: anywhere;
 }
 
-/* ----- Users: the accounts table, its drawer and the pending admin invites ----- */
+@container (max-width: 660px) {
+  .admin-users-table .portrait-avatar,
+  .admin-users-table th:nth-child(5),
+  .admin-users-table td:nth-child(5) {
+    display: none;
+  }
+}
+
+/* Pending admin invites, a quiet strip under the filters. */
+.admin-users-invites {
+  align-items: center;
+}
+
+.admin-users-invites-copy {
+  display: grid;
+  gap: var(--space-0-5);
+  min-width: 0;
+}
 
 .admin-users-account {
-  color: var(--text-secondary);
-}
-
-.admin-users-invites {
   display: grid;
-  gap: var(--space-3);
-  min-width: 0;
+  justify-items: start;
+  gap: var(--space-1);
 }
 
-.admin-users-invites-title {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2) var(--space-3);
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
+.admin-users-access {
+  width: 100%;
 }
 
-.admin-users-invite-list {
-  display: grid;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  border-top: 1px solid var(--border-default);
+@media (max-width: 1200px) {
+  .admin-users.has-detail {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
-.admin-users-invite-list li {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-1) var(--space-3);
-  min-width: 0;
-  padding: var(--space-3) 0;
-  border-bottom: 1px solid var(--border-subtle);
-  overflow-wrap: anywhere;
-}
-
-.admin-users-invite-list li > span {
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.admin-users-profile {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-4);
-}
-
-.admin-users-profile-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-.admin-users-audit {
-  display: grid;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.admin-users-audit-entry {
-  display: grid;
-  gap: var(--space-0-5);
-  padding: var(--space-2) 0;
-  border-bottom: 1px solid var(--border-subtle);
-  color: var(--text-primary);
-  font-size: var(--font-size-md);
-  text-decoration: none;
-  overflow-wrap: anywhere;
-}
-
-.admin-users-audit-entry:hover strong {
-  text-decoration: underline;
-}
-
-.admin-users-audit-entry strong {
-  font-weight: var(--font-weight-semibold);
-}
-
-.admin-users-audit-entry span {
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-/* ----- Teacher applications: the reader's bio, documents and history ----- */
+/* ----- Teacher applications ----- */
 
 .admin-applications-bio {
-  max-width: var(--reading-max);
-  margin: 0;
-  overflow-wrap: anywhere;
+  font-size: var(--font-size-sm);
   white-space: pre-line;
 }
 
-.admin-applications-section-head {
+/* A document: a file mark beside its name. */
+.admin-file {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-2);
-}
-
-/* The documents as hairline rows inside the reader (no box in a box). */
-.admin-applications-documents {
-  display: grid;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  border-block: 1px solid var(--border-subtle);
-}
-
-.admin-applications-documents li {
-  display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-3) 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
-.admin-applications-documents li + li {
-  border-top: 1px solid var(--border-subtle);
-}
-
-.admin-applications-documents .admin-cell-title {
-  flex: 1 1 200px;
-}
-
-.admin-applications-document-icon {
+.admin-file-mark {
   display: grid;
   flex: 0 0 auto;
   place-items: center;
   width: var(--space-8);
   height: var(--space-8);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
   color: var(--color-ink-700);
 }
 
-.admin-reader-section.type-caption {
-  margin: 0;
-}
+/* ----- Content review: what changed, the student preview and the lessons ----- */
 
-/* ----- Content review: kind marks in the queue, the student preview and the lessons in the reader ----- */
-
-.admin-review-section-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-1) var(--space-3);
-}
-
-.admin-review-preview {
+.admin-review-changes {
   display: grid;
-  gap: var(--space-3);
-  padding: var(--space-5) var(--space-6);
+  gap: var(--space-2);
+  padding: var(--space-4);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  background: var(--surface-page);
+  border-radius: var(--radius-md);
 }
 
-.admin-review-preview p,
-.admin-review-lesson p {
-  margin: 0;
+.admin-review-changes-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.admin-review-preview,
+.admin-review-lesson {
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+
+.admin-review-preview .admin-section,
+.admin-review-lesson .admin-section {
+  gap: var(--space-2);
+}
+
+.admin-review-preview-head {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
 }
 
 .admin-review-preview-title {
   margin: 0;
   font-family: var(--font-display);
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-snug);
+  font-size: var(--type-h2-size);
+  font-weight: var(--font-weight-extrabold);
+  line-height: 24px;
 }
 
-.admin-review-list {
-  display: grid;
+.admin-review-text {
   margin: 0;
-  padding: 0;
-  list-style: none;
+  font-size: var(--font-size-sm);
 }
 
-.admin-review-list > li {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-width: 0;
-  padding: var(--space-2-5) 0;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.admin-review-list > li:last-child {
-  border-bottom: 0;
-}
-
-.admin-review-list .admin-cell-title {
-  flex: 1 1 auto;
-}
-
-.admin-review-step {
-  display: grid;
-  flex: 0 0 auto;
-  place-items: center;
-  width: var(--space-6);
-  height: var(--space-6);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-round);
+.admin-review-block-title {
+  margin: 0;
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-bold);
-  font-variant-numeric: tabular-nums;
+  line-height: 18px;
 }
 
-.admin-review-lesson {
+.admin-review-facts {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-4);
-  min-width: 0;
+  margin: 0;
 }
 
-.admin-review-lesson + .admin-review-lesson {
-  padding-top: var(--space-5);
-  border-top: 1px dashed var(--border-default);
-}
-
-.admin-review-block {
+.admin-review-facts > div {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-0-5);
   min-width: 0;
+}
+
+.admin-review-facts dt {
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: 18px;
+}
+
+.admin-review-facts dd {
+  margin: 0;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  line-height: 20px;
 }
 
 .admin-review-video {
@@ -529,275 +242,253 @@
   gap: var(--space-1-5);
 }
 
+/* Key phrases as they read to a student: hanzi, pinyin, meaning. */
+.admin-phrases {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-phrase {
+  display: grid;
+  align-content: start;
+  gap: var(--space-0-5);
+  min-width: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  overflow-wrap: anywhere;
+}
+
+.admin-phrase > .hanzi {
+  font-size: var(--font-size-xl);
+  line-height: 28px;
+}
+
+.admin-review-activity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+/* The lines on the sunken preview need a darker hairline than a card's. */
+.admin-review-lesson .row-list > li + li,
+.admin-review-preview .row-list > li + li {
+  border-top-color: var(--border-default);
+}
+
 /* ----- Teacher classes ----- */
 
-.admin-content-table {
-  min-width: 680px;
+.admin-classes-table {
+  table-layout: fixed;
 }
 
-.admin-content-table td:first-child {
-  min-width: 12rem;
+.admin-classes-col-type {
+  width: 84px;
 }
 
-/* A teacher's name never breaks over two lines in the table. */
-.admin-teacher-classes-teacher {
-  white-space: nowrap;
+.admin-classes-col-class {
+  width: 22%;
 }
 
-.admin-teacher-classes-facts {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-md);
+.admin-classes-col-teacher {
+  width: 13%;
+}
+
+.admin-classes-col-status {
+  width: 204px;
+}
+
+.admin-classes-col-updated {
+  width: 72px;
+}
+
+/* Under 1200 the columns share what the narrower card has by their content. */
+@media (max-width: 1200px) {
+  .admin-classes-table {
+    min-width: 0;
+    table-layout: auto;
+  }
+
+  .admin-classes-table th:not(.col-actions) {
+    width: auto;
+  }
+
+  .admin-classes-table th,
+  .admin-classes-table td {
+    padding-inline: var(--space-2);
+  }
 }
 
 /* ----- AI reports: what was asked, what the AI answered and the student's note ----- */
 
+.admin-ai-facts {
+  grid-template-columns: 120px minmax(0, 1fr);
+}
+
 .admin-ai-exchange {
   display: grid;
-  gap: var(--space-5);
+  gap: var(--space-4);
 }
 
 .admin-ai-said {
   display: grid;
-  gap: var(--space-2);
-  padding-left: var(--space-4);
-  border-left: 2px solid var(--border-default);
+  gap: var(--space-1);
 }
 
 .admin-ai-said p {
   margin: 0;
+  font-size: var(--font-size-md);
+  line-height: 20px;
   overflow-wrap: anywhere;
   white-space: pre-line;
 }
 
-/* The AI's own words carry the AI pigment as a thin rule; the student's note is dashed. */
-.admin-ai-said.is-answer {
-  border-left-color: var(--module-ai);
+.admin-ai-said p.is-strong {
+  font-weight: var(--font-weight-bold);
 }
 
-.admin-ai-said.is-note {
-  border-left-style: dashed;
+.admin-ai-said p.admin-meta {
+  font-size: var(--font-size-xs);
+  line-height: 18px;
 }
 
 .admin-ai-decision {
-  display: grid;
-  gap: var(--space-4);
-  padding-top: var(--space-5);
-  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+.admin-ai-decision > .admin-meta {
+  flex: 1 1 240px;
+}
+
+.admin-ai-decision > .btn-group {
+  flex-wrap: nowrap;
 }
 
 /* ----- AI usage: totals, the request log and requests by feature ----- */
 
-.admin-ai-usage {
+.admin-ai-totals {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);
-  gap: var(--space-10);
-  align-items: start;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--grid-gap);
+  margin: 0;
 }
 
-.admin-ai-log .admin-cell-title strong {
+.admin-figure {
+  display: grid;
+  align-content: start;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-4);
+}
+
+.admin-figure dt {
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: 18px;
+}
+
+.admin-figure dd {
+  display: grid;
+  gap: var(--space-0-5);
+  margin: 0;
+  min-width: 0;
+}
+
+.admin-figure-value {
+  font-family: var(--font-display);
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-extrabold);
+  line-height: 32px;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-ai-usage {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(240px, 3fr);
+  gap: var(--grid-gap);
+  align-items: start;
+  min-width: 0;
+}
+
+.admin-ai-log {
+  min-width: 0;
+}
+
+.admin-ai-log .admin-cell-strong {
   white-space: nowrap;
 }
 
-.admin-ai-result {
+/* ----- AI settings ----- */
+
+.admin-ai-settings-grid {
   display: grid;
-  justify-items: start;
-  gap: var(--space-1);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--grid-gap);
 }
 
-.admin-ai-result small {
-  max-width: 32ch;
-  color: var(--text-secondary);
-  font-size: var(--font-size-xs);
-  white-space: normal;
-}
-
-/* A footnote under the feature breakdown: what the log keeps and what it never does. */
-.admin-ai-retention {
-  display: flex;
-  gap: var(--space-2);
-  margin: 0;
-  padding-top: var(--space-4);
-  border-top: 1px solid var(--border-subtle);
-  max-width: var(--reading-max);
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.admin-ai-retention > .icon-glyph {
-  flex: 0 0 auto;
-  margin-top: var(--space-0-5);
-}
-
-.admin-ai-features {
-  display: grid;
-  gap: var(--space-4);
-  min-width: 0;
-}
-
-.admin-ai-side-head {
-  padding-bottom: var(--space-2);
-  border-bottom: 1px solid var(--border-default);
-}
-
-.admin-ai-side-title {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
-}
-
-/* ----- AI settings: one row per setting, what it does on the left and its control on the right ----- */
-
-.admin-ai-settings {
-  max-width: 1040px;
-}
-
-.admin-ai-setting {
-  display: grid;
-  grid-template-columns: minmax(200px, 0.8fr) minmax(0, 1.6fr);
-  gap: var(--space-4) var(--space-10);
-  padding: var(--space-6) var(--card-padding);
-}
-
-.admin-ai-setting + .admin-ai-setting {
-  border-top: 1px solid var(--border-subtle);
-}
-
-.admin-ai-setting-copy {
-  display: grid;
-  align-content: start;
-  gap: var(--space-1-5);
-}
-
-.admin-ai-setting-copy h2 {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
-}
-
-.admin-ai-setting-copy p {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-md);
-}
-
-.admin-ai-setting-control {
-  display: grid;
-  align-content: start;
-  gap: var(--space-4);
-  min-width: 0;
-}
-
-.admin-ai-setting .field-counter {
-  margin-left: auto;
-}
-
-.admin-ai-preview {
-  display: grid;
-  gap: var(--space-2);
-  padding: var(--space-4);
-  border: 1px dashed var(--border-default);
-  border-radius: var(--radius-lg);
-  background: var(--surface-page);
-}
-
-/* The switches as hairline rows inside the form sheet (no box in a box). */
 .admin-ai-toggles {
-  gap: 0;
+  display: grid;
 }
 
 .admin-ai-toggle {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: var(--space-3) var(--space-4);
-  padding: var(--space-4) 0;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
   cursor: pointer;
+}
+
+.admin-ai-toggle:first-child {
+  padding-top: 0;
 }
 
 .admin-ai-toggle + .admin-ai-toggle {
   border-top: 1px solid var(--border-subtle);
 }
 
-/* The first switch sits right under the section heading, the last on the section's own divider. */
-.admin-ai-toggle:first-child {
-  padding-top: 0;
-}
-
-.admin-ai-toggle:last-child {
-  padding-bottom: 0;
-}
-
-.admin-ai-toggle-copy {
-  display: grid;
-  gap: var(--space-1);
-}
-
-.admin-ai-toggle-copy small {
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-}
-
 .admin-ai-toggle-state {
-  min-width: 3ch;
   color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  text-align: right;
-}
-
-.admin-ai-toggle-state.is-on {
-  color: var(--text-primary);
+  font-size: var(--font-size-xs);
 }
 
 .admin-ai-settings-foot {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-3) var(--space-4);
-  padding: var(--space-4) var(--card-padding);
-  border-top: 1px solid var(--border-subtle);
-  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
-  background: var(--surface-subtle);
+  justify-content: flex-start;
 }
 
-.admin-ai-settings-foot > p {
-  display: flex;
-  flex: 1 1 320px;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-1) var(--space-3);
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.admin-ai-unsaved {
-  color: var(--color-warning-text);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
+.admin-ai-save {
+  margin-left: auto;
 }
 
 @media (max-width: 1200px) {
   .admin-ai-usage {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  .admin-ai-totals {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
-/* ----- Support: the request queue and the conversation with the requester ----- */
+/* ----- Support: the conversation with the requester ----- */
 
-.admin-support-number {
-  min-width: 5ch;
-  padding-top: var(--space-0-5);
-  color: var(--text-secondary);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-bold);
-  font-variant-numeric: tabular-nums;
+.admin-support-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  min-width: 0;
 }
 
-/* The conversation: the requester's messages on the page colour, support's replies as white sheets set in a little. */
 .admin-support-thread {
   display: grid;
   gap: var(--space-3);
@@ -809,36 +500,21 @@
 .admin-support-message {
   display: grid;
   gap: var(--space-2);
-  max-width: var(--reading-max);
+  min-width: 0;
   padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  background: var(--surface-page);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
 }
 
 .admin-support-message.is-support {
-  justify-self: end;
-  width: min(100%, var(--reading-max));
-  margin-left: var(--space-10);
   background: var(--surface-card);
-  box-shadow: inset 2px 0 0 var(--color-ink-900);
-}
-
-.admin-support-message-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-2);
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.admin-support-message-meta strong {
-  color: var(--text-primary);
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
 }
 
 .admin-support-message-body {
   margin: 0;
+  font-size: var(--font-size-md);
+  line-height: 20px;
   overflow-wrap: anywhere;
   white-space: pre-line;
 }
@@ -849,26 +525,17 @@
   overflow-wrap: anywhere;
 }
 
-.admin-support-status-note {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-}
+/* ----- Analytics: the registrations line and three breakdowns ----- */
 
-.admin-support-reply {
-  display: grid;
-  gap: var(--space-3);
-  padding-top: var(--space-5);
-  border-top: 1px solid var(--border-subtle);
+.admin-insights-users {
+  justify-items: end;
+  text-align: right;
 }
-
-/* ----- Analytics: the key figures, the registrations line and three breakdowns ----- */
 
 .admin-insights-plot {
+  display: grid;
   gap: var(--space-2);
+  min-width: 0;
 }
 
 .admin-insights-plot .mini-chart {
@@ -878,7 +545,7 @@
 /* Each label is placed under its point (left set per label); the end labels align to the chart's edges. */
 .admin-insights-axis {
   position: relative;
-  height: 1.6em;
+  height: 18px;
   margin: 0;
   padding: 0;
   color: var(--text-secondary);
@@ -909,52 +576,13 @@
 .admin-insights-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-10);
-  align-items: start;
-}
-
-/* The three blocks share their rows (head, figures, link), so a lede that wraps in one block keeps the rules and
-   first rows of all three level. */
-.admin-insights-block {
-  display: grid;
-  grid-row: span 3;
-  grid-template-rows: subgrid;
-  align-content: start;
-  justify-items: start;
-  gap: var(--space-4);
-  min-width: 0;
-}
-
-.admin-insights-block > .admin-shares,
-.admin-insights-block > .admin-insights-head,
-.admin-insights-block > dl {
-  justify-self: stretch;
-}
-
-.admin-insights-head {
-  display: grid;
-  gap: var(--space-1);
-  padding-bottom: var(--space-3);
-  border-bottom: 1px solid var(--border-default);
-}
-
-.admin-insights-title {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
-}
-
-.admin-insights-head p {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
+  gap: var(--grid-gap);
 }
 
 .admin-insights-learning {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-5) var(--space-4);
+  gap: var(--space-6) var(--space-4);
   margin: 0;
 }
 
@@ -967,22 +595,17 @@
 
 .admin-insights-learning dt {
   color: var(--text-secondary);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
+  line-height: 18px;
 }
 
 .admin-insights-learning dd {
-  display: grid;
-  gap: var(--space-0-5);
   margin: 0;
   font-family: var(--font-display);
   font-size: var(--font-size-2xl);
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-extrabold);
+  line-height: 32px;
   font-variant-numeric: tabular-nums;
-}
-
-.admin-insights-learning dd .type-caption {
-  font-family: var(--font-body);
-  font-weight: var(--font-weight-regular);
 }
 
 @media (max-width: 1200px) {
@@ -995,28 +618,27 @@
   }
 }
 
-/* ----- Audit log: the actor filter and the entry drawer ----- */
+/* ----- Audit log ----- */
 
-/* The actor's e-mail needs a little more room than the other filters (its example address shows in full). */
-.admin-toolbar .admin-audit-actor {
-  flex-basis: 200px;
+.admin-audit-table {
+  table-layout: fixed;
 }
 
-.admin-audit-range-error {
-  margin: 0;
+.admin-audit-col-category {
+  width: 108px;
+}
+
+.admin-audit-col-actor {
+  width: 26%;
+}
+
+.admin-audit-col-time {
+  width: 136px;
 }
 
 .admin-audit-what {
-  display: grid;
-  gap: var(--space-2);
-}
-
-.admin-audit-what p {
   margin: 0;
-  font-size: var(--font-size-base);
+  font-size: var(--font-size-md);
+  line-height: 20px;
   overflow-wrap: anywhere;
-}
-
-.admin-audit-facts dd {
-  text-align: left;
 }

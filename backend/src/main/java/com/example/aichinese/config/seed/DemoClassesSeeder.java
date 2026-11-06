@@ -91,17 +91,22 @@ import com.example.aichinese.service.classes.LessonRevisionService;
 import com.example.aichinese.service.classes.TracingCharacters;
 
 /**
- * Demo classes as in the prototype: Li Wei's "Mandarin for Beginners" (with Amira, Chen Hao and Zhang Yi working
+ * Demo classes as in the prototype: Li Wei's "Mandarin for Campus Life" (with Amira, Chen Hao and Zhang Yi working
  * through it, quiz attempts, feedback, live sessions this week and next and past ones with recordings, one lesson
- * revision in review and one with changes requested), "HSK 1 Prep", a new class in review and a draft class, and
- * the published classes of the other teachers (8 published classes in the catalogue). Dates are relative to today.
+ * revision in review and one with changes requested), "Chinese Through Film", a new class in review and a draft class,
+ * and the published classes of the other teachers (8 published classes in the catalogue). A database whose demo teacher
+ * already has classes is left as it is. Dates are relative to today.
  */
 @Component
 @Order(2)
 @Profile("demo & !prod & !production")
 public class DemoClassesSeeder implements CommandLineRunner {
 
-    private static final String CLASS_TITLE = "Mandarin for Beginners";
+    private static final String CLASS_TITLE = "Mandarin for Campus Life";
+    private static final String UNIVERSITY_LIFE_NOTE =
+            "Add pinyin to the Campus Places matching cards and under each new word in the key phrases.";
+    /** The quiz player plays a link, and the demo ships no recordings: its listening questions use a speech service. */
+    private static final String SPEECH_LINK = "https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=zh-CN&q=";
 
     private final Repos repos;
     private final LessonRevisionService revisions;
@@ -196,8 +201,9 @@ public class DemoClassesSeeder implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
-        if (repos.users.findByEmailWithRoles(DemoPersonas.TEACHER.email()).isEmpty()
-                || repos.classes.findAll().stream().anyMatch(existing -> existing.getTitle().equals(CLASS_TITLE))) {
+        if (repos.users.findByEmailWithRoles(DemoPersonas.TEACHER.email())
+                .map(teacher -> !repos.classes.findByTeacherUserIdOrderByUpdatedAtDesc(teacher.getId()).isEmpty())
+                .orElse(true)) {
             return;
         }
         now = LocalDateTime.now(ZoneId.of(platformProperties.defaultTimeZone())).withSecond(0).withNano(0);
@@ -207,42 +213,41 @@ public class DemoClassesSeeder implements CommandLineRunner {
         LearningLevel beginner2 = level("Beginner 2");
 
         // Li Wei's main class: published 8 weeks ago, lessons approved over time.
-        CoursePackage beginners = createClass(liWei, CLASS_TITLE,
-                "Short lessons for a confident start: greetings, numbers and everyday campus Mandarin.",
-                "Start with Greetings, then come to Monday's live session. Bring one question in Chinese!",
-                beginner1, topic("Sentences"), LearningType.HYBRID, ContentStatus.PUBLISHED, 57);
-        event(beginners, null, liWei.getUser(), ClassContentEventType.CLASS_CREATED, null, 57);
-        event(beginners, null, liWei.getUser(), ClassContentEventType.CLASS_SUBMITTED, "Greetings", 55);
-        event(beginners, null, admin, ClassContentEventType.CLASS_APPROVED, "Greetings", 53);
-        List<List<Seeded>> beginnerUnits = createUnits(beginners, liWei, DemoClassContent.MANDARIN_FOR_BEGINNERS, ContentStatus.PUBLISHED, 56);
-        Seeded greetings = beginnerUnits.get(0).get(0);
-        Seeded numbers = beginnerUnits.get(0).get(1);
-        Seeded universityLife = beginnerUnits.get(0).get(2);
-        Seeded orderingFood = beginnerUnits.get(1).get(0);
-        Seeded findingPlaces = beginnerUnits.get(1).get(1);
-        replaceQuestions(greetings, DemoClassContent.GREETINGS_QUIZ);
-        event(beginners, greetings.lesson(), admin, ClassContentEventType.LESSON_APPROVED, null, 53);
+        CoursePackage campusLife = createClass(liWei, CLASS_TITLE,
+                "Campus scenarios for exchange students: meeting classmates, the canteen and finding your way.",
+                "Start with Meeting Classmates, then come to Monday's live session. Bring one question in Chinese!",
+                beginner1, topic("Study or exchange"), 3, LearningType.HYBRID, ContentStatus.PUBLISHED, 57);
+        event(campusLife, null, liWei.getUser(), ClassContentEventType.CLASS_CREATED, null, 57);
+        event(campusLife, null, liWei.getUser(), ClassContentEventType.CLASS_SUBMITTED, "Meeting Classmates", 55);
+        event(campusLife, null, admin, ClassContentEventType.CLASS_APPROVED, "Meeting Classmates", 53);
+        List<List<Seeded>> campusUnits = createUnits(campusLife, liWei, DemoClassContent.CAMPUS_LIFE, ContentStatus.PUBLISHED, 56);
+        Seeded meeting = campusUnits.get(0).get(0);
+        Seeded rooms = campusUnits.get(0).get(1);
+        Seeded universityLife = campusUnits.get(0).get(2);
+        Seeded orderingFood = campusUnits.get(1).get(0);
+        Seeded findingPlaces = campusUnits.get(1).get(1);
+        event(campusLife, meeting.lesson(), admin, ClassContentEventType.LESSON_APPROVED, null, 53);
         int daysAgo = 47;
-        for (Seeded seeded : List.of(universityLife, orderingFood, findingPlaces, numbers)) {
-            event(beginners, seeded.lesson(), liWei.getUser(), ClassContentEventType.LESSON_SUBMITTED, null, daysAgo + 2);
-            event(beginners, seeded.lesson(), admin, ClassContentEventType.LESSON_APPROVED, null, daysAgo);
+        for (Seeded seeded : List.of(universityLife, orderingFood, findingPlaces, rooms)) {
+            event(campusLife, seeded.lesson(), liWei.getUser(), ClassContentEventType.LESSON_SUBMITTED, null, daysAgo + 2);
+            event(campusLife, seeded.lesson(), admin, ClassContentEventType.LESSON_APPROVED, null, daysAgo);
             daysAgo -= 9;
         }
-        reviseUniversityLife(beginners, universityLife, liWei, admin);
-        reviseOrderingFood(beginners, orderingFood, liWei);
+        reviseUniversityLife(campusLife, universityLife, liWei, admin);
+        reviseOrderingFood(campusLife, orderingFood, liWei);
 
-        CoursePackage hsk = createClass(liWei, "HSK 1 Prep",
-                "Every HSK 1 word with a short video, a practice set and a mini test per unit.", null,
-                beginner1, topic("Vocabulary"), LearningType.RECORDED, ContentStatus.PUBLISHED, 40);
-        createUnits(hsk, liWei, DemoClassContent.HSK1_PREP, ContentStatus.PUBLISHED, 39);
-        event(hsk, null, liWei.getUser(), ClassContentEventType.CLASS_CREATED, null, 40);
-        event(hsk, null, admin, ClassContentEventType.CLASS_APPROVED, null, 36);
+        CoursePackage film = createClass(liWei, "Chinese Through Film",
+                "Short scenes filmed for this class: everyday lines, small talk and quick reactions.", null,
+                beginner2, topic("Personal interest"), 5, LearningType.RECORDED, ContentStatus.PUBLISHED, 40);
+        createUnits(film, liWei, DemoClassContent.THROUGH_FILM, ContentStatus.PUBLISHED, 39);
+        event(film, null, liWei.getUser(), ClassContentEventType.CLASS_CREATED, null, 40);
+        event(film, null, admin, ClassContentEventType.CLASS_APPROVED, null, 36);
 
         CoursePackage culture = createClass(liWei, "Chinese Culture and Festivals",
                 "Festivals, food and customs of the Chinese calendar, with the words you need to join in.", null,
-                beginner2, topic("Culture"), LearningType.HYBRID, ContentStatus.SUBMITTED, 2);
+                beginner1, topic("Personal interest"), 3, LearningType.HYBRID, ContentStatus.SUBMITTED, 2);
         culture.setSubmittedAt(at(0, 10, 0));
-        LearningModule festivalStories = createUnit(culture, liWei, "Unit 1: Festival Stories", 1);
+        LearningModule festivalStories = createUnit(culture, liWei, "Festival Stories", 1);
         Seeded lantern = createLesson(culture, festivalStories, liWei, DemoClassContent.LANTERN_FESTIVAL, 1, ContentStatus.SUBMITTED, 2);
         lantern.lesson().setSubmittedAt(at(0, 10, 0));
         lantern.quiz().setLearningStage(LearningStage.INDEPENDENT);
@@ -251,86 +256,86 @@ public class DemoClassesSeeder implements CommandLineRunner {
         event(culture, null, liWei.getUser(), ClassContentEventType.CLASS_SUBMITTED, "Lantern Festival", 0);
         event(culture, lantern.lesson(), liWei.getUser(), ClassContentEventType.LESSON_SUBMITTED, null, 0);
 
-        CoursePackage campus = createClass(liWei, "Campus Mandarin",
-                "Read the signs and notices you meet around campus.", null,
-                beginner1, topic("Characters"), LearningType.RECORDED, ContentStatus.DRAFT, 1);
-        createLesson(campus, createUnit(campus, liWei, "Unit 1: Around Campus", 1), liWei, DemoClassContent.AT_THE_LIBRARY, 1,
+        CoursePackage studyGroup = createClass(liWei, "Study Group Mandarin",
+                "Study together in Mandarin: library visits, group work and exam week.", null,
+                beginner1, topic("Study or exchange"), 3, LearningType.RECORDED, ContentStatus.DRAFT, 1);
+        createLesson(studyGroup, createUnit(studyGroup, liWei, "Around Campus", 1), liWei, DemoClassContent.AT_THE_LIBRARY, 1,
                 ContentStatus.DRAFT, 1);
-        event(campus, null, liWei.getUser(), ClassContentEventType.CLASS_CREATED, null, 1);
+        event(studyGroup, null, liWei.getUser(), ClassContentEventType.CLASS_CREATED, null, 1);
 
         TeacherProfile wong = teacher(DemoPersonas.WONG_SIEW_LING);
         TeacherProfile john = teacher(DemoPersonas.JOHN_LIM);
         TeacherProfile tan = teacher(DemoPersonas.TAN_MEI_FONG);
         CoursePackage everyday = publishedClass(wong, "Everyday Conversations",
-                "Real-life Mandarin for food stalls, campus and getting around, with live practice every week.",
+                "Meet people, chat at a hawker stall and get around town, with live practice every week.",
                 "Real-life Mandarin for food stalls, campus and getting around. Come and practise with me every Friday!",
-                beginner2, "Listening", LearningType.LIVE, DemoClassContent.EVERYDAY_CONVERSATIONS, 30, admin);
-        CoursePackage pinyin = publishedClass(john, "Pinyin: Read and Write",
-                "Tones, pinyin spelling and your first characters, step by step with short videos.", null,
-                beginner1, "Pinyin", LearningType.HYBRID, DemoClassContent.PINYIN, 34, admin);
-        publishedClass(john, "Chinese Characters 101",
-                "Strokes, radicals and your first characters, with tracing in every lesson.", null,
-                beginner1, "Characters", LearningType.RECORDED, DemoClassContent.CHARACTERS, 26, admin);
+                beginner1, "Daily life", 3, LearningType.LIVE, DemoClassContent.EVERYDAY_CONVERSATIONS, 30, admin);
         publishedClass(wong, "Travel Mandarin",
-                "Airport, hotel and taxi phrases, practised live with the teacher every Sunday.", null,
-                beginner2, "Speaking", LearningType.LIVE, DemoClassContent.TRAVEL, 22, admin);
-        publishedClass(tan, "Mandarin at Work",
-                "Greet customers, make small talk and handle simple calls and messages.", null,
-                beginner2, "Speaking", LearningType.HYBRID, DemoClassContent.AT_WORK, 18, admin);
-        publishedClass(tan, "Numbers, Money and Time",
-                "Count, pay and tell the time with confidence, from 一 to 一百.", null,
-                beginner1, "Numbers", LearningType.RECORDED, DemoClassContent.NUMBERS_MONEY_TIME, 14, admin);
+                "Airport, hotel, metro and restaurant scenes, plus signs and menus, practised live every Sunday.", null,
+                beginner1, "Travel", 3, LearningType.LIVE, DemoClassContent.TRAVEL, 16, admin);
+        CoursePackage shopping = publishedClass(john, "Shopping and Prices",
+                "Ask how much, bargain at the market and pay in shops, using numbers and measure words from Unit 4.", null,
+                beginner1, "Travel", 4, LearningType.HYBRID, DemoClassContent.SHOPPING_AND_PRICES, 14, admin);
+        publishedClass(john, "Study Abroad Survival",
+                "Registration day, your dorm, the library and asking classmates for help.", null,
+                beginner1, "Study or exchange", 3, LearningType.RECORDED, DemoClassContent.STUDY_ABROAD, 18, admin);
+        publishedClass(tan, "Basic Work Mandarin",
+                "Introduce yourself to colleagues, make small talk and handle simple calls and messages.", null,
+                beginner1, "Work and career", 3, LearningType.HYBRID, DemoClassContent.BASIC_WORK, 22, admin);
+        publishedClass(tan, "Serving Customers",
+                "Greet customers, give prices and answer simple questions at the counter.", null,
+                beginner1, "Work and career", 4, LearningType.RECORDED, DemoClassContent.SERVING_CUSTOMERS, 26, admin);
 
         StudentProfile amira = student(DemoPersonas.STUDENT);
         StudentProfile chen = student(DemoPersonas.CHEN_HAO);
         StudentProfile zhang = student(DemoPersonas.ZHANG_YI);
         StudentProfile nur = student(DemoPersonas.NUR_AISYAH);
-        join(amira, beginners, 28);
-        join(chen, beginners, 30);
-        join(zhang, beginners, 21);
-        join(nur, pinyin, 12);
+        join(amira, campusLife, 28);
+        join(chen, campusLife, 30);
+        join(zhang, campusLife, 21);
+        join(nur, shopping, 12);
         join(nur, everyday, 10);
 
-        // Amira: Numbers mastered, Ordering Food completed (best 60 %), Greetings in progress (2 of 3 activities, best 80 %).
-        complete(amira, numbers, 7);
-        watched(amira, numbers, 100, 7);
-        attempt(amira, numbers, 6, 18, 0, new boolean[] { true, true, true, true, true }, false);
+        // Amira, 40 %: Room Numbers mastered, Ordering Food completed (best 60 %), Meeting Classmates in progress (2 of 3
+        // activities and the quiz: 3 of 4 steps, best 80 %), quiz average 75 %.
+        complete(amira, rooms, 7);
+        watched(amira, rooms, 100, 7);
+        attempt(amira, rooms, 6, 18, 0, new boolean[] { true, true, true, true, true }, false);
         complete(amira, orderingFood, 4);
         watched(amira, orderingFood, 100, 4);
-        attempt(amira, orderingFood, 3, 20, 0, new boolean[] { true, false, true, false, false }, false);
-        completeSome(amira, greetings, 1, greetings.flashcards(), greetings.tracing());
-        watched(amira, greetings, 40, 1);
-        attempt(amira, greetings, 2, 19, 30, new boolean[] { true, true, true, false, false }, true);
-        QuizAttempt amiraLatest = attempt(amira, greetings, 0, 11, 45, new boolean[] { true, true, true, true, false }, true);
+        attempt(amira, orderingFood, 3, 20, 0, new boolean[] { true, false, true, true, false }, false);
+        completeSome(amira, meeting, 1, meeting.flashcards(), meeting.tracing());
+        watched(amira, meeting, 40, 1);
+        attempt(amira, meeting, 2, 19, 30, new boolean[] { true, true, true, false, false }, true);
+        QuizAttempt amiraLatest = attempt(amira, meeting, 0, 11, 45, new boolean[] { true, true, true, true, false }, true);
 
-        // Chen Hao: three lessons done (60 %), quiz average about 70 %.
-        complete(chen, greetings, 12);
-        attempt(chen, greetings, 12, 21, 0, new boolean[] { true, true, true, true, false }, false);
-        complete(chen, numbers, 10);
-        attempt(chen, numbers, 10, 21, 0, new boolean[] { true, true, false, true, false }, false);
+        // Chen Hao, 60 %: three lessons done and University Life begun, quiz average 70 %.
+        complete(chen, meeting, 12);
+        attempt(chen, meeting, 12, 21, 0, new boolean[] { true, true, true, true, false }, false);
+        complete(chen, rooms, 10);
+        attempt(chen, rooms, 10, 21, 0, new boolean[] { true, true, false, true, false }, false);
         complete(chen, orderingFood, 5);
         QuizAttempt chenFood = attempt(chen, orderingFood, 5, 20, 0, new boolean[] { true, false, true, true, false }, false);
-        complete(chen, universityLife, 1);
         watched(chen, universityLife, 100, 1);
         attempt(chen, universityLife, 1, 22, 0, new boolean[] { true, true, true, true, false }, false);
 
-        // Zhang Yi: one lesson done (20 %), weak quiz scores, no activity for 9 days: needs support.
-        complete(zhang, greetings, 9);
-        attempt(zhang, greetings, 10, 15, 0, new boolean[] { true, false, true, false, false }, true);
-        attempt(zhang, greetings, 9, 16, 0, new boolean[] { true, false, true, false, true }, true);
+        // Zhang Yi, 20 %: one lesson done, quiz average 50 %, no activity for 9 days: needs support.
+        complete(zhang, meeting, 9);
+        attempt(zhang, meeting, 10, 15, 0, new boolean[] { true, false, true, false, false }, true);
+        attempt(zhang, meeting, 9, 16, 0, new boolean[] { true, false, true, false, true }, true);
 
-        feedback(liWei, amira, beginners, greetings.lesson(), amiraLatest, "ENCOURAGING",
-                "Great effort on greetings. Keep practising tone 3 and listen for short reply phrases.", 0, 12, 30);
-        feedback(liWei, amira, beginners, numbers.lesson(), null, "LESSON",
-                "Well done mastering numbers. Try counting objects around you in Mandarin.", 6, 18, 20);
-        feedback(liWei, zhang, beginners, null, null, "WEAK_AREA",
-                "Tone 3 is still tricky. Try a listening set in Practice, then retake the Greetings quiz.", 8, 9, 15);
-        feedback(liWei, chen, beginners, orderingFood.lesson(), chenFood, "CORRECTIVE",
-                "Good job on food words. Check the measure word 杯 in question 2 before your next attempt.", 10, 16, 40);
-        feedback(liWei, chen, beginners, null, null, "PROGRESS",
+        feedback(liWei, amira, campusLife, meeting.lesson(), amiraLatest, "ENCOURAGING",
+                "Great effort on introductions. Keep practising the tones in 你叫什么名字？ and listen for short replies.", 0, 12, 30);
+        feedback(liWei, amira, campusLife, rooms.lesson(), null, "LESSON",
+                "Well done on numbers. Try counting objects around you in Mandarin.", 6, 18, 20);
+        feedback(liWei, zhang, campusLife, null, null, "WEAK_AREA",
+                "The tones in 你叫什么名字？ are still tricky. Try a listening set in Practice, then retake the Meeting Classmates quiz.", 8, 9, 15);
+        feedback(liWei, chen, campusLife, orderingFood.lesson(), chenFood, "CORRECTIVE",
+                "Good job on food words. Check the word 块 in question 2 before your next attempt.", 10, 16, 40);
+        feedback(liWei, chen, campusLife, null, null, "PROGRESS",
                 "Thanks for joining every live session this month. Your listening is getting faster.", 16, 11, 0);
 
-        seedLiveSessions(liWei, beginners, greetings, numbers, universityLife, orderingFood, findingPlaces, amira, chen, zhang);
+        seedLiveSessions(liWei, campusLife, meeting, rooms, universityLife, orderingFood, findingPlaces, amira, chen, zhang);
         seedWongSessions(wong, everyday, nur);
     }
 
@@ -340,52 +345,54 @@ public class DemoClassesSeeder implements CommandLineRunner {
     private void reviseUniversityLife(CoursePackage coursePackage, Seeded seeded, TeacherProfile teacher, User admin) {
         Lesson revision = revisions.workingCopy(seeded.lesson());
         revision.setContentStatus(ContentStatus.REJECTED);
-        revision.setRejectionReason("Add pinyin under each new word in the key phrases and check the new matching pair.");
+        revision.setRejectionReason(UNIVERSITY_LIFE_NOTE);
         revision.setSubmittedAt(at(4, 16, 0));
         repos.lessons.save(revision);
-        LessonKeyPhrase added = new LessonKeyPhrase();
-        added.setLesson(revision);
-        added.setChinese("教学楼");
-        added.setPinyin("jiàoxuélóu");
-        added.setMeaning("teaching building");
-        added.setSortOrder(5);
-        repos.keyPhrases.save(added);
+        MatchingGame places = repos.matching.findByLessonIdOrderByLessonPositionAscIdAsc(revision.getId()).get(0);
+        for (MatchingGameItem item : repos.matchingItems.findByMatchingGameIdOrderBySortOrderAscCreatedAtAsc(places.getId())) {
+            if (item.getLeftText().equals("宿舍")) {
+                item.setRightText("dorm room");
+                repos.matchingItems.save(item);
+            }
+        }
         event(coursePackage, seeded.lesson(), teacher.getUser(), ClassContentEventType.REVISION_SUBMITTED, null, 4,
-                "[{\"kind\":\"KEY_PHRASES_ADDED\",\"title\":null,\"count\":1,\"total\":5}]");
+                "[{\"kind\":\"ACTIVITY_CHANGED\",\"title\":\"" + places.getTitle() + "\",\"count\":null,\"total\":null}]");
         event(coursePackage, seeded.lesson(), admin, ClassContentEventType.REVISION_CHANGES_REQUESTED,
                 revision.getRejectionReason(), 3);
     }
 
-    /** A revision of Ordering Food in review: two quiz questions added (now 7). */
+    /** A revision of Ordering Food in review: two questions about prices and the matching game rewritten. */
     private void reviseOrderingFood(CoursePackage coursePackage, Seeded seeded, TeacherProfile teacher) {
         Lesson revision = revisions.workingCopy(seeded.lesson());
         revision.setContentStatus(ContentStatus.SUBMITTED);
         revision.setSubmittedAt(at(0, 11, 0));
         repos.lessons.save(revision);
         Quiz quiz = repos.quizzes.findByLessonIdOrderByCreatedAtAscIdAsc(revision.getId()).get(0);
-        List<Question> extra = List.of(
-                new Question("MULTIPLE_CHOICE", "How do you ask for a cup of tea?",
-                        List.of(new DemoClassContent.Option("一杯茶", true), new DemoClassContent.Option("一碗饭", false),
-                                new DemoClassContent.Option("多少钱", false), new DemoClassContent.Option("好吃", false)),
-                        null, "杯 is the measure word for cups: 一杯茶 is “a cup of tea”.", "Look for 杯, “cup”."),
-                new Question("TRUE_FALSE", "好吃 means “delicious”.",
-                        List.of(new DemoClassContent.Option("True", true), new DemoClassContent.Option("False", false)),
-                        null, "好吃 (hǎochī) is “delicious”.", null));
-        int order = 6;
-        for (Question question : extra) {
-            saveQuestion(quiz, question, order++);
+        List<QuizQuestion> questions = repos.questions.findByQuizIdOrderBySortOrderAscCreatedAtAsc(quiz.getId());
+        rewriteQuestion(questions.get(1), new Question("MULTIPLE_CHOICE", "How do you say “ten ringgit”?",
+                List.of(new DemoClassContent.Option("十个\nshí ge", false), new DemoClassContent.Option("十块\nshí kuài", true),
+                        new DemoClassContent.Option("一块\nyí kuài", false), new DemoClassContent.Option("十杯\nshí bēi", false)),
+                "块 (kuài) is the everyday word for ringgit: 十块 is “ten ringgit”.", "块 counts ringgit.", null));
+        rewriteQuestion(questions.get(2), new Question("MULTIPLE_CHOICE", "The stall owner says 十五块。 How much is it?",
+                List.of(new DemoClassContent.Option("5 ringgit", false), new DemoClassContent.Option("50 ringgit", false),
+                        new DemoClassContent.Option("15 ringgit", true), new DemoClassContent.Option("12 ringgit", false)),
+                "十五 is ten and five: 十五块 is “15 ringgit”.", null, null));
+        MatchingGame prices = repos.matching.findByLessonIdOrderByLessonPositionAscIdAsc(revision.getId()).get(0);
+        for (MatchingGameItem item : repos.matchingItems.findByMatchingGameIdOrderBySortOrderAscCreatedAtAsc(prices.getId())) {
+            item.setRightText("RM" + item.getRightText().replace(" ringgit", ""));
+            repos.matchingItems.save(item);
         }
-        quiz.setTotalPoints(14);
-        repos.quizzes.save(quiz);
         event(coursePackage, seeded.lesson(), teacher.getUser(), ClassContentEventType.REVISION_SUBMITTED, null, 0,
-                "[{\"kind\":\"QUESTIONS_ADDED\",\"title\":\"" + quiz.getTitle() + "\",\"count\":2,\"total\":7}]");
+                "[{\"kind\":\"ACTIVITY_CHANGED\",\"title\":\"" + prices.getTitle() + "\",\"count\":null,\"total\":null},"
+                        + "{\"kind\":\"QUESTIONS_CHANGED\",\"title\":\"" + quiz.getTitle() + "\",\"count\":2,\"total\":5}]");
     }
 
     // ----- classes, units and lessons -----
 
     private CoursePackage publishedClass(TeacherProfile teacher, String title, String description, String note,
-            LearningLevel level, String topic, LearningType type, List<UnitSpec> units, int daysAgo, User admin) {
-        CoursePackage coursePackage = createClass(teacher, title, description, note, level, topic(topic), type, ContentStatus.PUBLISHED, daysAgo);
+            LearningLevel level, String topic, int bestAfterUnit, LearningType type, List<UnitSpec> units, int daysAgo, User admin) {
+        CoursePackage coursePackage = createClass(teacher, title, description, note, level, topic(topic), bestAfterUnit, type,
+                ContentStatus.PUBLISHED, daysAgo);
         createUnits(coursePackage, teacher, units, ContentStatus.PUBLISHED, daysAgo - 1);
         event(coursePackage, null, teacher.getUser(), ClassContentEventType.CLASS_CREATED, null, daysAgo);
         event(coursePackage, null, teacher.getUser(), ClassContentEventType.CLASS_SUBMITTED, null, daysAgo - 1);
@@ -394,7 +401,7 @@ public class DemoClassesSeeder implements CommandLineRunner {
     }
 
     private CoursePackage createClass(TeacherProfile teacher, String title, String description, String note,
-            LearningLevel level, LearningCategory topic, LearningType type, ContentStatus status, int daysAgo) {
+            LearningLevel level, LearningCategory topic, int bestAfterUnit, LearningType type, ContentStatus status, int daysAgo) {
         CoursePackage coursePackage = new CoursePackage();
         coursePackage.setTeacher(teacher);
         coursePackage.setTitle(title);
@@ -402,6 +409,7 @@ public class DemoClassesSeeder implements CommandLineRunner {
         coursePackage.setTeacherNote(note);
         coursePackage.setLevel(level);
         coursePackage.setCategory(topic);
+        coursePackage.setBestAfterUnit(bestAfterUnit);
         coursePackage.setLearningType(type);
         coursePackage.setContentStatus(status);
         coursePackage.setCreatedAt(at(daysAgo, 9, 0));
@@ -459,7 +467,7 @@ public class DemoClassesSeeder implements CommandLineRunner {
         lesson.setUpdatedAt(at(Math.max(0, daysAgo - position), 10, 0));
         lesson = repos.lessons.save(lesson);
         int order = 1;
-        for (Word word : spec.words()) {
+        for (Word word : spec.phrases()) {
             LessonKeyPhrase phrase = new LessonKeyPhrase();
             phrase.setLesson(lesson);
             phrase.setChinese(word.chinese());
@@ -473,7 +481,7 @@ public class DemoClassesSeeder implements CommandLineRunner {
         }
         ContentStatus partStatus = status == ContentStatus.PUBLISHED ? ContentStatus.PUBLISHED : ContentStatus.DRAFT;
         RecordedLessonVideo video = spec.video() == null ? null : repos.videos.save(newVideo(lesson, spec.video(), spec.videoSeconds()));
-        Flashcard flashcards = flashcards(lesson, spec.title() + " Flashcards", partStatus, 1);
+        Flashcard flashcards = flashcards(lesson, spec.flashcards(), partStatus, 1);
         TracingExercise tracing = new TracingExercise();
         tracing.setTitle("Trace " + String.join(" and ", spec.trace().stream().map(Word::chinese).toList()));
         tracing.setCreatedByUser(teacher.getUser());
@@ -486,7 +494,7 @@ public class DemoClassesSeeder implements CommandLineRunner {
                 .toList());
         repos.tracing.save(tracing);
         MatchingGame matching = new MatchingGame();
-        matching.setTitle("Match Word and Meaning");
+        matching.setTitle(spec.matching());
         matching.setCreatedByUser(teacher.getUser());
         matching.setLearningStage(LearningStage.SCAFFOLDED);
         matching.setContentStatus(partStatus);
@@ -494,7 +502,7 @@ public class DemoClassesSeeder implements CommandLineRunner {
         matching.setLessonPosition(3);
         matching = repos.matching.save(matching);
         int pair = 1;
-        for (Word word : spec.words().subList(0, Math.min(4, spec.words().size()))) {
+        for (Word word : spec.pairs()) {
             matchingItem(matching, word.chinese(), word.pinyin(), word.meaning(), pair++);
         }
         Quiz quiz = newQuiz(lesson, spec.title(), partStatus);
@@ -510,25 +518,23 @@ public class DemoClassesSeeder implements CommandLineRunner {
         return new Seeded(coursePackage, lesson, flashcards, tracing, matching, quiz, questions, options, video);
     }
 
-    private void replaceQuestions(Seeded seeded, List<Question> questions) {
-        for (int index = 0; index < questions.size(); index++) {
-            QuizQuestion target = seeded.questions().get(index);
-            Question question = questions.get(index);
-            repos.options.deleteByQuestionId(target.getId());
-            target.setQuestionType(question.type());
-            target.setQuestionText(question.text());
-            target.setExplanation(question.explanation());
-            target.setHint(question.hint());
-            target.setCorrectAnswerText(question.answer() != null ? question.answer()
-                    : question.options().stream().filter(DemoClassContent.Option::correct).findFirst().orElseThrow().text());
-            repos.questions.save(target);
-            List<QuizOption> saved = new ArrayList<>();
-            int order = 1;
-            for (DemoClassContent.Option option : question.options()) {
-                saved.add(saveOption(target, option.text(), option.correct(), order++));
-            }
-            seeded.options().set(index, saved);
+    /** Gives a question of a revision copy new content, in place. */
+    private void rewriteQuestion(QuizQuestion target, Question question) {
+        repos.options.deleteByQuestionId(target.getId());
+        target.setQuestionType(question.type());
+        target.setQuestionText(question.text());
+        target.setExplanation(question.explanation());
+        target.setHint(question.hint());
+        target.setCorrectAnswerText(correctText(question));
+        repos.questions.save(target);
+        int order = 1;
+        for (DemoClassContent.Option option : question.options()) {
+            saveOption(target, option.text(), option.correct(), order++);
         }
+    }
+
+    private static String correctText(Question question) {
+        return question.options().stream().filter(DemoClassContent.Option::correct).findFirst().orElseThrow().text();
     }
 
     private QuizQuestion saveQuestion(Quiz quiz, Question question, int order) {
@@ -540,8 +546,9 @@ public class DemoClassesSeeder implements CommandLineRunner {
         saved.setHint(question.hint());
         saved.setPoints(2);
         saved.setSortOrder(order);
-        saved.setCorrectAnswerText(question.answer() != null ? question.answer()
-                : question.options().stream().filter(DemoClassContent.Option::correct).findFirst().orElseThrow().text());
+        saved.setCorrectAnswerText(correctText(question));
+        saved.setAudioUrl(question.spoken() == null ? null
+                : SPEECH_LINK + URLEncoder.encode(question.spoken(), StandardCharsets.UTF_8));
         saved = repos.questions.save(saved);
         int optionOrder = 1;
         for (DemoClassContent.Option option : question.options()) {
@@ -668,13 +675,9 @@ public class DemoClassesSeeder implements CommandLineRunner {
             answer.setQuestion(question);
             answer.setCorrect(correct);
             answer.setHintUsed(hintOnFirst && index == 0);
-            if (options.isEmpty()) {
-                answer.setAnswerText(correct ? question.getCorrectAnswerText() : "你们");
-            } else {
-                QuizOption chosen = options.stream().filter(option -> option.isCorrectOption() == correct).findFirst().orElseThrow();
-                answer.setSelectedOption(chosen);
-                answer.setAnswerText(chosen.getOptionText());
-            }
+            QuizOption chosen = options.stream().filter(option -> option.isCorrectOption() == correct).findFirst().orElseThrow();
+            answer.setSelectedOption(chosen);
+            answer.setAnswerText(chosen.getOptionText());
             answer.setCreatedAt(attempt.getCompletedAt());
             repos.answers.save(answer);
             max += question.getPoints();
@@ -701,14 +704,14 @@ public class DemoClassesSeeder implements CommandLineRunner {
 
     // ----- live sessions -----
 
-    private void seedLiveSessions(TeacherProfile teacher, CoursePackage coursePackage, Seeded greetings, Seeded numbers,
+    private void seedLiveSessions(TeacherProfile teacher, CoursePackage coursePackage, Seeded meeting, Seeded rooms,
             Seeded universityLife, Seeded orderingFood, Seeded findingPlaces, StudentProfile amira, StudentProfile chen,
             StudentProfile zhang) {
         // Today's session starts two hours from now (or tomorrow afternoon late in the evening).
         LocalDateTime todayStart = now.getHour() <= 20
                 ? now.toLocalDate().atTime(now.getHour() + 2, 0)
                 : now.toLocalDate().plusDays(1).atTime(16, 0);
-        LiveClass today = session(teacher, coursePackage, greetings.lesson(), "Greetings 问候", todayStart, 45, 25,
+        LiveClass today = session(teacher, coursePackage, meeting.lesson(), "Meeting Classmates 认识同学", todayStart, 45, 25,
                 MeetingPlatform.ZOOM, "https://zoom.us/j/88123456789");
         book(today, amira, 2, false);
         book(today, chen, 2, false);
@@ -730,20 +733,20 @@ public class DemoClassesSeeder implements CommandLineRunner {
         book(full, chen, 2, false);
         book(full, zhang, 2, false);
 
-        LiveClass tones = session(teacher, coursePackage, greetings.lesson(), "Tones Clinic", day(7, 15), 30, 30,
+        LiveClass questionsAndAnswers = session(teacher, coursePackage, meeting.lesson(), "Campus Q&A", day(7, 15), 30, 30,
                 MeetingPlatform.ZOOM, "https://zoom.us/j/88555123456");
-        tones.setRescheduledFromStartAt(day(7, 14));
-        tones.setLiveClassStatus(LiveClassStatus.RESCHEDULED);
-        repos.sessions.save(tones);
-        book(tones, chen, 1, false);
+        questionsAndAnswers.setRescheduledFromStartAt(day(7, 14));
+        questionsAndAnswers.setLiveClassStatus(LiveClassStatus.RESCHEDULED);
+        repos.sessions.save(questionsAndAnswers);
+        book(questionsAndAnswers, chen, 1, false);
 
-        LiveClass pastNumbers = session(teacher, coursePackage, numbers.lesson(), "Numbers 数字", day(-7, 16), 45, 25,
+        LiveClass pastRooms = session(teacher, coursePackage, rooms.lesson(), "Room Numbers 房号", day(-7, 16), 45, 25,
                 MeetingPlatform.ZOOM, "https://zoom.us/j/88001122334");
-        pastNumbers.setRecordingUrl("https://zoom.us/rec/share/numbers-practice");
-        repos.sessions.save(pastNumbers);
-        book(pastNumbers, amira, 9, true);
-        book(pastNumbers, chen, 9, true);
-        book(pastNumbers, zhang, 9, false);
+        pastRooms.setRecordingUrl("https://zoom.us/rec/share/room-numbers-practice");
+        repos.sessions.save(pastRooms);
+        book(pastRooms, amira, 9, true);
+        book(pastRooms, chen, 9, true);
+        book(pastRooms, zhang, 9, false);
 
         LiveClass pastCampus = session(teacher, coursePackage, universityLife.lesson(), "Campus Words 校园", day(-11, 17), 45, 20,
                 MeetingPlatform.GOOGLE_MEET, "https://meet.google.com/abc-defg-hij");
@@ -751,7 +754,7 @@ public class DemoClassesSeeder implements CommandLineRunner {
         repos.sessions.save(pastCampus);
         book(pastCampus, amira, 13, true);
 
-        LiveClass pastGreetings = session(teacher, coursePackage, greetings.lesson(), "Greetings 问候", day(-14, 16), 45, 25,
+        LiveClass pastGreetings = session(teacher, coursePackage, meeting.lesson(), "Greetings 问候", day(-14, 16), 45, 25,
                 MeetingPlatform.ZOOM, "https://zoom.us/j/88777666555");
         pastGreetings.setRecordingUrl("https://zoom.us/rec/share/greetings-practice");
         repos.sessions.save(pastGreetings);

@@ -60,10 +60,9 @@ describe('AdminAnalyticsPage', () => {
     await flushPromises()
 
     expect(overview.analytics).toHaveBeenCalledWith(7)
-    const kpis = wrapper.findAll('[data-testid="admin-insights-kpi"]').map((kpi) => kpi.text())
-    expect(kpis[0]).toContain('8 students · 6 teachers · 1 admin')
-    expect(kpis[1]).toContain('In the last 7 days')
-    expect(kpis[3]).toContain('1,236 successful')
+    const users = wrapper.get('[data-testid="admin-insights-users"]').text()
+    expect(users).toContain('15 users')
+    expect(users).toContain('8 students · 6 teachers · 1 admin')
     expect(wrapper.get('[data-testid="admin-insights-registrations-detail"]').text()).toContain('6 new accounts')
     expect(wrapper.text()).toContain('6 of 8')
     expect(wrapper.text()).toContain('78.5%')
@@ -78,7 +77,6 @@ describe('AdminAnalyticsPage', () => {
     await flushPromises()
     expect(overview.analytics).toHaveBeenLastCalledWith(30)
     expect(wrapper.get('[data-testid="admin-insights-period-30"]').attributes('aria-pressed')).toBe('true')
-    expect(wrapper.findAll('[data-testid="admin-insights-kpi"]')[1].text()).toContain('In the last 30 days')
     expect(wrapper.findAll('.admin-insights-axis li')).toHaveLength(30)
   })
 
@@ -115,6 +113,6 @@ describe('AdminAnalyticsPage', () => {
 
     await wrapper.get('.state-actions button').trigger('click')
     await flushPromises()
-    expect(wrapper.findAll('[data-testid="admin-insights-kpi"]')).toHaveLength(4)
+    expect(wrapper.find('[data-testid="admin-insights-users"]').exists()).toBe(true)
   })
 })

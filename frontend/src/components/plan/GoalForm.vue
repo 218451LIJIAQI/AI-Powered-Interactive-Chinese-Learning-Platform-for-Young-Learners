@@ -1,12 +1,14 @@
 <template>
-  <div class="plan-goal-form">
+  <div class="plan-goal-form" :class="{ 'is-compact': compact }">
     <section v-if="show('reason')" class="plan-form-section">
-      <h3 v-if="variant === 'chips'" class="plan-form-label">{{ t('plan.setup.reasonsLabel') }}</h3>
+      <h3 v-if="compact" class="plan-form-label">{{ t('plan.setup.reasonsLabel') }}</h3>
       <PlanChoiceGrid
         :choices="reasonChoices"
         :selected="model.reason ? [model.reason] : []"
         :label="t('plan.setup.reasonsLabel')"
-        :variant="variant"
+        :variant="compact ? 'chips' : 'cards'"
+        :columns="compact ? 2 : 3"
+        :compact="compact"
         test-id="reason-choices"
         @toggle="pickReason"
       />
@@ -23,17 +25,21 @@
     </section>
 
     <section v-if="show('goals')" class="plan-form-section">
-      <h3 class="plan-form-label">{{ t('plan.setup.goalsLabel') }}</h3>
+      <h3 v-if="compact" class="plan-form-label">{{ t('plan.setup.goalsLabel') }}</h3>
       <PlanChoiceGrid
         :choices="goalChoices"
         :selected="model.goals"
         :label="t('plan.setup.goalsLabel')"
         variant="chips"
+        :columns="compact ? 2 : 4"
+        :compact="compact"
         test-id="goal-choices"
         @toggle="pickGoal"
       />
       <div class="field">
-        <label class="field-label" :for="`${baseId}-own-words`">{{ t('plan.setup.ownWordsLabel') }}</label>
+        <label class="field-label" :for="`${baseId}-own-words`">
+          {{ t('plan.setup.ownWordsLabel') }} <span class="plan-optional">{{ t('plan.setup.optional') }}</span>
+        </label>
         <textarea
           :id="`${baseId}-own-words`"
           v-model="goalText"
@@ -53,12 +59,14 @@
     </section>
 
     <section v-if="show('deadline')" class="plan-form-section">
-      <h3 class="plan-form-label">{{ t('plan.setup.reachIn') }}</h3>
+      <h3 class="plan-form-label">{{ compact ? t('plan.setup.reachInShort') : t('plan.setup.reachIn') }}</h3>
       <PlanChoiceGrid
         :choices="deadlineChoices"
         :selected="model.deadlineChoice ? [model.deadlineChoice] : []"
         :label="t('plan.setup.reachIn')"
         variant="chips"
+        :columns="compact ? 3 : 4"
+        :compact="compact"
         test-id="deadline-choices"
         @toggle="pickDeadline"
       />
@@ -74,10 +82,10 @@
         />
       </div>
       <p v-if="deadline" class="plan-form-note">
-        <IconGlyph name="calendar" :size="16" />{{ t('plan.setup.thatsAround', { date: longDate(deadline) }) }}
+        <IconGlyph name="calendar" :size="14" />{{ t('plan.setup.thatsAround', { date: longDate(deadline) }) }}
       </p>
       <p v-else-if="model.deadlineChoice === 'none'" class="plan-form-note">
-        <IconGlyph name="calendar" :size="16" />{{ t('plan.setup.noRush') }}
+        <IconGlyph name="calendar" :size="14" />{{ t('plan.setup.noRush') }}
       </p>
     </section>
 
@@ -87,24 +95,27 @@
         :choices="paceChoices"
         :selected="model.pace ? [model.pace] : []"
         :label="t('plan.setup.timeLabel')"
-        :variant="variant"
+        :variant="compact ? 'chips' : 'cards'"
+        :columns="compact ? 2 : 4"
+        :compact="compact"
         test-id="pace-choices"
         @toggle="pickPace"
       />
       <p v-if="selectedPace" class="plan-form-note">
-        <IconGlyph name="info" :size="16" />{{
-          t('plan.setup.dailyGoalNote', { pace: t(PACES[selectedPace.key].label), xp: selectedPace.dailyGoalXp })
+        <IconGlyph name="info" :size="14" />{{
+          compact ? t(PACES[selectedPace.key].hint) : t('plan.setup.dailyGoalNote', { xp: selectedPace.dailyGoalXp })
         }}
       </p>
     </section>
 
     <section v-if="show('focus')" class="plan-form-section">
-      <h3 v-if="variant === 'chips'" class="plan-form-label">{{ t('plan.setup.focusLead') }}</h3>
+      <h3 v-if="compact" class="plan-form-label">{{ t('plan.setup.focusLabel') }}</h3>
       <PlanChoiceGrid
         :choices="focusChoices"
         :selected="model.focus"
         :label="t('plan.setup.focusTitle')"
-        :variant="variant"
+        :variant="compact ? 'chips' : 'cards'"
+        :compact="compact"
         :suggested-label="t('plan.setup.suggested')"
         test-id="focus-choices"
         @toggle="pickFocus"
@@ -134,13 +145,13 @@ import {
 } from './goalDraft'
 import PlanChoiceGrid, { type PlanChoice } from './PlanChoiceGrid.vue'
 import { longDate } from './planFormat'
-import { FOCUSES, GOAL_KEYS, PACES, REASONS } from './planLabels'
+import { FOCUSES, GOAL_KEYS, PACES, REASONS, SHOWN_FOCUSES, SHOWN_REASONS } from './planLabels'
 
 type Section = 'reason' | 'goals' | 'deadline' | 'pace' | 'focus'
 
 /**
- * The goal's fields: the setup shows one section per step (as cards), "Edit my goal" and "Update my goal" show
- * several (as chips). Every change replaces the draft, so the parent owns it.
+ * The goal's fields: the setup shows one section per step (as cards), "Edit my goal" and "Update my goal" show several
+ * (`variant="chips"`, compact). Every change replaces the draft, so the parent owns it.
  */
 const props = withDefaults(
   defineProps<{
@@ -159,6 +170,7 @@ const { t } = useLocalMessages({ plan: planMessages })
 const baseId = useId()
 const focusLimit = ref(false)
 
+const compact = computed(() => props.variant === 'chips')
 const goalTextMax = computed(() => props.options.goalTextMax)
 const deadline = computed(() =>
   model.value.deadlineChoice === 'none' ? null : deadlineFor(model.value.deadlineChoice, model.value.customDate),
@@ -179,11 +191,11 @@ const customDate = computed({
 })
 
 const reasonChoices = computed<PlanChoice[]>(() =>
-  props.options.reasons.map((reason) => ({
-    value: reason.key,
-    label: t(REASONS[reason.key].label),
-    hint: t(REASONS[reason.key].hint),
-    icon: REASONS[reason.key].icon,
+  SHOWN_REASONS.filter((key) => props.options.reasons.some((reason) => reason.key === key)).map((key) => ({
+    value: key,
+    label: t(REASONS[key].label),
+    hint: t(REASONS[key].hint),
+    icon: compact.value ? undefined : REASONS[key].icon,
   })),
 )
 
@@ -197,27 +209,36 @@ const goalChoices = computed<PlanChoice[]>(() => {
 })
 
 const deadlineChoices = computed<PlanChoice[]>(() =>
-  DEADLINE_CHOICES.map((choice) => ({ value: choice, label: deadlineLabel(choice) })),
+  DEADLINE_CHOICES.map((choice) => ({
+    value: choice,
+    label: deadlineLabel(choice),
+    icon: choice === 'date' ? 'calendar' : undefined,
+  })),
 )
 
 const paceChoices = computed<PlanChoice[]>(() =>
-  props.options.paces.map((pace) => ({
-    value: pace.key,
-    label: t(PACES[pace.key].label),
-    hint: t(PACES[pace.key].hint),
-    icon: PACES[pace.key].icon,
-  })),
+  props.options.paces.map((pace) => {
+    return {
+      value: pace.key,
+      label: t(PACES[pace.key].label),
+      hint: t(PACES[pace.key].hint),
+      icon: compact.value ? undefined : PACES[pace.key].icon,
+    }
+  }),
 )
 
-const focusChoices = computed<PlanChoice[]>(() =>
-  props.options.focuses.map((focus) => ({
+const focusChoices = computed<PlanChoice[]>(() => {
+  const lead = model.value.reason ? t(REASONS[model.value.reason].forLabel) : undefined
+  return SHOWN_FOCUSES.filter((focus) => props.options.focuses.includes(focus)).map((focus) => ({
     value: focus,
     label: t(FOCUSES[focus].label),
     hint: t(FOCUSES[focus].hint),
-    icon: FOCUSES[focus].icon,
+    icon: compact.value ? undefined : FOCUSES[focus].icon,
+    lead,
+    foot: t(FOCUSES[focus].week),
     suggested: focus === props.suggestedFocus,
-  })),
-)
+  }))
+})
 
 function show(section: Section): boolean {
   return props.sections.includes(section)

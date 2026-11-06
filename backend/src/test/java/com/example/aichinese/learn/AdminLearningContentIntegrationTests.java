@@ -37,15 +37,25 @@ class AdminLearningContentIntegrationTests extends ApiIntegrationTest {
         mockMvc.perform(api.authGet(PATH, admin))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.unitCount").value(8))
-                .andExpect(jsonPath("$.data.lessonCount").value(47))
-                .andExpect(jsonPath("$.data.levels[0].lessonCount").value(24))
+                .andExpect(jsonPath("$.data.lessonCount").value(51))
+                .andExpect(jsonPath("$.data.levels[0].lessonCount").value(28))
+                .andExpect(jsonPath("$.data.levels[0].units[0].lessonCount").value(8))
+                .andExpect(jsonPath("$.data.levels[0].units[1].lessonCount").value(6))
+                .andExpect(jsonPath("$.data.levels[0].units[2].lessonCount").value(8))
+                .andExpect(jsonPath("$.data.levels[0].units[3].lessonCount").value(6))
                 .andExpect(jsonPath("$.data.levels[1].lessonCount").value(23))
-                .andExpect(jsonPath("$.data.levels[1].units[2].status").value("DRAFT"));
+                .andExpect(jsonPath("$.data.levels[1].units[0].lessonCount").value(6))
+                .andExpect(jsonPath("$.data.levels[1].units[1].lessonCount").value(6))
+                .andExpect(jsonPath("$.data.levels[1].units[2].lessonCount").value(5))
+                .andExpect(jsonPath("$.data.levels[1].units[3].lessonCount").value(6))
+                .andExpect(jsonPath("$.data.levels[1].units[1].status").value("PUBLISHED"))
+                .andExpect(jsonPath("$.data.levels[1].units[2].status").value("DRAFT"))
+                .andExpect(jsonPath("$.data.levels[1].units[3].status").value("DRAFT"));
 
         LearnUnit unitThree = unitRepository.findAllByOrderByPositionAsc().get(2);
         mockMvc.perform(api.authGet(PATH + "/units/" + unitThree.getId(), admin))
-                .andExpect(jsonPath("$.data.unit.title").value("Getting around"))
-                .andExpect(jsonPath("$.data.lessons.length()").value(6))
+                .andExpect(jsonPath("$.data.unit.title").value("First sentences"))
+                .andExpect(jsonPath("$.data.lessons.length()").value(8))
                 .andExpect(jsonPath("$.data.lessons[0].questionCount").isNumber());
 
         String student = api.registerStudent(uniqueEmail("admin-path-student"));
@@ -56,7 +66,7 @@ class AdminLearningContentIntegrationTests extends ApiIntegrationTest {
             mockMvc.perform(api.authPost(PATH + "/units/" + unitThree.getId() + "/unpublish", admin))
                     .andExpect(status().isBadRequest());
             JsonNode path = api.data(mockMvc.perform(api.authGet("/api/v1/students/learn/path", student)).andReturn());
-            assertThat(path.findValuesAsText("title")).doesNotContain("Getting around");
+            assertThat(path.findValuesAsText("title")).doesNotContain("First sentences");
             assertThat(auditLogRepository.findTop10ByTargetTypeAndTargetIdOrderByCreatedAtDesc("LEARN_UNIT", unitThree.getId()))
                     .isNotEmpty();
         } finally {
@@ -109,7 +119,7 @@ class AdminLearningContentIntegrationTests extends ApiIntegrationTest {
         String admin = api.adminToken();
         mockMvc.perform(api.authGet(LIBRARY, admin).param("size", "10"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.totalItems").value(org.hamcrest.Matchers.greaterThanOrEqualTo(35)))
+                .andExpect(jsonPath("$.data.totalItems").value(org.hamcrest.Matchers.greaterThanOrEqualTo(30)))
                 .andExpect(jsonPath("$.data.items.length()").value(10));
         JsonNode quizzes = api.data(mockMvc.perform(api.authGet(LIBRARY, admin).param("type", "quizzes").param("size", "50"))
                 .andReturn());

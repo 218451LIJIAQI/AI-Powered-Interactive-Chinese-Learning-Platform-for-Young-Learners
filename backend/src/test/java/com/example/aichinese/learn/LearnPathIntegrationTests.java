@@ -28,6 +28,8 @@ import com.example.aichinese.support.ApiIntegrationTest;
 class LearnPathIntegrationTests extends ApiIntegrationTest {
 
     private static final String PATH = "/api/v1/students/learn/path";
+    private static final String FIRST = "The four tones · 声调";
+    private static final String SECOND = "Simple finals · a o e i u ü";
 
     @Autowired
     private LearnLessonRepository lessonRepository;
@@ -44,16 +46,16 @@ class LearnPathIntegrationTests extends ApiIntegrationTest {
         JsonNode path = api.data(mockMvc.perform(api.authGet(PATH, token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.completedLessons").value(0))
-                .andExpect(jsonPath("$.data.nextLesson.title").value("Hello and goodbye"))
+                .andExpect(jsonPath("$.data.nextLesson.title").value(FIRST))
                 .andExpect(jsonPath("$.data.nextLesson.position").value(1))
-                .andExpect(jsonPath("$.data.nextLesson.unitLessonCount").value(7))
+                .andExpect(jsonPath("$.data.nextLesson.unitLessonCount").value(8))
                 .andExpect(jsonPath("$.data.levels[0].level").value(1))
                 .andExpect(jsonPath("$.data.levels[0].locked").value(false))
                 .andExpect(jsonPath("$.data.levels[0].units[0].state").value("ACTIVE"))
                 .andExpect(jsonPath("$.data.levels[0].units[0].lessons[0].state").value("AVAILABLE"))
                 .andExpect(jsonPath("$.data.levels[0].units[0].lessons[0].current").value(true))
                 .andExpect(jsonPath("$.data.levels[0].units[0].lessons[1].state").value("LOCKED"))
-                .andExpect(jsonPath("$.data.levels[0].units[0].lessons[1].unlockAfter").value("Hello and goodbye"))
+                .andExpect(jsonPath("$.data.levels[0].units[0].lessons[1].unlockAfter").value(FIRST))
                 .andExpect(jsonPath("$.data.levels[0].units[1].state").value("LOCKED"))
                 .andExpect(jsonPath("$.data.levels[0].units[1].unlockAfterUnit").value(1))
                 .andExpect(jsonPath("$.data.levels[0].checkpoint.state").value("LOCKED"))
@@ -63,7 +65,8 @@ class LearnPathIntegrationTests extends ApiIntegrationTest {
                 .andReturn());
 
         List<String> unitTitles = path.findValuesAsText("title");
-        assertThat(unitTitles).contains("Say hello", "Campus life", "Shopping", "Travel").doesNotContain("Work and study");
+        assertThat(unitTitles).contains("Pinyin and tones", "Questions and counting", "Time and completed actions", "Comparing")
+                .doesNotContain("Actions and experience", "Abilities and reasons");
         int publishedLessons = (int) lessonRepository.findPathInOrder().stream()
                 .filter(lesson -> lesson.getUnit().getPublishStatus() == PublishStatus.PUBLISHED)
                 .filter(lesson -> lesson.getLessonKind() != LearnLessonKind.CHECKPOINT)
@@ -74,12 +77,12 @@ class LearnPathIntegrationTests extends ApiIntegrationTest {
     @Test
     void lessonsSendNoAnswersAndLockedLessonsCannotBeOpened() throws Exception {
         String token = api.registerStudent(uniqueEmail("path-lock"));
-        LearnLesson first = lesson("Hello and goodbye");
-        LearnLesson second = lesson("Polite phrases");
+        LearnLesson first = lesson(FIRST);
+        LearnLesson second = lesson(SECOND);
 
         JsonNode lesson = api.data(mockMvc.perform(api.authGet("/api/v1/students/learn/lessons/" + first.getId(), token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.title").value("Hello and goodbye"))
+                .andExpect(jsonPath("$.data.title").value(FIRST))
                 .andExpect(jsonPath("$.data.unitNumber").value(1))
                 .andExpect(jsonPath("$.data.xpReward").value(10))
                 .andReturn());
@@ -108,7 +111,7 @@ class LearnPathIntegrationTests extends ApiIntegrationTest {
     void checkingAnswersRecordsMistakesAndFinishingUnlocksTheNextLessonOnce() throws Exception {
         String email = uniqueEmail("path-flow");
         String token = api.registerStudent(email);
-        LearnLesson first = lesson("Hello and goodbye");
+        LearnLesson first = lesson(FIRST);
         LearnQuestion question = questionRepository.findByLessonIdOrderByPositionAsc(first.getId()).get(0);
         String lessonPath = "/api/v1/students/learn/lessons/" + first.getId();
 
@@ -125,7 +128,7 @@ class LearnPathIntegrationTests extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.data.learn").value(1))
                 .andExpect(jsonPath("$.data.page.items[0].yourAnswer").value("something else"));
         mockMvc.perform(api.authGet("/api/v1/students/mistakes/review", token))
-                .andExpect(jsonPath("$.data.context[0].sourceTitle").value("Hello and goodbye"));
+                .andExpect(jsonPath("$.data.context[0].sourceTitle").value(FIRST));
 
         mockMvc.perform(api.jsonPost(lessonPath + "/complete", token,
                         Map.of("answers", answers(first), "durationSeconds", 222)))
@@ -138,7 +141,7 @@ class LearnPathIntegrationTests extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.data.xp.dailyGoalXp").value(20))
                 .andExpect(jsonPath("$.data.xp.goalJustReached").value(false))
                 .andExpect(jsonPath("$.data.xp.newBadges[0]").value("FIRST_STEPS"))
-                .andExpect(jsonPath("$.data.nextLesson.title").value("Polite phrases"))
+                .andExpect(jsonPath("$.data.nextLesson.title").value(SECOND))
                 .andExpect(jsonPath("$.data.nextLesson.unlockedNow").value(true));
 
         // A replay is welcome but earns nothing twice; a wrong replay still finishes a lesson.
@@ -148,7 +151,7 @@ class LearnPathIntegrationTests extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.data.xp.xpEarned").value(0));
 
         // The second lesson reaches the default goal of 20 XP: +5 bonus and a streak of one day.
-        LearnLesson second = lesson("Polite phrases");
+        LearnLesson second = lesson(SECOND);
         mockMvc.perform(api.jsonPost("/api/v1/students/learn/lessons/" + second.getId() + "/complete", token,
                         Map.of("answers", answers(second))))
                 .andExpect(jsonPath("$.data.xp.xpEarned").value(10))
@@ -160,7 +163,7 @@ class LearnPathIntegrationTests extends ApiIntegrationTest {
 
         mockMvc.perform(api.authGet(PATH, token))
                 .andExpect(jsonPath("$.data.completedLessons").value(2))
-                .andExpect(jsonPath("$.data.nextLesson.title").value("Introduce yourself"))
+                .andExpect(jsonPath("$.data.nextLesson.title").value("Initials 1 · b p m f and more"))
                 .andExpect(jsonPath("$.data.levels[0].units[0].completedCount").value(2));
         // Another student's path is untouched.
         String other = api.registerStudent(uniqueEmail("path-other"));
@@ -186,7 +189,7 @@ class LearnPathIntegrationTests extends ApiIntegrationTest {
         mockMvc.perform(api.authGet(PATH, token))
                 .andExpect(jsonPath("$.data.levels[0].units[0].state").value("DONE"))
                 .andExpect(jsonPath("$.data.levels[0].units[1].state").value("ACTIVE"))
-                .andExpect(jsonPath("$.data.nextLesson.title").value("At the canteen"))
+                .andExpect(jsonPath("$.data.nextLesson.title").value("Strokes and order · 笔画"))
                 .andExpect(jsonPath("$.data.levels[0].units[0].lessons[4].kind").value("BONUS"))
                 .andExpect(jsonPath("$.data.levels[0].units[0].lessons[4].state").value("AVAILABLE"));
     }
@@ -224,7 +227,7 @@ class LearnPathIntegrationTests extends ApiIntegrationTest {
         mockMvc.perform(api.jsonPost(checkpointPath + "/complete", token, Map.of("answers", answers(checkpoint))))
                 .andExpect(jsonPath("$.data.passed").value(true))
                 .andExpect(jsonPath("$.data.xp.xpEarned").value(50))
-                .andExpect(jsonPath("$.data.nextLesson.title").value("Clothes and colours"));
+                .andExpect(jsonPath("$.data.nextLesson.title").value("Yesterday and today · 昨天"));
         mockMvc.perform(api.authGet(PATH, token))
                 .andExpect(jsonPath("$.data.levels[0].checkpoint.state").value("DONE"))
                 .andExpect(jsonPath("$.data.levels[1].locked").value(false));
@@ -236,10 +239,40 @@ class LearnPathIntegrationTests extends ApiIntegrationTest {
         LearnUnit unit = unitRepository.findAllByOrderByPositionAsc().get(0);
         mockMvc.perform(api.authGet("/api/v1/students/learn/units/" + unit.getId() + "/guidebook", token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.title").value("Say hello"))
-                .andExpect(jsonPath("$.data.phrases[0].hanzi").value("你好"))
+                .andExpect(jsonPath("$.data.title").value("Pinyin and tones"))
+                .andExpect(jsonPath("$.data.titleZh").value("拼音"))
+                .andExpect(jsonPath("$.data.phrases[0].hanzi").value("妈"))
                 .andExpect(jsonPath("$.data.phrases.length()").value(5))
-                .andExpect(jsonPath("$.data.tips.length()").value(3));
+                .andExpect(jsonPath("$.data.tips.length()").value(4));
+    }
+
+    @Test
+    void aPronunciationLessonAsksOnlyForThePinyinAndWhatYouHear() throws Exception {
+        String token = api.registerStudent(uniqueEmail("path-sounds"));
+        LearnLesson initials = lesson("Initials 1 · b p m f and more");
+        for (LearnLesson done : List.of(lesson(FIRST), lesson(SECOND))) {
+            complete(token, done);
+        }
+        JsonNode lesson = api.data(mockMvc.perform(api.authGet("/api/v1/students/learn/lessons/" + initials.getId(), token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.position").value(3))
+                .andExpect(jsonPath("$.data.unitLessonCount").value(8))
+                .andReturn());
+        JsonNode sample = lesson.path("questions").get(0);
+        assertThat(sample.path("type").asText()).isEqualTo("PINYIN");
+        assertThat(sample.path("hanzi").asText()).isEqualTo("爸");
+        assertThat(sample.path("options").findValuesAsText("text")).containsExactly("bà", "pà", "mà");
+        assertThat(lesson.path("questions").findValuesAsText("type"))
+                .containsOnly("PINYIN", "LISTEN_CHOOSE", "LISTEN_BUILD");
+
+        JsonNode drill = lesson.path("questions").get(1);
+        assertThat(drill.path("type").asText()).isEqualTo("LISTEN_BUILD");
+        assertThat(drill.path("tiles").toString()).contains("mā", "pà", "dú", "hē", "bà", "tū", "gē");
+        mockMvc.perform(api.jsonPost("/api/v1/students/learn/lessons/" + initials.getId() + "/check", token,
+                        Map.of("questionId", drill.path("id").asLong(), "answer", "mā bà dú hē")))
+                .andExpect(jsonPath("$.data.correct").value(false))
+                .andExpect(jsonPath("$.data.correctAnswer").value("mā pà dú hē"))
+                .andExpect(jsonPath("$.data.explanation").value(org.hamcrest.Matchers.containsString("puff of air")));
     }
 
     @Test

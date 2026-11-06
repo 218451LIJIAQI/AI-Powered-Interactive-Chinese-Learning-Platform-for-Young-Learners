@@ -1,21 +1,28 @@
 <template>
   <div class="page-stack support-page">
-    <PageHeaderBlock :title="t('support.pageTitle')" :description="t('support.replyTime')">
+    <div v-if="notice" class="alert alert-success" role="status" data-testid="support-notice">
+      <IconGlyph name="status" :size="18" />
+      <span>{{ t(notice.key, { number: notice.number }) }}</span>
+    </div>
+
+    <PageHeaderBlock :title="t('support.pageTitle')" hide-title>
       <template #actions>
+        <p class="ops-toolbar-note">{{ t('support.replyTime') }}</p>
         <button class="btn btn-primary" type="button" data-testid="support-new" @click="openDialog">
-          <IconGlyph name="plus" :size="16" />
           {{ t('support.newRequest') }}
         </button>
       </template>
     </PageHeaderBlock>
 
-    <DataNotice :success="sentNotice" :success-title="t('support.sentTitle')" />
-
     <div class="support-layout">
-      <section class="support-requests" aria-labelledby="support-requests-title">
-        <div class="support-section-head">
-          <h2 id="support-requests-title" class="support-section-title">{{ t('support.yourRequests') }}</h2>
-          <span v-if="requests.length" class="type-caption">
+      <section
+        class="panel support-requests"
+        :class="{ 'is-empty': !resource.loading.value && !resource.error.value && !requests.length }"
+        aria-labelledby="support-requests-title"
+      >
+        <div class="support-requests-head">
+          <h2 id="support-requests-title" class="card-title">{{ t('support.yourRequests') }}</h2>
+          <span v-if="!resource.loading.value && !resource.error.value" class="type-caption">
             {{ t('support.requestCount', { count: requests.length }, requests.length) }}
           </span>
         </div>
@@ -37,75 +44,57 @@
             <button class="btn btn-primary" type="button" @click="resource.reload">{{ t('support.retry') }}</button>
           </template>
         </StatePanel>
-        <ul v-else-if="requests.length" class="support-request-list" data-testid="support-requests">
+        <ul v-else-if="requests.length" class="row-list" data-testid="support-requests">
           <li v-for="request in requests" :key="request.id">
             <RouterLink
               class="support-request-row"
-              :class="{ 'is-solved': request.status === 'SOLVED' }"
               :to="{ name: ticketRouteName, params: { ticketId: request.id } }"
               :aria-label="t('support.openRequest', { number: request.number, subject: request.subject })"
             >
-              <span class="support-request-copy">
-                <strong class="support-request-subject">
-                  <span class="support-request-number">#{{ request.number }}</span> · {{ request.subject }}
-                </strong>
-                <span class="type-caption">{{ requestMeta(request) }}</span>
+              <span class="row-list-copy">
+                <strong class="card-title support-request-subject"
+                  >#{{ request.number }} · {{ request.subject }}</strong
+                >
+                <span class="row-list-meta">{{ requestMeta(request) }}</span>
               </span>
-              <StatusPill :label="t(requestStatusKey(request.status))" :tone="supportStatusTone(request.status)" />
+              <StatusPill :label="t(requestStatusKey(request.status))" :tone="requestStatusTone(request.status)" />
               <IconGlyph name="chevronRight" :size="18" class="support-request-chevron" />
             </RouterLink>
           </li>
         </ul>
-        <StatePanel
-          v-else
-          tone="empty"
-          icon="support"
-          :title="t('support.emptyTitle')"
-          :message="t('support.emptyHint')"
-        >
-          <template #actions>
-            <button class="btn btn-secondary" type="button" @click="openDialog">{{ t('support.newRequest') }}</button>
-          </template>
-        </StatePanel>
-
-        <p class="support-footnote">{{ t('support.footnote') }}</p>
       </section>
 
-      <!-- Quick answers: questions first, an answer opens under its question. -->
-      <aside class="support-rail" :aria-label="t('support.quickAnswers')">
-        <h2 class="support-section-title">{{ t('support.quickAnswers') }}</h2>
-        <div class="support-answer-list">
-          <details v-for="answer in quickAnswers" :key="answer.question" class="support-answer">
-            <summary>
-              {{ t(answer.question) }}
-              <IconGlyph name="chevronDown" :size="16" class="support-answer-chevron" />
-            </summary>
-            <p>{{ t(answer.answer) }}</p>
-          </details>
-        </div>
-        <RouterLink class="support-rail-link" to="/safety">
-          {{ t('support.safetyLink') }} <IconGlyph name="chevronRight" :size="14" />
-        </RouterLink>
-        <RouterLink class="support-rail-link" to="/responsible-ai">
-          {{ t('support.aiLink') }} <IconGlyph name="chevronRight" :size="14" />
-        </RouterLink>
+      <aside class="support-side-card" aria-labelledby="support-answers-title">
+        <h2 id="support-answers-title" class="card-title">{{ t('support.quickAnswers') }}</h2>
+        <dl class="support-answer-list">
+          <div v-for="answer in quickAnswers" :key="answer.question" class="support-answer">
+            <dt>{{ t(answer.question) }}</dt>
+            <dd>{{ t(answer.answer) }}</dd>
+          </div>
+        </dl>
+        <p class="support-safety">
+          <RouterLink to="/safety">
+            {{ t('support.safetyLink') }}
+            <IconGlyph name="chevronRight" :size="14" />
+          </RouterLink>
+        </p>
       </aside>
     </div>
 
     <AppOverlay
       :open="dialogOpen"
       :title="t('support.dialogTitle')"
-      :subtitle="t('support.dialogSubtitle')"
+      :subtitle="t('support.replyTime')"
+      :busy="sending"
       test-id="support-dialog"
       @close="closeDialog"
     >
       <form id="support-new-form" class="form-grid" novalidate @submit.prevent="send">
         <div class="field">
           <label for="support-topic">{{ t('support.topic') }}</label>
-          <select id="support-topic" v-model="form.topic" class="select" aria-describedby="support-topic-hint">
+          <select id="support-topic" v-model="form.topic" class="select">
             <option v-for="topic in SUPPORT_TOPICS" :key="topic" :value="topic">{{ t(supportTopicKey(topic)) }}</option>
           </select>
-          <p id="support-topic-hint" class="field-hint">{{ t('support.topicHint') }}</p>
         </div>
 
         <div class="field">
@@ -114,6 +103,7 @@
           </label>
           <input
             id="support-subject"
+            data-autofocus
             v-model="form.subject"
             class="input"
             maxlength="150"
@@ -144,41 +134,58 @@
         </div>
 
         <div class="field">
-          <label for="support-screenshot">{{ t('support.screenshot') }}</label>
+          <span id="support-screenshot-label" class="field-label">{{ t('support.screenshot') }}</span>
+          <input
+            id="support-screenshot"
+            ref="fileInput"
+            class="sr-only"
+            type="file"
+            tabindex="-1"
+            aria-hidden="true"
+            accept="image/png,image/jpeg"
+            @change="chooseScreenshot"
+          />
           <div class="support-file-row">
-            <input
-              id="support-screenshot"
-              ref="fileInput"
-              class="input"
-              type="file"
-              accept="image/png,image/jpeg"
+            <button
+              id="support-screenshot-add"
+              ref="addFileButton"
+              class="btn btn-secondary"
+              type="button"
+              aria-labelledby="support-screenshot-label support-screenshot-add"
               :aria-invalid="Boolean(errors.screenshot)"
               :aria-describedby="errors.screenshot ? 'support-screenshot-error' : 'support-screenshot-hint'"
-              @change="chooseScreenshot"
-            />
-            <button
-              v-if="form.screenshot"
-              class="btn btn-ghost btn-icon btn-sm"
-              type="button"
-              :aria-label="t('support.removeScreenshot')"
-              @click="clearScreenshot"
+              data-testid="support-add-file"
+              @click="fileInput?.click()"
             >
-              <IconGlyph name="close" :size="16" />
+              {{ t('support.addFile') }}
             </button>
+            <template v-if="form.screenshot">
+              <span class="support-file-name">{{ form.screenshot.name }}</span>
+              <button
+                class="btn btn-ghost btn-icon btn-sm"
+                type="button"
+                :aria-label="t('support.removeScreenshot')"
+                @click="removeScreenshot"
+              >
+                <IconGlyph name="close" :size="16" />
+              </button>
+            </template>
+            <p v-else id="support-screenshot-hint" class="field-hint">{{ t('support.screenshotHint') }}</p>
           </div>
-          <p id="support-screenshot-hint" class="field-hint">{{ t('support.screenshotHint') }}</p>
           <p v-if="errors.screenshot" id="support-screenshot-error" class="field-error">{{ errors.screenshot }}</p>
         </div>
 
-        <p v-if="sendError" class="alert alert-danger" role="alert">
+        <div v-if="sendError" class="alert alert-danger" role="alert">
           <IconGlyph name="alert" :size="18" />
           <span>{{ sendError }}</span>
-        </p>
+        </div>
       </form>
 
       <template #footer>
         <p class="support-privacy-note">{{ t('support.privacyNote') }}</p>
-        <button class="btn btn-ghost" type="button" @click="closeDialog">{{ t('support.cancel') }}</button>
+        <button class="btn btn-secondary" type="button" :disabled="sending" @click="closeDialog">
+          {{ t('support.cancel') }}
+        </button>
         <button
           class="btn btn-primary"
           type="submit"
@@ -199,11 +206,10 @@ import { computed, reactive, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
 import { supportApi } from '@/api/ops'
-import DataNotice from '@/components/common/DataNotice.vue'
+import AppOverlay from '@/components/common/AppOverlay.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
 import StatusPill from '@/components/common/StatusPill.vue'
-import AppOverlay from '@/components/common/AppOverlay.vue'
 import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { useResource } from '@/composables/useResource'
@@ -213,7 +219,7 @@ import { useAuthStore } from '@/stores/auth'
 import type { SupportRequestSummary, SupportTopic } from '@/types/ops'
 import { resolveApiError } from '@/utils/apiError'
 import { formatShortDate } from '@/utils/format'
-import { requestStatusKey, SUPPORT_TOPICS, supportStatusTone, supportTopicKey } from '@/utils/opsLabels'
+import { requestStatusKey, requestStatusTone, SUPPORT_TOPICS, supportTopicKey } from '@/utils/opsLabels'
 import { screenshotIssue } from '@/utils/uploadChecks'
 import '@/styles/ops-account.css'
 
@@ -228,19 +234,14 @@ const ticketRouteName = computed(() => (isTeacher.value ? 'teacher-support-ticke
 const STUDENT_ANSWERS = [
   { question: 'support.studentQ1', answer: 'support.studentA1' },
   { question: 'support.studentQ2', answer: 'support.studentA2' },
-  { question: 'support.studentQ3', answer: 'support.studentA3' },
-  { question: 'support.studentQ4', answer: 'support.studentA4' },
 ] as const
 const TEACHER_ANSWERS = [
   { question: 'support.teacherQ1', answer: 'support.teacherA1' },
   { question: 'support.teacherQ2', answer: 'support.teacherA2' },
-  { question: 'support.teacherQ3', answer: 'support.teacherA3' },
-  { question: 'support.teacherQ4', answer: 'support.teacherA4' },
 ] as const
 const APPLICANT_ANSWERS = [
   { question: 'support.applicantQ1', answer: 'support.applicantA1' },
   { question: 'support.applicantQ2', answer: 'support.applicantA2' },
-  { question: 'support.applicantQ3', answer: 'support.applicantA3' },
 ] as const
 
 const quickAnswers = computed(() =>
@@ -260,11 +261,28 @@ function requestMeta(request: SupportRequestSummary): string {
   return parts.join(' · ')
 }
 
+// ----- what just happened: a request sent here, or one marked as solved on its own page -----
+
+type SupportNotice = { key: 'support.sent' | 'support.solvedNotice'; number: number }
+
+const notice = ref<SupportNotice | null>(readSolvedRequest())
+
+function readSolvedRequest(): SupportNotice | null {
+  const state = window.history.state as { supportSolved?: number } | null
+  const number = state?.supportSolved
+  if (number === undefined) return null
+  // Shown once: a reload or a later visit does not repeat it.
+  window.history.replaceState({ ...state, supportSolved: undefined }, '')
+  return { key: 'support.solvedNotice', number }
+}
+
+// ----- new request -----
+
 const dialogOpen = ref(false)
 const sending = ref(false)
 const sendError = ref<string | null>(null)
-const sentNotice = ref<string | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
+const addFileButton = ref<HTMLButtonElement | null>(null)
 const form = reactive({
   topic: 'ACCOUNT' as SupportTopic,
   subject: '',
@@ -307,6 +325,12 @@ function clearScreenshot(): void {
   if (fileInput.value) fileInput.value.value = ''
 }
 
+/** The remove button goes away with the file: the keyboard continues from Add a file. */
+function removeScreenshot(): void {
+  clearScreenshot()
+  addFileButton.value?.focus()
+}
+
 async function send(): Promise<void> {
   if (sending.value) return
   errors.subject = form.subject.trim() ? null : t('support.subjectRequired')
@@ -323,7 +347,7 @@ async function send(): Promise<void> {
       screenshot: form.screenshot,
     })
     dialogOpen.value = false
-    sentNotice.value = t('support.sent', { number: created.request.number })
+    notice.value = { key: 'support.sent', number: created.request.number }
     await resource.reload()
   } catch (reason) {
     sendError.value = resolveApiError(reason, t('support.sendError'))

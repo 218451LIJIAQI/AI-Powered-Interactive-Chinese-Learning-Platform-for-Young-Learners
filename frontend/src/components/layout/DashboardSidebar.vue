@@ -1,7 +1,10 @@
 <template>
   <aside class="sidebar">
-    <AppBrand compact class="sidebar-brand" :to="homePath" />
-    <span class="sidebar-role" data-testid="sidebar-role">{{ t(roleLabelKey) }}</span>
+    <AppBrand class="sidebar-brand" :to="homePath">
+      <template #subtitle>
+        <span data-testid="sidebar-role">{{ t(roleLabelKey) }}</span>
+      </template>
+    </AppBrand>
 
     <nav class="sidebar-nav" :aria-label="t('dashboard.sidebarNavigation')">
       <RouterLink
@@ -25,15 +28,6 @@
       </RouterLink>
     </nav>
 
-    <div class="sidebar-word" role="group" :aria-label="wordLabel">
-      <span class="hanzi-tile" aria-hidden="true">{{ word.hanzi }}</span>
-      <div class="sidebar-word-copy" aria-hidden="true">
-        <span class="sidebar-word-eyebrow">{{ t('dashboard.todaysWord') }}</span>
-        <strong class="cjk-text">{{ word.pinyin }}</strong>
-        <span>{{ wordMeaning }}</span>
-      </div>
-    </div>
-
     <div class="sidebar-spacer" />
 
     <RouterLink
@@ -55,16 +49,22 @@
 
     <component
       :is="status.to ? RouterLink : 'div'"
+      v-if="status"
       :to="status.to"
       class="sidebar-status"
-      :class="`is-${status.tone}`"
       data-testid="sidebar-status"
     >
-      <div class="sidebar-status-row">
-        <strong>{{ status.title }}</strong>
-        <span v-if="status.pill" class="sidebar-status-pill">{{ status.pill }}</span>
+      <div class="sidebar-status-row" :class="{ 'has-pill': status.pill }">
+        <span v-if="status.level" class="sidebar-status-tile" aria-hidden="true">{{ status.level }}</span>
+        <span class="sidebar-status-copy">
+          <span class="sidebar-status-title">{{ status.title }}</span>
+          <span v-if="status.meta" class="sidebar-status-meta">
+            <IconGlyph v-if="status.level" name="streak" :size="12" />
+            {{ status.meta }}
+          </span>
+        </span>
+        <StatusPill v-if="status.pill" :label="status.pill" :tone="status.tone" />
       </div>
-      <span class="sidebar-status-meta">{{ status.meta }}</span>
       <ProgressBar
         v-if="status.progress !== null"
         class="is-sm"
@@ -82,15 +82,13 @@ import { useI18n } from 'vue-i18n'
 
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import ProgressBar from '@/components/common/ProgressBar.vue'
+import StatusPill, { type PillTone } from '@/components/common/StatusPill.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { isNavItemActive, roleNavigation, roleSupportNav, type RoleNavItem } from '@/config/navigation'
 import { dashboardMessages } from '@/plugins/dashboardMessages'
 import { useAuthStore } from '@/stores/auth'
-import { useUiStore } from '@/stores/ui'
 import type { HealthStatusResponse, RewardSummaryResponse } from '@/types/api'
-import { formatDate, formatTime } from '@/utils/format'
 import { defaultRouteForRole } from '@/utils/role'
-import { dailyWord } from '@/utils/todaysWord'
 import { xpLevelFor } from '@/utils/xpLevel'
 
 import AppBrand from './AppBrand.vue'
@@ -123,16 +121,17 @@ interface SidebarItem {
 
 interface StatusCard {
   readonly title: string
+  /** The student's level number, shown as a tile before the title. */
+  readonly level?: number
   readonly pill: string
   readonly meta: string
-  readonly tone: 'neutral' | 'success' | 'warning' | 'info'
+  readonly tone: PillTone
   readonly to?: string
   readonly progress: number | null
   readonly progressLabel: string
 }
 
 const auth = useAuthStore()
-const ui = useUiStore()
 const route = useRoute()
 const { t: globalT } = useI18n({ useScope: 'global' })
 const { t } = useLocalMessages({ dashboard: dashboardMessages })
@@ -159,15 +158,10 @@ const supportItem = computed<SidebarItem | null>(() => {
   return item ? toSidebarItem(item) : null
 })
 
-const word = dailyWord()
-const wordMeaning = computed(() => word.meaning[ui.locale])
-const wordLabel = computed(() =>
-  t('dashboard.todaysWordLabel', { hanzi: word.hanzi, pinyin: word.pinyin, meaning: wordMeaning.value }),
-)
-
-const status = computed<StatusCard>(() => {
+/** The card at the bottom of the sidebar. An approved teacher has none: their status needs no reminding. */
+const status = computed<StatusCard | null>(() => {
   if (role.value === 'ADMIN') return adminStatus.value
-  if (role.value === 'TEACHER') return teacherStatus.value
+  if (role.value === 'TEACHER') return isApplicant.value ? applicantStatus.value : null
   return studentStatus.value
 })
 
@@ -177,6 +171,7 @@ const studentStatus = computed<StatusCard>(() => {
   const level = xpLevelFor(totalXp)
   return {
     title: t('dashboard.levelTitle', { level: level.level, title: globalT(level.titleKey) }),
+    level: level.level,
     pill: '',
     meta: streak > 0 ? t('dashboard.xpAndStreak', { xp: totalXp, streak }) : t('dashboard.xpNoStreak', { xp: totalXp }),
     tone: 'neutral',
@@ -186,20 +181,8 @@ const studentStatus = computed<StatusCard>(() => {
   }
 })
 
-const teacherStatus = computed<StatusCard>(() => {
-  const profile = auth.currentUser?.teacherProfile
-  if (!isApplicant.value) {
-    return {
-      title: t('dashboard.verifiedTeacher'),
-      pill: t('dashboard.approved'),
-      meta: profile?.approvedAt ? t('dashboard.approvedOn', { date: formatDate(profile.approvedAt) }) : '',
-      tone: 'success',
-      to: '/teacher/profile',
-      progress: null,
-      progressLabel: '',
-    }
-  }
-  const state = profile?.verificationState ?? 'IN_REVIEW'
+const applicantStatus = computed<StatusCard>(() => {
+  const state = auth.currentUser?.teacherProfile?.verificationState ?? 'IN_REVIEW'
   const pill =
     state === 'NOT_SUBMITTED'
       ? t('dashboard.verificationNotSubmitted')
@@ -209,9 +192,9 @@ const teacherStatus = computed<StatusCard>(() => {
   return {
     title: t('dashboard.verification'),
     pill,
-    meta: t('dashboard.verificationHint'),
-    // The same tones as the verification pills on the pages: in review is information, changes requested a warning.
-    tone: state === 'CHANGES_REQUESTED' ? 'warning' : state === 'NOT_SUBMITTED' ? 'neutral' : 'info',
+    meta: '',
+    // The same tones as the verification badges on the pages: changes requested needs the applicant's action.
+    tone: state === 'CHANGES_REQUESTED' ? 'strong' : state === 'NOT_SUBMITTED' ? 'outline' : 'info',
     to: '/teacher/profile',
     progress: null,
     progressLabel: '',
@@ -233,14 +216,7 @@ const adminStatus = computed<StatusCard>(() => {
           : running
             ? t('dashboard.systemRunning')
             : t('dashboard.systemUnavailable'),
-    meta:
-      health === undefined
-        ? ''
-        : health
-          ? t('dashboard.systemCheckedAt', {
-              time: formatTime(health.timestamp),
-            })
-          : t('dashboard.systemCheckFailed'),
+    meta: '',
     tone: running && !withoutAi ? 'success' : health === undefined ? 'neutral' : 'warning',
     progress: null,
     progressLabel: '',

@@ -1,5 +1,7 @@
 <template>
-  <RouteTabs :tabs="tabs" :label="t('adminAi.tabsLabel')" />
+  <RouteTabs :tabs="tabs" :label="t('adminAi.tabsLabel')"
+    ><template v-if="$slots.default" #default><slot /></template
+  ></RouteTabs>
 </template>
 
 <script setup lang="ts">

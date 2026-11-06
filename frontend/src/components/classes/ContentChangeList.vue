@@ -37,6 +37,7 @@ const CHANGE_KEYS: Record<string, string> = {
   LEVEL: 'classHistory.change.LEVEL',
   TOPIC: 'classHistory.change.TOPIC',
   LEARNING_TYPE: 'classHistory.change.LEARNING_TYPE',
+  BEST_AFTER_UNIT: 'classHistory.change.BEST_AFTER_UNIT',
 }
 
 function changeText(change: ContentChange): string {

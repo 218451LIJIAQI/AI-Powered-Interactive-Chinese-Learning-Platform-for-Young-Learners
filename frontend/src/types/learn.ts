@@ -96,6 +96,8 @@ export interface PathUnit {
   readonly number: number
   readonly title: string
   readonly titleZh: string
+  /** The unit's line icon (an `IconGlyph` name). */
+  readonly iconKey?: string | null
   readonly state: UnitState
   readonly lessonCount: number
   readonly completedCount: number
@@ -333,6 +335,21 @@ export interface ProgressOverview {
   readonly badges: readonly { readonly key: BadgeKey; readonly earned: boolean; readonly earnedAt: string | null }[]
 }
 
+export type ProgressSkill = 'VOCABULARY' | 'LISTENING' | 'CHARACTERS' | 'SENTENCES'
+
+/** The Skills card of the Progress page, computed from the student's real completions. */
+export interface SkillProgress {
+  readonly skills: readonly {
+    readonly skill: ProgressSkill
+    /** The share of the skill's published items the student completed. */
+    readonly percent: number
+    /** Percentage points gained from completions in the last 7 days. */
+    readonly weeklyChange: number
+  }[]
+  /** Null until the student has completed anything. */
+  readonly weakest: ProgressSkill | null
+}
+
 // ===== Admin =====
 
 export interface AdminUnitRow {
@@ -370,7 +387,15 @@ export interface AdminUnitDetail {
   }[]
 }
 
-export type LevelCheckSkill = 'VOCABULARY' | 'LISTENING' | 'CHARACTERS' | 'SENTENCES' | 'PINYIN'
+export type LevelCheckSkill =
+  | 'VOCABULARY'
+  | 'LISTENING'
+  | 'CHARACTERS'
+  | 'NUMBERS'
+  | 'PINYIN'
+  | 'GRAMMAR'
+  | 'SENTENCES'
+  | 'IDIOMS'
 export type LevelCheckLevel = 'BEGINNER_1' | 'BEGINNER_2'
 export type Difficulty = 'EASY' | 'MEDIUM' | 'HARD'
 
@@ -489,6 +514,8 @@ export interface LevelCheckStep {
     readonly hanzi: string | null
     readonly pinyin: string | null
     readonly audioText: string | null
+    /** The skill this question tests: the check asks one question per skill. */
+    readonly skill?: LevelCheckSkill
     readonly options: readonly { readonly id: number; readonly text: string }[]
   } | null
   readonly done: boolean

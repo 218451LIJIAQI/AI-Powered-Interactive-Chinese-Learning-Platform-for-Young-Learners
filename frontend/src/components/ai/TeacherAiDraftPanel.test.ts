@@ -36,9 +36,6 @@ describe('TeacherAiDraftPanel (FRAI05)', () => {
     expect(api.aiQuizDraft).toHaveBeenCalledWith(
       expect.objectContaining({ topic: 'Ordering food', level: 'HSK 1', languagePreference: 'en' }),
     )
-    const result = wrapper.get('[data-testid="teacher-ai-draft-result"]').text()
-    expect(result).toContain(teacherAiQuizDraft.title)
-    expect(result).toContain('Not saved')
   })
 
   it('checks AI availability once the panel becomes enabled and clamps the live quiz question count', async () => {
@@ -55,7 +52,7 @@ describe('TeacherAiDraftPanel (FRAI05)', () => {
     await wrapper.get('input[type="number"]').setValue(25)
     await wrapper.get('form').trigger('submit')
     await flushPromises()
-    expect(api.aiQuizDraft).toHaveBeenCalledWith(expect.objectContaining({ topic: 'Food', numberOfQuestions: 10 }))
+    expect(api.aiQuizDraft).toHaveBeenCalledWith(expect.objectContaining({ topic: 'Food', numberOfQuestions: 5 }))
   })
 
   it('stays disabled with the unavailable note when AI is off', async () => {

@@ -32,7 +32,7 @@ const PASSWORD = 'New-spark-2026'
 
 async function mountPage(): Promise<VueWrapper> {
   const wrapper = mount(ResetPasswordPage, {
-    global: { stubs: { AppBrand: true, IconGlyph: true, LanguageSwitcher: true, StatusPill: true } },
+    global: { stubs: { AppBrand: true, IconGlyph: true, LanguageSwitcher: true } },
   })
   await flushPromises()
   return wrapper
@@ -69,11 +69,24 @@ describe('ResetPasswordPage password reset (FRAUTH05)', () => {
 
     await choosePassword(wrapper, 'Different-2026')
     expect(button().attributes('disabled')).toBeDefined()
-    expect(wrapper.findAll('.auth-checks li.is-met')).toHaveLength(2)
+    expect(wrapper.findAll('.auth-checks li.is-met')).toHaveLength(1)
 
     await wrapper.get('#reset-confirm').setValue(PASSWORD)
     expect(button().attributes('disabled')).toBeUndefined()
-    expect(wrapper.findAll('.auth-checks li.is-met')).toHaveLength(3)
+    expect(wrapper.findAll('.auth-checks li.is-met')).toHaveLength(2)
+  })
+
+  it('says when the new password is too long, and keeps the button off', async () => {
+    mocks.route.query = { token: 'reset-token' }
+    mocks.checkResetLink.mockResolvedValue({ email: 'mei@example.com' })
+    const wrapper = await mountPage()
+
+    const long = 'x'.repeat(80)
+    await wrapper.get('#reset-password').setValue(long)
+    await wrapper.get('#reset-confirm').setValue(long)
+
+    expect(wrapper.get('#reset-too-long').text()).toBe('Use at most 72 characters.')
+    expect(wrapper.get('button[type="submit"]').attributes('disabled')).toBeDefined()
   })
 
   it('resets the password and opens sign in with the "password updated" notice', async () => {
@@ -96,13 +109,16 @@ describe('ResetPasswordPage password reset (FRAUTH05)', () => {
 
   it('offers a new link when the link was used or expired', async () => {
     mocks.route.query = { token: 'old-token' }
-    mocks.checkResetLink.mockRejectedValue({ response: { status: 400, data: { message: 'This link has expired.' } } })
+    mocks.checkResetLink.mockRejectedValue({ response: { status: 400, data: { message: 'Reset token is invalid.' } } })
 
     const wrapper = await mountPage()
 
     expect(wrapper.get('h1').text()).toBe('This reset link no longer works')
-    expect(wrapper.get('[data-testid="link-invalid"]').text()).toContain('This link has expired.')
+    expect(wrapper.get('[data-testid="link-invalid"]').text()).toBe(
+      'The link was already used or is more than 60 minutes old.',
+    )
     expect(wrapper.find('form').exists()).toBe(false)
+    expect(wrapper.text()).toContain('Request a new link')
   })
 
   it('does not call the server without a token', async () => {

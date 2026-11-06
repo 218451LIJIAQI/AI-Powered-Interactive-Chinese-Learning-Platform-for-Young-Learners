@@ -1,10 +1,8 @@
 <template>
-  <div class="page-stack admin-ai-page">
-    <div class="admin-head">
-      <PageHeaderBlock :title="t('adminAi.usageTitle')" :description="t('adminAi.usageLede')" />
-      <AdminAiTabs />
-    </div>
-    <DataNotice :success="success" :error="exportError" />
+  <div class="page-stack">
+    <PageHeaderBlock :title="t('adminAi.usageTitle')" hide-title />
+    <AdminAiTabs />
+    <DataNotice :error="exportError" />
 
     <StatePanel
       v-if="summaryResource.loading.value"
@@ -23,63 +21,61 @@
         <button class="btn btn-primary" type="button" @click="summaryResource.reload">{{ t('adminAi.retry') }}</button>
       </template>
     </StatePanel>
-    <section v-else-if="summary" class="admin-ai-totals" :aria-label="t('adminAi.totalsLabel')">
-      <dl class="admin-figures">
-        <div class="admin-figure" data-testid="admin-ai-kpi-total">
-          <dt>{{ t('adminAi.requests') }}</dt>
-          <dd>
-            <strong class="stat-figure">{{ formatNumber(summary.totalRequests) }}</strong>
-            <span>{{
-              t('adminAi.notAnsweredShare', { percent: percentOf(summary.unavailable + summary.failed) })
-            }}</span>
-          </dd>
-        </div>
-        <div class="admin-figure">
-          <dt>{{ t('adminAi.successful') }}</dt>
-          <dd>
-            <strong class="stat-figure">{{ formatNumber(summary.successful) }}</strong>
-            <span>{{ t('adminAi.shareOfAll', { percent: percentOf(summary.successful) }) }}</span>
-          </dd>
-        </div>
-        <div class="admin-figure">
-          <dt>{{ t('adminAi.unavailable') }}</dt>
-          <dd>
-            <strong class="stat-figure">{{ formatNumber(summary.unavailable) }}</strong>
-            <span>{{ t('adminAi.unavailableHint') }}</span>
-          </dd>
-        </div>
-        <div class="admin-figure">
-          <dt>{{ t('adminAi.failed') }}</dt>
-          <dd>
-            <strong class="stat-figure">{{ formatNumber(summary.failed) }}</strong>
-            <span>{{ t('adminAi.failedHint') }}</span>
-          </dd>
-        </div>
-      </dl>
-    </section>
+    <dl v-else-if="summary" class="admin-ai-totals" :aria-label="t('adminAi.totalsLabel')">
+      <div class="panel admin-figure" data-testid="admin-ai-kpi-total">
+        <dt>{{ t('adminAi.requests') }}</dt>
+        <dd>
+          <strong class="admin-figure-value">{{ formatNumber(summary.totalRequests) }}</strong>
+          <span class="admin-meta">{{
+            t('adminAi.notAnsweredShare', { percent: percentOf(summary.unavailable + summary.failed) })
+          }}</span>
+        </dd>
+      </div>
+      <div class="panel admin-figure">
+        <dt>{{ t('adminAi.successful') }}</dt>
+        <dd>
+          <strong class="admin-figure-value">{{ formatNumber(summary.successful) }}</strong>
+          <span class="admin-meta">{{ percentOf(summary.successful) }}</span>
+        </dd>
+      </div>
+      <div class="panel admin-figure">
+        <dt>{{ t('adminAi.unavailable') }}</dt>
+        <dd>
+          <strong class="admin-figure-value">{{ formatNumber(summary.unavailable) }}</strong>
+          <span class="admin-meta">{{ t('adminAi.unavailableHint') }}</span>
+        </dd>
+      </div>
+      <div class="panel admin-figure">
+        <dt>{{ t('adminAi.failed') }}</dt>
+        <dd>
+          <strong class="admin-figure-value">{{ formatNumber(summary.failed) }}</strong>
+          <span class="admin-meta">{{ t('adminAi.failedHint') }}</span>
+        </dd>
+      </div>
+    </dl>
 
     <div class="admin-ai-usage">
-      <section class="admin-sheet" :aria-labelledby="`${baseId}-log`">
-        <div class="admin-sheet-head">
-          <div>
-            <h2 :id="`${baseId}-log`" class="admin-sheet-title">{{ t('adminAi.requestLog') }}</h2>
-            <p class="admin-sheet-caption">
+      <section class="panel admin-table-card" :aria-labelledby="`${baseId}-log`">
+        <div class="admin-section-head">
+          <div class="admin-list-head">
+            <h2 :id="`${baseId}-log`" class="card-title">{{ t('adminAi.requestLog') }}</h2>
+            <p class="admin-meta">
               {{ t('adminAi.requestLogCount', { count: formatNumber(totalItems) }, totalItems) }}
             </p>
           </div>
           <button
-            class="btn btn-secondary btn-sm"
+            class="btn btn-secondary"
             type="button"
             :disabled="exporting"
             :aria-busy="exporting"
             @click="exportCsv"
           >
-            <IconGlyph v-if="!exporting" name="download" :size="16" />
-            {{ t('adminAi.exportCsv') }}
+            <IconGlyph name="download" :size="16" />
+            <span>{{ t('adminAi.exportCsv') }}</span>
           </button>
         </div>
 
-        <div class="admin-toolbar">
+        <div class="admin-filters">
           <div class="field">
             <label class="field-label" :for="`${baseId}-feature`">{{ t('adminAi.feature') }}</label>
             <select :id="`${baseId}-feature`" v-model="filters.featureType" class="select" @change="applyFilters">
@@ -106,84 +102,86 @@
           </div>
         </div>
 
-        <div v-if="logResource.loading.value" class="admin-sheet-body">
-          <StatePanel tone="loading" :title="t('adminAi.logLoading')" :message="t('adminAi.logLoadingHint')" />
-        </div>
-        <div v-else-if="logResource.error.value && !rows.length" class="admin-sheet-body">
-          <StatePanel tone="error" icon="alert" :title="t('adminAi.logError')" :message="logResource.error.value">
-            <template #actions>
-              <button class="btn btn-primary" type="button" @click="logResource.reload">
-                {{ t('adminAi.retry') }}
-              </button>
-            </template>
-          </StatePanel>
-        </div>
+        <StatePanel
+          v-if="logResource.loading.value"
+          tone="loading"
+          :title="t('adminAi.logLoading')"
+          :message="t('adminAi.logLoadingHint')"
+        />
+        <StatePanel
+          v-else-if="logResource.error.value && !rows.length"
+          tone="error"
+          icon="alert"
+          :title="t('adminAi.logError')"
+          :message="logResource.error.value"
+        >
+          <template #actions>
+            <button class="btn btn-primary" type="button" @click="logResource.reload">
+              {{ t('adminAi.retry') }}
+            </button>
+          </template>
+        </StatePanel>
         <div
           v-else-if="rows.length"
-          class="data-table-wrap admin-ai-log"
+          class="data-table-wrap admin-table-wrap"
           role="region"
           :aria-label="t('adminAi.requestLog')"
           tabindex="0"
         >
-          <table class="data-table admin-table admin-table-static">
+          <table class="data-table admin-table admin-table-static admin-ai-log">
             <thead>
               <tr>
+                <th scope="col">{{ t('adminAi.time') }}</th>
                 <th scope="col">{{ t('adminAi.user') }}</th>
+                <th scope="col">{{ t('adminAi.role') }}</th>
                 <th scope="col">{{ t('adminAi.feature') }}</th>
                 <th scope="col">{{ t('adminAi.result') }}</th>
-                <th scope="col" class="col-numeric">{{ t('adminAi.time') }}</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="row in rows" :key="row.id">
+                <td class="admin-cell-date">{{ formatDateTime(row.createdAt) }}</td>
+                <td class="admin-cell-strong">{{ row.userName || t('adminAi.unknownUser') }}</td>
                 <td>
-                  <span class="admin-cell-title">
-                    <strong>{{ row.userName || t('adminAi.unknownUser') }}</strong>
-                    <span>{{ roleLabel(row.userRole) }}</span>
-                  </span>
+                  <span class="tag is-outline">{{ roleLabel(row.userRole) }}</span>
                 </td>
-                <td>{{ featureLabel(row.featureKey) }}</td>
-                <td>
-                  <span class="admin-ai-result">
-                    <StatusPill :label="t(resultMeta(row.status).labelKey)" :tone="resultMeta(row.status).tone" />
-                    <small v-if="row.status !== 'SUCCESS' && row.errorSummary">{{ row.errorSummary }}</small>
-                  </span>
-                </td>
-                <td class="col-numeric admin-cell-date">
-                  {{ formatDateTime(row.createdAt) }}
+                <td class="admin-cell-muted">{{ featureLabel(row.featureKey) }}</td>
+                <td :title="row.errorSummary ?? undefined">
+                  <StatusPill :label="t(resultMeta(row.status).labelKey)" :tone="resultMeta(row.status).tone" />
                 </td>
               </tr>
             </tbody>
           </table>
         </div>
-        <div v-else class="admin-sheet-body">
-          <StatePanel
-            tone="empty"
-            icon="search"
-            :title="t('adminAi.noRequests')"
-            :message="t('adminAi.noRequestsHint')"
-          />
-        </div>
-        <div class="admin-sheet-foot">
-          <PaginationBar
-            v-if="totalPages > 1"
-            icon-only
-            :current-page="page + 1"
-            :total-pages="totalPages"
-            :label="t('adminAi.requestLog')"
-            :info="t('adminAi.showing', range)"
-            @update:current-page="goToPage($event - 1)"
-          />
-        </div>
+        <StatePanel
+          v-else
+          tone="empty"
+          icon="search"
+          :title="t('adminAi.noRequests')"
+          :message="t('adminAi.noRequestsHint')"
+        />
+        <PaginationBar
+          v-if="totalPages > 1"
+          icon-only
+          :current-page="page + 1"
+          :total-pages="totalPages"
+          :label="t('adminAi.requestLog')"
+          :info="t('adminAi.showing', range)"
+          @update:current-page="goToPage($event - 1)"
+        />
+        <p class="callout is-compact">
+          <IconGlyph name="shield" :size="16" />
+          <span>{{ t('adminAi.retentionNote') }}</span>
+        </p>
       </section>
 
-      <section v-if="summary" class="admin-ai-features" :aria-labelledby="`${baseId}-features`">
-        <div class="admin-ai-side-head">
-          <h2 :id="`${baseId}-features`" class="admin-ai-side-title">{{ t('adminAi.byFeature') }}</h2>
-          <p class="admin-sheet-caption">
+      <section v-if="summary" class="panel admin-list" :aria-labelledby="`${baseId}-features`">
+        <header class="admin-list-head">
+          <h2 :id="`${baseId}-features`" class="card-title">{{ t('adminAi.byFeature') }}</h2>
+          <p class="admin-meta">
             {{ t('adminAi.byFeatureTotal', { count: formatNumber(summary.totalRequests) }) }}
           </p>
-        </div>
+        </header>
         <ul class="admin-shares">
           <li v-for="row in summary.byFeature" :key="row.featureKey">
             <span class="admin-share-head">
@@ -195,12 +193,9 @@
             </span>
           </li>
         </ul>
-        <p class="admin-ai-retention">
-          <IconGlyph name="shield" :size="16" />
-          <span>{{ t('adminAi.retentionNote') }}</span>
-        </p>
       </section>
     </div>
+    <AppToast :message="toast" />
   </div>
 </template>
 
@@ -210,6 +205,7 @@ import { computed, reactive, ref, useId } from 'vue'
 import { adminAiApi } from '@/api/ai'
 import { aiFeatureLabel } from '@/components/admin/adminDisplay'
 import AdminAiTabs from '@/components/admin/AdminAiTabs.vue'
+import AppToast from '@/components/common/AppToast.vue'
 import DataNotice from '@/components/common/DataNotice.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import PaginationBar from '@/components/common/PaginationBar.vue'
@@ -218,6 +214,7 @@ import StatusPill, { type PillTone } from '@/components/common/StatusPill.vue'
 import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { useResource, useServerPage } from '@/composables/useResource'
+import { useToast } from '@/composables/useToast'
 import { adminAiMessages } from '@/plugins/adminAiMessages'
 import { aiFeatureMessages } from '@/plugins/aiFeatureMessages'
 import type { AiFeatureKey } from '@/types/api'
@@ -250,6 +247,7 @@ const PAGE_SIZE = 10
 
 const { t } = useLocalMessages({ adminAi: adminAiMessages, aiFeatures: aiFeatureMessages })
 const baseId = useId()
+const { toast, showToast } = useToast()
 
 const summaryResource = useResource(() => adminAiApi.usageSummary())
 const summary = computed(() => summaryResource.data.value)
@@ -258,7 +256,6 @@ const page = ref(0)
 const logResource = useResource(() => adminAiApi.usageLogs({ ...filters }, page.value, PAGE_SIZE))
 const { items: rows, totalItems, totalPages, range, goToPage } = useServerPage(logResource, page)
 const exporting = ref(false)
-const success = ref<string | null>(null)
 const exportError = ref<string | null>(null)
 
 function featureLabel(featureKey: string): string {
@@ -281,19 +278,17 @@ function percentOf(count: number): string {
 }
 
 function applyFilters(): void {
-  success.value = null
   goToPage(0)
 }
 
 async function exportCsv(): Promise<void> {
   if (exporting.value) return
   exporting.value = true
-  success.value = null
   exportError.value = null
   try {
     const download = await adminAiApi.exportUsageLogs({ ...filters })
     saveBlobDownload(download, 'ai-usage-log.csv')
-    success.value = t('adminAi.csvDownloaded')
+    showToast(t('adminAi.csvDownloaded'))
   } catch (reason) {
     exportError.value = resolveApiError(reason, t('adminAi.csvError'))
   } finally {

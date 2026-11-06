@@ -132,6 +132,7 @@ public class TeacherClassService {
                     coursePackage.getRevisionStatus() == null ? null : coursePackage.getRevisionStatus().name(),
                     levelName(coursePackage.getLevel()),
                     topicName(coursePackage.getCategory()),
+                    coursePackage.getBestAfterUnit(),
                     coursePackage.getLearningType(),
                     classUnits.size(),
                     lessons.size(),
@@ -518,6 +519,7 @@ public class TeacherClassService {
                 levelName(coursePackage.getLevel()),
                 coursePackage.getCategory() == null ? null : coursePackage.getCategory().getId(),
                 topicName(coursePackage.getCategory()),
+                coursePackage.getBestAfterUnit(),
                 coursePackage.getLearningType(),
                 coursePackage.getContentStatus().name(),
                 coursePackage.getRejectionReason(),
@@ -537,6 +539,7 @@ public class TeacherClassService {
                 coursePackage.getPendingDescription(),
                 coursePackage.getPendingLevel() == null ? null : coursePackage.getPendingLevel().getId(),
                 coursePackage.getPendingCategory() == null ? null : coursePackage.getPendingCategory().getId(),
+                coursePackage.getPendingBestAfterUnit(),
                 coursePackage.getPendingLearningType(),
                 coursePackage.getRevisionRejectionReason());
     }
@@ -544,17 +547,35 @@ public class TeacherClassService {
     private void applyDetails(CoursePackage coursePackage, ClassRequests.ClassDetails request) {
         coursePackage.setTitle(contentSafetyService.requireSafeText(request.title(), 200, "Class title is required."));
         coursePackage.setDescription(contentSafetyService.optionalSafeText(request.description(), 2000));
-        coursePackage.setLevel(request.levelId() == null ? null : teacherContentAccessService.requireLevel(request.levelId()));
+        coursePackage.setLevel(levelOrDefault(request, coursePackage));
         coursePackage.setCategory(request.topicId() == null ? null : teacherContentAccessService.requireCategory(request.topicId()));
-        coursePackage.setLearningType(request.learningType() == null ? LearningType.HYBRID : request.learningType());
+        coursePackage.setLearningType(learningTypeOrDefault(request, coursePackage));
+        coursePackage.setBestAfterUnit(request.bestAfterUnit() == null ? coursePackage.getBestAfterUnit() : request.bestAfterUnit());
     }
 
     private void applyPendingDetails(CoursePackage coursePackage, ClassRequests.ClassDetails request) {
         coursePackage.setPendingTitle(contentSafetyService.requireSafeText(request.title(), 200, "Class title is required."));
         coursePackage.setPendingDescription(contentSafetyService.optionalSafeText(request.description(), 2000));
-        coursePackage.setPendingLevel(request.levelId() == null ? null : teacherContentAccessService.requireLevel(request.levelId()));
+        coursePackage.setPendingLevel(levelOrDefault(request, coursePackage));
         coursePackage.setPendingCategory(request.topicId() == null ? null : teacherContentAccessService.requireCategory(request.topicId()));
-        coursePackage.setPendingLearningType(request.learningType() == null ? LearningType.HYBRID : request.learningType());
+        coursePackage.setPendingLearningType(learningTypeOrDefault(request, coursePackage));
+        coursePackage.setPendingBestAfterUnit(request.bestAfterUnit() == null ? coursePackage.getBestAfterUnit() : request.bestAfterUnit());
+    }
+
+    /** The level sent, else the class's approved level, else Beginner 1 (a request may leave the level out). */
+    private LearningLevel levelOrDefault(ClassRequests.ClassDetails request, CoursePackage coursePackage) {
+        if (request.levelId() != null) {
+            return teacherContentAccessService.requireLevel(request.levelId());
+        }
+        return coursePackage.getLevel() != null ? coursePackage.getLevel() : teacherContentAccessService.defaultLevel();
+    }
+
+    /** The learning type sent, else the class's approved one (a new class starts as hybrid). */
+    private static LearningType learningTypeOrDefault(ClassRequests.ClassDetails request, CoursePackage coursePackage) {
+        if (request.learningType() != null) {
+            return request.learningType();
+        }
+        return coursePackage.getLearningType() != null ? coursePackage.getLearningType() : LearningType.HYBRID;
     }
 
     private static void clearPendingDetails(CoursePackage coursePackage) {
@@ -563,6 +584,7 @@ public class TeacherClassService {
         coursePackage.setPendingLevel(null);
         coursePackage.setPendingCategory(null);
         coursePackage.setPendingLearningType(null);
+        coursePackage.setPendingBestAfterUnit(null);
         coursePackage.setRevisionStatus(null);
         coursePackage.setRevisionRejectionReason(null);
         coursePackage.setRevisionSubmittedAt(null);
@@ -586,6 +608,9 @@ public class TeacherClassService {
         if (coursePackage.getLearningType() != coursePackage.getPendingLearningType()) {
             changes.add(new Change("LEARNING_TYPE", null, null, null));
         }
+        if (!Objects.equals(coursePackage.getBestAfterUnit(), coursePackage.getPendingBestAfterUnit())) {
+            changes.add(new Change("BEST_AFTER_UNIT", null, coursePackage.getPendingBestAfterUnit(), null));
+        }
         return changes;
     }
 
@@ -598,6 +623,7 @@ public class TeacherClassService {
         coursePackage.setLearningType(coursePackage.getPendingLearningType() == null
                 ? coursePackage.getLearningType()
                 : coursePackage.getPendingLearningType());
+        coursePackage.setBestAfterUnit(coursePackage.getPendingBestAfterUnit());
         clearPendingDetails(coursePackage);
     }
 

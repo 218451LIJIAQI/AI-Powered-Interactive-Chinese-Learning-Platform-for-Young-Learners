@@ -1,162 +1,139 @@
 <template>
-  <section class="ai-stage" :aria-labelledby="`${baseId}-title`">
-    <aside class="ai-side">
-      <header class="ai-side-head">
-        <h2 :id="`${baseId}-title`" class="ai-side-title">{{ t('aiHelper.storyTitle') }}</h2>
-        <p class="ai-side-lede">{{ t('aiHelper.storySubtitle') }}</p>
-      </header>
+  <section class="panel ai-maker" :aria-labelledby="`${baseId}-title`">
+    <h2 :id="`${baseId}-title`" class="card-title">{{ t('aiHelper.storyTitle') }}</h2>
 
-      <form class="ai-maker-form" @submit.prevent="make">
-        <div class="field">
-          <label class="field-label" :for="`${baseId}-topic`">{{ t('aiHelper.storyTopic') }}</label>
-          <input
-            :id="`${baseId}-topic`"
-            v-model="topic"
-            class="input"
-            autocomplete="off"
-            maxlength="200"
-            :disabled="Boolean(blocked) || making"
-            :placeholder="t('aiHelper.storyTopicPlaceholder')"
-          />
-        </div>
-        <button
-          class="btn btn-primary"
-          type="submit"
-          :disabled="Boolean(blocked) || making || !topic.trim()"
-          :aria-busy="making"
-        >
-          {{ t('aiHelper.makeStory') }}
-          <IconGlyph v-if="!making" name="chevronRight" :size="16" />
-        </button>
-      </form>
-
-      <div class="ai-topics" role="group" :aria-labelledby="`${baseId}-topics`">
-        <p :id="`${baseId}-topics`" class="ai-overline">{{ t('aiHelper.tryATopic') }}</p>
-        <div class="ai-topic-list">
-          <button
-            v-for="key in STORY_TOPIC_KEYS"
-            :key="key"
-            class="ai-help-chip"
-            type="button"
-            :aria-pressed="topic === t(key)"
-            :disabled="making"
-            @click="topic = t(key)"
-          >
-            {{ t(key) }}
-          </button>
-        </div>
+    <form class="ai-maker-form" @submit.prevent="make">
+      <div class="field">
+        <label class="field-label" :for="`${baseId}-topic`">{{ t('aiHelper.storyTopic') }}</label>
+        <input
+          :id="`${baseId}-topic`"
+          v-model="topic"
+          class="input"
+          autocomplete="off"
+          maxlength="200"
+          :disabled="Boolean(blocked) || making"
+          :placeholder="t('aiHelper.storyTopicPlaceholder')"
+        />
       </div>
-    </aside>
+      <button
+        class="btn btn-primary"
+        type="submit"
+        :disabled="Boolean(blocked) || making || !topic.trim()"
+        :aria-busy="making"
+      >
+        {{ making ? t('aiHelper.making') : t('aiHelper.makeStory') }}
+        <IconGlyph v-if="!making" name="chevronRight" :size="16" />
+      </button>
+    </form>
 
-    <div class="ai-output">
-      <p v-if="error" class="callout is-compact is-danger" role="alert">{{ error }}</p>
-      <p v-if="notice" class="callout is-compact" role="status">{{ notice }}</p>
-
-      <StatePanel
-        v-if="making"
-        tone="loading"
-        :title="t('aiHelper.making')"
-        :message="t('aiHelper.storyMakingHint', { topic: requestedTopic })"
+    <div class="ai-topics">
+      <span class="ai-topics-label" aria-hidden="true">{{ t('aiHelper.tryATopic') }}</span>
+      <FilterChips
+        :model-value="topic"
+        :options="topicOptions"
+        :label="t('aiHelper.tryATopic')"
+        size="sm"
+        :disabled="Boolean(blocked) || making"
+        @update:model-value="topic = $event"
       />
+    </div>
 
-      <article v-else-if="story" ref="resultEl" class="ai-sheet ai-result" data-testid="ai-story-result">
-        <header class="ai-result-head">
-          <div class="ai-result-heading">
-            <p class="ai-overline">{{ t('aiHelper.madeBySparkbot') }}</p>
-            <h3 class="ai-story-title hanzi" lang="zh-CN">{{ story.title }}</h3>
-            <p class="ai-result-meta">
-              <template v-if="story.titleTranslation">{{ story.titleTranslation }} · </template
-              >{{ t('aiHelper.storyMeta', { topic: requestedTopic }) }}
-            </p>
-          </div>
-          <div class="ai-result-tools">
-            <AiResultLabel />
-            <button v-if="!reported" class="ai-line-action ai-result-report" type="button" @click="report">
-              <IconGlyph name="flag" :size="14" />
-              {{ t('aiHelper.report') }}
-            </button>
-            <span v-else class="ai-reported ai-result-report"
-              ><IconGlyph name="status" :size="14" />{{ t('aiHelper.reported') }}</span
-            >
-          </div>
-        </header>
+    <p v-if="error" class="callout is-compact is-danger" role="alert">{{ error }}</p>
 
+    <div v-if="making" class="ai-panel" role="status" aria-live="polite">
+      <div class="ai-panel-source">
+        <span class="page-eyebrow">{{ t('aiHelper.madeBySparkbot') }}</span>
+        <AiResultLabel short />
+      </div>
+      <p class="ai-result-title">{{ t('aiHelper.storyMakingHint', { topic: requestedTopic }) }}</p>
+    </div>
+
+    <article v-else-if="story" ref="resultEl" class="ai-panel" data-testid="ai-story-result">
+      <header class="ai-panel-head">
+        <div class="ai-panel-source">
+          <span class="page-eyebrow">{{ t('aiHelper.madeBySparkbot') }}</span>
+          <AiResultLabel short />
+        </div>
+        <button v-if="!reported" class="btn btn-ghost btn-sm ai-result-report" type="button" @click="report">
+          <IconGlyph name="flag" :size="16" />
+          {{ t('aiHelper.report') }}
+        </button>
+        <span v-else class="ai-reported ai-result-report"
+          ><IconGlyph name="status" :size="14" />{{ t('aiHelper.reported') }}</span
+        >
+      </header>
+      <h3 class="ai-story-title">
+        <span lang="zh-CN">{{ story.title }}</span>
+        <span class="ai-story-title-gloss"> · {{ story.titleTranslation || requestedTopic }}</span>
+      </h3>
+
+      <div class="ai-story-columns">
         <section class="ai-story-text" :aria-labelledby="`${baseId}-story`">
           <div class="ai-story-bar">
-            <h4 :id="`${baseId}-story`" class="sr-only">{{ t('aiHelper.storyLabel') }}</h4>
-            <div class="ai-toggle-group" role="group" :aria-label="t('aiHelper.show')">
-              <button class="ai-toggle" type="button" :aria-pressed="showPinyin" @click="showPinyin = !showPinyin">
-                {{ t('aiHelper.pinyin') }}
-              </button>
-              <button
-                class="ai-toggle"
-                type="button"
-                :aria-pressed="showTranslation"
-                @click="showTranslation = !showTranslation"
-              >
-                {{ t('aiHelper.translation') }}
-              </button>
+            <h4 :id="`${baseId}-story`" class="page-eyebrow">{{ t('aiHelper.storyLabel') }}</h4>
+            <div class="ai-story-show" role="group" :aria-label="t('aiHelper.show')">
+              <span aria-hidden="true">{{ t('aiHelper.show') }}</span>
+              <label class="choice"><input v-model="showPinyin" type="checkbox" />{{ t('aiHelper.pinyin') }}</label>
+              <label class="choice">
+                <input v-model="showTranslation" type="checkbox" />{{ t('aiHelper.translation') }}
+              </label>
             </div>
-            <button v-if="speech.canSpeak" class="btn btn-secondary btn-sm" type="button" @click="toggleReading">
-              <IconGlyph :name="readingIndex === null ? 'audio' : 'stop'" :size="16" />
-              {{ readingIndex === null ? t('aiHelper.readAloud') : t('aiHelper.stopReading') }}
-            </button>
           </div>
           <ol class="ai-story-lines">
             <li v-for="(line, index) in story.lines" :key="index" :class="{ 'is-reading': readingIndex === index }">
-              <p class="ai-line-zh cjk-text" lang="zh-CN">{{ line.chinese }}</p>
-              <p v-if="showPinyin && line.pinyin" class="ai-line-py">{{ line.pinyin }}</p>
-              <p v-if="showTranslation && line.translation" class="ai-line-meaning">{{ line.translation }}</p>
+              <p class="ai-story-line" lang="zh-CN">{{ line.chinese }}</p>
+              <p v-if="showPinyin && line.pinyin" class="ai-line-pinyin">{{ line.pinyin }}</p>
+              <p v-if="showTranslation && line.translation" class="ai-line-pinyin">{{ line.translation }}</p>
             </li>
           </ol>
+          <button
+            v-if="speech.canSpeak"
+            class="btn btn-ghost btn-sm ai-story-read"
+            type="button"
+            @click="toggleReading"
+          >
+            <IconGlyph :name="readingIndex === null ? 'audio' : 'stop'" :size="16" />
+            {{ readingIndex === null ? t('aiHelper.readAloud') : t('aiHelper.stopReading') }}
+          </button>
         </section>
 
-        <div class="ai-story-extra">
-          <section v-if="story.vocabularyList.length" class="ai-story-words" :aria-labelledby="`${baseId}-words`">
-            <h4 :id="`${baseId}-words`" class="ai-recap-label">{{ t('aiHelper.keyWords') }}</h4>
-            <ul class="ai-key-words">
-              <li v-for="word in words" :key="word.chineseWord">
-                <button
-                  class="ai-key-word"
-                  type="button"
-                  :disabled="!speech.canSpeak"
-                  @click="speech.speak(word.chineseWord)"
-                >
-                  <span class="hanzi" lang="zh-CN">{{ word.chineseWord }}</span>
-                  <span class="ai-key-word-gloss">
-                    <span class="ai-line-py">{{ word.pinyin }}</span>
-                    <span>{{ word.meaning }}</span>
-                  </span>
-                  <IconGlyph v-if="speech.canSpeak" name="audio" :size="16" />
-                </button>
-              </li>
-            </ul>
-          </section>
+        <section v-if="words.length" class="ai-story-words" :aria-labelledby="`${baseId}-words`">
+          <h4 :id="`${baseId}-words`" class="page-eyebrow">{{ t('aiHelper.keyWords') }}</h4>
+          <ul class="row-list ai-key-words">
+            <li v-for="word in words" :key="word.chineseWord">
+              <button
+                class="ai-key-word"
+                type="button"
+                :disabled="!speech.canSpeak"
+                :aria-label="`${word.chineseWord} ${word.pinyin} ${word.meaning}`"
+                @click="speech.speak(word.chineseWord)"
+              >
+                <strong lang="zh-CN">{{ word.chineseWord }}</strong>
+                <span class="ai-key-word-pinyin">{{ word.pinyin }}</span>
+                <span>{{ word.meaning }}</span>
+                <IconGlyph v-if="speech.canSpeak" name="audio" :size="16" />
+              </button>
+            </li>
+          </ul>
+        </section>
+      </div>
 
-          <section
-            v-if="story.comprehensionQuestions.length"
-            class="ai-story-check"
-            :aria-labelledby="`${baseId}-check`"
-          >
-            <h4 :id="`${baseId}-check`" class="ai-recap-label">{{ t('aiHelper.checkUnderstanding') }}</h4>
-            <AiChoiceQuestions :questions="questions" />
-          </section>
-        </div>
+      <section v-if="story.comprehensionQuestions.length" class="ai-story-check" :aria-labelledby="`${baseId}-check`">
+        <h4 :id="`${baseId}-check`" class="page-eyebrow">{{ t('aiHelper.checkUnderstanding') }}</h4>
+        <AiChoiceQuestions :questions="questions" :columns="2" />
+      </section>
+    </article>
 
-        <div class="ai-result-notes">
-          <p class="ai-footnote">{{ t('aiHelper.selfPracticeOnly') }}</p>
-          <AiNotice :text="aiNotice" />
-        </div>
-      </article>
-
+    <div v-else-if="!blocked" class="ai-panel">
       <StatePanel
-        v-else
         tone="empty"
         icon="story"
         :title="t('aiHelper.storyEmptyTitle')"
         :message="t('aiHelper.storyEmptyHint')"
       />
     </div>
+
+    <AiNotice :text="aiNotice" guidance />
   </section>
 
   <AiReportDialog v-if="reportTarget" :target="reportTarget" @close="reportTarget = null" @sent="onReported" />
@@ -166,6 +143,7 @@
 import { computed, nextTick, ref, useId, watch } from 'vue'
 
 import { aiHelperApi } from '@/api/ai'
+import FilterChips from '@/components/common/FilterChips.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
@@ -183,9 +161,9 @@ import AiResultLabel from './AiResultLabel.vue'
 import { revealResult, STORY_TOPIC_KEYS, type AiBlockedReason, type AiReportTarget } from './aiHelper'
 
 /**
- * Story: the maker on the left, a reading sheet on the right. A short beginner story on any topic, line by line with
- * pinyin and the translation to show when wanted, read aloud with the current line marked, its key words to hear and
- * two questions checked in the browser. Self-practice only: nothing is saved.
+ * Story: a topic on top, the reading panel below. A short beginner story on any topic, line by line with pinyin and the
+ * translation to show when wanted, read aloud with the current line marked, its key words to hear and two questions
+ * checked in the browser. Self-practice only: nothing is saved.
  */
 const props = defineProps<{
   blocked: AiBlockedReason
@@ -202,7 +180,6 @@ const topic = ref('')
 const requestedTopic = ref('')
 const making = ref(false)
 const error = ref<string | null>(null)
-const notice = ref<string | null>(null)
 const story = ref<AiStoryGeneratorResponse | null>(null)
 const showPinyin = ref(true)
 const showTranslation = ref(false)
@@ -211,6 +188,7 @@ const reportTarget = ref<AiReportTarget | null>(null)
 const readingIndex = ref<number | null>(null)
 const resultEl = ref<HTMLElement | null>(null)
 
+const topicOptions = computed(() => STORY_TOPIC_KEYS.map((key) => ({ value: t(key), label: t(key) })))
 const words = computed(() => storyVocabularyRows(story.value, ui.locale))
 const questions = computed<ChoiceQuestion[]>(() =>
   (story.value?.comprehensionQuestions ?? []).map((question) => ({
@@ -225,7 +203,6 @@ async function make(): Promise<void> {
   if (!cleanTopic || making.value || props.blocked) return
   stopReading()
   error.value = null
-  notice.value = null
   requestedTopic.value = cleanTopic
   making.value = true
   try {
@@ -295,7 +272,6 @@ function report(): void {
 function onReported(): void {
   reportTarget.value = null
   reported.value = true
-  notice.value = t('aiHelper.reportSentNotice')
   emit('reported')
 }
 </script>

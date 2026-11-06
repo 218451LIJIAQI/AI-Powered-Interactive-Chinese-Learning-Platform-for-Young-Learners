@@ -72,20 +72,14 @@ export function queueStatusKey(status: SupportStatus): string {
   return QUEUE_STATUS_KEYS[status]
 }
 
-/** A request still in progress (waiting on either side) is info; a solved request is quiet. */
-export function supportStatusTone(status: SupportStatus): PillTone {
-  return status === 'SOLVED' ? 'neutral' : 'info'
+/** The requester's view: "Answered · your turn" needs them now, "Open" waits for support, "Solved" is done. */
+export function requestStatusTone(status: SupportStatus): PillTone {
+  if (status === 'ANSWERED') return 'strong'
+  return status === 'SOLVED' ? 'success' : 'outline'
 }
 
 export function verificationStateKey(state: TeacherVerificationState): string {
   return VERIFICATION_KEYS[state]
-}
-
-export function verificationTone(state: TeacherVerificationState): PillTone {
-  if (state === 'APPROVED') return 'success'
-  if (state === 'CHANGES_REQUESTED') return 'warning'
-  if (state === 'IN_REVIEW') return 'info'
-  return 'neutral'
 }
 
 export function documentTypeKey(type: TeacherDocumentType): string {

@@ -64,6 +64,58 @@ describe('AiQuizTab (Quick quiz)', () => {
     expect(wrapper.emitted('used')).toHaveLength(1)
   })
 
+  it('shows the making state while the request runs', async () => {
+    let finish: (value: typeof QUIZ) => void = () => {}
+    api.quiz.mockReturnValue(new Promise((resolve) => (finish = resolve)))
+    const wrapper = mountQuiz()
+    await wrapper.get('.ai-maker-form input').setValue('Food')
+    await wrapper.get('.ai-maker-form').trigger('submit')
+
+    const button = wrapper.get<HTMLButtonElement>('.ai-maker-form button')
+    expect(button.text()).toBe('Making…')
+    expect(button.element.disabled).toBe(true)
+    expect(wrapper.get('.ai-panel').text()).toContain('SparkBot is writing 3 questions on Food…')
+
+    finish(QUIZ)
+    await flushPromises()
+    expect(wrapper.get('.ai-maker-form button').text()).toBe('Make quiz')
+  })
+
+  it('offers topic ideas that fill the topic', async () => {
+    const wrapper = mountQuiz()
+
+    await wrapper
+      .findAll('.filter-chip')
+      .find((chip) => chip.text() === 'Food and drink')!
+      .trigger('click')
+
+    expect(wrapper.get<HTMLInputElement>('.ai-maker-form input').element.value).toBe('Food and drink')
+  })
+
+  it('waits for a new answer before checking again and praises a full score', async () => {
+    api.quiz.mockResolvedValue(QUIZ)
+    const wrapper = mountQuiz()
+    await wrapper.get('.ai-maker-form input').setValue('Food')
+    await wrapper.get('.ai-maker-form').trigger('submit')
+    await flushPromises()
+
+    const check = wrapper.get<HTMLButtonElement>('.ai-result-foot button')
+    const radios = wrapper.findAll('input[type="radio"]')
+    expect(check.element.disabled).toBe(true)
+
+    await radios[0]!.setValue(true) // rice: correct
+    await radios[3]!.setValue(true) // 水: wrong
+    await check.trigger('click')
+    expect(check.element.disabled).toBe(true)
+
+    await radios[4]!.setValue(true) // 茶: correct
+    expect(check.element.disabled).toBe(false)
+    await check.trigger('click')
+
+    expect(wrapper.get('.ai-result-foot p').text()).toBe('2 of 2 correct. Nice work!')
+    expect(check.element.disabled).toBe(true)
+  })
+
   it('reports the quiz with the topic and the questions as the student saw them', async () => {
     api.quiz.mockResolvedValue(QUIZ)
     api.report.mockResolvedValue({ id: 8, status: 'PENDING_REVIEW' })

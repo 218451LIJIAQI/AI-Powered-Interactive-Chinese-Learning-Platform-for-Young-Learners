@@ -2,6 +2,7 @@
 import type { GoalInput, LearningPlan, PlanFocus, PlanGoal, PlanPace, PlanReason } from '@/types/plan'
 
 import { addDays, addMonths, isoDay } from './planFormat'
+import { SHOWN_FOCUSES, shownReason } from './planLabels'
 
 export type DeadlineChoice = '2w' | '1m' | '2m' | '3m' | '6m' | 'none' | 'date'
 
@@ -33,17 +34,20 @@ export function emptyDraft(): GoalDraft {
   }
 }
 
-/** The plan's goal as a draft: its deadline becomes a picked date. */
+/**
+ * The plan's goal as a draft: its deadline becomes a picked date. An older plan's reason falls under the chip that now
+ * covers it, and a focus the form no longer offers is dropped (it would use up one of the two picks unseen).
+ */
 export function draftFromPlan(plan: LearningPlan): GoalDraft {
   return {
-    reason: plan.goal.reason,
+    reason: shownReason(plan.goal.reason),
     reasonText: plan.goal.reasonText ?? '',
     goals: [...plan.goal.picks],
     goalText: plan.goal.ownWords ?? '',
     deadlineChoice: plan.goal.deadline ? 'date' : 'none',
     customDate: plan.goal.deadline ?? '',
     pace: plan.pace.key,
-    focus: [...plan.goal.focus],
+    focus: plan.goal.focus.filter((focus) => SHOWN_FOCUSES.includes(focus)),
   }
 }
 

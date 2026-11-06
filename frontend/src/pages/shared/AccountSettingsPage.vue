@@ -1,9 +1,6 @@
 <template>
   <div class="page-stack account-page">
-    <PageHeaderBlock
-      :title="t('account.pageTitle')"
-      :description="settings ? t('account.signedInAs', { email: settings.email }) : ''"
-    />
+    <PageHeaderBlock :title="t('account.pageTitle')" hide-title />
     <AppToast :message="toast" />
 
     <StatePanel
@@ -27,253 +24,205 @@
     </StatePanel>
 
     <template v-else>
-      <DataNotice
-        :info="pendingEmail ? t('account.emailLinkSent', { email: pendingEmail }) : null"
-        :info-title="t('account.emailPendingTitle')"
-      />
+      <div v-if="pendingEmail" class="alert alert-success" role="status" data-testid="account-email-pending">
+        <IconGlyph name="status" :size="18" />
+        <span>{{ t('account.emailLinkSent', { email: pendingEmail }) }}</span>
+      </div>
 
       <div class="account-layout">
-        <!-- The section index: one jump per section, in page order (desktop). -->
-        <nav class="account-index" :aria-label="t('account.sectionsLabel')">
-          <ul>
-            <li v-for="section in sections" :key="section.id">
-              <RouterLink :to="{ hash: `#${section.id}` }" :class="{ 'is-danger': section.id === 'account-danger' }">
-                {{ section.label }}
-              </RouterLink>
-            </li>
-          </ul>
-        </nav>
+        <div class="account-column">
+          <section class="panel account-card" aria-labelledby="account-profile-title">
+            <h2 id="account-profile-title" class="card-title">
+              {{ isStudent ? t('account.profileStudent') : t('account.profileOther') }}
+            </h2>
 
-        <div class="account-sections">
-          <div class="panel account-sheet">
-            <section id="account-profile" class="account-section" aria-labelledby="account-profile-title">
-              <div class="account-section-head">
-                <h2 id="account-profile-title" class="account-section-title">
-                  {{ isStudent ? t('account.profileStudent') : t('account.profileOther') }}
-                </h2>
-                <p class="account-section-hint">{{ t('account.profileHint') }}</p>
+            <form id="account-profile-form" class="form-grid" novalidate @submit.prevent="saveProfile">
+              <div class="field">
+                <label for="account-name">{{ t('account.name') }}</label>
+                <input
+                  id="account-name"
+                  v-model="profile.name"
+                  class="input"
+                  autocomplete="name"
+                  maxlength="120"
+                  :aria-invalid="Boolean(profileError)"
+                  :aria-describedby="profileError ? 'account-name-error' : undefined"
+                />
+                <p v-if="profileError" id="account-name-error" class="field-error" role="alert">{{ profileError }}</p>
               </div>
 
-              <form id="account-profile-form" class="form-grid account-form" novalidate @submit.prevent="saveProfile">
-                <div class="field">
-                  <label for="account-name">{{ t('account.name') }}</label>
-                  <input
-                    id="account-name"
-                    v-model="profile.name"
-                    class="input"
-                    autocomplete="name"
-                    maxlength="120"
-                    :aria-invalid="Boolean(profileError)"
-                    :aria-describedby="profileError ? 'account-name-error' : undefined"
-                  />
-                  <p v-if="profileError" id="account-name-error" class="field-error" role="alert">{{ profileError }}</p>
-                </div>
-
-                <div class="field">
-                  <label for="account-email">{{ t('account.email') }}</label>
-                  <div class="account-email-row">
-                    <input id="account-email" class="input" type="email" :value="settings.email" disabled />
-                    <button
-                      class="btn btn-secondary"
-                      type="button"
-                      data-testid="account-change-email"
-                      @click="openEmailDialog"
-                    >
-                      {{ t('account.changeEmail') }}
-                    </button>
-                  </div>
-                </div>
-
-                <fieldset v-if="isStudent" class="field-set account-goal" aria-describedby="account-goal-hint">
-                  <legend class="field-label">{{ t('account.dailyGoal') }}</legend>
-                  <SegmentedControl
-                    v-model="profile.dailyGoal"
-                    :options="
-                      DAILY_GOALS.map((xp) => ({
-                        value: xp,
-                        label: t('account.dailyGoalOption', { xp }),
-                        testId: `account-goal-${xp}`,
-                      }))
-                    "
-                    :disabled="dailyGoalUnavailable"
-                  />
-                  <p id="account-goal-hint" class="field-hint">
-                    {{ dailyGoalUnavailable ? t('account.dailyGoalUnavailable') : t('account.dailyGoalHint') }}
-                  </p>
-                </fieldset>
-
-                <ul class="account-notes">
-                  <li v-if="isTeacher">
-                    <IconGlyph name="verified" :size="16" />
-                    <span>
-                      {{ t('account.teacherProfileHint') }}
-                      <RouterLink class="account-notes-link" :to="{ name: 'teacher-profile' }">
-                        {{ t('account.teachingProfile') }}<IconGlyph name="chevronRight" :size="14" />
-                      </RouterLink>
-                    </span>
-                  </li>
-                  <li>
-                    <IconGlyph name="language" :size="16" />
-                    <span>{{ t('account.languageHint') }}</span>
-                  </li>
-                </ul>
-
-                <div class="form-actions">
+              <div class="field">
+                <label for="account-email">{{ t('account.email') }}</label>
+                <div class="account-email-row">
+                  <input id="account-email" class="input" type="email" :value="settings.email" disabled />
                   <button
-                    class="btn btn-primary"
-                    type="submit"
-                    :disabled="savingProfile"
-                    :aria-busy="savingProfile"
-                    data-testid="account-save"
+                    class="btn btn-secondary"
+                    type="button"
+                    data-testid="account-change-email"
+                    @click="openEmailDialog"
                   >
-                    {{ savingProfile ? t('account.saving') : t('account.save') }}
+                    {{ t('account.changeEmail') }}
                   </button>
                 </div>
-              </form>
-            </section>
+              </div>
 
-            <section id="account-notifications" class="account-section" aria-labelledby="account-notifications-title">
-              <div class="account-section-head">
-                <h2 id="account-notifications-title" class="account-section-title">
-                  {{ t('account.notificationsTitle') }}
-                </h2>
-                <p class="account-section-hint">{{ t('account.notificationsHint') }}</p>
-              </div>
-              <div class="account-form">
-                <ul class="account-preferences">
-                  <li v-for="preference in preferenceRows" :key="preference.key" class="account-preference">
-                    <label class="account-preference-label" :for="`account-pref-${preference.key}`">
-                      <strong>{{ t(preference.title) }}</strong>
-                      <span>{{ t(preference.hint) }}</span>
-                    </label>
-                    <span class="account-preference-control">
-                      <span class="type-caption" aria-hidden="true">
-                        {{ preferences[preference.key] ? t('account.on') : t('account.off') }}
-                      </span>
-                      <input
-                        :id="`account-pref-${preference.key}`"
-                        class="switch"
-                        type="checkbox"
-                        role="switch"
-                        :checked="Boolean(preferences[preference.key])"
-                        :disabled="savingPreference === preference.key"
-                        :data-testid="`account-pref-${preference.key}`"
-                        @change="togglePreference(preference.key, ($event.target as HTMLInputElement).checked)"
-                      />
-                    </span>
-                  </li>
-                  <li class="account-preference">
-                    <span class="account-preference-label">
-                      <strong>{{ t('account.securityTitle') }}</strong>
-                      <span>{{ t('account.securityHint') }}</span>
-                    </span>
-                    <StatusPill :label="t('account.alwaysOn')" tone="neutral" icon="lock" />
-                  </li>
-                </ul>
-                <p v-if="preferencesError" class="field-error" role="alert">{{ preferencesError }}</p>
-              </div>
-            </section>
-
-            <section id="account-password" class="account-section" aria-labelledby="account-password-title">
-              <div class="account-section-head">
-                <h2 id="account-password-title" class="account-section-title">{{ t('account.passwordTitle') }}</h2>
-                <p class="account-section-hint">{{ t('account.passwordSignOutNote') }}</p>
-              </div>
-              <form
-                id="account-password-form"
-                class="form-grid account-form"
-                novalidate
-                @submit.prevent="changePassword"
+              <fieldset
+                v-if="isStudent"
+                class="field-set"
+                :aria-describedby="dailyGoalUnavailable ? 'account-goal-hint' : undefined"
               >
-                <div v-for="field in PASSWORD_FIELDS" :key="field.key" class="field">
-                  <label :for="`account-${field.key}`">
-                    {{ t(field.label) }}<span class="required-mark" aria-hidden="true">*</span>
-                  </label>
-                  <input
-                    :id="`account-${field.key}`"
-                    v-model="password[field.key]"
-                    class="input"
-                    :type="showPasswords ? 'text' : 'password'"
-                    :autocomplete="field.autocomplete"
-                    aria-required="true"
-                    :aria-invalid="Boolean(passwordErrors[field.key])"
-                    :aria-describedby="describedBy(field.key)"
-                  />
-                  <p v-if="field.key === 'newPassword'" id="account-newPassword-hint" class="field-hint">
-                    {{ t('account.newPasswordHint') }}
-                  </p>
-                  <p
-                    v-if="passwordErrors[field.key]"
-                    :id="`account-${field.key}-error`"
-                    class="field-error"
-                    role="alert"
-                  >
-                    {{ t(passwordErrors[field.key] as string) }}
-                  </p>
-                </div>
-                <p v-if="passwordError" class="alert alert-danger" role="alert">
-                  <IconGlyph name="alert" :size="18" />
-                  <span>{{ passwordError }}</span>
+                <legend class="field-label">{{ t('account.dailyGoal') }}</legend>
+                <FilterChips
+                  v-model="profile.dailyGoal"
+                  :options="
+                    DAILY_GOALS.map((xp) => ({
+                      value: xp,
+                      label: t('account.dailyGoalOption', { xp }),
+                      testId: `account-goal-${xp}`,
+                    }))
+                  "
+                  :disabled="dailyGoalUnavailable"
+                />
+                <p v-if="dailyGoalUnavailable" id="account-goal-hint" class="field-hint">
+                  {{ t('account.dailyGoalUnavailable') }}
                 </p>
-                <div class="account-password-actions">
-                  <label class="choice">
-                    <input v-model="showPasswords" type="checkbox" data-testid="account-show-passwords" />
-                    <span>{{ t('account.showPasswords') }}</span>
-                  </label>
-                  <button
-                    class="btn btn-primary"
-                    type="submit"
-                    :disabled="changingPassword"
-                    :aria-busy="changingPassword"
-                    data-testid="account-change-password"
-                  >
-                    {{ changingPassword ? t('account.changingPassword') : t('account.changePassword') }}
-                  </button>
-                </div>
-              </form>
-            </section>
+              </fieldset>
 
-            <section id="account-signout" class="account-section" aria-labelledby="account-signout-title">
-              <div class="account-section-head">
-                <h2 id="account-signout-title" class="account-section-title">{{ t('account.signOutTitle') }}</h2>
-                <p class="account-section-hint">{{ t('account.signOutHint') }}</p>
-                <!-- Admins cannot delete their own account; how an admin account ends is said here, not in a red zone. -->
-                <p v-if="isAdmin" class="account-section-hint">{{ t('account.adminDeleteNote') }}</p>
-              </div>
-              <div class="account-form account-row">
-                <button class="btn btn-secondary" type="button" data-testid="account-sign-out" @click="signOut">
-                  <IconGlyph name="logout" :size="16" />
-                  {{ t('account.signOut') }}
+              <div class="form-actions">
+                <button
+                  class="btn btn-primary"
+                  type="submit"
+                  :disabled="savingProfile"
+                  :aria-busy="savingProfile"
+                  data-testid="account-save"
+                >
+                  {{ savingProfile ? t('account.saving') : t('account.save') }}
                 </button>
               </div>
-            </section>
-          </div>
+            </form>
+          </section>
 
-          <section
-            v-if="!isAdmin"
-            id="account-danger"
-            class="account-section account-danger"
-            aria-labelledby="account-danger-title"
-          >
-            <div class="account-section-head">
-              <h2 id="account-danger-title" class="account-section-title">{{ t('account.dangerZone') }}</h2>
-              <p class="account-section-hint">{{ t('account.dangerHint') }}</p>
-            </div>
-            <div class="account-form account-row">
-              <button class="btn btn-danger-soft" type="button" data-testid="account-delete" @click="openDeleteDialog">
-                <IconGlyph name="trash" :size="16" />
-                {{ t('account.deleteAccount') }}
+          <section class="panel account-card" aria-labelledby="account-notifications-title">
+            <h2 id="account-notifications-title" class="card-title">{{ t('account.notificationsTitle') }}</h2>
+            <ul class="row-list account-preferences">
+              <li v-for="preference in preferenceRows" :key="preference.key">
+                <label class="row-list-copy account-preference-label" :for="`account-pref-${preference.key}`">
+                  <span class="row-list-title">{{ t(preference.title) }}</span>
+                  <span class="row-list-meta">{{ t(preference.hint) }}</span>
+                </label>
+                <span class="row-list-actions">
+                  <span class="type-caption" aria-hidden="true">
+                    {{ preferences[preference.key] ? t('account.on') : t('account.off') }}
+                  </span>
+                  <input
+                    :id="`account-pref-${preference.key}`"
+                    class="switch"
+                    type="checkbox"
+                    role="switch"
+                    :checked="Boolean(preferences[preference.key])"
+                    :disabled="savingPreference === preference.key"
+                    :data-testid="`account-pref-${preference.key}`"
+                    @change="togglePreference(preference.key, ($event.target as HTMLInputElement).checked)"
+                  />
+                </span>
+              </li>
+              <li>
+                <span class="row-list-copy">
+                  <span class="row-list-title">{{ t('account.securityTitle') }}</span>
+                  <span class="row-list-meta">{{ t('account.securityHint') }}</span>
+                </span>
+                <span class="tag">{{ t('account.alwaysOn') }}</span>
+              </li>
+            </ul>
+            <p v-if="preferencesError" class="field-error" role="alert">{{ preferencesError }}</p>
+          </section>
+        </div>
+
+        <div class="account-column">
+          <section class="panel account-card" aria-labelledby="account-password-title">
+            <h2 id="account-password-title" class="card-title">{{ t('account.passwordTitle') }}</h2>
+            <form id="account-password-form" class="form-grid" novalidate @submit.prevent="changePassword">
+              <div v-for="field in PASSWORD_FIELDS" :key="field.key" class="field">
+                <label :for="`account-${field.key}`">
+                  {{ t(field.label) }}<span class="required-mark" aria-hidden="true">*</span>
+                </label>
+                <input
+                  :id="`account-${field.key}`"
+                  v-model="password[field.key]"
+                  class="input"
+                  :type="showPasswords ? 'text' : 'password'"
+                  :autocomplete="field.autocomplete"
+                  aria-required="true"
+                  :aria-invalid="Boolean(passwordErrors[field.key])"
+                  :aria-describedby="describedBy(field.key)"
+                />
+                <p v-if="field.key === 'newPassword'" id="account-newPassword-hint" class="field-hint">
+                  {{ t('account.newPasswordHint') }}
+                </p>
+                <p v-if="passwordErrors[field.key]" :id="`account-${field.key}-error`" class="field-error" role="alert">
+                  {{ t(passwordErrors[field.key] as string) }}
+                </p>
+              </div>
+              <p class="callout">
+                <IconGlyph name="info" :size="18" />
+                <span>{{ t('account.passwordSignOutNote') }}</span>
+              </p>
+              <div v-if="passwordError" class="alert alert-danger" role="alert">
+                <IconGlyph name="alert" :size="18" />
+                <span>{{ passwordError }}</span>
+              </div>
+              <div class="account-password-actions">
+                <label class="choice">
+                  <input v-model="showPasswords" type="checkbox" data-testid="account-show-passwords" />
+                  <span>{{ t('account.showPasswords') }}</span>
+                </label>
+                <button
+                  class="btn btn-primary"
+                  type="submit"
+                  :disabled="changingPassword"
+                  :aria-busy="changingPassword"
+                  data-testid="account-change-password"
+                >
+                  {{ changingPassword ? t('account.changingPassword') : t('account.changePassword') }}
+                </button>
+              </div>
+            </form>
+          </section>
+
+          <section class="panel account-card" aria-labelledby="account-signout-title">
+            <h2 id="account-signout-title" class="card-title">{{ t('account.signOutTitle') }}</h2>
+            <div class="form-actions">
+              <button class="btn btn-secondary" type="button" data-testid="account-sign-out" @click="signOut">
+                <IconGlyph name="logout" :size="16" />
+                {{ t('account.signOut') }}
               </button>
             </div>
           </section>
         </div>
       </div>
+
+      <section v-if="!isAdmin" class="panel account-danger" aria-labelledby="account-danger-title">
+        <div class="row-list-copy">
+          <h2 id="account-danger-title" class="row-list-title">{{ t('account.dangerZone') }}</h2>
+          <p class="row-list-meta">{{ t('account.dangerHint') }}</p>
+        </div>
+        <button class="btn btn-danger-soft" type="button" data-testid="account-delete" @click="openDeleteDialog">
+          <IconGlyph name="trash" :size="16" />
+          {{ t('account.deleteAccount') }}
+        </button>
+      </section>
+      <!-- Admins cannot delete their own account; how an admin account ends is said here, not in a red zone. -->
+      <p v-else class="callout">
+        <IconGlyph name="shield" :size="18" />
+        <span>{{ t('account.adminDeleteNote') }}</span>
+      </p>
     </template>
 
     <AppOverlay
       :open="emailDialogOpen"
       :title="t('account.emailDialogTitle')"
       :subtitle="t('account.emailDialogSubtitle')"
+      :busy="sendingEmail"
       test-id="account-email-dialog"
       @close="emailDialogOpen = false"
     >
@@ -288,6 +237,7 @@
           </label>
           <input
             id="account-new-email"
+            data-autofocus
             v-model="emailForm.newEmail"
             class="input"
             type="email"
@@ -309,6 +259,7 @@
             type="password"
             autocomplete="current-password"
             aria-required="true"
+            :placeholder="t('account.passwordPlaceholder')"
             :aria-invalid="Boolean(emailErrors.password)"
             :aria-describedby="emailErrors.password ? 'account-email-password-error' : undefined"
           />
@@ -316,13 +267,15 @@
             {{ emailErrors.password }}
           </p>
         </div>
-        <p v-if="emailError" class="alert alert-danger" role="alert">
+        <div v-if="emailError" class="alert alert-danger" role="alert">
           <IconGlyph name="alert" :size="18" />
           <span>{{ emailError }}</span>
-        </p>
+        </div>
       </form>
       <template #footer>
-        <button class="btn btn-ghost" type="button" @click="emailDialogOpen = false">{{ t('account.cancel') }}</button>
+        <button class="btn btn-secondary" type="button" :disabled="sendingEmail" @click="emailDialogOpen = false">
+          {{ t('account.cancel') }}
+        </button>
         <button
           class="btn btn-primary"
           type="submit"
@@ -340,32 +293,40 @@
       :open="deleteDialogOpen"
       :title="t('account.deleteDialogTitle')"
       :subtitle="t('account.deleteDialogSubtitle')"
+      :busy="deleting"
       test-id="account-delete-dialog"
       @close="deleteDialogOpen = false"
     >
-      <div class="callout is-danger">
+      <p class="callout is-danger">
         <IconGlyph name="alert" :size="18" />
-        <p>{{ isTeacher ? t('account.deleteTeacherCopy') : t('account.deleteStudentCopy') }}</p>
-      </div>
+        <span>{{ deleteCopy }}</span>
+      </p>
       <form id="account-delete-form" novalidate @submit.prevent="deleteAccount">
         <div class="field">
-          <label for="account-delete-confirm">{{ t('account.typeToConfirm', { email: settings?.email ?? '' }) }}</label>
+          <label for="account-delete-confirm">
+            {{ t('account.typeToConfirm', { email: settings?.email ?? '' })
+            }}<span class="required-mark" aria-hidden="true">*</span>
+          </label>
           <input
             id="account-delete-confirm"
+            data-autofocus
             v-model="deleteConfirm"
             class="input"
             type="email"
             autocomplete="off"
             spellcheck="false"
+            aria-required="true"
           />
         </div>
       </form>
-      <p v-if="deleteError" class="alert alert-danger" role="alert">
+      <div v-if="deleteError" class="alert alert-danger" role="alert">
         <IconGlyph name="alert" :size="18" />
         <span>{{ deleteError }}</span>
-      </p>
+      </div>
       <template #footer>
-        <button class="btn btn-ghost" type="button" @click="deleteDialogOpen = false">{{ t('account.cancel') }}</button>
+        <button class="btn btn-secondary" type="button" :disabled="deleting" @click="deleteDialogOpen = false">
+          {{ t('account.cancel') }}
+        </button>
         <button
           class="btn btn-danger"
           type="submit"
@@ -374,25 +335,42 @@
           :aria-busy="deleting"
           data-testid="account-delete-confirm"
         >
+          <IconGlyph name="trash" :size="16" />
           {{ deleting ? t('account.deleting') : t('account.deleteForever') }}
         </button>
       </template>
     </AppOverlay>
 
+    <!-- A teacher with a published class: the same dialog, but the way forward is the class page. -->
     <AppOverlay
       :open="blockedDialogOpen"
-      :title="t('account.blockedTitle')"
-      :subtitle="t('account.blockedSubtitle')"
+      :title="t('account.deleteDialogTitle')"
+      :subtitle="t('account.blockedSubtitle', { count: publishedClasses.length }, publishedClasses.length)"
       test-id="account-blocked-dialog"
       @close="blockedDialogOpen = false"
     >
-      <p class="card-subtitle">{{ t('account.blockedCopy') }}</p>
-      <ul class="account-blocked-list">
-        <li v-for="published in settings?.deletion.publishedClasses ?? []" :key="published.id">
-          <IconGlyph name="classes" :size="18" />
-          <span>{{ published.title }}</span>
-          <RouterLink class="btn btn-link" :to="{ name: 'teacher-class', params: { classId: published.id } }">
+      <div class="callout is-warning">
+        <IconGlyph name="alert" :size="18" />
+        <span>
+          <strong>{{ t('account.blockedHeading', {}, publishedClasses.length) }}</strong>
+          <span>
+            {{
+              onlyPublishedClass
+                ? t('account.blockedCopyOne', { title: onlyPublishedClass.title })
+                : t('account.blockedCopyMany')
+            }}
+          </span>
+        </span>
+      </div>
+      <ul v-if="!onlyPublishedClass" class="row-list">
+        <li v-for="published in publishedClasses" :key="published.id">
+          <span class="row-list-title account-blocked-title">{{ published.title }}</span>
+          <RouterLink
+            class="btn btn-secondary btn-sm"
+            :to="{ name: 'teacher-class', params: { classId: published.id } }"
+          >
             {{ t('account.openClass') }}
+            <IconGlyph name="chevronRight" :size="16" />
           </RouterLink>
         </li>
       </ul>
@@ -400,6 +378,13 @@
         <button class="btn btn-secondary" type="button" @click="blockedDialogOpen = false">
           {{ t('account.close') }}
         </button>
+        <RouterLink
+          v-if="onlyPublishedClass"
+          class="btn btn-primary"
+          :to="{ name: 'teacher-class', params: { classId: onlyPublishedClass.id } }"
+        >
+          {{ t('account.openClass') }}
+        </RouterLink>
       </template>
     </AppOverlay>
   </div>
@@ -412,13 +397,11 @@ import { RouterLink, useRouter } from 'vue-router'
 import { xpApi } from '@/api/learn'
 import { accountOpsApi } from '@/api/ops'
 import { accountApi } from '@/api/services'
-import SegmentedControl from '@/components/common/SegmentedControl.vue'
-import DataNotice from '@/components/common/DataNotice.vue'
-import IconGlyph from '@/components/common/IconGlyph.vue'
-import StatePanel from '@/components/common/StatePanel.vue'
-import StatusPill from '@/components/common/StatusPill.vue'
 import AppOverlay from '@/components/common/AppOverlay.vue'
 import AppToast from '@/components/common/AppToast.vue'
+import FilterChips from '@/components/common/FilterChips.vue'
+import IconGlyph from '@/components/common/IconGlyph.vue'
+import StatePanel from '@/components/common/StatePanel.vue'
 import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { useResource } from '@/composables/useResource'
@@ -504,15 +487,6 @@ const PREFERENCE_ROWS: Record<'STUDENT' | 'TEACHER' | 'ADMIN', { key: Preference
     ADMIN: [{ key: 'reviewQueues', title: 'account.reviewQueuesTitle', hint: 'account.reviewQueuesHint' }],
   }
 const preferenceRows = computed(() => PREFERENCE_ROWS[auth.activeRole ?? 'STUDENT'])
-
-/** The section index, in page order. */
-const sections = computed(() => [
-  { id: 'account-profile', label: isStudent.value ? t('account.profileStudent') : t('account.profileOther') },
-  { id: 'account-notifications', label: t('account.notificationsTitle') },
-  { id: 'account-password', label: t('account.passwordTitle') },
-  { id: 'account-signout', label: t('account.signOutTitle') },
-  ...(isAdmin.value ? [] : [{ id: 'account-danger', label: t('account.dangerZone') }]),
-])
 
 // ----- profile -----
 
@@ -657,6 +631,12 @@ const deleting = ref(false)
 const deleteConfirmed = computed(
   () => Boolean(settings.value) && deleteConfirm.value.trim().toLowerCase() === settings.value?.email.toLowerCase(),
 )
+const deleteCopy = computed(() => {
+  if (!isTeacher.value) return t('account.deleteStudentCopy')
+  return auth.isApprovedTeacher ? t('account.deleteTeacherCopy') : t('account.deleteApplicantCopy')
+})
+const publishedClasses = computed(() => settings.value?.deletion.publishedClasses ?? [])
+const onlyPublishedClass = computed(() => (publishedClasses.value.length === 1 ? publishedClasses.value[0] : null))
 
 function openDeleteDialog(): void {
   if (settings.value?.deletion.blockedBy === 'PUBLISHED_CLASSES') {

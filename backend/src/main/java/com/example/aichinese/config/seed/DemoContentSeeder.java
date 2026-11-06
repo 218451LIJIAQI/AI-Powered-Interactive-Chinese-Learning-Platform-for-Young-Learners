@@ -64,7 +64,7 @@ public class DemoContentSeeder implements CommandLineRunner {
         }
 
         createTeacher(DemoPersonas.TEACHER,
-                "A Mandarin tutor helping university students and young professionals build everyday communication skills.",
+                "Mandarin tutor for young adult beginners. I help university students and young professionals build everyday speaking confidence.",
                 TeacherStatus.APPROVED);
         DemoPersonas.OTHER_TEACHERS.forEach(persona -> createTeacher(persona,
                 "Mandarin teacher for young adult beginners in Malaysia, focusing on everyday speaking.",

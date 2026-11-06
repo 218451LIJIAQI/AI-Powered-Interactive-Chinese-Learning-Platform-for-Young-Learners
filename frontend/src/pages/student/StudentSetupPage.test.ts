@@ -38,7 +38,6 @@ async function pick(wrapper: VueWrapper, group: string, value: string): Promise<
 async function answerTheGoal(wrapper: VueWrapper): Promise<void> {
   await primary(wrapper)
   await pick(wrapper, 'reason-choices', 'TRAVEL')
-  expect(wrapper.text()).toContain('Travel it is!')
   await primary(wrapper)
   await pick(wrapper, 'goal-choices', 'ORDER_FOOD')
   await wrapper.get('textarea').setValue('I am going to Shanghai in July.')
@@ -47,7 +46,7 @@ async function answerTheGoal(wrapper: VueWrapper): Promise<void> {
   expect(wrapper.get('[data-testid="setup-primary"]').attributes('disabled')).toBeDefined()
   await pick(wrapper, 'deadline-choices', '2m')
   await pick(wrapper, 'pace-choices', 'REGULAR')
-  expect(wrapper.text()).toContain('Regular sets your daily goal to 20 XP.')
+  expect(wrapper.text()).toContain('Daily goal: 20 XP. You can change it in Account.')
   await primary(wrapper)
 }
 
@@ -68,22 +67,23 @@ describe('StudentSetupPage', () => {
     const { wrapper, router } = await mountPage()
 
     await answerTheGoal(wrapper)
-    await pick(wrapper, 'self-level-choices', 'A_LITTLE')
+    await pick(wrapper, 'self-level-choices', 'BEGINNER_1')
     await primary(wrapper)
 
-    // The level check starts at Beginner 1 for "A little" and gives friendly feedback.
+    // The level check starts at Beginner 1 for "Beginner 1" and gives friendly feedback.
     expect(api.next).toHaveBeenCalledWith('BEGINNER_1', [])
+    expect(wrapper.text()).toContain('Level check · 1 of')
     await wrapper.get('[data-testid="option-1"]').trigger('click')
     await wrapper.get('[data-testid="check"]').trigger('click')
     await flushPromises()
     expect(wrapper.get('[data-testid="check-bar"]').text()).toContain('Nice!')
     await wrapper.get('[data-testid="continue"]').trigger('click')
     await flushPromises()
-    expect(wrapper.get('[data-testid="level-check-done"]').text()).toContain('You answered 3 questions')
+    expect(wrapper.get('[data-testid="level-check-done"]').text()).toContain('That’s all we need!')
     await primary(wrapper)
 
     // Focus: listening is suggested because it was new in the check.
-    expect(wrapper.text()).toContain('Suggested from your level check: Listening was new to you.')
+    expect(wrapper.text()).toContain('Suggested from your level check: listening was new to you.')
     await pick(wrapper, 'focus-choices', 'LISTENING')
     await primary(wrapper)
     await vi.advanceTimersByTimeAsync(3000)
@@ -108,9 +108,13 @@ describe('StudentSetupPage', () => {
     const result = wrapper.get('[data-testid="plan-result"]')
     expect(result.text()).toContain('Travel to Shanghai')
     expect(result.text()).toContain('AI-assisted summary of what you wrote')
+    expect(result.text()).toContain('You can already')
+    expect(result.text()).toContain('Your typical week')
+    expect(result.text()).toContain('15 min a day, 5 days a week')
     await primary(wrapper)
     expect(wrapper.get('[data-testid="plan-path"]').text()).toContain('Learn · Unit 1 · Say hello')
-    expect(wrapper.get('[data-testid="plan-coverage"]').text()).toContain('Learn covers 2 of your 3 goals.')
+    expect(wrapper.text()).toContain('How you’ll know it’s working')
+    expect(wrapper.text()).toContain('Retake the level check')
     await primary(wrapper)
     expect(router.currentRoute.value.name).toBe('student-home')
   })

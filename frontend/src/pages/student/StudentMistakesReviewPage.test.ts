@@ -38,16 +38,12 @@ describe('StudentMistakesReviewPage (focus mode review)', () => {
 
     expect(wrapper.text()).toContain('Mistakes review · 1 of 1')
     expect(wrapper.text()).toContain('Learn · Polite phrases · you answered “teacher” last time')
-    // The tally counts down as each mistake is checked.
-    expect(wrapper.get('.practice-review-left').text()).toBe('1 left')
-    expect(wrapper.get('.practice-review-tally li').text()).toBe('Mistake 1: now')
+    expect(wrapper.get('.focus-topbar [role="progressbar"]').attributes('aria-valuenow')).toBe('0')
 
     await wrapper.get('[data-testid="option-0"]').trigger('click')
     await wrapper.get('[data-testid="check"]').trigger('click')
     await flushPromises()
     expect(api.check).toHaveBeenCalledWith({ questionId: 7, answer: 'name' })
-    expect(wrapper.get('.practice-review-left').text()).toBe('0 left')
-    expect(wrapper.get('.practice-review-tally li').classes()).toContain('is-right')
 
     await wrapper.get('[data-testid="continue"]').trigger('click')
     await flushPromises()
@@ -56,6 +52,20 @@ describe('StudentMistakesReviewPage (focus mode review)', () => {
     expect(done.text()).toContain('Review complete!')
     expect(done.text()).toContain('1 / 1')
     expect(done.text()).toContain('5 mistakes to try again next time')
+    expect(wrapper.get('[data-testid="review-done"]').attributes('href')).toBe('/student/practice/mistakes')
+    expect(wrapper.get('.focus-topbar [role="progressbar"]').attributes('aria-valuenow')).toBe('100')
+  })
+
+  it('asks before leaving once something was answered, and not before', async () => {
+    api.check.mockResolvedValue(answerCheck())
+    const wrapper = await mountPage()
+
+    expect(wrapper.findComponent({ name: 'ConfirmDialog' }).props('open')).toBe(false)
+    await wrapper.get('[data-testid="option-0"]').trigger('click')
+    await wrapper.get('[data-testid="check"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="focus-close"]').trigger('click')
+    expect(wrapper.findComponent({ name: 'ConfirmDialog' }).props('open')).toBe(true)
   })
 
   it('celebrates an empty list once the last mistake is fixed', async () => {

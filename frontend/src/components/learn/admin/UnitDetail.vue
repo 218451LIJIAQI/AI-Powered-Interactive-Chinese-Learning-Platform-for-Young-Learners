@@ -1,17 +1,16 @@
 <template>
-  <div class="admin-reader-slot" data-testid="unit-detail">
+  <AppOverlay
+    variant="drawer"
+    :open="unitId !== null"
+    :title="unitTitle || t('adminLearning.unitLoading')"
+    :subtitle="unitMeta"
+    :busy="busy"
+    test-id="unit-detail"
+    @close="emit('close')"
+  >
     <StatePanel
-      v-if="unitId === null"
-      tone="empty"
-      icon="route"
-      spacious
-      :title="t('adminLearning.chooseUnit')"
-      :message="t('adminLearning.chooseUnitHint')"
-    />
-    <StatePanel
-      v-else-if="detail.loading.value"
+      v-if="detail.loading.value"
       tone="loading"
-      spacious
       :title="t('adminLearning.unitLoading')"
       :message="t('adminLearning.unitLoadingHint')"
     />
@@ -19,7 +18,6 @@
       v-else-if="detail.error.value"
       tone="error"
       icon="alert"
-      spacious
       :title="t('adminLearning.unitError')"
       :message="detail.error.value"
     >
@@ -27,99 +25,85 @@
         <button class="btn btn-primary" type="button" @click="detail.reload">{{ t('adminLearning.retry') }}</button>
       </template>
     </StatePanel>
-    <section v-else-if="unit" class="panel admin-reader" aria-labelledby="unit-detail-title">
-      <header class="admin-reader-head">
-        <div class="admin-reader-heading">
-          <h2 id="unit-detail-title">{{ unitTitle }}</h2>
-          <p>{{ unitMeta }}</p>
-          <p class="admin-path-state">
-            <StatusPill
-              :label="published ? t('adminLearning.published') : t('adminLearning.draft')"
-              :tone="published ? 'success' : 'neutral'"
-            />
-            <span>{{ published ? t('adminLearning.unitLive') : t('adminLearning.unitHidden') }}</span>
-          </p>
-        </div>
-        <button
-          v-if="published"
-          class="btn btn-outline"
-          type="button"
-          data-testid="unit-unpublish"
-          @click="confirming = true"
-        >
-          <IconGlyph name="eyeOff" :size="16" />
-          {{ t('adminLearning.unpublish') }}
-        </button>
-        <button
-          v-else
-          class="btn btn-primary"
-          type="button"
-          :disabled="busy"
-          :aria-busy="busy"
-          data-testid="unit-publish"
-          @click="changeStatus(true)"
-        >
-          <IconGlyph name="send" :size="16" />
-          {{ t('adminLearning.publish') }}
-        </button>
-      </header>
-
-      <section class="admin-reader-section" aria-labelledby="unit-detail-lessons">
-        <h3 id="unit-detail-lessons" class="admin-reader-label">{{ t('adminLearning.lessons') }}</h3>
-        <ol class="admin-timeline">
-          <li v-for="stop in detail.data.value!.lessons" :key="stop.id">
-            <span class="admin-timeline-mark" :class="{ 'is-numbered': stop.kind === 'LESSON' }" aria-hidden="true">
-              <IconGlyph v-if="stop.kind !== 'LESSON'" :name="kindIcon(stop.kind)" :size="14" />
-              <template v-else>{{ lessonNumber(stop.id) }}</template>
+    <section v-else-if="unit" class="admin-section" aria-labelledby="unit-detail-lessons">
+      <h3 id="unit-detail-lessons" class="admin-section-title">{{ t('adminLearning.lessons') }}</h3>
+      <ol class="row-list">
+        <li v-for="stop in stops" :key="stop.id">
+          <span class="admin-path-stop">
+            <span class="admin-step" aria-hidden="true">
+              <IconGlyph v-if="stop.number === null" name="star" :size="14" />
+              <template v-else>{{ stop.number }}</template>
             </span>
-            <span class="admin-timeline-copy">
-              <strong>{{ stop.title }}</strong>
-              <span>
-                {{ t(kindKey(stop.kind)) }} · {{ t('adminLearning.aboutMinutes', { minutes: stop.minutes }) }} · +{{
-                  stop.xpReward
-                }}
-                XP · {{ t('adminLearning.questionCount', { count: stop.questionCount }, stop.questionCount) }}
-              </span>
+            <span class="row-list-copy">
+              <span class="row-list-title"><CjkText :text="stop.title" /></span>
+              <span class="row-list-meta">{{ stop.meta }}</span>
             </span>
-          </li>
-        </ol>
-        <p class="type-caption">{{ t('adminLearning.unitNote') }}</p>
-      </section>
+          </span>
+        </li>
+      </ol>
     </section>
-  </div>
+    <template v-if="unit && !detail.loading.value" #footer>
+      <button class="btn btn-secondary" type="button" @click="emit('close')">{{ t('adminLearning.close') }}</button>
+      <button
+        v-if="published"
+        class="btn btn-secondary"
+        type="button"
+        data-testid="unit-unpublish"
+        @click="confirming = true"
+      >
+        {{ t('adminLearning.unpublish') }}
+      </button>
+      <button
+        v-else
+        class="btn btn-primary"
+        type="button"
+        :disabled="busy"
+        :aria-busy="busy"
+        data-testid="unit-publish"
+        @click="changeStatus(true)"
+      >
+        {{ t('adminLearning.publish') }}
+      </button>
+    </template>
+  </AppOverlay>
 
-  <ConfirmDialog
+  <AdminDecisionDialog
     :open="confirming"
     :title="t('adminLearning.unpublishUnitTitle', { title: unitTitle })"
-    :message="t('adminLearning.unpublishUnitMessage')"
     :confirm-label="t('adminLearning.unpublishUnit')"
     :cancel-label="t('adminLearning.keepPublished')"
     :busy="busy"
+    test-id="unit-unpublish-dialog"
     @confirm="changeStatus(false)"
     @cancel="confirming = false"
-  />
+  >
+    <p class="overlay-message">{{ t('adminLearning.unpublishUnitMessage') }}</p>
+  </AdminDecisionDialog>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 
 import { adminLearningApi } from '@/api/learn'
-import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
+import AdminDecisionDialog from '@/components/admin/AdminDecisionDialog.vue'
+import AppOverlay from '@/components/common/AppOverlay.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
-import StatusPill from '@/components/common/StatusPill.vue'
+import CjkText from '@/components/learning/CjkText.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { useResource } from '@/composables/useResource'
 import { adminLearningMessages } from '@/plugins/adminLearningMessages'
 import type { AdminUnitDetail, LessonKind } from '@/types/learn'
 import { resolveApiError } from '@/utils/apiError'
+import { formatNumber } from '@/utils/format'
 
 /**
- * The unit chosen on the admin Learning path, beside the path: its stops in order (kind, minutes, XP, questions),
- * whether students see it, and publish / unpublish (unpublishing asks first).
+ * One unit of the admin Learning path, in a drawer: its stops in order (kind, minutes, XP), whether students see it, and
+ * publish / unpublish (unpublishing asks first).
  */
 const props = defineProps<{ unitId: number | null }>()
 const emit = defineEmits<{
+  close: []
   changed: [detail: AdminUnitDetail, message: string]
   failed: [message: string]
 }>()
@@ -153,35 +137,44 @@ const unitTitle = computed(() => {
 const unitMeta = computed(() => {
   const value = unit.value
   if (!value) return ''
-  return t('adminLearning.unitMeta', {
-    lessons: value.lessonCount,
-    hsk: value.hskLevel,
-    students: value.studentsStarted,
-  })
+  const parts = [t('adminLearning.lessonsHsk', { lessons: value.lessonCount, hsk: value.hskLevel })]
+  if (published.value) {
+    parts.push(
+      t('adminLearning.studentsStarted', { count: formatNumber(value.studentsStarted) }, value.studentsStarted),
+    )
+  }
+  parts.push(published.value ? t('adminLearning.published') : t('adminLearning.draft'))
+  return parts.join(' · ')
 })
 
-function lessonNumber(id: number): number {
-  const lessons = detail.data.value?.lessons.filter((stop) => stop.kind === 'LESSON') ?? []
-  return lessons.findIndex((stop) => stop.id === id) + 1
+const KIND_KEYS: Readonly<Record<LessonKind, string>> = {
+  LESSON: 'adminLearning.kindLesson',
+  BONUS: 'adminLearning.kindBonus',
+  REVIEW: 'adminLearning.kindReview',
+  CHECKPOINT: 'adminLearning.kindCheckpoint',
 }
 
-function kindIcon(kind: LessonKind): string {
-  if (kind === 'BONUS') return 'rewards'
-  return kind === 'CHECKPOINT' ? 'trophy' : 'star'
-}
-
-function kindKey(kind: LessonKind): string {
-  switch (kind) {
-    case 'BONUS':
-      return 'adminLearning.kindBonus'
-    case 'REVIEW':
-      return 'adminLearning.kindReview'
-    case 'CHECKPOINT':
-      return 'adminLearning.kindCheckpoint'
-    default:
-      return 'adminLearning.kindLesson'
-  }
-}
+/** The stops as students meet them: numbered in order, a bonus chest (a star) opens after the lesson before it. */
+const stops = computed(() => {
+  let number = 0
+  return (detail.data.value?.lessons ?? []).map((stop) => {
+    if (stop.kind === 'BONUS') {
+      return {
+        id: stop.id,
+        number: null,
+        title: stop.title,
+        meta: t('adminLearning.bonusMeta', { lesson: number }),
+      }
+    }
+    number += 1
+    return {
+      id: stop.id,
+      number,
+      title: stop.title,
+      meta: t('adminLearning.stopMeta', { kind: t(KIND_KEYS[stop.kind]), minutes: stop.minutes, xp: stop.xpReward }),
+    }
+  })
+})
 
 async function changeStatus(publish: boolean): Promise<void> {
   if (props.unitId === null) return

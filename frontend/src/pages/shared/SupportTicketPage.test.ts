@@ -4,12 +4,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SupportRequestDetail, SupportStatus } from '@/types/ops'
 
 const supportApi = vi.hoisted(() => ({ get: vi.fn(), reply: vi.fn(), solve: vi.fn(), attachment: vi.fn() }))
+const router = vi.hoisted(() => ({ push: vi.fn() }))
 
 vi.mock('@/api/ops', () => ({ supportApi }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ isAuthenticated: true, activeRole: 'STUDENT' }) }))
 vi.mock('vue-router', async () => ({
   RouterLink: (await import('@/test/helpers')).routerLinkStub,
   useRoute: () => ({ name: 'student-support-ticket', params: { ticketId: '7' } }),
+  useRouter: () => router,
 }))
 
 import SupportTicketPage from './SupportTicketPage.vue'
@@ -70,7 +72,9 @@ describe('SupportTicketPage', () => {
     const wrapper = await mountPage()
 
     expect(wrapper.find('h1').text()).toBe('Live session link didn’t open')
-    expect(wrapper.text()).toContain('Answered · your turn')
+    expect(wrapper.find('.support-ticket-heading .status-pill').text()).toBe('Answered · your turn')
+    expect(wrapper.find('.support-ticket-heading .status-pill').classes()).toContain('strong')
+    expect(wrapper.text()).toContain('#1038 · Classes & live sessions · sent')
     const thread = wrapper.find('[data-testid="support-thread"]')
     expect(thread.text()).toContain('You')
     expect(thread.text()).toContain('Olivia Tan')
@@ -88,7 +92,7 @@ describe('SupportTicketPage', () => {
 
     expect(supportApi.reply).toHaveBeenCalledWith(7, 'Copy link worked, thanks!')
     expect(wrapper.text()).toContain('Waiting for support')
-    expect(wrapper.text()).toContain('Reply sent on #1038.')
+    expect(wrapper.find('[data-testid="toast"]').text()).toBe('Reply sent on #1038.')
   })
 
   it('does not send an empty reply', async () => {
@@ -99,7 +103,7 @@ describe('SupportTicketPage', () => {
     expect(supportApi.reply).not.toHaveBeenCalled()
   })
 
-  it('marks the request solved and hides the reply box', async () => {
+  it('marks the request solved and goes back to the list, which confirms it', async () => {
     supportApi.solve.mockResolvedValue(detail('SOLVED'))
     const wrapper = await mountPage()
 
@@ -107,6 +111,13 @@ describe('SupportTicketPage', () => {
     await flushPromises()
 
     expect(supportApi.solve).toHaveBeenCalledWith(7)
+    expect(router.push).toHaveBeenCalledWith({ name: 'student-support', state: { supportSolved: 1038 } })
+  })
+
+  it('shows a solved request without the reply box', async () => {
+    supportApi.get.mockResolvedValue(detail('SOLVED'))
+    const wrapper = await mountPage()
+
     expect(wrapper.find('form.support-reply').exists()).toBe(false)
     expect(wrapper.find('[data-testid="support-solved"]').text()).toContain('If it happens again, send a new request.')
   })
@@ -125,7 +136,7 @@ describe('SupportTicketPage', () => {
     const wrapper = await mountPage()
 
     expect(wrapper.text()).toContain('We couldn’t open this request')
-    expect(wrapper.text()).toContain('Back to Help & support')
+    expect(wrapper.text()).toContain('Go to Help & support')
     expect(wrapper.findAll('h1')).toHaveLength(1)
   })
 })

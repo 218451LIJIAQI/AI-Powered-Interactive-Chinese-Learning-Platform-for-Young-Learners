@@ -2,7 +2,6 @@ import { mount, type VueWrapper } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
-  replace: vi.fn(),
   auth: { isAuthenticated: false, activeRole: null as string | null },
   route: { path: '/', query: {} as Record<string, string> },
 }))
@@ -10,7 +9,6 @@ const mocks = vi.hoisted(() => ({
 vi.mock('vue-router', async () => ({
   RouterLink: (await import('@/test/helpers')).routerLinkHrefStub,
   useRoute: () => mocks.route,
-  useRouter: () => ({ replace: mocks.replace }),
 }))
 
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => mocks.auth }))
@@ -22,57 +20,43 @@ function mountPage(): VueWrapper {
 }
 
 beforeEach(() => {
-  mocks.replace.mockReset()
   mocks.auth.isAuthenticated = false
   mocks.auth.activeRole = null
   mocks.route.query = {}
 })
 
 describe('LandingPage (FRPUB01)', () => {
-  it('has one h1, the how-it-works and about anchors, the featured classes and links into Help', () => {
+  it('has one h1, the how-it-works anchor and the featured classes', () => {
     const wrapper = mountPage()
 
     expect(wrapper.findAll('h1')).toHaveLength(1)
     expect(wrapper.find('#how-it-works').exists()).toBe(true)
-    expect(wrapper.find('#about').exists()).toBe(true)
     expect(wrapper.findComponent({ name: 'FeaturedClasses' }).exists()).toBe(true)
-    expect(wrapper.text()).toContain('Personal plan in 3 minutes')
-    for (const anchor of ['/help#getting-started', '/help#for-teachers', '/help#ai-and-safety']) {
-      expect(wrapper.find(`a[href="${anchor}"]`).exists(), anchor).toBe(true)
-    }
   })
 
-  it('shows the four ways to learn in order, and only Learn and Practice earn XP', () => {
+  it('shows how MandarinSpark works in four parts, in order', () => {
     const wrapper = mountPage()
 
-    expect(wrapper.findAll('.landing-way h3').map((title) => title.text())).toEqual([
+    expect(wrapper.findAll('.landing-how-item h3').map((title) => title.text())).toEqual([
       'Learn',
       'Practice',
       'AI Helper',
       'Classes',
     ])
-    expect(wrapper.findAll('.landing-xp').map((rule) => rule.text())).toEqual([
-      'Earns XP',
-      'Earns XP',
-      'Optional · no XP',
-      'Free · no XP',
-    ])
-    expect(wrapper.findAll('.landing-xp.is-earning')).toHaveLength(2)
   })
 
-  it('shows the first lesson moment: 你好 in two tiles with pinyin and tone', () => {
+  it('shows 你好 in two tiles with its pinyin and meaning', () => {
     const wrapper = mountPage()
 
-    expect(wrapper.findAll('.landing-moment-tile').map((tile) => tile.text())).toEqual(['你', '好'])
-    expect(wrapper.findAll('.landing-moment-pinyin').map((pinyin) => pinyin.text())).toEqual(['nǐ', 'hǎo'])
-    // jsdom has no speech synthesis, so the Listen button stays hidden.
-    expect(wrapper.find('.landing-moment-meaning button').exists()).toBe(false)
+    expect(wrapper.findAll('.landing-word-tile').map((tile) => tile.text())).toEqual(['你', '好'])
+    expect(wrapper.get('.landing-word-gloss').text()).toBe('nǐ hǎo · hello')
   })
 
-  it('invites a visitor to create a student account', () => {
+  it('invites a visitor to create a student account, with one yellow action', () => {
     const wrapper = mountPage()
 
-    const start = wrapper.get('.landing-actions a')
+    const start = wrapper.get('.landing-hero .btn-accent')
+    expect(wrapper.findAll('.btn-accent')).toHaveLength(1)
     expect(start.text()).toBe('Start learning')
     expect(start.attributes('href')).toBe(
       JSON.stringify({ path: '/auth', query: { tab: 'register', role: 'student' } }),
@@ -85,18 +69,16 @@ describe('LandingPage (FRPUB01)', () => {
 
     const wrapper = mountPage()
 
-    expect(wrapper.get('.landing-actions a').attributes('href')).toBe('/student/home')
+    expect(wrapper.get('.landing-hero .btn-accent').attributes('href')).toBe('/student/home')
   })
 
-  it('shows the account-deleted notice until it is dismissed', async () => {
-    mocks.route.query = { notice: 'account-deleted', tab: 'x' }
-    const wrapper = mountPage()
+  it('shows the account-deleted notice after an account is deleted', () => {
+    mocks.route.query = { notice: 'account-deleted' }
 
-    const notice = wrapper.get('[data-testid="account-deleted-notice"]')
-    expect(notice.text()).toContain('Your account was deleted.')
+    const notice = mountPage().get('[data-testid="account-deleted-notice"]')
 
-    await notice.get('button').trigger('click')
-    expect(mocks.replace).toHaveBeenCalledWith({ query: { tab: 'x' } })
+    expect(notice.text()).toBe('Your account was deleted.')
+    expect(notice.attributes('role')).toBe('status')
   })
 
   it('has no notice without the query', () => {

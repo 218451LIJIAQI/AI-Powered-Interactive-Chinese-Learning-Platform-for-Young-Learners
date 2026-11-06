@@ -56,7 +56,7 @@ describe('StudentLevelCheckPage', () => {
 
     expect(api.retake).toHaveBeenCalledWith('BEGINNER_1', [{ questionId: 1, optionId: null }], 'en')
     expect(wrapper.get('[data-testid="retake-outcome"]').text()).toBe(
-      'Your level is still Beginner 1, with a head start, so your plan stays the same.',
+      'Your level is still Beginner 1, so your plan stays the same.',
     )
     expect(wrapper.get('[data-testid="back-to-plan"]').attributes('href')).toBe('/student/progress/plan')
   })

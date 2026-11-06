@@ -1,8 +1,8 @@
 <template>
-  <section class="confirm-email" aria-labelledby="confirm-email-title">
+  <section class="panel confirm-email" aria-labelledby="confirm-email-title">
     <span class="state-icon confirm-email-icon" :class="`is-${state}`" aria-hidden="true">
       <span v-if="state === 'checking'" class="spinner" />
-      <IconGlyph v-else :name="state === 'done' ? 'check' : 'alert'" :size="26" />
+      <IconGlyph v-else :name="state === 'done' ? 'check' : 'alert'" :size="24" />
     </span>
 
     <template v-if="state === 'checking'">
@@ -15,7 +15,7 @@
       <p role="status" data-testid="confirm-email-done">{{ t('recovery.signupConfirmedCopy', { email: newEmail }) }}</p>
       <RouterLink v-if="homePath" class="btn btn-primary btn-lg" :to="homePath">
         {{ t('recovery.continueLearning') }}
-        <IconGlyph name="chevronRight" :size="16" />
+        <IconGlyph name="chevronRight" :size="18" />
       </RouterLink>
       <RouterLink v-else class="btn btn-primary btn-lg" to="/auth">{{ t('recovery.signIn') }}</RouterLink>
     </template>
@@ -25,14 +25,14 @@
       <p role="status" data-testid="confirm-email-done">{{ t('recovery.confirmedCopy', { email: newEmail }) }}</p>
       <RouterLink class="btn btn-primary btn-lg" :to="{ name: 'auth', query: { email: 'changed' } }">
         {{ t('recovery.signIn') }}
-        <IconGlyph name="chevronRight" :size="16" />
+        <IconGlyph name="chevronRight" :size="18" />
       </RouterLink>
     </template>
 
     <template v-else>
       <h1 id="confirm-email-title">{{ t('recovery.confirmFailedTitle') }}</h1>
       <p role="alert" data-testid="confirm-email-error">{{ errorMessage }}</p>
-      <p class="confirm-email-hint">{{ signup ? t('recovery.signupFailedHint') : t('recovery.confirmFailedHint') }}</p>
+      <p>{{ signup ? t('recovery.signupFailedHint') : t('recovery.confirmFailedHint') }}</p>
       <RouterLink v-if="signup && homePath" class="btn btn-primary btn-lg" :to="homePath">{{
         t('recovery.continueLearning')
       }}</RouterLink>

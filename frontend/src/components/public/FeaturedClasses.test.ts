@@ -5,8 +5,6 @@ import type { ClassCard } from '@/types/classes'
 
 const mocks = vi.hoisted(() => ({ featured: vi.fn() }))
 
-vi.mock('vue-router', async () => ({ RouterLink: (await import('@/test/helpers')).routerLinkHrefStub }))
-
 vi.mock('@/api/classes', () => ({ publicClassesApi: { featured: mocks.featured } }))
 
 import FeaturedClasses from './FeaturedClasses.vue'
@@ -17,7 +15,7 @@ function card(overrides: Partial<ClassCard> = {}): ClassCard {
     title: 'Mandarin for Beginners',
     description: null,
     levelName: 'Beginner 1',
-    topicName: 'Sentences',
+    topicName: 'Daily life',
     learningType: 'HYBRID',
     teacher: { id: 1, name: 'Li Wei', verified: true, bio: null },
     unitCount: 2,
@@ -27,8 +25,14 @@ function card(overrides: Partial<ClassCard> = {}): ClassCard {
   }
 }
 
+/** The card itself belongs to the catalogue; here it only has to get the class and the route to its page. */
+const ClassCatalogueCard = {
+  props: ['card', 'to'],
+  template: '<article class="card-stub" :data-to="JSON.stringify(to)">{{ card.title }}</article>',
+}
+
 function mountList() {
-  return mount(FeaturedClasses, { global: { stubs: { IconGlyph: true, PortraitAvatar: true } } })
+  return mount(FeaturedClasses, { global: { stubs: { IconGlyph: true, ClassCatalogueCard } } })
 }
 
 beforeEach(() => {
@@ -36,29 +40,14 @@ beforeEach(() => {
 })
 
 describe('FeaturedClasses (FRPUB01)', () => {
-  it('lists each class teacher first, linking to its class page', async () => {
-    mocks.featured.mockResolvedValue([
-      card(),
-      card({
-        id: 10,
-        title: 'Numbers, Money and Time',
-        teacher: { id: 4, name: 'Tan Mei Fong', verified: false, bio: null },
-        upcomingLiveSessionCount: 0,
-      }),
-    ])
+  it('shows each class on the catalogue card, linking to its class page', async () => {
+    mocks.featured.mockResolvedValue([card(), card({ id: 10, title: 'Numbers, Money and Time' })])
     const wrapper = mountList()
     await flushPromises()
 
-    const rows = wrapper.findAll('.featured-class')
-    expect(rows).toHaveLength(2)
-    expect(rows[0]!.get('.featured-class-teacher').text()).toBe('Li Wei Verified')
-    expect(rows[0]!.get('.featured-class-link').attributes('href')).toBe(
-      JSON.stringify({ name: 'class-detail', params: { classId: 1 } }),
-    )
-    expect(rows[0]!.text()).toContain('Beginner 1 · Sentences · 2 units · 5 lessons · 4 live sessions coming up')
-    expect(rows[0]!.find('.verified-mark').exists()).toBe(true)
-    expect(rows[1]!.find('.verified-mark').exists()).toBe(false)
-    expect(rows[1]!.text()).not.toContain('live session')
+    const cards = wrapper.findAll('.card-stub')
+    expect(cards.map((item) => item.text())).toEqual(['Mandarin for Beginners', 'Numbers, Money and Time'])
+    expect(cards[1]!.attributes('data-to')).toBe(JSON.stringify({ name: 'class-detail', params: { classId: 10 } }))
   })
 
   it('offers a retry when the classes cannot be loaded', async () => {
@@ -70,14 +59,15 @@ describe('FeaturedClasses (FRPUB01)', () => {
     await wrapper.get('button').trigger('click')
     await flushPromises()
 
-    expect(wrapper.findAll('.featured-class')).toHaveLength(1)
+    expect(wrapper.findAll('.card-stub')).toHaveLength(1)
   })
 
-  it('says so when no class is published yet', async () => {
+  it('says why the list is empty when no class is published yet', async () => {
     mocks.featured.mockResolvedValue([])
     const wrapper = mountList()
     await flushPromises()
 
+    expect(wrapper.text()).toContain('No classes yet')
     expect(wrapper.text()).toContain('Classes will appear here once teachers publish them.')
   })
 })

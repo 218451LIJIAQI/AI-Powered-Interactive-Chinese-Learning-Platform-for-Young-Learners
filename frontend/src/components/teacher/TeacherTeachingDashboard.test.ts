@@ -62,27 +62,23 @@ const dashboard: TeachingDashboard = {
 describe('TeacherTeachingDashboard', () => {
   beforeEach(() => api.dashboard.mockReset())
 
-  it('lists what needs the teacher first, the numbers and the students needing support', async () => {
+  it('lists what needs the teacher first and the students needing support, without a number strip', async () => {
     api.dashboard.mockResolvedValue(dashboard)
     const router = await classesTestRouter('/teacher/classes')
     const wrapper = mount(TeacherTeachingDashboard, { global: { plugins: [router] } })
     await flushPromises()
 
     expect(wrapper.text()).toContain('1 needs you · 1 to keep an eye on')
-    expect(wrapper.text()).toContain('Changes requested: University Life (revision)')
-    const note = wrapper.get('blockquote')
-    expect(note.text()).toContain('Add pinyin under the new words.')
-    expect(note.text()).toContain('Olivia Tan, May 15')
-    expect(wrapper.text()).toContain('1 item needs you')
-    expect(wrapper.text()).toContain('with its first lesson, "Lantern Festival"')
+    expect(wrapper.text()).toContain('Changes requested: University Life')
+    expect(wrapper.text()).toContain('Olivia Tan, May 15: Add pinyin under the new words.')
+    expect(wrapper.text()).toContain('In review: Chinese Culture and Festivals (new class)')
+    expect(wrapper.text()).toContain('Submitted May 18, 10:00 AM')
     const edit = wrapper.findAll('a').find((link) => link.text().includes('Edit lesson'))
     expect(edit?.attributes('href')).toBe('/teacher/classes/7/lessons/13')
 
-    expect(wrapper.text()).toContain('2 classes and 21 lessons · 2 in review')
-    expect(wrapper.text()).toContain('8 bookings')
-    expect(wrapper.text()).toContain('65%')
+    expect(wrapper.text()).not.toContain('21')
     expect(wrapper.text()).toContain('Zhang Yi')
     expect(wrapper.text()).toContain('20% class progress · quiz average 50%')
-    expect(wrapper.text()).toContain('No live sessions are coming up.')
+    expect(wrapper.text()).toContain('No live sessions coming up')
   })
 })

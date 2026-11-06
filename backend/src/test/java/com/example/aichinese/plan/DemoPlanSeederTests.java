@@ -63,18 +63,19 @@ class DemoPlanSeederTests {
                 .map(step -> step.kind() == PlanStepKind.CLASS ? "C:" + step.title() : "U" + step.unitNumber())
                 .toList();
         assertThat(steps).containsExactly(
-                "U1", "C:Mandarin for Beginners", "U2", "C:Everyday Conversations", "U3");
+                "U1", "C:Mandarin for Campus Life", "U2", "U3", "C:Travel Mandarin", "U4", "C:Shopping and Prices");
         assertThat(plan.steps().get(0).status()).isEqualTo(PlanViews.StepStatus.IN_PROGRESS);
         assertThat(plan.steps().get(1).status()).isEqualTo(PlanViews.StepStatus.IN_MY_CLASSES);
-        assertThat(plan.steps().get(3).status()).isEqualTo(PlanViews.StepStatus.OPTIONAL);
+        assertThat(plan.steps().get(4).status()).isEqualTo(PlanViews.StepStatus.OPTIONAL);
         assertThat(plan.goal().deadline()).isAfter(LocalDate.now().plusWeeks(6));
 
         HomeView home = homeService.home(amira);
         assertThat(home.email().confirmed()).isTrue();
         assertThat(home.setupState()).isEqualTo(PlanSetupState.COMPLETED);
-        assertThat(home.next().title()).isEqualTo("Introduce yourself");
+        assertThat(home.next().title()).isEqualTo("Initials 1 · b p m f and more");
         assertThat(home.next().phrase()).isNotNull();
-        assertThat(home.plan().classSteps()).hasSize(2);
+        assertThat(home.next().phrase().hanzi()).isEqualTo("爸");
+        assertThat(home.plan().classSteps()).hasSize(3);
 
         long versions = planRepository.count();
         demoPlanSeeder.run();

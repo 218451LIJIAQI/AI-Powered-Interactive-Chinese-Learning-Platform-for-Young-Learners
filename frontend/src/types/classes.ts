@@ -29,6 +29,8 @@ export interface ClassCard {
   description: string | null
   levelName: string | null
   topicName: string | null
+  /** "Best after Unit N": a soft label, never a lock. */
+  bestAfterUnit?: number | null
   learningType: LearningType | null
   teacher: ClassTeacher
   unitCount: number
@@ -360,6 +362,7 @@ export interface PracticeSuggestion {
 }
 
 export interface QuizResult {
+  attemptId: number
   quiz: QuizIntro
   submittedAt: string
   score: number
@@ -479,6 +482,7 @@ export interface ClassListItem {
   revisionStatus: RevisionStatus | null
   levelName: string | null
   topicName: string | null
+  bestAfterUnit?: number | null
   learningType: LearningType | null
   unitCount: number
   lessonCount: number
@@ -517,6 +521,7 @@ export interface DetailsRevision {
   description: string | null
   levelId: number | null
   topicId: number | null
+  bestAfterUnit?: number | null
   learningType: LearningType | null
   rejectionReason: string | null
 }
@@ -530,6 +535,7 @@ export interface TeacherClassPage {
   levelName: string | null
   topicId: number | null
   topicName: string | null
+  bestAfterUnit?: number | null
   learningType: LearningType | null
   status: ContentStatus
   rejectionReason: string | null
@@ -545,6 +551,8 @@ export interface ClassDetailsPayload {
   levelId?: number | null
   topicId?: number | null
   learningType?: LearningType | null
+  /** 1 to 8; left out, the class keeps the value it has. */
+  bestAfterUnit?: number | null
 }
 
 /** One change of a revision; the frontend words it from `kind`. */
@@ -854,6 +862,7 @@ export interface ReviewDetail {
     description: string | null
     levelName: string | null
     topicName: string | null
+    bestAfterUnit?: number | null
     learningType: LearningType | null
     teacherName: string
     unitCount: number

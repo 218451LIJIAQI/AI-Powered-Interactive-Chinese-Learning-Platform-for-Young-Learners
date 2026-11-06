@@ -1,6 +1,11 @@
 <template>
-  <AppOverlay :title="t(target.titleKey)" :subtitle="t('aiHelper.reportLead')" @close="emit('close')">
-    <form class="ai-dialog-form" data-testid="ai-report-form" @submit.prevent="send">
+  <AppOverlay
+    :title="t(target.titleKey)"
+    :subtitle="t(target.leadKey ?? 'aiHelper.reportLead')"
+    :busy="sending"
+    @close="emit('close')"
+  >
+    <form :id="`${baseId}-form`" class="ai-dialog-form" data-testid="ai-report-form" @submit.prevent="send">
       <div class="field">
         <label class="field-label" :for="`${baseId}-reason`">
           {{ t('aiHelper.reportReason') }}<span class="required-mark" aria-hidden="true">*</span>
@@ -20,19 +25,21 @@
           :placeholder="t('aiHelper.reportNotePlaceholder')"
         />
       </div>
-      <p class="callout is-compact">
-        <IconGlyph name="attach" :size="16" />
+      <p class="ai-dialog-attached">
+        <IconGlyph name="status" :size="14" />
         {{ t(target.attachedKey) }}
       </p>
       <p v-if="error" class="field-error" role="alert">{{ error }}</p>
-      <div class="form-actions">
-        <button class="btn btn-ghost" type="button" @click="emit('close')">{{ t('aiHelper.cancel') }}</button>
-        <button class="btn btn-primary" type="submit" :disabled="sending" :aria-busy="sending">
-          <IconGlyph v-if="!sending" name="flag" :size="16" />
-          {{ t('aiHelper.sendReport') }}
-        </button>
-      </div>
     </form>
+    <template #footer>
+      <button class="btn btn-secondary" type="button" :disabled="sending" @click="emit('close')">
+        {{ t('aiHelper.cancel') }}
+      </button>
+      <button class="btn btn-primary" type="submit" :form="`${baseId}-form`" :disabled="sending" :aria-busy="sending">
+        <IconGlyph v-if="!sending" name="flag" :size="16" />
+        {{ t('aiHelper.sendReport') }}
+      </button>
+    </template>
   </AppOverlay>
 </template>
 
@@ -40,13 +47,13 @@
 import { computed, ref, useId } from 'vue'
 
 import { aiHelperApi } from '@/api/ai'
+import AppOverlay from '@/components/common/AppOverlay.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { aiHelperMessages } from '@/plugins/aiHelperMessages'
 import { aiSafetyMessages } from '@/plugins/aiSafetyMessages'
 import { resolveApiError } from '@/utils/apiError'
 
-import AppOverlay from '@/components/common/AppOverlay.vue'
 import { reportReasonKey, reportReasons, type AiReportTarget } from './aiHelper'
 
 /** "Report this answer": the student picks a reason and may add a note; what was reported is attached for the admin. */
@@ -86,5 +93,19 @@ async function send(): Promise<void> {
 .ai-dialog-form {
   display: grid;
   gap: var(--space-4);
+}
+
+.ai-dialog-attached {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-1-5);
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: 18px;
+}
+
+.ai-dialog-attached .icon-glyph {
+  margin-top: var(--space-0-5);
 }
 </style>

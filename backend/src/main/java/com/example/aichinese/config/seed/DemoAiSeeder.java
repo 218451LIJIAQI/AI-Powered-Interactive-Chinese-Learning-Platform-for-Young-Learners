@@ -81,7 +81,7 @@ public class DemoAiSeeder implements CommandLineRunner {
 
         report(amira, AiResponseReportReason.INCORRECT_CONTENT, at(today.minusDays(2), 12, 0),
                 "How do I introduce myself in Mandarin?",
-                "你可以说“我是叫 Aina”。(Nǐ kěyǐ shuō “wǒ shì jiào Aina”.) That means “My name is Aina”.",
+                "你可以说“我是叫 Amira”。(Nǐ kěyǐ shuō “wǒ shì jiào Amira”.) That means “My name is Amira”.",
                 "The answer mixes 我是 and 我叫.", null, null, null);
         if (chenHao != null) {
             report(chenHao, AiResponseReportReason.UNCLEAR_EXPLANATION, at(today.minusDays(3), 9, 20),
@@ -112,20 +112,20 @@ public class DemoAiSeeder implements CommandLineRunner {
         log(chenHao, AiFeatureKey.CHAT_TUTOR, AiRequestStatus.SUCCESS, at(today.minusDays(3), 9, 15), null);
         countToday(amira, 3, today);
 
-        Lesson greetings = lessonRepository.findAll().stream()
+        Lesson meetingClassmates = lessonRepository.findAll().stream()
                 .filter(lesson -> lesson.getRevisionOf() == null
-                        && DemoClassContent.GREETINGS.title().equals(lesson.getTitle()))
+                        && DemoClassContent.MEETING_CLASSMATES.title().equals(lesson.getTitle()))
                 .findFirst()
                 .orElse(null);
-        check(amira, greetings, PracticeCheckType.RECORDING, "你好", 82, 76, 88, 84, at(today, 11, 0),
+        check(amira, meetingClassmates, PracticeCheckType.RECORDING, "你好", 82, 76, 88, 84, at(today, 11, 0),
                 "Clear and friendly — keep tone 3 low",
                 "Both syllables were easy to understand. 你 sounded a little high.",
                 List.of("你 nǐ — the 3rd tone dips low before it rises.", "好 hǎo — well done, nice and clear."));
-        check(amira, greetings, PracticeCheckType.RECORDING, "你好吗？", 74, 65, 80, 78, at(today.minusDays(3), 18, 0),
+        check(amira, meetingClassmates, PracticeCheckType.RECORDING, "你好吗？", 74, 65, 80, 78, at(today.minusDays(3), 18, 0),
                 "Good start — the question needs a lift",
                 "你好 was clear. 吗 came out flat, so it did not sound like a question yet.",
                 List.of("吗 ma — a light, neutral tone at the end of a question.", "Say 你好 as one phrase, then add 吗."));
-        check(amira, greetings, PracticeCheckType.HANDWRITING, "好", 88, null, null, null, at(today.minusDays(4), 15, 30),
+        check(amira, meetingClassmates, PracticeCheckType.HANDWRITING, "好", 88, null, null, null, at(today.minusDays(4), 15, 30),
                 "Neat and balanced",
                 "The two parts 女 and 子 are both visible. Keep 女 a little narrower.",
                 List.of("Leave a small gap between 女 and 子.", "Make the last stroke of 子 a firm horizontal."));

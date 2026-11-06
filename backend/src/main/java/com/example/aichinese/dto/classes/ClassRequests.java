@@ -24,7 +24,11 @@ public final class ClassRequests {
     private ClassRequests() {
     }
 
-    /** Create a class, or save the details of a class (a pending revision once the class is published). */
+    /**
+     * Create a class, or save the details of a class (a pending revision once the class is published). Level, learning
+     * type and "best after" are optional: left out, a new class gets Beginner 1 and hybrid, and a saved class keeps the
+     * values it has.
+     */
     public record ClassDetails(
             @NotBlank(message = "Class title is required.")
             @Size(max = 200, message = "Class title must be 200 characters or fewer.")
@@ -39,7 +43,11 @@ public final class ClassRequests {
             @Positive(message = "Topic id must be positive.")
             Long topicId,
 
-            LearningType learningType) {
+            LearningType learningType,
+
+            @Min(value = 1, message = "Best after unit must be between 1 and 8.")
+            @Max(value = 8, message = "Best after unit must be between 1 and 8.")
+            Integer bestAfterUnit) {
 
         public ClassDetails {
             title = strip(title);

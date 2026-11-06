@@ -1,96 +1,66 @@
 import { PRACTICE_TYPE_SLUGS } from '@/api/learn'
 import type { PracticeType } from '@/types/learn'
 
-/** The pigments of `tokens.css` (`--pigment-*`) a Practice type can wear. */
-export type PracticePigment = 'cobalt' | 'cinnabar' | 'teal' | 'ink' | 'plum' | 'jade' | 'ochre'
-
-/**
- * One Practice type as the room shows it: its own pigment and a character (set in a 田字格 tile) that tell the types
- * apart at a glance, on the hub, in the player header and on the done card. Keys are full message keys.
- */
+/** One Practice activity as its tab and set meta line name it. Keys are full message keys. */
 export interface PracticeTypeInfo {
   readonly type: PracticeType
   readonly slug: string
-  readonly glyph: string
-  readonly pigment: PracticePigment
+  readonly icon: string
   readonly labelKey: string
-  readonly trainsKey: string
+  /** The activity in a set's meta line ("Quiz · 6 questions"). */
+  readonly metaKey: string
   readonly unitKey: string
-  /** A typical set takes about this many minutes. */
-  readonly minutes: number
 }
 
-/** The seven types, in the order the room lists them. */
+/** The six activities, in tab order. Story is not one of them: AI Helper keeps its own Story. */
 export const PRACTICE_TYPES: readonly PracticeTypeInfo[] = [
   {
     type: 'FLASHCARDS',
     slug: PRACTICE_TYPE_SLUGS.FLASHCARDS,
-    glyph: '卡',
-    pigment: 'cobalt',
+    icon: 'copy',
     labelKey: 'practice.typeFlashcards',
-    trainsKey: 'practice.trainsFlashcards',
+    metaKey: 'practice.typeFlashcards',
     unitKey: 'practice.unitCards',
-    minutes: 2,
   },
   {
     type: 'QUIZZES',
     slug: PRACTICE_TYPE_SLUGS.QUIZZES,
-    glyph: '测',
-    pigment: 'cinnabar',
+    icon: 'checklist',
     labelKey: 'practice.typeQuizzes',
-    trainsKey: 'practice.trainsQuizzes',
+    metaKey: 'practice.typeQuiz',
     unitKey: 'practice.unitQuestions',
-    minutes: 3,
   },
   {
     type: 'LISTENING',
     slug: PRACTICE_TYPE_SLUGS.LISTENING,
-    glyph: '听',
-    pigment: 'teal',
+    icon: 'listening',
     labelKey: 'practice.typeListening',
-    trainsKey: 'practice.trainsListening',
+    metaKey: 'practice.typeListening',
     unitKey: 'practice.unitQuestions',
-    minutes: 3,
   },
   {
     type: 'TRACING',
     slug: PRACTICE_TYPE_SLUGS.TRACING,
-    glyph: '写',
-    pigment: 'ink',
+    icon: 'pen',
     labelKey: 'practice.typeTracing',
-    trainsKey: 'practice.trainsTracing',
-    unitKey: 'practice.unitWords',
-    minutes: 1,
+    metaKey: 'practice.typeTracing',
+    unitKey: 'practice.unitStrokes',
   },
   {
     type: 'DRAG_DROP',
     slug: PRACTICE_TYPE_SLUGS.DRAG_DROP,
-    glyph: '句',
-    pigment: 'plum',
+    icon: 'puzzle',
     labelKey: 'practice.typeDragDrop',
-    trainsKey: 'practice.trainsDragDrop',
+    metaKey: 'practice.typeDragDrop',
     unitKey: 'practice.unitSentences',
-    minutes: 3,
   },
   {
     type: 'MATCHING',
     slug: PRACTICE_TYPE_SLUGS.MATCHING,
-    glyph: '配',
-    pigment: 'jade',
+    icon: 'link',
     labelKey: 'practice.typeMatching',
-    trainsKey: 'practice.trainsMatching',
+    metaKey: 'practice.typeMatching',
     unitKey: 'practice.unitPairs',
-    minutes: 2,
-  },
-  {
-    type: 'STORY',
-    slug: PRACTICE_TYPE_SLUGS.STORY,
-    glyph: '读',
-    pigment: 'ochre',
-    labelKey: 'practice.typeStory',
-    trainsKey: 'practice.trainsStory',
-    unitKey: 'practice.unitQuestions',
-    minutes: 4,
   },
 ]
 
@@ -98,7 +68,7 @@ export function practiceTypeInfo(type: PracticeType): PracticeTypeInfo {
   return PRACTICE_TYPES.find((info) => info.type === type) ?? PRACTICE_TYPES[0]!
 }
 
-/** The type after this one in the room (wrapping round), for "Try …" once every set of a type is done. */
+/** The activity after this one (wrapping round), for "Try …" once a type has no set left. */
 export function nextPracticeType(type: PracticeType): PracticeTypeInfo {
   const index = PRACTICE_TYPES.findIndex((info) => info.type === type)
   return PRACTICE_TYPES[(index + 1) % PRACTICE_TYPES.length]!

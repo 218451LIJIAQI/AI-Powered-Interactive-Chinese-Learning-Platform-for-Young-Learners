@@ -29,7 +29,7 @@ class PracticeIntegrationTests extends ApiIntegrationTest {
     @Test
     void eachTypeListsItsPublishedSetsWithDoneFlags() throws Exception {
         String token = api.registerStudent(uniqueEmail("practice-list"));
-        for (String slug : List.of("flashcards", "quizzes", "listening", "tracing", "drag-drop", "matching", "story")) {
+        for (String slug : List.of("flashcards", "quizzes", "listening", "tracing", "drag-drop", "matching")) {
             JsonNode sets = api.data(mockMvc.perform(api.authGet("/api/v1/students/practice/" + slug + "/sets", token))
                     .andExpect(status().isOk())
                     .andReturn());
@@ -39,6 +39,10 @@ class PracticeIntegrationTests extends ApiIntegrationTest {
                 assertThat(set.path("itemCount").asInt()).isPositive();
             });
         }
+        // The Story type stays in the API; Practice no longer comes with story sets.
+        mockMvc.perform(api.authGet("/api/v1/students/practice/story/sets", token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.sets.length()").value(0));
         mockMvc.perform(api.authGet("/api/v1/students/practice/flashcards/sets", token))
                 .andExpect(jsonPath("$.data.sets[0].title").value("Campus Words"))
                 .andExpect(jsonPath("$.data.sets[0].itemCount").value(6))
@@ -164,21 +168,21 @@ class PracticeIntegrationTests extends ApiIntegrationTest {
     @Test
     void draftSetsAndOtherRolesAreKeptOut() throws Exception {
         String token = api.registerStudent(uniqueEmail("practice-draft"));
-        PracticeActivityContent set = set(PracticeType.STORY, "My Weekend");
+        PracticeActivityContent set = set(PracticeType.LISTENING, "Weather Today");
         set.setContentStatus(ContentStatus.DRAFT);
-        catalog.save(PracticeType.STORY, set);
+        catalog.save(PracticeType.LISTENING, set);
         try {
-            mockMvc.perform(api.authGet("/api/v1/students/practice/story/sets/" + set.getId(), token))
+            mockMvc.perform(api.authGet("/api/v1/students/practice/listening/sets/" + set.getId(), token))
                     .andExpect(status().isNotFound());
-            JsonNode stories = api.data(mockMvc.perform(api.authGet("/api/v1/students/practice/story/sets", token))
+            JsonNode sets = api.data(mockMvc.perform(api.authGet("/api/v1/students/practice/listening/sets", token))
                     .andReturn());
-            assertThat(stories.findValuesAsText("title")).doesNotContain("My Weekend");
+            assertThat(sets.findValuesAsText("title")).doesNotContain("Weather Today");
         } finally {
             set.setContentStatus(ContentStatus.PUBLISHED);
-            catalog.save(PracticeType.STORY, set);
+            catalog.save(PracticeType.LISTENING, set);
         }
         String teacherToken = api.approvedTeacher(uniqueEmail("practice-teacher"));
-        mockMvc.perform(api.authGet("/api/v1/students/practice/story/sets", teacherToken))
+        mockMvc.perform(api.authGet("/api/v1/students/practice/listening/sets", teacherToken))
                 .andExpect(status().isForbidden());
     }
 

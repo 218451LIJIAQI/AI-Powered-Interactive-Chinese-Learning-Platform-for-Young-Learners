@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { auditActionMessages } from '@/plugins/auditActionMessages'
 import type { AuditCategory } from '@/types/ops'
 
-import { auditActionIcon, auditActionKey, auditCategoryKey } from './auditActions'
+import { auditActionKey, auditCategoryKey } from './auditActions'
 
 function message(key: string): unknown {
   const [namespace, name] = key.split('.')
@@ -48,15 +48,5 @@ describe('audit action labels', () => {
       'Learning',
       'System',
     ])
-  })
-
-  it('picks an icon for what happened, falling back to the category icon', () => {
-    expect(auditActionIcon('ADMIN_USER_DEACTIVATE', 'ACCOUNT')).toBe('lock')
-    expect(auditActionIcon('ADMIN_USER_REACTIVATE', 'ACCOUNT')).toBe('unlock')
-    expect(auditActionIcon('TEACHER_APPLICATION_SUBMITTED', 'ACCOUNT')).toBe('upload')
-    expect(auditActionIcon('CONTENT_SUBMIT', 'CONTENT')).toBe('send')
-    expect(auditActionIcon('CONTENT_REJECT', 'CONTENT')).toBe('edit')
-    expect(auditActionIcon('AI_RESPONSE_REPORT_REVIEW', 'AI')).toBe('check')
-    expect(auditActionIcon('SOMETHING_NEW', 'SUPPORT')).toBe('support')
   })
 })

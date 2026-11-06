@@ -10,8 +10,9 @@
       <IconGlyph name="close" :size="22" />
     </button>
     <div v-if="progress !== null" class="focus-topbar-progress">
-      <ProgressBar :progress="progress" :label="progressLabel || label" />
+      <ProgressBar class="is-lg" :progress="progress" :label="progressLabel || label" />
     </div>
+    <span v-else aria-hidden="true" />
     <span class="focus-topbar-label">{{ label }}</span>
   </header>
 </template>

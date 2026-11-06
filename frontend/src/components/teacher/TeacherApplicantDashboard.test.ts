@@ -47,26 +47,27 @@ describe('TeacherApplicantDashboard', () => {
     teacherVerificationApi.profile.mockReset()
   })
 
-  it('asks a new applicant to upload documents and lists the locked tools', async () => {
+  it('asks a new applicant to upload documents and shows the steps', async () => {
     teacherVerificationApi.profile.mockResolvedValue(profile())
     const wrapper = await mountDashboard()
 
-    expect(wrapper.text()).toContain('Verification: Not submitted')
-    expect(wrapper.text()).toContain('Teacher applicant · Mei Lin')
+    expect(wrapper.get('#applicant-status-title').attributes('aria-label')).toBe('Verification: Not submitted')
+    expect(wrapper.text()).toContain('Upload your documents so an admin can approve your account.')
     expect(wrapper.find('[data-testid="applicant-upload"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('3. Admin review')
     expect(wrapper.text()).toContain('Starts when you submit')
-    expect(wrapper.text()).toContain('Live sessions')
     expect(wrapper.findAll('h1')).toHaveLength(1)
+    expect(wrapper.find('.seal').exists()).toBe(false)
   })
 
-  it('explains what happens next while the application is in review', async () => {
+  it('says since when the application is in review', async () => {
     teacherVerificationApi.profile.mockResolvedValue(
       profile({ verificationState: 'IN_REVIEW', submittedAt: '2026-05-14T09:00:00', documents }),
     )
     const wrapper = await mountDashboard()
 
-    expect(wrapper.text()).toContain('Verification: In review')
-    expect(wrapper.text()).toContain('What happens next')
+    expect(wrapper.get('#applicant-status-title').attributes('aria-label')).toBe('Verification: In review')
+    expect(wrapper.text()).toContain('In review since May 14.')
     expect(wrapper.text()).toContain('3 documents uploaded')
     expect(wrapper.text()).toContain('View verification status')
   })

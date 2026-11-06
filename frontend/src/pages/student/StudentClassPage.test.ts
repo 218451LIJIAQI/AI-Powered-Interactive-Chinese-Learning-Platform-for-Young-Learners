@@ -2,7 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { classesTestRouter } from '@/test/classRoutes'
-import type { ClassCard, StudentClass } from '@/types/classes'
+import type { ClassCard, FeedbackItem, StudentClass } from '@/types/classes'
 
 const api = vi.hoisted(() => ({
   classPage: vi.fn(),
@@ -20,7 +20,8 @@ const card: ClassCard = {
   title: 'Mandarin for Beginners',
   description: 'Greetings, numbers and campus life.',
   levelName: 'Beginner 1',
-  topicName: 'Sentences',
+  topicName: 'Daily life',
+  bestAfterUnit: 3,
   learningType: 'HYBRID',
   teacher: { id: 3, name: 'Li Wei', verified: true, bio: null },
   unitCount: 1,
@@ -98,15 +99,48 @@ function joined(): StudentClass {
       },
     ],
     quizAttemptCount: 1,
-    feedbackCount: 0,
+    feedbackCount: 2,
   }
 }
+
+const feedbackItems: FeedbackItem[] = [
+  {
+    id: 1,
+    teacherName: 'Li Wei',
+    type: 'ENCOURAGING',
+    about: 'QUIZ_ATTEMPT',
+    lessonTitle: 'Greetings',
+    message: 'Great effort.',
+    createdAt: '2026-05-18T12:30:00',
+    editedAt: null,
+  },
+  {
+    id: 2,
+    teacherName: 'Li Wei',
+    type: 'LESSON',
+    about: 'LESSON',
+    lessonTitle: 'Numbers 1–10',
+    message: 'Well done.',
+    createdAt: '2026-05-12T18:20:00',
+    editedAt: null,
+  },
+  {
+    id: 3,
+    teacherName: 'Li Wei',
+    type: 'PROGRESS',
+    about: 'GENERAL',
+    lessonTitle: null,
+    message: 'Keep it up.',
+    createdAt: '2026-05-10T18:20:00',
+    editedAt: null,
+  },
+]
 
 async function mountAt(path: string) {
   const router = await classesTestRouter(path)
   const wrapper = mount(StudentClassPage, { global: { plugins: [router], stubs: { teleport: true } } })
   await flushPromises()
-  return wrapper
+  return { wrapper, router }
 }
 
 describe('StudentClassPage', () => {
@@ -114,50 +148,76 @@ describe('StudentClassPage', () => {
     api.classPage.mockReset()
     api.join.mockReset()
     api.quizResults.mockReset()
+    api.feedback.mockReset()
   })
 
-  it('shows the preview of a class not joined yet and joins it', async () => {
+  it('shows the preview of a class not joined yet, and joining ends in My classes', async () => {
     api.classPage.mockResolvedValue(preview())
     api.join.mockResolvedValue(joined())
-    const wrapper = await mountAt('/student/classes/7')
+    const { wrapper, router } = await mountAt('/student/classes/7')
 
     expect(wrapper.text()).toContain('Free to join')
-    expect(wrapper.text()).toContain('Lessons open when you join.')
+    expect(wrapper.text()).toContain('Li Wei · Daily life · 2 lessons · best after Unit 3')
+    expect(wrapper.text()).toContain('Unit 1: First Conversations')
     expect(wrapper.find('[data-testid="continue-class"]').exists()).toBe(false)
 
     await wrapper.get('[data-testid="join-class"]').trigger('click')
     await flushPromises()
 
     expect(api.join).toHaveBeenCalledWith(7)
-    expect(wrapper.text()).toContain('You joined Mandarin for Beginners.')
-    expect(wrapper.get('[data-testid="continue-class"]').text()).toContain('Continue: Numbers 1–10')
+    expect(router.currentRoute.value.name).toBe('student-classes')
   })
 
-  it('shows the note, the next step and each lesson with its status', async () => {
-    api.classPage.mockResolvedValue(joined())
-    const wrapper = await mountAt('/student/classes/7')
+  it('shows the error and stays when joining fails', async () => {
+    api.classPage.mockResolvedValue(preview())
+    api.join.mockRejectedValue(new Error('nope'))
+    const { wrapper, router } = await mountAt('/student/classes/7')
 
-    expect(wrapper.text()).toContain('Note from Li Wei')
-    expect(wrapper.text()).toContain('Start with Greetings!')
+    await wrapper.get('[data-testid="join-class"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('You could not join this class.')
+    expect(router.currentRoute.value.name).toBe('student-class')
+  })
+
+  it('shows the next step and each lesson with its progress and status', async () => {
+    api.classPage.mockResolvedValue(joined())
+    const { wrapper } = await mountAt('/student/classes/7')
+
+    expect(wrapper.text()).not.toContain('Start with Greetings!')
     expect(wrapper.text()).toContain('Numbers 1–10 · Lesson 2 · 1 of 3 activities done')
     expect(wrapper.text()).toContain('50% · 1 of 2 lessons completed')
-    expect(wrapper.findAll('.student-class-lesson-state').map((state) => state.text())).toEqual([
-      'Mastered',
-      'In progress · 25%',
-    ])
-    expect(wrapper.get('a.student-class-lesson.is-current').attributes('aria-label')).toBe('Open Numbers 1–10')
+    expect(wrapper.get('[data-testid="continue-class"]').text()).toContain('Continue: Numbers 1–10')
+    const rows = wrapper.findAll('a.student-class-lesson')
+    expect(rows.map((row) => row.attributes('aria-label'))).toEqual(['Open Greetings', 'Open Numbers 1–10'])
+    // A mastered lesson reads Completed.
+    expect(rows[0]!.text()).toContain('Lesson 1 · best quiz 90%')
+    expect(rows[0]!.text()).toContain('Completed')
+    expect(rows[1]!.text()).toContain('25%')
+    expect(rows[1]!.text()).toContain('In progress')
+    expect(api.feedback).not.toHaveBeenCalled()
+  })
+
+  it('has only the Lessons and Feedback tabs, and an old results link lands on the class', async () => {
+    api.classPage.mockResolvedValue(joined())
+    const { wrapper, router } = await mountAt('/student/classes/7/results')
+    await flushPromises()
+
+    expect(router.currentRoute.value.params.tab).toBeFalsy()
+    expect(wrapper.findAll('.route-tab').map((tab) => tab.text())).toEqual(['Lessons2', 'Feedback2'])
     expect(api.quizResults).not.toHaveBeenCalled()
   })
 
-  it('loads the quiz results on the results tab', async () => {
+  it('lists the feedback, each note opening its attempt or its lesson', async () => {
     api.classPage.mockResolvedValue(joined())
+    api.feedback.mockResolvedValue(feedbackItems)
     api.quizResults.mockResolvedValue({
       averagePercent: 80,
       attempts: [
         {
           attemptId: 5,
           quizId: 9,
-          quizTitle: 'Lesson quiz: Greetings',
+          quizTitle: 'Greetings',
           lessonTitle: 'Greetings',
           completedAt: '2026-05-18T10:00:00',
           score: 8,
@@ -166,10 +226,14 @@ describe('StudentClassPage', () => {
         },
       ],
     })
-    const wrapper = await mountAt('/student/classes/7/results')
+    const { wrapper } = await mountAt('/student/classes/7/feedback')
+    await flushPromises()
 
-    expect(api.quizResults).toHaveBeenCalledWith(7)
-    expect(wrapper.text()).toContain('Average 80%')
-    expect(wrapper.text()).toContain('8 / 10')
+    expect(wrapper.text()).toContain('3 messages')
+    const notes = wrapper.findAll('.student-class-note')
+    expect(notes[0]!.text()).toContain('Lesson quiz · Greetings')
+    expect(notes[0]!.get('a').attributes('href')).toBe('/student/quiz/9/attempts/5')
+    expect(notes[1]!.get('a').attributes('href')).toBe('/student/classes/7/lessons/12')
+    expect(notes[2]!.find('a').exists()).toBe(false)
   })
 })

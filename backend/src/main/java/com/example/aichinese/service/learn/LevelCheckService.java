@@ -5,6 +5,7 @@ import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -29,16 +30,16 @@ import com.example.aichinese.repository.LevelCheckOptionRepository;
 import com.example.aichinese.repository.LevelCheckQuestionRepository;
 
 /**
- * The adaptive level check that places a new student. It keeps no state: every call sends all answers so far. The
- * questions are ranked from Beginner 1 easy to Beginner 2 hard; the check starts at the picked level (Beginner 1 by
- * default), a right answer moves one step harder and a wrong or "I don't know yet" answer one step easier. It stops
- * after 6 questions, or from the third answer on when the level is already clear. Answers are checked by the system,
- * never by AI, and earn no XP.
+ * The adaptive level check that places a new student. It keeps no state: every call sends all answers so far. It asks
+ * one question per skill, in the order of {@link LevelCheckSkill}. The questions are ranked from Beginner 1 easy to
+ * Beginner 2 hard; the check starts at the picked level (Beginner 1 by default), a right answer moves one step harder
+ * and a wrong or "I don't know yet" answer one step easier, and each skill's question is the one nearest that step. It
+ * stops when every skill was asked (8 questions), or from the third answer on when the level is already clear. Answers
+ * are checked by the system, never by AI, and earn no XP.
  */
 @Service
 public class LevelCheckService {
 
-    public static final int MAX_QUESTIONS = 6;
     static final int EARLY_STOP_AFTER = 3;
 
     private static final List<ActivityDifficulty> DIFFICULTY_ORDER =
@@ -66,7 +67,7 @@ public class LevelCheckService {
                 done,
                 done ? result(graded) : null,
                 graded.size(),
-                MAX_QUESTIONS);
+                replay.maxQuestions());
     }
 
     /**
@@ -109,19 +110,23 @@ public class LevelCheckService {
             tier = correct ? Math.min(TOP_TIER, tier + 1) : Math.max(0, tier - 1);
         }
 
-        Set<Long> asked = graded.stream().map(entry -> entry.question().getId()).collect(Collectors.toSet());
-        Optional<LevelCheckQuestion> next = pick(published, asked, tier);
-        boolean done = graded.size() >= MAX_QUESTIONS
+        Set<LevelCheckSkill> askedSkills = graded.stream().map(entry -> entry.question().getSkill())
+                .collect(Collectors.toCollection(() -> EnumSet.noneOf(LevelCheckSkill.class)));
+        Optional<LevelCheckQuestion> next = pick(published, askedSkills, tier);
+        // A bank seeded before a skill existed simply has fewer skills to ask.
+        int maxQuestions = (int) published.stream().map(LevelCheckQuestion::getSkill).distinct().count();
+        boolean done = graded.size() >= maxQuestions
                 || (graded.size() >= EARLY_STOP_AFTER && levelIsClear(graded))
                 || next.isEmpty();
-        return new Replay(graded, options, next, done);
+        return new Replay(graded, options, next, done, maxQuestions);
     }
 
     private record Replay(
             List<Graded> graded,
             Map<Long, List<LevelCheckOption>> options,
             Optional<LevelCheckQuestion> next,
-            boolean done) {
+            boolean done,
+            int maxQuestions) {
     }
 
     // ===== Rules =====
@@ -171,11 +176,15 @@ public class LevelCheckService {
                 graded.size());
     }
 
-    /** The unasked published question nearest to the target tier (the lower one on a tie, then the oldest). */
-    static Optional<LevelCheckQuestion> pick(List<LevelCheckQuestion> published, Set<Long> asked, int tier) {
+    /**
+     * A question of the next skill not asked yet: the one nearest to the target tier (the lower one on a tie, then the
+     * oldest). Skills without a published question are passed over.
+     */
+    static Optional<LevelCheckQuestion> pick(List<LevelCheckQuestion> published, Set<LevelCheckSkill> askedSkills, int tier) {
         return published.stream()
-                .filter(question -> !asked.contains(question.getId()))
-                .min(Comparator.comparingInt((LevelCheckQuestion question) -> Math.abs(tierOf(question) - tier))
+                .filter(question -> !askedSkills.contains(question.getSkill()))
+                .min(Comparator.comparing(LevelCheckQuestion::getSkill)
+                        .thenComparingInt((LevelCheckQuestion question) -> Math.abs(tierOf(question) - tier))
                         .thenComparingInt(LevelCheckService::tierOf)
                         .thenComparing(LevelCheckQuestion::getId));
     }
@@ -218,6 +227,7 @@ public class LevelCheckService {
                 question.getHanzi(),
                 question.getPinyin(),
                 question.getAudioText(),
+                question.getSkill(),
                 options.stream()
                         .sorted(Comparator.comparing(LevelCheckOption::getPosition))
                         .map(option -> new LevelCheckNextResponse.Option(option.getId(), option.getOptionText()))

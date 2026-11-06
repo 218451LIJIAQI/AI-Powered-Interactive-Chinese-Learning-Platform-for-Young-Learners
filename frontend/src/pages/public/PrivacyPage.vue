@@ -1,18 +1,9 @@
 <template>
-  <LegalDocument :title="t('legal.privacy.title')" :intro="t('legal.privacy.intro')" :sections="sections">
-    <template #lead>
-      <p class="legal-official-title" data-testid="official-title">{{ t('legal.officialTitle') }}</p>
-    </template>
-    <template #links>
-      <RouterLink class="btn btn-link" :to="{ name: 'terms' }">{{ t('legal.termsLink') }}</RouterLink>
-      <RouterLink class="btn btn-link" :to="{ name: 'responsible-ai' }">{{ t('legal.responsibleAiLink') }}</RouterLink>
-    </template>
-  </LegalDocument>
+  <LegalDocument :title="t('legal.privacy.title')" :sections="sections" />
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { RouterLink } from 'vue-router'
 
 import LegalDocument from '@/components/public/LegalDocument.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'

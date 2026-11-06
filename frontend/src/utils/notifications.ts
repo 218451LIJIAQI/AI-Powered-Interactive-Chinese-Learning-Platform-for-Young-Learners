@@ -27,24 +27,23 @@ export function announceNotificationsRead(): void {
   window.dispatchEvent(new CustomEvent(NOTIFICATION_READ_EVENT))
 }
 
-/** The tag and icon of a notification type (namespace `notifications`); an unknown type reads as Account. */
+/** The tag of a notification type (namespace `notifications`); an unknown type reads as Account. */
 interface NotificationKind {
   readonly labelKey: string
-  readonly icon: string
 }
 
-const ACCOUNT_KIND: NotificationKind = { labelKey: 'notifications.typeAccount', icon: 'account' }
+const ACCOUNT_KIND: NotificationKind = { labelKey: 'notifications.typeAccount' }
 
 const NOTIFICATION_KINDS: Readonly<Record<string, NotificationKind>> = {
-  LIVE_CLASS_REMINDER: { labelKey: 'notifications.typeLiveSession', icon: 'live' },
-  TEACHER_FEEDBACK: { labelKey: 'notifications.typeFeedback', icon: 'chat' },
-  SUPPORT_REQUEST: { labelKey: 'notifications.typeSupport', icon: 'help' },
-  AI_REPORT_REVIEW: { labelKey: 'notifications.typeAiReport', icon: 'flag' },
-  CONTENT_REVIEW: { labelKey: 'notifications.typeContentReview', icon: 'checklist' },
-  CLASS_ENROLMENT: { labelKey: 'notifications.typeStudents', icon: 'students' },
-  MODERATION_ACTION: { labelKey: 'notifications.typeModeration', icon: 'shield' },
-  PROGRESS_UPDATE: { labelKey: 'notifications.typeProgress', icon: 'progress' },
-  ADMIN_TASK: { labelKey: 'notifications.typeAdminTask', icon: 'audit' },
+  LIVE_CLASS_REMINDER: { labelKey: 'notifications.typeLiveSession' },
+  TEACHER_FEEDBACK: { labelKey: 'notifications.typeFeedback' },
+  SUPPORT_REQUEST: { labelKey: 'notifications.typeSupport' },
+  AI_REPORT_REVIEW: { labelKey: 'notifications.typeAiReport' },
+  CONTENT_REVIEW: { labelKey: 'notifications.typeContentReview' },
+  CLASS_ENROLMENT: { labelKey: 'notifications.typeStudents' },
+  MODERATION_ACTION: { labelKey: 'notifications.typeModeration' },
+  PROGRESS_UPDATE: { labelKey: 'notifications.typeProgress' },
+  ADMIN_TASK: { labelKey: 'notifications.typeAdminTask' },
   SYSTEM: ACCOUNT_KIND,
 }
 
@@ -52,8 +51,8 @@ const NOTIFICATION_KINDS: Readonly<Record<string, NotificationKind>> = {
 export function notificationKind(type: string, role: UserRole | null): NotificationKind {
   if (type === 'TEACHER_APPROVAL') {
     return role === 'ADMIN'
-      ? { labelKey: 'notifications.typeTeacherApplication', icon: 'verification' }
-      : { labelKey: 'notifications.typeVerification', icon: 'verified' }
+      ? { labelKey: 'notifications.typeTeacherApplication' }
+      : { labelKey: 'notifications.typeVerification' }
   }
   return NOTIFICATION_KINDS[type] ?? ACCOUNT_KIND
 }

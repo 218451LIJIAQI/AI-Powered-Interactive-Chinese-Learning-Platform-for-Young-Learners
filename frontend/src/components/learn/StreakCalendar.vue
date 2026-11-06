@@ -1,26 +1,29 @@
 <template>
   <div class="progress-calendar">
     <div class="progress-calendar-head">
-      <h3 class="progress-calendar-month">{{ monthLabel }}</h3>
-      <div class="progress-calendar-nav">
-        <button
-          class="btn btn-ghost btn-icon btn-sm"
-          type="button"
-          :disabled="!calendar.previousMonth || busy"
-          :aria-label="t('progress.previousMonth')"
-          @click="emit('month', calendar.previousMonth!)"
-        >
-          <IconGlyph name="chevronLeft" :size="16" />
-        </button>
-        <button
-          class="btn btn-ghost btn-icon btn-sm"
-          type="button"
-          :disabled="!calendar.nextMonth || busy"
-          :aria-label="t('progress.nextMonth')"
-          @click="emit('month', calendar.nextMonth!)"
-        >
-          <IconGlyph name="chevronRight" :size="16" />
-        </button>
+      <slot />
+      <div class="progress-calendar-month">
+        <h3 class="card-title">{{ monthLabel }}</h3>
+        <div class="btn-group is-sm">
+          <button
+            class="btn btn-ghost btn-icon btn-sm"
+            type="button"
+            :disabled="!calendar.previousMonth || busy"
+            :aria-label="t('progress.previousMonth')"
+            @click="emit('month', calendar.previousMonth!)"
+          >
+            <IconGlyph name="chevronLeft" :size="16" />
+          </button>
+          <button
+            class="btn btn-ghost btn-icon btn-sm"
+            type="button"
+            :disabled="!calendar.nextMonth || busy"
+            :aria-label="t('progress.nextMonth')"
+            @click="emit('month', calendar.nextMonth!)"
+          >
+            <IconGlyph name="chevronRight" :size="16" />
+          </button>
+        </div>
       </div>
     </div>
     <table class="progress-calendar-grid" :class="{ 'is-busy': busy }" :aria-label="monthLabel">
@@ -32,7 +35,7 @@
       <tbody>
         <tr v-for="(week, index) in weeks" :key="index">
           <td v-for="(cell, dayIndex) in week" :key="dayIndex">
-            <span v-if="cell" class="progress-day" :class="dayClass(cell.state)" :aria-label="cell.label">
+            <span v-if="cell" class="progress-day" :class="`is-${cell.state}`" :aria-label="cell.label">
               <span aria-hidden="true">{{ cell.day }}</span>
             </span>
           </td>
@@ -40,9 +43,9 @@
       </tbody>
     </table>
     <ul class="progress-calendar-legend">
-      <li><span class="progress-day seal" aria-hidden="true" />{{ t('progress.legendLearned') }}</li>
-      <li><span class="progress-day seal is-outline" aria-hidden="true" />{{ t('progress.legendToday') }}</li>
-      <li><span class="progress-day is-missed" aria-hidden="true" />{{ t('progress.legendMissed') }}</li>
+      <li><span class="progress-legend-dot is-learned" aria-hidden="true" />{{ t('progress.legendLearned') }}</li>
+      <li><span class="progress-legend-dot is-today" aria-hidden="true" />{{ t('progress.legendToday') }}</li>
+      <li><span class="progress-legend-dot is-missed" aria-hidden="true" />{{ t('progress.legendMissed') }}</li>
     </ul>
   </div>
 </template>
@@ -57,9 +60,9 @@ import type { ProgressOverview } from '@/types/learn'
 import { formatDate, parseDate } from '@/utils/format'
 
 /**
- * A month of the streak, stamped: every day the daily goal was reached carries a seal, today is the outlined seal
- * still to earn, missed days since the student joined stay plain. Each day says its state in words, not only in
- * colour.
+ * A month of the streak: every day the daily goal was reached is filled, today has a ring until it is, days still to
+ * come are dashed and missed days plain. Each day says its state in words, not only in colour. The default slot holds
+ * the streak figure, on the row of the month.
  */
 interface Props {
   calendar: ProgressOverview['calendar']
@@ -72,13 +75,6 @@ const emit = defineEmits<{ month: [month: string] }>()
 const { t, locale } = useLocalMessages({ progress: progressMessages })
 
 type DayState = 'learned' | 'today' | 'learned-today' | 'missed' | 'future' | 'before'
-
-/** A reached goal is stamped; today, still open, is the outlined seal. */
-function dayClass(state: DayState): string[] {
-  if (state === 'learned' || state === 'learned-today') return [`is-${state}`, 'seal']
-  if (state === 'today') return ['is-today', 'seal', 'is-outline']
-  return [`is-${state}`]
-}
 
 function iso(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`

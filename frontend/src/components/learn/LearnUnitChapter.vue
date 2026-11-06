@@ -2,82 +2,53 @@
   <section
     :id="`learn-unit-${unit.number}`"
     class="learn-unit"
-    :class="[`is-${unit.state.toLowerCase()}`, { 'is-expanded': expanded }]"
+    :class="`is-${unit.state.toLowerCase()}`"
     :aria-labelledby="`${baseId}-title`"
   >
-    <header class="learn-unit-head">
-      <span v-if="unit.state === 'DONE'" class="seal learn-unit-seal" lang="zh-CN" aria-hidden="true">完</span>
-      <span v-else class="learn-unit-numeral" aria-hidden="true">{{ unit.number }}</span>
-      <div class="learn-unit-copy">
-        <p class="learn-unit-overline">{{ overline }}</p>
-        <h3 :id="`${baseId}-title`" class="learn-unit-title">
-          {{ unit.title }} · <span class="cjk-text" lang="zh-CN">{{ unit.titleZh }}</span>
-        </h3>
-        <p v-if="unit.state === 'LOCKED'" class="learn-unit-status">
-          <IconGlyph name="lock" :size="14" />
-          {{
-            unit.unlockAfterUnit
-              ? t('learn.finishUnitToUnlock', { number: unit.unlockAfterUnit })
-              : t('learn.lessonCount', { count: unit.lessonCount }, unit.lessonCount)
-          }}
-        </p>
-        <div v-else class="learn-unit-status">
-          <ProgressBar
-            v-if="unit.state === 'ACTIVE'"
-            class="is-sm learn-unit-bar"
-            :progress="ratioPercent(unit.completedCount, unit.lessonCount)"
-            :label="t('learn.unitProgress', { number: unit.number })"
-          />
-          <span>{{ t('learn.xOfY', { done: unit.completedCount, total: unit.lessonCount }) }}</span>
-        </div>
-        <!-- Each title stays whole; the separator stays with the title before it, so lines break only between titles. -->
-        <p v-if="unit.state === 'LOCKED'" class="learn-unit-teaser">
-          <template v-for="(stop, index) in unit.lessons" :key="stop.id">
-            <span class="learn-unit-teaser-item"
-              >{{ stop.title }}{{ index < unit.lessons.length - 1 ? '\u00a0·' : '' }}</span
-            >{{ ' ' }}
-          </template>
-        </p>
-      </div>
-      <div v-if="unit.state !== 'LOCKED'" class="learn-unit-tools">
-        <button
-          class="btn btn-ghost btn-sm"
-          type="button"
-          :data-testid="`guidebook-${unit.number}`"
-          @click="emit('guidebook', unit)"
-        >
-          <IconGlyph name="learn" :size="16" />{{ t('learn.guidebook') }}
-        </button>
-        <button
-          class="btn btn-ghost btn-sm learn-unit-toggle"
-          type="button"
-          :aria-expanded="expanded"
-          :aria-controls="`${baseId}-lessons`"
-          :data-testid="`unit-toggle-${unit.number}`"
-          @click="expanded = !expanded"
-        >
-          {{ expanded ? t('learn.hideLessons') : t('learn.showLessons') }}
-          <IconGlyph name="chevronDown" :size="16" />
-        </button>
-      </div>
-    </header>
+    <!-- The pinned banner above the path already shows this unit, so its heading only speaks to assistive technology. -->
+    <h3 v-if="bannerPinned" :id="`${baseId}-title`" class="sr-only">{{ unit.title }} · {{ unit.titleZh }}</h3>
+    <LearnUnitBanner
+      v-else
+      :unit="unit"
+      :title-id="`${baseId}-title`"
+      :show-guidebook="!isPinnedUnit"
+      @guidebook="emit('guidebook', $event)"
+    />
+    <p class="sr-only">{{ t('learn.xOfY', { done: unit.completedCount, total: unit.lessonCount }) }}</p>
 
-    <ol
-      v-if="expanded"
-      :id="`${baseId}-lessons`"
-      class="learn-lessons"
-      :aria-label="t('learn.unitLessons', { number: unit.number })"
-    >
-      <li
-        v-for="stop in unit.lessons"
-        :key="stop.id"
-        class="learn-lesson"
-        :class="[`is-${stop.state.toLowerCase()}`, { 'is-current': stop.current, 'is-open': openStopId === stop.id }]"
-      >
-        <div class="learn-lesson-row">
+    <div class="learn-road" :style="{ height: `${roadHeight}px` }">
+      <!-- The road is a drawing: its origin is the centre line of the column, so it follows the column's width. -->
+      <svg class="learn-road-line" aria-hidden="true">
+        <line
+          v-for="segment in segments"
+          :key="segment.key"
+          :class="segment.walked ? 'is-walked' : 'is-ahead'"
+          :x1="segment.x1"
+          :y1="segment.y1"
+          :x2="segment.x2"
+          :y2="segment.y2"
+        />
+      </svg>
+
+      <ol class="learn-road-stops" :aria-label="t('learn.unitLessons', { number: unit.number })">
+        <li
+          v-for="(stop, index) in unit.lessons"
+          :key="stop.id"
+          class="learn-node"
+          :class="[
+            `is-${stop.state.toLowerCase()}`,
+            {
+              'is-current': stop.current,
+              'is-bonus': stop.kind === 'BONUS',
+              'is-open': openStopId === stop.id,
+            },
+          ]"
+          :style="{ '--node-x': `${point(index).x}px`, '--node-y': `${point(index).y}px` }"
+          @keydown.esc.stop="close(stop.id)"
+        >
           <button
             :ref="(el) => setNodeRef(stop.id, el)"
-            class="learn-lesson-button"
+            class="learn-node-button"
             type="button"
             :aria-expanded="openStopId === stop.id"
             :aria-controls="`${baseId}-card-${stop.id}`"
@@ -85,89 +56,81 @@
             :data-testid="`stop-${stop.id}`"
             @click="toggle(stop.id)"
           >
-            <span class="seal learn-lesson-seal" :class="sealClass(stop)" lang="zh-CN" aria-hidden="true">{{
-              hanziNumeral(stop.position)
-            }}</span>
-            <span class="learn-lesson-copy">
-              <span class="learn-lesson-title">{{ stop.title }}</span>
-              <span class="learn-lesson-meta">
-                <IconGlyph v-if="stop.state === 'LOCKED'" name="lock" :size="12" />{{ rowMeta(stop) }}
-              </span>
+            <span class="learn-node-disc">
+              <IconGlyph v-if="stop.state === 'DONE'" name="check" :size="stop.current ? 36 : 32" />
+              <span v-else-if="stop.kind === 'BONUS'" class="learn-node-bonus">{{ t('learn.kindBonus') }}</span>
+              <IconGlyph v-else-if="stop.state === 'LOCKED'" name="lock" :size="24" />
+              <IconGlyph v-else class="learn-node-star" name="star" :size="stop.current ? 32 : 24" />
             </span>
-            <!-- The current lesson shows Continue in the chevron's place, so the chevrons keep one column. -->
-            <IconGlyph v-if="!showsContinue(stop)" class="learn-lesson-chevron" name="chevronDown" :size="16" />
+            <span class="learn-node-label">{{ stop.title }}</span>
+            <span v-if="stop.current && openStopId !== stop.id" class="learn-node-bubble">{{
+              t('learn.startBubble')
+            }}</span>
           </button>
-          <RouterLink
-            v-if="showsContinue(stop)"
-            class="btn btn-accent learn-lesson-continue"
-            :to="{ name: 'student-learn-lesson', params: { lessonId: stop.id } }"
-            :data-testid="`continue-${stop.id}`"
-          >
-            {{ t('learn.continue') }}
-          </RouterLink>
-        </div>
 
-        <div
-          v-if="openStopId === stop.id"
-          :id="`${baseId}-card-${stop.id}`"
-          class="learn-lesson-card"
-          role="dialog"
-          :aria-label="stop.title"
-          @keydown.esc.stop="close(stop.id)"
-        >
-          <p class="learn-lesson-card-meta">
-            {{
-              t('learn.stopMeta', {
-                position: stop.position,
-                total: unit.lessonCount,
-                unit: unit.number,
-                minutes: stop.minutes,
-              })
-            }}
-          </p>
-          <p v-if="stop.state === 'LOCKED'" class="learn-lesson-card-locked">
-            <IconGlyph name="lock" :size="14" />
-            {{ t('learn.finishToUnlock', { title: stop.unlockAfter ?? '' }) }}
-          </p>
-          <RouterLink
-            v-else
-            class="btn btn-sm"
-            :class="stop.state === 'DONE' ? 'btn-secondary' : 'btn-primary'"
-            :to="{ name: 'student-learn-lesson', params: { lessonId: stop.id } }"
-            :data-testid="`start-${stop.id}`"
+          <div
+            v-if="openStopId === stop.id"
+            :id="`${baseId}-card-${stop.id}`"
+            class="learn-node-card"
+            role="dialog"
+            :aria-label="stop.title"
           >
-            {{ stop.state === 'DONE' ? t('learn.practiseAgain') : t('learn.startWithXp', { xp: stop.xpReward }) }}
-          </RouterLink>
-        </div>
-      </li>
-    </ol>
+            <p class="learn-node-card-title">{{ stop.title }}</p>
+            <template v-if="stop.state === 'LOCKED'">
+              <p class="learn-node-card-meta">{{ lockedReason(stop) }}</p>
+              <button class="btn btn-secondary btn-block" type="button" disabled>{{ t('learn.locked') }}</button>
+            </template>
+            <template v-else>
+              <p class="learn-node-card-meta">
+                {{
+                  t('learn.stopMeta', {
+                    position: stop.position,
+                    total: unit.lessonCount,
+                    unit: unit.number,
+                    minutes: stop.minutes,
+                  })
+                }}
+              </p>
+              <RouterLink
+                class="btn btn-block"
+                :class="stop.current ? 'btn-accent' : 'btn-secondary'"
+                :to="{ name: 'student-learn-lesson', params: { lessonId: stop.id } }"
+                :data-testid="`start-${stop.id}`"
+              >
+                {{ stop.state === 'DONE' ? t('learn.practiseAgain') : t('learn.startWithXp', { xp: stop.xpReward }) }}
+              </RouterLink>
+            </template>
+          </div>
+        </li>
+      </ol>
+    </div>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, useId, type ComponentPublicInstance } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, type ComponentPublicInstance } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import IconGlyph from '@/components/common/IconGlyph.vue'
-import ProgressBar from '@/components/common/ProgressBar.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { learnMessages } from '@/plugins/learnMessages'
 import type { PathStop, PathUnit } from '@/types/learn'
-import { ratioPercent } from '@/utils/format'
 
-import { hanziNumeral } from './sealGlyphs'
+import LearnUnitBanner from './LearnUnitBanner.vue'
 
 /**
- * One unit of the Learn path as a chapter of a book: its number, title and progress, then its lessons on an ink
- * thread, each a seal (stamped when done, outlined in purple for the current one, muted while locked). The open unit
- * shows its lessons; a finished unit is stamped 完 and folds away, a locked one lists what it teaches and why it is
- * locked. A lesson opens its card in place: Start (+XP), Practise again, or what to finish first.
+ * One unit of the Learn path: its banner, then its lessons as round stops on a winding road, solid where the student has
+ * walked and dotted ahead. A stop opens its card in place: Start (+XP), Practise again, or what to finish first.
  */
 interface Props {
   unit: PathUnit
+  /** This unit is the one the pinned "You are here" banner shows. */
+  isPinnedUnit?: boolean
+  /** The pinned banner stands directly above this unit, so it draws no banner of its own. */
+  bannerPinned?: boolean
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), { isPinnedUnit: false, bannerPinned: false })
 
 const emit = defineEmits<{
   guidebook: [unit: PathUnit]
@@ -176,41 +139,43 @@ const emit = defineEmits<{
 const { t } = useLocalMessages({ learn: learnMessages })
 const baseId = useId()
 
-/** The unit being worked on starts open; finished and locked units start folded. */
-const expanded = ref(props.unit.state === 'ACTIVE')
+// ----- the road: stops every 130px, swinging 120px either side of the centre line -----
 
-/** "Unit 2", "Unit 2 · Locked" or "Unit 1 · done". */
-const overline = computed(() => {
-  const number = t('learn.unitNumber', { number: props.unit.number })
-  if (props.unit.state === 'LOCKED') return `${number} · ${t('learn.locked')}`
-  if (props.unit.state === 'DONE') return `${number} · ${t('learn.unitDone')}`
-  return number
-})
+const STOP_SPACING = 130
+const SWING = 120
+const ROAD_EDGE = 60
+/** Room for the Start bubble when the very first stop is the current one. */
+const BUBBLE_ROOM = 24
 
-function showsContinue(stop: PathStop): boolean {
-  return stop.current && stop.state !== 'LOCKED'
-}
+const roadTop = computed(() => ROAD_EDGE + (props.unit.lessons[0]?.current ? BUBBLE_ROOM : 0))
 
-function sealClass(stop: PathStop): Record<string, boolean> {
+const roadHeight = computed(() => roadTop.value + Math.max(0, props.unit.lessons.length - 1) * STOP_SPACING + ROAD_EDGE)
+
+function point(index: number): { x: number; y: number } {
   return {
-    'is-outline': stop.state === 'AVAILABLE',
-    'is-muted': stop.state === 'LOCKED',
+    x: Math.round(-SWING * Math.sin((index * Math.PI) / 4)),
+    y: roadTop.value + index * STOP_SPACING,
   }
 }
 
-function kindPrefix(stop: PathStop): string {
-  if (stop.kind === 'BONUS') return `${t('learn.kindBonus')} · `
-  if (stop.kind === 'REVIEW') return `${t('learn.kindReview')} · `
-  return ''
-}
+const segments = computed(() =>
+  props.unit.lessons.slice(1).map((stop, index) => {
+    const from = point(index)
+    const to = point(index + 1)
+    const previous = props.unit.lessons[index]!
+    return {
+      key: stop.id,
+      x1: from.x,
+      y1: from.y,
+      x2: to.x,
+      y2: to.y,
+      // An optional bonus chest may be passed by, so what lies beyond it also counts as walked.
+      walked: previous.state === 'DONE' || stop.state === 'DONE',
+    }
+  }),
+)
 
-function rowMeta(stop: PathStop): string {
-  if (stop.state === 'DONE') return `${kindPrefix(stop)}${t('learn.stateDoneShort')}`
-  if (stop.state === 'LOCKED') {
-    return stop.unlockAfter ? t('learn.opensAfter', { title: stop.unlockAfter }) : t('learn.locked')
-  }
-  return `${kindPrefix(stop)}${t('learn.minutesXp', { minutes: stop.minutes, xp: stop.xpReward })}`
-}
+// ----- names -----
 
 function stopLabel(stop: PathStop): string {
   const state =
@@ -222,7 +187,15 @@ function stopLabel(stop: PathStop): string {
   return `${stop.title} (${state})`
 }
 
-// ----- the lesson card, one open at a time -----
+function lockedReason(stop: PathStop): string {
+  return stop.unlockAfter
+    ? t('learn.finishToUnlock', { title: stop.unlockAfter })
+    : props.unit.unlockAfterUnit
+      ? t('learn.finishUnitToUnlock', { number: props.unit.unlockAfterUnit })
+      : t('learn.locked')
+}
+
+// ----- the stop's card, one open at a time -----
 
 const openStopId = ref<number | null>(null)
 const nodes = new Map<number, HTMLElement>()
@@ -232,20 +205,26 @@ function setNodeRef(id: number, element: Element | ComponentPublicInstance | nul
   else nodes.delete(id)
 }
 
-function toggle(id: number): void {
+async function toggle(id: number): Promise<void> {
   openStopId.value = openStopId.value === id ? null : id
+  if (openStopId.value === null) return
+  await nextTick()
+  nodes.get(id)?.parentElement?.querySelector('.learn-node-card')?.scrollIntoView?.({ block: 'nearest' })
 }
 
 function close(id: number): void {
+  if (openStopId.value !== id) return
   openStopId.value = null
   nodes.get(id)?.focus()
 }
 
-/** The current lesson's row, so the page can bring it into view. */
-function currentNode(): HTMLElement | null {
-  const current = props.unit.lessons.find((stop) => stop.current)
-  return current ? (nodes.get(current.id) ?? null) : null
+/** A click anywhere outside the open stop closes its card. */
+function onDocumentClick(event: MouseEvent): void {
+  if (openStopId.value === null) return
+  const openNode = nodes.get(openStopId.value)?.parentElement
+  if (!openNode?.contains(event.target as Node)) openStopId.value = null
 }
 
-defineExpose({ currentNode })
+onMounted(() => document.addEventListener('click', onDocumentClick))
+onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick))
 </script>

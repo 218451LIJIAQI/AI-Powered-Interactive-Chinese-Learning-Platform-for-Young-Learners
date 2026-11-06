@@ -1,454 +1,831 @@
-/* The learning plan module: the setup and level check (focus mode), the plan reveal and path, My learning plan, the
-   student Home, and the plan's cards on Progress, Find classes and the teacher's Students page.
-   Page-prefixed classes only: plan-* and home-*. */
+/* The learning plan: student Home, the setup and level check (focus mode), the road map, My learning plan, the strip on
+   Progress. Tokens only; page classes are
+   prefixed `.home-*` and `.plan-*`. */
 
-/* ===== Setup (focus mode) ================================================== */
+/* ===== Shared ============================================================== */
 
-/* One question per screen, asked by SparkBot: a narrow conversational column for the questions, a wider one for the
-   plan itself. The footer holds Back and the next step, always in reach. */
-.plan-setup {
-  --setup-width: 760px;
-  --focus-width: var(--setup-width);
-  --progress-color: var(--module-progress);
-  /* Room for the fixed footer, so the last line stays readable above it. */
-  padding-bottom: calc(var(--space-20) + var(--space-12));
-}
-
-.plan-setup:has(.plan-setup-body.is-wide) {
-  --setup-width: 1080px;
-}
-
-.plan-setup-body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-6);
-  width: 100%;
-  max-width: var(--setup-width);
-  margin: 0 auto;
-  padding-top: var(--space-10);
-}
-
-.plan-setup-body > section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-5);
-  min-width: 0;
-}
-
-.plan-setup-title {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--type-h1-size);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-tight);
-  letter-spacing: var(--letter-spacing-display);
-}
-
-.plan-setup-lead {
-  margin: calc(-1 * var(--space-2)) 0 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-lg);
-}
-
-.plan-setup-note {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-md);
-}
-
-.plan-setup-note .icon-glyph {
-  flex: 0 0 auto;
-  margin-top: var(--space-0-5);
-}
-
-.plan-setup-error {
-  max-width: var(--setup-width);
-  margin: var(--space-4) auto 0;
-}
-
-.plan-setup-footer {
-  position: fixed;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: var(--z-sticky);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
-  padding: var(--space-4) max(var(--page-gutter), calc((100% - var(--setup-width)) / 2));
-  border-top: 1px solid var(--border-subtle);
-  background: var(--surface-page);
-}
-
-.plan-setup-footer .btn-primary {
-  margin-left: auto;
-}
-
-.plan-setup-footer-note {
-  flex: 1 1 auto;
-  max-width: 520px;
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-  text-align: center;
-}
-
-.plan-skip-check {
-  align-self: flex-start;
-}
-
-/* SparkBot, the one asking: its mark and name above each question. */
-.plan-asker {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin: 0 0 calc(-1 * var(--space-3));
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-bold);
-}
-
-.plan-spark-avatar {
-  display: grid;
+/* A filled tile for the goal's icon. */
+.plan-icon-tile {
+  --plan-tile-size: var(--control-height-md);
+  display: inline-grid;
   flex: 0 0 auto;
   place-items: center;
-  width: var(--space-8);
-  height: var(--space-8);
-  border-radius: var(--radius-round);
+  width: var(--plan-tile-size);
+  height: var(--plan-tile-size);
+  border-radius: var(--radius-lg);
   background: var(--color-primary-500);
-  color: var(--text-on-dark);
+  color: var(--text-on-primary);
 }
 
-/* Welcome: you today → the path → your goal, then the three parts of the setup. */
-.plan-welcome {
-  align-items: center;
-  text-align: center;
+.plan-icon-tile.is-lg {
+  --plan-tile-size: calc(var(--space-12) + var(--space-2));
 }
 
-.plan-welcome .plan-setup-lead {
-  max-width: 560px;
-  margin-top: 0;
-}
-
-.plan-journey {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
-  margin-bottom: var(--space-3);
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-bold);
-}
-
-.plan-journey-stop {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+/* A list of short lines, each led by an icon. */
+.plan-icon-list {
+  display: grid;
   gap: var(--space-2);
-}
-
-.plan-journey-you {
-  display: grid;
-  place-items: center;
-  width: var(--space-12);
-  height: var(--space-12);
-  border-radius: var(--radius-round);
-  background: var(--color-primary-500);
-  color: var(--text-on-dark);
-  font-size: var(--font-size-xs);
-  letter-spacing: var(--letter-spacing-wide);
-  text-transform: uppercase;
-}
-
-.plan-journey .plan-journey-goal {
-  --seal-size: var(--space-12);
-}
-
-.plan-journey-road {
-  width: 160px;
-  margin-top: calc(var(--space-6) - var(--space-2));
-  padding-top: var(--space-3);
-  border-top: var(--border-width-thick) dashed var(--border-strong);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
-}
-
-.plan-welcome-steps {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  width: 100%;
-  margin: var(--space-4) 0 0;
-  padding: var(--space-6) 0;
-  border-block: 1px solid var(--border-subtle);
+  margin: 0;
+  padding: 0;
+  font-size: var(--type-label-size);
+  line-height: 20px;
   list-style: none;
 }
 
-.plan-welcome-steps li {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-1);
-  padding: 0 var(--space-4);
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.plan-welcome-steps li + li {
-  border-left: 1px solid var(--border-subtle);
-}
-
-.plan-welcome-steps strong {
-  color: var(--text-primary);
-  font-size: var(--font-size-base);
-}
-
-.plan-welcome-number {
-  margin-bottom: var(--space-1);
-  color: var(--module-progress);
-  font-family: var(--font-display);
-  font-size: var(--font-size-3xl);
-  font-weight: var(--font-weight-semibold);
-  line-height: 1;
-}
-
-/* Centred with the welcome text: the icon runs inline with it, so it never strands at the edge when the note wraps. */
-.plan-welcome .plan-setup-note {
-  display: block;
-}
-
-.plan-welcome .plan-setup-note .icon-glyph {
-  display: inline-block;
-  margin: 0 var(--space-1) 0 0;
-  vertical-align: -0.15em;
-}
-
-/* SparkBot's short reply to the student's choice. */
-.plan-spark-reply {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--space-3);
-  margin: 0;
-  animation: plan-reply-in var(--duration-base) var(--ease-out);
-}
-
-.plan-spark-bubble {
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) var(--radius-xs);
-  background: var(--surface-card);
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-semibold);
-}
-
-@keyframes plan-reply-in {
-  from {
-    opacity: 0;
-    transform: translateY(var(--space-2));
-  }
-}
-
-/* ===== Choices (cards and chips) =========================================== */
-
-/* Cards: big tappable rows with an icon, a label and a hint; chips: compact pills. Selection shows with a check and a
-   heavier ink border, never by colour alone. */
-.plan-choices {
+.plan-icon-list li {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
-  gap: var(--space-3);
-}
-
-.plan-choices.is-chips {
-  display: flex;
-  flex-wrap: wrap;
+  grid-template-columns: auto minmax(0, 1fr);
   gap: var(--space-2);
+  align-items: start;
 }
 
-.plan-choice {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  min-width: 0;
-  min-height: 76px;
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
-  background: var(--surface-card);
-  color: var(--text-primary);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    border-color var(--duration-fast) var(--ease-standard),
-    background var(--duration-fast) var(--ease-standard),
-    box-shadow var(--duration-fast) var(--ease-standard);
+.plan-icon-list .icon-glyph {
+  margin-top: var(--space-0-5);
 }
 
-.plan-choice:hover {
-  border-color: var(--border-interactive);
-  background: var(--surface-hover);
-}
-
-.plan-choice:active {
-  background: var(--surface-sunken);
-}
-
-.plan-choice.is-selected {
-  border-color: var(--color-primary-500);
-  box-shadow: inset 0 0 0 1px var(--color-primary-500);
-  background: var(--surface-card);
-}
-
-.plan-choices.is-chips .plan-choice {
-  gap: var(--space-1-5);
-  min-height: var(--control-height-md);
-  padding: var(--space-1-5) var(--space-4);
-  border-radius: var(--radius-pill);
-  font-size: var(--font-size-md);
-}
-
-.plan-choices.is-chips .plan-choice-label {
-  font-weight: var(--font-weight-semibold);
-}
-
-.plan-choices.is-chips .plan-choice.is-selected {
-  box-shadow: none;
-  background: var(--color-primary-500);
-  color: var(--text-on-dark);
-}
-
-.plan-choice-icon {
-  display: grid;
-  flex: 0 0 auto;
-  place-items: center;
-  width: var(--space-10);
-  height: var(--space-10);
-  border-radius: var(--radius-md);
-  background: var(--surface-sunken);
-  color: var(--text-secondary);
-  transition:
-    background var(--duration-fast) var(--ease-standard),
-    color var(--duration-fast) var(--ease-standard);
-}
-
-.plan-choice.is-selected .plan-choice-icon {
-  background: var(--color-primary-500);
-  color: var(--text-on-dark);
-}
-
-.plan-choice-copy {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  gap: var(--space-0-5);
-  min-width: 0;
-}
-
-.plan-choice-label {
-  font-weight: var(--font-weight-bold);
-  overflow-wrap: anywhere;
-}
-
-.plan-choice-hint {
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.plan-choice-badge {
-  flex: 0 0 auto;
-  padding: var(--space-0-5) var(--space-2);
-  border-radius: var(--radius-pill);
-  background: var(--module-progress-soft);
-  color: var(--module-progress);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-bold);
-}
-
-.plan-choice-tick {
-  display: grid;
-  flex: 0 0 auto;
-  place-items: center;
-  width: var(--space-6);
-  height: var(--space-6);
-  border-radius: var(--radius-round);
-  background: var(--color-primary-500);
-  color: var(--text-on-dark);
-}
-
-.plan-goal-form {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-6);
-}
-
-.plan-form-section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-.plan-form-label {
-  margin: 0;
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-bold);
-}
-
+/* A short note with an icon under a question or a form section. */
 .plan-form-note {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   margin: 0;
   color: var(--text-secondary);
-  font-size: var(--font-size-sm);
+  font-size: var(--type-caption-size);
+  line-height: 18px;
 }
 
-.plan-date-field {
-  max-width: 260px;
+.plan-form-note .icon-glyph {
+  flex: 0 0 auto;
 }
 
-/* ===== Level check ========================================================= */
+/* ===== Home ================================================================ */
+/* The goal as a strip across the top, the next lesson as the one big card down to the window's edge, and the rest of the
+   day in a sunken rail beside it. */
 
-/* The end of the check: the seal, then what the student knows and what is new, side by side. */
-.plan-check-done {
+.home-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--page-gap);
+  min-width: 0;
+  min-height: calc(100vh - var(--topbar-height) - var(--page-top) - var(--page-bottom));
+}
+
+.home-email {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+}
+
+.home-email-copy {
+  margin: 0;
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-bold);
+  line-height: 20px;
+}
+
+.home-email .field-error {
+  grid-column: 2 / -1;
+  grid-row: 2;
+}
+
+.home-strip {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.6fr) auto;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-6);
+  border-radius: var(--radius-xl);
+}
+
+.home-strip-goal {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.home-strip-title {
+  margin: 0;
+  font-size: var(--type-body-size);
+  font-weight: var(--font-weight-extrabold);
+  line-height: 20px;
+}
+
+.home-strip-progress {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.home-strip-progress .type-caption,
+.home-rail-card .type-caption {
+  margin: 0;
+}
+
+.home-desk {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: minmax(0, 1fr) 372px;
+  gap: var(--grid-gap);
+  min-width: 0;
+}
+
+/* The next step: everything centred, with the action last. */
+.home-next {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-8);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-2xl);
+  background: var(--surface-card);
   text-align: center;
 }
 
-.plan-check-done .plan-setup-lead {
-  max-width: 560px;
-  margin-top: 0;
+.home-next-tile {
+  --hanzi-tile-size: 220px;
+  margin-bottom: var(--space-4);
 }
 
+.home-next-copy {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.home-next-title {
+  margin: 0;
+  font-size: var(--type-h1-focus-size);
+  font-weight: var(--font-weight-extrabold);
+  letter-spacing: var(--letter-spacing-display);
+  line-height: 40px;
+}
+
+.home-next-meta {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--type-body-size);
+  line-height: 20px;
+}
+
+.home-next-phrase {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  font-size: var(--type-label-size);
+  line-height: 20px;
+}
+
+.home-next-phrase .cjk-text {
+  font-size: var(--type-h2-size);
+  font-weight: var(--font-weight-bold);
+  line-height: 24px;
+}
+
+.home-next-unit {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-2);
+  max-width: 100%;
+}
+
+.home-next-unit .type-caption {
+  margin: 0;
+  font-weight: var(--font-weight-bold);
+}
+
+/* The unit's lessons: a check when done, a ring on the next one, dashed for the rest. */
+.home-steps {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2) 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.home-steps li {
+  display: flex;
+  align-items: center;
+}
+
+.home-steps li + li::before {
+  content: '';
+  width: var(--space-3);
+  height: 1px;
+  background: var(--border-strong);
+}
+
+.home-steps li.is-done + li::before {
+  background: var(--color-primary-500);
+}
+
+.home-step {
+  display: grid;
+  place-items: center;
+  width: var(--control-height-sm);
+  height: var(--control-height-sm);
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.home-steps li.is-done .home-step {
+  border: 0;
+  background: var(--color-primary-500);
+  color: var(--text-on-primary);
+}
+
+.home-steps li.is-current .home-step {
+  border: 2px solid var(--color-primary-500);
+  color: var(--color-primary-600);
+}
+
+/* The rail: sunken, with the day as a timeline that fills its height. */
+.home-rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  min-width: 0;
+  padding: var(--card-padding);
+  border-radius: var(--radius-2xl);
+  background: var(--surface-sunken);
+}
+
+.home-rail-section {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.home-rail-section > .type-caption {
+  margin: 0;
+}
+
+.home-rail-goal {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.home-rail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: var(--control-height-sm);
+}
+
+.home-rail-figure {
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-bold);
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+.home-rail-card {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+}
+
+.home-rail-card-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.home-rail-card-head .type-caption {
+  margin: 0;
+}
+
+.home-timeline {
+  display: grid;
+  flex: 1 1 auto;
+  grid-auto-rows: minmax(max-content, 1fr);
+  margin: 0;
+  padding: var(--space-2) 0 0;
+  list-style: none;
+}
+
+.home-timeline-item {
+  display: grid;
+  grid-template-columns: calc(var(--space-16) + var(--space-2)) var(--space-3) minmax(0, 1fr);
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.home-timeline-when {
+  padding-top: var(--space-0-5);
+  color: var(--text-secondary);
+  font-size: var(--type-overline-size);
+  font-weight: var(--font-weight-extrabold);
+  letter-spacing: var(--letter-spacing-wide);
+  line-height: 16px;
+  text-transform: uppercase;
+}
+
+/* A ring on the line; the line runs on to the next item. */
+.home-timeline-node {
+  position: relative;
+  display: block;
+}
+
+.home-timeline-node::before {
+  content: '';
+  display: block;
+  box-sizing: border-box;
+  width: var(--space-3);
+  height: var(--space-3);
+  margin-top: var(--space-1);
+  border: 2px solid var(--color-primary-500);
+  border-radius: 50%;
+  background: var(--surface-sunken);
+}
+
+.home-timeline-item:not(:last-child) .home-timeline-node::after {
+  content: '';
+  position: absolute;
+  top: var(--space-5);
+  bottom: 0;
+  left: calc(50% - 1px);
+  width: 2px;
+  background: var(--border-strong);
+}
+
+.home-timeline-body {
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  gap: var(--space-1);
+  min-width: 0;
+  padding-bottom: var(--space-4);
+}
+
+.home-timeline-item:last-child .home-timeline-body {
+  padding-bottom: 0;
+}
+
+.home-timeline-title {
+  margin: 0;
+  font-size: var(--type-body-size);
+  font-weight: var(--font-weight-extrabold);
+  line-height: 20px;
+}
+
+.home-timeline-body .type-caption {
+  margin: 0;
+}
+
+.home-timeline-body .btn {
+  margin-top: var(--space-1);
+}
+
+/* The offer to build a plan: the rail's one filled card. */
+.home-build {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-primary-500);
+  color: var(--text-on-primary);
+  font-size: var(--type-label-size);
+  line-height: 20px;
+}
+
+.home-build p {
+  margin: 0;
+}
+
+.home-build-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0;
+  color: inherit;
+  font-size: var(--type-card-title-size);
+  font-weight: var(--font-weight-extrabold);
+  line-height: 22px;
+}
+
+.home-build-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: var(--control-height-md);
+  height: var(--control-height-md);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+  color: var(--color-primary-600);
+}
+
+/* ===== Setup and level check (focus mode) ================================== */
+
+.plan-setup {
+  --focus-label-width: 176px;
+  --focus-stage-top: clamp(var(--space-6), 12vh, 110px);
+}
+
+/* While the plan builds there is nothing to leave or name. */
+.plan-setup.is-building .focus-topbar-close {
+  visibility: hidden;
+}
+
+/* A question: the headline, a line under it, then the choices, in one column of 780. */
+.plan-question {
+  --focus-column: 780px;
+  gap: var(--space-6);
+}
+
+.plan-question-head {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.plan-question-head p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--type-body-size);
+  line-height: 20px;
+}
+
+/* The plan itself takes the width of the top bar. */
+.plan-wide {
+  --focus-column: var(--focus-bar-width);
+  --focus-stage-top: var(--space-3);
+  gap: var(--space-4);
+}
+
+/* Welcome, building and done sit in the middle of the window. */
+.plan-center {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: var(--space-6);
+  max-width: var(--focus-bar-width);
+  min-height: calc(
+    100vh - var(--focus-bar-top) - var(--control-height-md) - var(--space-3) - var(--focus-footer-height) -
+      var(--space-6)
+  );
+  margin: 0 auto;
+  text-align: center;
+}
+
+.plan-center-lead {
+  margin: calc(-1 * var(--space-2)) 0 0;
+  color: var(--text-secondary);
+  font-size: var(--type-body-size);
+  line-height: 20px;
+}
+
+.plan-welcome-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.plan-welcome-steps li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  text-align: left;
+}
+
+.plan-welcome-number {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: var(--control-height-sm);
+  height: var(--control-height-sm);
+  border-radius: 50%;
+  background: var(--surface-sunken);
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-extrabold);
+}
+
+.plan-welcome-copy {
+  display: grid;
+  gap: var(--space-0-5);
+  min-width: 0;
+}
+
+.plan-welcome-copy strong {
+  font-size: var(--type-body-size);
+  font-weight: var(--font-weight-extrabold);
+  line-height: 20px;
+}
+
+.plan-welcome-copy span {
+  color: var(--text-secondary);
+  font-size: var(--type-caption-size);
+  line-height: 18px;
+}
+
+.plan-setup-error {
+  max-width: var(--focus-bar-width);
+  margin: var(--space-4) auto 0;
+}
+
+.plan-skip-check {
+  font-weight: var(--font-weight-bold);
+}
+
+/* Choices: equal in width, a 2px ring and a check when selected. */
+.plan-choices {
+  display: grid;
+  grid-template-columns: repeat(var(--plan-choice-columns), minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.plan-choices.is-chips {
+  gap: var(--space-2);
+}
+
+.plan-choice {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4);
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+  box-shadow: inset 0 0 0 1px var(--border-default);
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.plan-choice:hover {
+  background: var(--surface-subtle);
+  box-shadow: inset 0 0 0 1px var(--border-interactive);
+}
+
+.plan-choice.is-selected {
+  background: var(--color-primary-50);
+  box-shadow: inset 0 0 0 2px var(--color-primary-500);
+}
+
+.plan-choice-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: var(--control-height-md);
+  height: var(--control-height-md);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+}
+
+.plan-choice.is-selected .plan-choice-icon {
+  background: var(--color-primary-500);
+  color: var(--text-on-primary);
+}
+
+.plan-choice-copy {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.plan-choice-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  min-width: 0;
+}
+
+.plan-choice-label {
+  font-size: var(--type-card-title-size);
+  font-weight: var(--font-weight-extrabold);
+  line-height: 22px;
+}
+
+.plan-choice-hint {
+  color: var(--text-secondary);
+  font-size: var(--type-caption-size);
+  line-height: 18px;
+}
+
+/* A focus card: what it is for in a box, what it adds under a rule, all boxes and rules on one line. */
+.plan-choice-box {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+  font-size: var(--type-caption-size);
+  line-height: 18px;
+}
+
+.plan-choice.is-selected .plan-choice-box {
+  background: var(--surface-card);
+}
+
+.plan-choice-box strong {
+  color: var(--text-primary);
+}
+
+.plan-choice-foot {
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border-default);
+  color: var(--text-secondary);
+  font-size: var(--type-caption-size);
+  font-weight: var(--font-weight-bold);
+  line-height: 18px;
+}
+
+.plan-choices.is-cards:has(.plan-choice-box) .plan-choice {
+  grid-template-rows: auto 1fr;
+}
+
+.plan-choices.is-cards:has(.plan-choice-box) .plan-choice-copy {
+  grid-template-rows: auto 1fr auto;
+}
+
+.plan-choice-tick {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  display: grid;
+  place-items: center;
+  width: var(--space-5);
+  height: var(--space-5);
+  border-radius: 50%;
+  background: var(--color-primary-500);
+  color: var(--text-on-primary);
+}
+
+/* Row cards: the icon beside the words. */
+.plan-choices.is-rows {
+  gap: var(--space-3);
+}
+
+.plan-choices.is-rows .plan-choice {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  padding: var(--space-3);
+  padding-right: var(--space-8);
+}
+
+.plan-choices.is-rows .plan-choice-copy {
+  gap: var(--space-0-5);
+}
+
+/* Chips: one height, centred words. */
+.plan-choices.is-chips .plan-choice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--control-height-md);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-pill);
+  text-align: center;
+}
+
+.plan-choices.is-chips .plan-choice.is-selected {
+  background: var(--color-primary-500);
+  box-shadow: none;
+  color: var(--text-on-primary);
+}
+
+.plan-choices.is-chips .plan-choice-label {
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-bold);
+  line-height: 20px;
+}
+
+.plan-choices.is-chips.is-compact .plan-choice {
+  min-height: var(--control-height-sm);
+  padding: var(--space-1) var(--space-2);
+}
+
+.plan-goal-form,
+.plan-form-section {
+  display: grid;
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+.plan-form-section {
+  gap: var(--space-3);
+}
+
+.plan-goal-form.is-compact {
+  gap: var(--space-4);
+}
+
+.plan-goal-form .field {
+  margin: 0;
+}
+
+.plan-form-label {
+  margin: 0;
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-bold);
+  line-height: 20px;
+}
+
+.plan-optional {
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-regular);
+}
+
+.plan-date-field {
+  max-width: 240px;
+}
+
+/* The level check: the skill over the question, and answers laid out for what they are. */
+.plan-check {
+  gap: var(--space-2);
+}
+
+.plan-check.has-pairs .learn-options {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.plan-check.has-tiles .learn-options {
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+}
+
+.plan-check.has-tiles .option-row {
+  position: relative;
+  justify-content: center;
+  min-height: 136px;
+}
+
+.plan-check.has-tiles .option-keycap {
+  position: absolute;
+  top: var(--space-2);
+  left: var(--space-2);
+}
+
+.plan-check.has-tiles .learn-option-mark {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+}
+
+.plan-check.has-tiles .learn-option-text {
+  justify-content: center;
+}
+
+.plan-check.has-tiles .learn-option-hanzi {
+  font-size: var(--font-size-5xl);
+  line-height: 48px;
+}
+
+/* Done: what the student knows and what is new, as one row of chips each. */
 .plan-skill-rows {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
-  width: 100%;
-  margin: var(--space-4) 0 0;
-  padding-top: var(--space-6);
-  border-top: 1px solid var(--border-subtle);
-  text-align: left;
+  gap: var(--space-3);
+  margin: 0;
 }
 
 .plan-skill-rows > div {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  padding: 0 var(--space-6);
-}
-
-.plan-skill-rows > div + div {
-  border-left: 1px solid var(--border-subtle);
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
 }
 
 .plan-skill-rows dt {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: var(--font-size-md);
+  color: var(--text-secondary);
+  font-size: var(--type-label-size);
   font-weight: var(--font-weight-bold);
 }
 
@@ -456,87 +833,59 @@
   margin: 0;
 }
 
-.plan-chips {
+.plan-skill-chips {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: var(--space-2);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.plan-chip {
+.plan-skill-chip {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1-5);
+  min-height: var(--control-height-sm);
   padding: var(--space-1) var(--space-3);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-pill);
-  background: var(--surface-card);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-bold);
 }
 
-.plan-chip.is-known {
+.plan-skill-chip.is-known {
   border-color: var(--color-primary-500);
   background: var(--color-primary-500);
-  color: var(--text-on-dark);
+  color: var(--text-on-primary);
 }
 
-.plan-chip.is-soft {
-  border-color: transparent;
-  background: var(--surface-sunken);
-}
-
-.plan-chip-empty {
+.plan-skill-none {
   color: var(--text-secondary);
-  font-size: var(--font-size-md);
+  font-size: var(--type-label-size);
 }
 
-.plan-retake-outcome {
-  max-width: 560px;
-  margin: 0;
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-lg);
-  background: var(--module-progress-soft);
-  color: var(--module-progress);
-  font-weight: var(--font-weight-semibold);
-}
-
-/* ===== Building ============================================================ */
-
-.plan-building {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-5);
-  padding-top: var(--space-10);
-  text-align: center;
-}
-
+/* Building: what happens while the server builds the plan. */
 .plan-building-icon {
   display: grid;
   place-items: center;
-  width: var(--space-16);
-  height: var(--space-16);
-  border-radius: var(--radius-round);
+  width: 88px;
+  height: 88px;
+  border-radius: var(--radius-2xl);
   background: var(--color-primary-500);
-  color: var(--text-on-dark);
-}
-
-.plan-building-title {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--font-size-3xl);
-  font-weight: var(--font-weight-semibold);
+  color: var(--text-on-primary);
 }
 
 .plan-building-steps {
-  display: flex;
-  flex-direction: column;
-  width: min(380px, 100%);
+  display: grid;
+  gap: var(--space-4);
+  width: 100%;
+  max-width: 420px;
   margin: 0;
-  padding: 0;
+  padding: var(--space-4) var(--space-6);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
   list-style: none;
   text-align: left;
 }
@@ -545,18 +894,15 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-3) 0;
   color: var(--text-secondary);
-  font-weight: var(--font-weight-semibold);
-}
-
-.plan-building-steps li + li {
-  border-top: 1px solid var(--border-subtle);
+  font-size: var(--type-body-size);
+  line-height: 20px;
 }
 
 .plan-building-steps li.is-done,
 .plan-building-steps li.is-current {
   color: var(--text-primary);
+  font-weight: var(--font-weight-bold);
 }
 
 .plan-building-mark {
@@ -566,175 +912,41 @@
   width: var(--space-6);
   height: var(--space-6);
   border: 1.5px dashed var(--border-strong);
-  border-radius: var(--radius-round);
+  border-radius: 50%;
 }
 
 .plan-building-steps li.is-done .plan-building-mark {
   border: 0;
-  background: var(--module-progress);
-  color: var(--text-on-dark);
+  background: var(--color-primary-500);
+  color: var(--text-on-primary);
 }
 
 .plan-building-steps li.is-current .plan-building-mark {
   border: 0;
 }
 
-.plan-building-note {
-  max-width: 480px;
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-/* ===== Plan reveal ========================================================= */
-
-/* The reveal: the 好 seal lands, then the goal as the headline and the Mandarin level beside it. */
-.plan-result-head {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-3);
-}
-
-.plan-result-head .plan-setup-lead {
-  margin-top: 0;
-}
-
-.plan-result-head .plan-result-seal {
-  --seal-size: 64px;
-  transform: rotate(-6deg);
-  animation: plan-stamp var(--duration-slow) var(--ease-spring);
-}
-
-@keyframes plan-stamp {
-  from {
-    opacity: 0;
-    transform: rotate(-6deg) scale(1.6);
-  }
-}
-
+/* Result: two equal cards. */
 .plan-result {
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
-  align-items: start;
-  padding-top: var(--space-8);
-  border-top: 1px solid var(--border-subtle);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--grid-gap);
 }
 
-.plan-result-goal,
-.plan-result-level {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
+.plan-result-card {
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
   min-width: 0;
+  padding: var(--card-padding);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-2xl);
 }
 
-.plan-result-goal {
-  padding-right: var(--space-10);
-}
-
-.plan-result-level {
-  padding-left: var(--space-10);
-  border-left: 1px solid var(--border-subtle);
-}
-
-.plan-result-label {
-  margin: 0;
-  color: var(--module-progress);
-  font-size: var(--type-overline-size);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: var(--letter-spacing-wide);
-  text-transform: uppercase;
-}
-
-.plan-result-goal-title {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--font-size-5xl);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-tight);
-  letter-spacing: var(--letter-spacing-display);
-  overflow-wrap: anywhere;
-}
-
-.plan-result-level-name {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-3);
-  margin: 0 0 var(--space-2);
-  font-family: var(--font-display);
-  font-size: var(--font-size-3xl);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-tight);
-}
-
-.plan-result-level-name .chip {
-  font-family: var(--font-body);
-}
-
-.plan-result-note {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-md);
-}
-
-.plan-result-sub {
-  margin: var(--space-3) 0 0;
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-bold);
-}
-
-.plan-quote {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  margin: var(--space-2) 0;
-}
-
-.plan-quote blockquote {
-  margin: 0;
-  padding-left: var(--space-4);
-  border-left: var(--border-width-thick) solid var(--module-progress);
-  font-size: var(--font-size-lg);
-  line-height: var(--line-height-normal);
-  overflow-wrap: anywhere;
-}
-
-.plan-quote figcaption {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1-5);
-  padding-left: var(--space-4);
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.plan-milestone {
-  display: flex;
-  gap: var(--space-3);
-  margin-top: var(--space-2);
-  padding: var(--space-4);
-  border-radius: var(--radius-lg);
-  background: var(--color-warning-soft);
-  color: var(--color-warning-text);
-}
-
-.plan-milestone p {
-  margin: 0;
-}
-
-.plan-milestone-text {
-  margin-top: var(--space-2);
-  font-weight: var(--font-weight-bold);
-}
-
-/* The Mandarin level: three segments of one track, the reached ones filled in the module's ochre, "You" over the
-   student's segment and the target outlined. */
 .plan-ladder {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-1);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: end;
+  gap: var(--space-2);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -742,524 +954,593 @@
 
 .plan-ladder-rung {
   display: grid;
-  grid-template-rows: var(--space-6) auto auto;
-  gap: var(--space-1-5);
+  gap: var(--space-1);
   min-width: 0;
 }
 
-.plan-ladder-tag-row {
-  display: flex;
-  align-items: flex-end;
+.plan-ladder-tag-slot {
+  min-height: var(--space-6);
 }
 
-.plan-ladder-tag {
-  padding: var(--space-0-5) var(--space-2);
-  border-radius: var(--radius-pill);
-  background: var(--color-primary-500);
-  color: var(--text-on-dark);
-  font-size: var(--font-size-2xs);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: var(--letter-spacing-wide);
-  text-transform: uppercase;
+.plan-ladder-tag-slot .tag.is-outline {
+  background: var(--surface-card);
 }
 
-.plan-ladder-tag.is-target {
-  background: transparent;
-  box-shadow: inset 0 0 0 1px var(--module-progress);
-  color: var(--module-progress);
-}
-
+/* Each rung a step higher than the one before. */
 .plan-ladder-bar {
-  display: block;
-  height: var(--space-2);
-  border-radius: var(--radius-pill);
-  background: var(--surface-sunken);
+  height: calc((var(--rung) + 1) * var(--space-3));
+  margin-bottom: var(--space-1);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
 }
 
 .plan-ladder-rung.is-reached .plan-ladder-bar {
-  background: var(--module-progress);
+  border-color: var(--color-primary-500);
+  background: var(--color-primary-500);
 }
 
 .plan-ladder-rung.is-target .plan-ladder-bar {
-  background: transparent;
-  box-shadow: inset 0 0 0 1.5px var(--module-progress);
+  border: 1.5px dashed var(--color-primary-500);
 }
 
-/* Level names break between words only ("Beginner 1 · / HSK 1"), never inside one. */
+.plan-ladder-hsk {
+  color: var(--text-secondary);
+  font-size: var(--type-caption-size);
+  font-weight: var(--font-weight-bold);
+  line-height: 18px;
+}
+
+.plan-ladder-rung.is-reached .plan-ladder-hsk,
+.plan-ladder-rung.is-target .plan-ladder-hsk {
+  color: var(--text-primary);
+}
+
 .plan-ladder-name {
   color: var(--text-secondary);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-snug);
-  overflow-wrap: break-word;
-  text-wrap: balance;
+  font-size: var(--type-overline-size);
+  line-height: 16px;
+  overflow-wrap: anywhere;
 }
 
-.plan-ladder-rung.is-you .plan-ladder-name {
-  color: var(--text-primary);
+.plan-result-level {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0;
+  font-size: var(--type-h1-size);
+  font-weight: var(--font-weight-extrabold);
+  letter-spacing: var(--letter-spacing-display);
+  line-height: 36px;
+}
+
+.plan-result-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.plan-result-sub {
+  margin: 0;
+  font-size: var(--type-label-size);
   font-weight: var(--font-weight-bold);
+  line-height: 20px;
 }
 
-/* ===== Path ================================================================ */
+.plan-result-goal {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
 
+.plan-result-goal .plan-icon-tile {
+  --plan-tile-size: 52px;
+}
+
+.plan-result-goal-title {
+  margin: 0;
+  font-size: var(--type-h2-size);
+  font-weight: var(--font-weight-extrabold);
+  line-height: 24px;
+}
+
+.plan-result-goal .type-caption {
+  margin: 0;
+}
+
+.plan-result-quote {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--surface-sunken);
+  font-size: var(--type-body-size);
+  line-height: 20px;
+}
+
+.plan-result-ai {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--type-caption-size);
+  line-height: 18px;
+}
+
+.plan-result-picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.plan-result-week {
+  display: grid;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.plan-result-week-rows {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.plan-result-week-rows > div {
+  display: grid;
+  grid-template-columns: var(--space-7) minmax(0, 1fr);
+  column-gap: var(--space-3);
+}
+
+.plan-result-week-rows dt {
+  display: contents;
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-bold);
+  line-height: 20px;
+}
+
+.plan-result-week-icon {
+  display: grid;
+  grid-row: span 2;
+  place-items: center;
+  align-self: center;
+  width: var(--space-7);
+  height: var(--space-7);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+}
+
+.plan-result-week-rows dd {
+  grid-column: 2;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--type-caption-size);
+  line-height: 18px;
+}
+
+/* Path: the headline and its facts, then the road beside the rail. */
 .plan-path-head {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-3) var(--space-4);
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
 }
 
-.plan-path-head .plan-setup-title {
-  flex: 1 1 100%;
+.plan-path-head .plan-form-note {
+  flex: 0 0 auto;
 }
 
-.plan-path-chips {
+.plan-path-tags {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
-  margin: 0;
+  margin: var(--space-2) 0 0;
   padding: 0;
   list-style: none;
 }
 
-.plan-path-ai {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1-5);
-  margin: 0 0 0 auto;
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-}
+/* ===== The road map ======================================================== */
+/* An SVG road under a list: the list lays out the marks and words; the SVG joins the marks wherever they end up. */
 
-.plan-path-layout,
-.plan-page-layout {
+.plan-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.7fr) minmax(280px, 1fr);
-  align-items: start;
-  gap: var(--space-12);
+  grid-template-columns: minmax(0, 1fr) 332px;
+  align-items: stretch;
+  gap: var(--grid-gap);
 }
 
-/* The path: one stop per step on a road that is solid behind the student and dashed ahead. Finished units are
-   stamped with their first character; "You" marks where the student stands; the flag is the goal. */
-.plan-path {
-  margin: 0;
-  padding: 0;
-  list-style: none;
+.plan-road-card {
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-4) var(--card-padding) var(--card-padding);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-2xl);
+  background: var(--surface-card);
 }
 
-.plan-node {
+.plan-road {
+  display: grid;
+  min-width: 0;
+  container-type: inline-size;
+}
+
+.plan-road-svg,
+.plan-road-list {
+  grid-area: 1 / 1;
+}
+
+.plan-road-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.plan-road-bed,
+.plan-road-line {
+  fill: none;
+  stroke-linecap: round;
+}
+
+.plan-road-bed {
+  stroke: var(--surface-sunken);
+  stroke-width: var(--space-4);
+}
+
+.plan-road-line {
+  stroke: var(--color-ink-400);
+  stroke-dasharray: 2 9;
+  stroke-width: 2;
+}
+
+.plan-road-line.is-next {
+  stroke: var(--color-primary-500);
+  stroke-width: 3;
+}
+
+.plan-road-line.is-done {
+  stroke: var(--color-primary-500);
+  stroke-dasharray: none;
+  stroke-width: 4;
+}
+
+.plan-road-list {
   position: relative;
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) auto;
-  column-gap: var(--space-4);
-  padding-bottom: var(--space-8);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.plan-node::before {
-  position: absolute;
-  top: calc(44px + var(--space-1));
-  bottom: var(--space-1);
-  left: 21px;
-  border-left: var(--border-width-thick) solid var(--color-ink-900);
-  content: '';
+.plan-road-here,
+.plan-road-learn,
+.plan-road-fork,
+.plan-road-goal {
+  grid-column: 1 / -1;
 }
 
-.plan-node.is-dashed::before {
-  border-left-style: dashed;
-  border-left-color: var(--border-strong);
-}
-
-.plan-node:last-child {
-  padding-bottom: 0;
-}
-
-.plan-node:last-child::before {
-  display: none;
-}
-
-.plan-node-mark {
+.plan-road-mark {
   display: grid;
+  flex: 0 0 auto;
   place-items: center;
-  width: 44px;
-  height: 44px;
-  font-size: var(--font-size-2xs);
-  font-weight: var(--font-weight-bold);
-}
-
-.plan-node-mark:not(.seal) {
-  border: 1.5px solid var(--border-strong);
-  border-radius: var(--radius-md);
-  background: var(--surface-page);
-  color: var(--text-secondary);
-}
-
-.plan-node .plan-node-mark.seal {
-  --seal-size: 44px;
-}
-
-.plan-node.is-in-progress .plan-node-mark,
-.plan-node.is-next .plan-node-mark {
-  border-color: var(--color-primary-500);
+  width: var(--plan-mark-size, 52px);
+  height: var(--plan-mark-size, 52px);
+  background: var(--surface-card);
   color: var(--text-primary);
 }
 
-.plan-node.is-in-progress .plan-node-mark {
-  border-width: var(--border-width-thick);
-}
-
-.plan-node.is-dashed .plan-node-mark:not(.seal),
-.plan-node.is-optional .plan-node-mark:not(.seal) {
-  border-style: dashed;
-}
-
-.plan-node.is-in-my-classes .plan-node-mark,
-.plan-node.is-optional .plan-node-mark {
-  border: 0;
-  background: transparent;
-}
-
-.plan-node-mark.is-you {
-  border: 0;
-  border-radius: var(--radius-round);
+.plan-road-mark.is-you {
+  --plan-mark-size: 44px;
+  border-radius: 50%;
   background: var(--color-primary-500);
-  color: var(--text-on-dark);
-  letter-spacing: var(--letter-spacing-wide);
-  text-transform: uppercase;
+  color: var(--text-on-primary);
+  font-size: var(--type-body-size);
+  font-weight: var(--font-weight-extrabold);
 }
 
-.plan-node.is-goal .plan-node-mark {
-  border-color: var(--color-primary-500);
+.plan-road-mark.is-learn {
+  border: 2px solid var(--color-primary-500);
+  border-radius: var(--radius-lg);
+  color: var(--color-primary-600);
+}
+
+.plan-road-mark.is-fork {
+  --plan-mark-size: 44px;
+  border: 1.5px dashed var(--color-ink-400);
+  border-radius: 50%;
+}
+
+.plan-road-mark.is-class {
+  border: 1.5px dashed var(--color-ink-400);
+  border-radius: 50%;
+}
+
+.plan-road-branch.is-picked .plan-road-mark.is-class {
+  border: 2px solid var(--color-primary-500);
+  color: var(--color-primary-600);
+}
+
+.plan-road-mark.is-goal {
+  border-radius: var(--radius-lg);
   background: var(--color-primary-500);
-  color: var(--text-on-dark);
+  color: var(--text-on-primary);
 }
 
-.plan-node.is-milestone .plan-node-mark {
-  border-color: var(--module-progress);
-  color: var(--module-progress);
-}
-
-.plan-node-body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1-5);
+.plan-road-copy {
+  display: grid;
+  justify-items: start;
+  align-content: start;
+  gap: var(--space-0-5);
   min-width: 0;
-  padding-top: var(--space-2-5);
 }
 
-.plan-node-head {
+.plan-road-title {
+  margin: 0;
+  font-size: var(--type-card-title-size);
+  font-weight: var(--font-weight-extrabold);
+  line-height: 22px;
+}
+
+.plan-road-class {
+  margin: 0;
+  font-size: var(--type-body-size);
+  font-weight: var(--font-weight-extrabold);
+  line-height: 20px;
+}
+
+.plan-road-meta,
+.plan-road-why {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--type-caption-size);
+  line-height: 18px;
+}
+
+.plan-road-why {
+  color: var(--text-primary);
+  font-size: var(--type-label-size);
+  line-height: 20px;
+}
+
+.plan-road-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
+  margin-top: var(--space-2);
 }
 
-.plan-node-title {
-  margin: 0;
-  font-weight: var(--font-weight-bold);
-  overflow-wrap: anywhere;
-}
-
-.plan-node.is-here .plan-node-title,
-.plan-node.is-goal .plan-node-title {
-  font-family: var(--font-display);
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
-}
-
-.plan-node-percent {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-bold);
-}
-
-.plan-node-meta,
-.plan-node-why {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.plan-node-why strong {
-  font-weight: var(--font-weight-semibold);
-}
-
-.plan-node-action {
-  padding-top: var(--space-1-5);
-}
-
-/* ===== Side column ========================================================= */
-
-/* What the plan gives and covers: quiet blocks divided by hairlines. */
-.plan-side,
-.plan-page-rail {
+.plan-road-here {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-6);
-  min-width: 0;
-}
-
-.plan-side-block {
-  display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: var(--space-3);
+  padding-left: var(--space-4);
 }
 
-.plan-side > * + *,
-.plan-page-rail > * + * {
-  padding-top: var(--space-6);
-  border-top: 1px solid var(--border-subtle);
-}
-
-.plan-side-title {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
-}
-
-.plan-side-note {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.plan-side-block .progress-bar {
-  --progress-color: var(--module-progress);
-}
-
-.plan-weeks {
-  display: flex;
-  flex-direction: column;
-  margin: 0;
-}
-
-.plan-weeks > div {
+/* The current unit, a little further along the road. */
+.plan-road-learn {
   display: grid;
-  grid-template-columns: 76px minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
   gap: var(--space-3);
-  padding: var(--space-2) 0;
+  margin-top: var(--space-6);
+  padding-left: var(--space-24);
 }
 
-.plan-weeks > div + div {
-  border-top: 1px solid var(--border-subtle);
+/* A class the student has: under the unit, or beside it when the card is wide. */
+.plan-road-joined {
+  position: relative;
+  grid-column: 1 / -1;
+  display: grid;
+  justify-items: start;
+  align-content: start;
+  gap: var(--space-1);
+  margin: var(--space-3) 0 0 calc(var(--space-24) + var(--space-16));
+  padding: var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
 }
 
-.plan-weeks dt {
-  color: var(--module-progress);
+.plan-road-joined .btn {
+  margin-top: var(--space-1);
+}
+
+.plan-road-joined-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  margin: 0;
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-extrabold);
+  line-height: 20px;
+}
+
+/* The fork in the middle; its words sit above the road that leaves it sideways. */
+.plan-road-fork {
+  --plan-mark-size-fork: 44px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: end;
+  column-gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.plan-road-fork .plan-road-mark {
+  grid-column: 2;
+}
+
+.plan-road-fork .plan-road-copy {
+  grid-column: 3;
+  margin-bottom: calc(var(--plan-mark-size-fork) / 2 + var(--space-2));
+}
+
+/* The classes: to the left and right of the fork, with the road running round them. */
+.plan-road-branch {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-3);
+  min-width: 0;
+  margin-top: var(--space-12);
+  padding-left: var(--space-6);
+}
+
+.plan-road-branch.is-right {
+  grid-column: 2;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 0 var(--space-6) 0 0;
+}
+
+.plan-road-branch.is-right .plan-road-mark {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.plan-road-branch.is-right .plan-road-copy {
+  grid-column: 1;
+  grid-row: 1;
+  justify-items: end;
+  text-align: right;
+}
+
+.plan-road-branch.is-right .plan-road-actions {
+  justify-content: flex-end;
+}
+
+/* The only class on the road, or the third: on the straight down the middle. */
+.plan-road-branch.is-center {
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  padding: 0;
+}
+
+.plan-road-branch.is-center .plan-road-mark {
+  grid-column: 2;
+}
+
+.plan-road-branch.is-center .plan-road-copy {
+  grid-column: 3;
+}
+
+.plan-road-goal {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-0-5);
+  margin-top: var(--space-6);
+  text-align: center;
+}
+
+.plan-road-goal .plan-road-mark {
+  margin-bottom: var(--space-2);
+}
+
+@container (min-width: 620px) {
+  .plan-road-learn {
+    grid-column: 1 / span 2;
+    grid-row: 2;
+    padding-right: 256px;
+  }
+
+  .plan-road-joined {
+    grid-column: 1 / span 2;
+    grid-row: 2;
+    justify-self: end;
+    width: 240px;
+    margin: var(--space-3) 0 0;
+  }
+}
+
+/* The sunken rail beside the road. */
+.plan-rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--card-padding);
+  border-radius: var(--radius-2xl);
+  background: var(--surface-sunken);
+}
+
+.plan-rail-block {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.plan-rail > * + * {
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-default);
+}
+
+.plan-rail-rows {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.plan-rail-rows > div {
+  display: grid;
+  grid-template-columns: var(--space-16) minmax(0, 1fr);
+  gap: var(--space-2);
+  font-size: var(--type-label-size);
+  line-height: 20px;
+}
+
+.plan-rail-rows dt {
   font-weight: var(--font-weight-bold);
 }
 
-.plan-weeks dd {
+.plan-rail-rows dd {
   margin: 0;
-  overflow-wrap: anywhere;
-}
-
-.plan-checklist {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.plan-checklist li {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-}
-
-.plan-checklist .icon-glyph {
-  flex: 0 0 auto;
-  margin-top: var(--space-1);
-  color: var(--module-progress);
+  color: var(--text-secondary);
 }
 
 .plan-ai-note {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   gap: var(--space-2);
   color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.plan-ai-note > .icon-glyph {
-  flex: 0 0 auto;
-  margin-top: var(--space-0-5);
+  font-size: var(--type-caption-size);
+  line-height: 18px;
 }
 
 .plan-ai-note p {
-  flex: 1 1 200px;
   margin: 0;
+}
+
+.plan-ai-note .btn-link {
+  min-height: 0;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.plan-ai-note .icon-glyph {
+  margin-top: var(--space-0-5);
 }
 
 /* ===== My learning plan ==================================================== */
 
-.plan-page {
-  --progress-color: var(--module-progress);
+.plan-updated {
+  width: 100%;
+  margin-top: var(--space-4);
 }
 
-/* The goal is the headline; the weeks run underneath it from the start to the goal date. */
-.plan-hero {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-6);
-  padding-bottom: var(--space-10);
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.plan-hero-main {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--space-4) var(--space-8);
-}
-
-.plan-hero-copy {
-  display: flex;
-  flex: 1 1 480px;
-  flex-direction: column;
-  gap: var(--space-3);
-  min-width: 0;
-}
-
-.plan-hero-title {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--type-h1-size);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-tight);
-  letter-spacing: var(--letter-spacing-display);
-}
-
-.plan-hero-goal {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  margin: 0;
-}
-
-/* At the page-title size: the goal heads this page as a title heads any other. */
-.plan-hero-goal-name {
-  font-family: var(--font-display);
-  font-size: var(--type-h1-size);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-tight);
-  letter-spacing: var(--letter-spacing-display);
-  overflow-wrap: anywhere;
-}
-
-.plan-hero-goal-when {
-  color: var(--text-secondary);
-  font-size: var(--font-size-lg);
-}
-
-.plan-hero-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2) var(--space-4);
-}
-
-.plan-weekline {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2-5);
-}
-
-.plan-weekline-caption {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-2) var(--space-4);
-  font-size: var(--font-size-md);
-}
-
-.plan-weekline-end {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1-5);
-  color: var(--text-secondary);
-  font-weight: var(--font-weight-semibold);
-}
-
-.plan-weekline-track {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.plan-weekline-track li,
-.plan-weekline-key {
-  height: var(--space-3);
-  border-radius: var(--radius-xs);
-  background: var(--surface-sunken);
-}
-
-.plan-weekline-track li {
-  flex: 1 1 0;
-  min-width: 0;
-}
-
-.plan-weekline-track li.is-done,
-.plan-weekline-key.is-done {
-  background: var(--module-progress);
-}
-
-.plan-weekline-track li.is-now,
-.plan-weekline-key.is-now {
-  background: var(--color-primary-500);
-}
-
-.plan-weekline-track li.is-now {
-  height: var(--space-5);
-}
-
-.plan-weekline-track li.is-review,
-.plan-weekline-key.is-review {
-  border: 1.5px dashed var(--border-strong);
-  background: transparent;
-}
-
-.plan-weekline-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-5);
-  margin: 0;
-  padding: 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-xs);
-  list-style: none;
-}
-
-.plan-weekline-legend li {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1-5);
-}
-
-.plan-weekline-key {
-  display: inline-block;
-  width: var(--space-4);
-  height: var(--space-2-5);
-}
-
-/* The plan at a glance: four figures divided by hairlines, no boxes. */
 .plan-stats {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  row-gap: var(--space-6);
+  grid-template-columns: 1.4fr repeat(3, minmax(0, 1fr));
+  border-radius: var(--radius-2xl);
 }
 
 .plan-stat {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  display: grid;
+  align-content: start;
   gap: var(--space-2);
   min-width: 0;
   padding: 0 var(--space-6);
@@ -1269,762 +1550,182 @@
   padding-left: 0;
 }
 
+.plan-stat:last-child {
+  padding-right: 0;
+}
+
 .plan-stat + .plan-stat {
   border-left: 1px solid var(--border-subtle);
 }
 
-.plan-stat-label {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--type-overline-size);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: var(--letter-spacing-wide);
-  text-transform: uppercase;
-}
-
 .plan-stat-value {
   margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--font-size-2xl);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-snug);
-  overflow-wrap: anywhere;
-}
-
-.plan-stat-note {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.plan-page-path {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-6);
-  min-width: 0;
-}
-
-.plan-section-title {
-  margin: 0;
-  font-family: var(--font-display);
   font-size: var(--type-h2-size);
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: var(--letter-spacing-display);
+  font-weight: var(--font-weight-extrabold);
+  line-height: 24px;
 }
 
-/* This week: the to-dos, the one sheet in the rail (it is what to do next). */
-.plan-week {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
-
-.plan-week-title {
+.plan-stat .type-caption {
   margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-semibold);
+}
+
+.plan-stat-behind {
+  color: var(--color-warning-text);
+  font-weight: var(--font-weight-bold);
+}
+
+.plan-page .plan-layout {
+  grid-template-columns: minmax(0, 1fr) 380px;
+}
+
+.plan-page .plan-road-card {
+  gap: var(--space-6);
+  padding-top: var(--card-padding);
 }
 
 .plan-tasks {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  gap: var(--space-3);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .plan-tasks li {
-  display: flex;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   gap: var(--space-3);
-  padding: var(--space-3) 0;
-}
-
-.plan-tasks li + li {
-  border-top: 1px solid var(--border-subtle);
+  align-items: center;
 }
 
 .plan-task-box {
   display: grid;
-  flex: 0 0 auto;
   place-items: center;
-  width: 22px;
-  height: 22px;
-  margin-top: var(--space-0-5);
-  border: 1.5px solid var(--border-interactive);
+  width: var(--space-5);
+  height: var(--space-5);
+  border: 1.5px solid var(--color-ink-400);
   border-radius: var(--radius-xs);
+  background: var(--surface-card);
+  color: var(--text-on-primary);
 }
 
 .plan-tasks li.is-done .plan-task-box {
-  border-color: var(--module-progress);
-  background: var(--module-progress);
-  color: var(--text-on-dark);
+  border-color: var(--color-primary-500);
+  background: var(--color-primary-500);
 }
 
 .plan-task-copy {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-0-5);
+  display: grid;
   min-width: 0;
 }
 
 .plan-task-title {
-  font-weight: var(--font-weight-bold);
-  overflow-wrap: anywhere;
-}
-
-/* A row title that opens the task: plain like other row titles, underlined on hover. */
-a.plan-task-title {
   color: var(--text-primary);
-  text-underline-offset: 3px;
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-extrabold);
+  line-height: 20px;
+  text-decoration: none;
 }
 
 a.plan-task-title:hover {
-  color: var(--text-link-hover);
+  color: var(--text-link);
   text-decoration: underline;
 }
 
-.plan-tasks li.is-done .plan-task-title {
-  color: var(--text-secondary);
-  text-decoration: line-through;
+.plan-task-copy .type-caption {
+  margin: 0;
 }
 
-.plan-task-meta {
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-}
+/* ===== The strip on Progress =============================================== */
 
-/* ===== Setup and plan: responsive ========================================== */
-
-@media (max-width: 1200px) {
-  /* One column: this week's to-dos come first, the path and the notes about the plan after them. */
-  .plan-page-layout {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: var(--space-10);
-  }
-
-  .plan-page-rail {
-    display: contents;
-  }
-
-  .plan-page-rail > .plan-week {
-    order: -1;
-  }
-
-  .plan-stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .plan-stat:nth-child(odd) {
-    padding-left: 0;
-    border-left: 0;
-  }
-}
-
-/* ===== Plan cards on other pages ========================================== */
-
-/* Progress: "My learning plan", the one sheet on the page (it opens another page): the goal, the Mandarin level
-   and plan progress side by side, divided by hairlines. */
-.plan-card {
+.plan-strip {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr);
-  align-items: start;
-}
-
-.plan-card > .state-panel {
-  grid-column: 1 / -1;
-}
-
-.plan-card-goal,
-.plan-card-level,
-.plan-card-progress {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  min-width: 0;
-}
-
-.plan-card-level,
-.plan-card-progress {
-  padding-left: var(--space-8);
-  border-left: 1px solid var(--border-subtle);
-}
-
-.plan-card-goal {
-  padding-right: var(--space-8);
-}
-
-.plan-card-level {
-  padding-right: var(--space-8);
-}
-
-.plan-card-overline {
-  margin: 0;
-  color: var(--module-progress);
-  font-size: var(--type-overline-size);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: var(--letter-spacing-wide);
-  text-transform: uppercase;
-}
-
-.plan-card-title {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--font-size-2xl);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-snug);
-  letter-spacing: var(--letter-spacing-display);
-  overflow-wrap: anywhere;
-}
-
-.plan-card-label {
-  margin: 0;
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-bold);
-}
-
-.plan-card-note {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.plan-card-progress {
-  --progress-color: var(--module-progress);
-}
-
-.plan-card-foot {
-  display: flex;
-  flex-wrap: wrap;
+  grid-template-columns: auto minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2) var(--space-4);
-}
-
-.plan-card-build {
-  display: flex;
-  grid-column: 1 / -1;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
-}
-
-.plan-card-build .plan-card-goal {
-  flex: 1 1 320px;
-}
-
-@media (max-width: 1200px) {
-  .plan-card {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    row-gap: var(--space-6);
-  }
-
-  .plan-card-goal {
-    grid-column: 1 / -1;
-    padding-right: 0;
-  }
-
-  .plan-card-level {
-    padding-left: 0;
-    border-left: 0;
-  }
-}
-
-.plan-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-0-5) var(--space-2-5);
-  border-radius: var(--radius-pill);
-  background: var(--color-primary-500);
-  color: var(--text-on-dark);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-bold);
-}
-
-.plan-teacher-goal {
-  display: grid;
-  gap: var(--space-4);
-}
-
-.plan-teacher-goal-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-2) var(--space-4);
-}
-
-.plan-teacher-goal-head p,
-.plan-teacher-goal > p {
-  margin: 0;
-}
-
-/* The goal, focus, level and class in a 2 × 2 grid of label over value. */
-.plan-teacher-goal-list {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-4) var(--space-6);
-  margin: 0;
-  padding: var(--space-4);
-  border-radius: var(--radius-md);
-  background: var(--module-progress-soft);
-}
-
-.plan-teacher-goal-list > div {
-  display: grid;
-  gap: var(--space-1);
-  min-width: 0;
-}
-
-.plan-teacher-goal-list dt {
-  color: var(--text-secondary);
-  font-size: var(--type-overline-size);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: var(--letter-spacing-wide);
-  text-transform: uppercase;
-}
-
-.plan-teacher-goal-list dd {
-  margin: 0;
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-semibold);
-  overflow-wrap: anywhere;
-}
-
-.plan-teacher-goal-class {
-  display: block;
-}
-
-/* ===== Home ================================================================ */
-/* A desk for today: the greeting with the week stamped as seals, the next lesson on the one white sheet, the plan's
-   goal as a quiet line under it and today's plan as a timeline of hairline rows beside it. */
-
-.home-email {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2) var(--space-3);
-  padding: var(--space-2-5) var(--space-4);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  background: var(--surface-subtle);
-  color: var(--text-secondary);
-  font-size: var(--font-size-md);
-}
-
-.home-email > p:first-of-type {
-  flex: 1 1 280px;
-  margin: 0;
-}
-
-.home-email .field-error {
-  flex-basis: 100%;
-}
-
-.home-header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--space-5) var(--space-10);
-}
-
-.home-greeting {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  min-width: 0;
-}
-
-.home-title {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--type-h1-size);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-tight);
-  letter-spacing: var(--letter-spacing-display);
-  overflow-wrap: anywhere;
-}
-
-/* The streak: the count in ink (as on Practice and Progress) beside the last seven days (StreakWeek). */
-.home-streak {
-  display: flex;
-  align-items: flex-end;
   gap: var(--space-6);
+  border-radius: var(--radius-2xl);
 }
 
-.home-streak-count {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1-5);
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-}
-
-.home-streak-count .stat-figure {
-  color: var(--text-primary);
-}
-
-.home-streak-count.is-zero .stat-figure {
-  color: var(--color-ink-300);
-}
-
-/* The desk: the next lesson and the goal on the left, the day on the right. */
-.home-desk {
-  display: grid;
-  grid-template-areas:
-    'next day'
-    'goal day';
-  grid-template-rows: auto 1fr;
-  grid-template-columns: minmax(0, 1.65fr) minmax(300px, 1fr);
-  align-items: start;
-  gap: var(--space-8) var(--space-12);
-}
-
-.home-desk-next {
-  grid-area: next;
-}
-
-.home-desk-goal {
-  grid-area: goal;
-}
-
-.home-desk-day {
-  grid-area: day;
-}
-
-/* The next lesson: its character on a big 田字格 tile, one ink Continue, the unit's lessons as seals under it. */
-.home-next {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--space-8);
-  padding: var(--space-8);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-xl);
-  background: var(--surface-card);
-  box-shadow: var(--shadow-xs);
-}
-
-.home-next-tile {
-  --hanzi-tile-size: 176px;
-}
-
-.home-next-copy {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-3);
-  min-width: 0;
-}
-
-.home-next-eyebrow {
-  margin: 0;
-  color: var(--text-brand);
-  font-size: var(--type-overline-size);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: var(--letter-spacing-wide);
-  text-transform: uppercase;
-}
-
-.home-next-title {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--font-size-5xl);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-tight);
-  letter-spacing: var(--letter-spacing-display);
-  overflow-wrap: anywhere;
-}
-
-.home-next-title .cjk-text {
-  font-size: 1em;
-  line-height: inherit;
-}
-
-.home-next-meta {
-  margin: 0;
-  color: var(--text-secondary);
-}
-
-.home-next-phrase {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--space-1) var(--space-3);
-  margin: var(--space-1) 0 0;
-  padding-left: var(--space-4);
-  border-left: var(--border-width-thick) solid var(--color-primary-300);
-  color: var(--text-secondary);
-  font-size: var(--font-size-md);
-}
-
-.home-next-phrase .hanzi {
-  color: var(--text-primary);
-  font-size: var(--font-size-2xl);
-}
-
-.home-next-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-3) var(--space-6);
-  margin-top: var(--space-3);
-}
-
-.home-next-unit {
-  display: flex;
-  flex-wrap: wrap;
+/* Loading and error take the whole strip. */
+.plan-strip > .state-panel {
   grid-column: 1 / -1;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3) var(--space-6);
-  padding-top: var(--space-5);
-  border-top: 1px solid var(--border-subtle);
 }
 
-.home-next-stops {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.home-next-stops li {
-  position: relative;
-  display: flex;
-}
-
-/* A thread between the seals: ink behind the student, dashed ahead. */
-.home-next-stops li + li::before {
-  position: absolute;
-  top: 50%;
-  right: 100%;
-  width: var(--space-3);
-  border-top: 1px dashed var(--border-strong);
-  content: '';
-}
-
-.home-next-stops li.is-done + li::before {
-  border-top-style: solid;
-  border-top-color: var(--color-ink-900);
-}
-
-.home-next-seal {
-  --seal-size: 30px;
-}
-
-.home-next-progress {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-/* The plan's goal (or the offer to build one): a quiet line under the sheet. */
-.home-goal,
-.home-build {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-2);
-  min-width: 0;
-  padding: 0 var(--space-8);
-}
-
-.home-goal > .progress-bar {
-  margin-top: var(--space-1);
-}
-
-.home-goal-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-1) var(--space-4);
-  width: 100%;
-}
-
-.home-overline {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--type-overline-size);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: var(--letter-spacing-wide);
-  text-transform: uppercase;
-}
-
-.home-goal-title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-snug);
-  overflow-wrap: anywhere;
-}
-
-.home-goal-title > svg {
-  flex: 0 0 auto;
-  color: var(--text-secondary);
-}
-
-.home-goal .type-caption {
-  margin: 0;
-}
-
-.home-build-title {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-semibold);
-}
-
-.home-build p {
-  max-width: var(--reading-max);
-  margin: 0 0 var(--space-2);
-  color: var(--text-secondary);
-}
-
-/* The day: a heading with today's XP, a slim meter, then the timeline. */
-.home-day {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  min-width: 0;
-}
-
-.home-day-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-1) var(--space-4);
-}
-
-.home-day-title {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--type-h2-size);
-  font-weight: var(--font-weight-semibold);
-}
-
-.home-day-xp {
-  font-family: var(--font-display);
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-semibold);
-  font-variant-numeric: tabular-nums;
-}
-
-.home-day-goal {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-
-.home-day-goal .type-caption {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1-5);
-  margin: 0;
-}
-
-.home-goal-picker {
-  align-self: flex-start;
-}
-
-.home-timeline {
-  margin: var(--space-2) 0 0;
-  padding: 0;
-  list-style: none;
-  border-top: 1px solid var(--border-default);
-}
-
-.home-timeline-item {
+.plan-strip-goal,
+.plan-strip-level,
+.plan-strip-progress {
   display: grid;
-  grid-template-columns: 80px minmax(0, 1fr);
-  gap: var(--space-4);
-  padding: var(--space-4) 0;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.home-timeline-when {
-  padding-top: var(--space-1);
-  color: var(--text-secondary);
-  font-size: var(--type-overline-size);
-  font-weight: var(--font-weight-bold);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: var(--letter-spacing-wide);
-  text-transform: uppercase;
-}
-
-.home-timeline-item.is-now .home-timeline-when {
-  color: var(--text-brand);
-}
-
-.home-timeline-body {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-0-5);
+  gap: var(--space-1);
   min-width: 0;
 }
 
-.home-timeline-title {
+.plan-strip-progress {
+  gap: var(--space-2);
+}
+
+.plan-strip-build {
+  grid-column: 2 / span 3;
+}
+
+.plan-strip-title {
   margin: 0;
-  font-weight: var(--font-weight-semibold);
-  overflow-wrap: anywhere;
+  font-size: var(--type-h2-size);
+  font-weight: var(--font-weight-extrabold);
+  line-height: 24px;
 }
 
-.home-timeline-meta {
+.plan-strip-value {
   margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
+  font-size: var(--type-card-title-size);
+  font-weight: var(--font-weight-extrabold);
+  line-height: 22px;
 }
 
-.home-timeline-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0 var(--space-5);
+.plan-strip .type-caption {
+  margin: 0;
 }
 
-/* Below 1200px the day's plan moves under the next step instead of squeezing it (as on Learn and Plan). */
+/* ===== The window's one breakpoint: the rails go under ===================== */
+
 @media (max-width: 1200px) {
-  .home-desk {
-    grid-template-areas:
-      'next'
-      'day'
-      'goal';
-    grid-template-rows: none;
+  .home-desk,
+  .plan-layout,
+  .plan-page .plan-layout {
     grid-template-columns: minmax(0, 1fr);
-    row-gap: var(--space-10);
   }
 
-  .home-next {
-    gap: var(--space-6);
-    padding: var(--space-6);
+  .home-strip {
+    grid-template-columns: auto minmax(0, 1fr) auto;
   }
 
-  .home-next-tile {
-    --hanzi-tile-size: 128px;
+  .home-strip-progress {
+    grid-column: 1 / -1;
+    grid-row: 2;
   }
 
-  .home-next-title {
-    font-size: var(--font-size-4xl);
+  .plan-strip {
+    grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr) auto;
   }
 
-  /* The last row of the day's plan already draws the rule above the goal. */
-  .home-goal,
-  .home-build {
-    padding: 0;
+  .plan-strip-level {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .plan-strip-progress {
+    grid-column: 3 / -1;
+    grid-row: 2;
+  }
+
+  .plan-strip-goal {
+    grid-column: 2 / 4;
+  }
+
+  .plan-strip-build {
+    grid-column: 2 / 4;
+  }
+
+  .plan-result {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

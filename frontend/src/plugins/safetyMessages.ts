@@ -2,10 +2,6 @@
 export const safetyMessages = {
   en: {
     title: 'Safety centre',
-    intro:
-      'How we keep learning on MandarinSpark safe, what we expect from everyone, and how to tell us when something feels wrong.',
-    responsibleAiLink: 'Responsible AI guidance',
-    privacyLink: 'Privacy Notice',
     reportLink: 'Report a concern',
     keepSafeTitle: 'How we keep you safe',
     keepSafeTeachers: 'Every teacher is checked and approved by an admin before they can teach.',
@@ -32,15 +28,9 @@ export const safetyMessages = {
     reportSignedIn: 'Signed in: open Help & support and send a request with the topic “Safety concern”.',
     reportVisitor: 'Not signed in: use “Send us a message” on the Help page.',
     reportEmergency: 'If someone is in danger right now, call 999.',
-    openSupport: 'Open Help & support',
-    openHelpForm: 'Send us a message',
   },
   ms: {
     title: 'Pusat keselamatan',
-    intro:
-      'Cara kami memastikan pembelajaran di MandarinSpark selamat, apa yang kami harapkan daripada semua orang, dan cara memberitahu kami apabila sesuatu terasa tidak kena.',
-    responsibleAiLink: 'Panduan AI Bertanggungjawab',
-    privacyLink: 'Notis Privasi',
     reportLink: 'Laporkan kebimbangan',
     keepSafeTitle: 'Cara kami memastikan anda selamat',
     keepSafeTeachers: 'Setiap guru disemak dan diluluskan oleh pentadbir sebelum mereka boleh mengajar.',
@@ -73,14 +63,9 @@ export const safetyMessages = {
       'Sudah log masuk: buka Bantuan & sokongan dan hantar permintaan dengan topik “Kebimbangan keselamatan”.',
     reportVisitor: 'Belum log masuk: gunakan “Hantar mesej kepada kami” di halaman Bantuan.',
     reportEmergency: 'Jika seseorang berada dalam bahaya sekarang, hubungi 999.',
-    openSupport: 'Buka Bantuan & sokongan',
-    openHelpForm: 'Hantar mesej kepada kami',
   },
   'zh-CN': {
     title: '安全中心',
-    intro: '我们如何保障在 MandarinSpark 上的学习安全、我们对每个人的期望，以及当你觉得不对劲时如何告诉我们。',
-    responsibleAiLink: '负责任的 AI 指南',
-    privacyLink: '隐私声明',
     reportLink: '报告问题',
     keepSafeTitle: '我们如何保障你的安全',
     keepSafeTeachers: '每位老师在授课前都经过管理员审核和批准。',
@@ -105,7 +90,5 @@ export const safetyMessages = {
     reportSignedIn: '已登录：打开“帮助与支持”，发送主题为“安全问题”的请求。',
     reportVisitor: '未登录：在帮助页面使用“给我们留言”。',
     reportEmergency: '如果有人正处于危险之中，请立即拨打 999。',
-    openSupport: '打开帮助与支持',
-    openHelpForm: '给我们留言',
   },
 }

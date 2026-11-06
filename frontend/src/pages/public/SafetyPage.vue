@@ -1,9 +1,10 @@
 <template>
-  <LegalDocument :title="t('safety.title')" :intro="t('safety.intro')" :sections="sections">
-    <template #links>
-      <RouterLink class="btn btn-link" :to="{ name: 'responsible-ai' }">{{ t('safety.responsibleAiLink') }}</RouterLink>
-      <RouterLink class="btn btn-link" :to="{ name: 'privacy' }">{{ t('safety.privacyLink') }}</RouterLink>
-      <a class="btn btn-link" href="#report">{{ t('safety.reportLink') }}</a>
+  <LegalDocument :title="t('safety.title')" :sections="sections">
+    <template #meta>
+      <RouterLink class="btn btn-link" :to="reportRoute">
+        {{ t('safety.reportLink') }}
+        <IconGlyph name="chevronRight" :size="16" />
+      </RouterLink>
     </template>
   </LegalDocument>
 </template>
@@ -12,6 +13,7 @@
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 
+import IconGlyph from '@/components/common/IconGlyph.vue'
 import LegalDocument, { type LegalSection } from '@/components/public/LegalDocument.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { safetyMessages } from '@/plugins/safetyMessages'
@@ -47,10 +49,8 @@ const SECTIONS = [
 ] as const
 
 /** Signed-in students and teachers report through Help & support; everyone else through the Help page form. */
-const reportLink = computed(() =>
-  auth.isAuthenticated && auth.activeRole !== 'ADMIN'
-    ? { label: t('safety.openSupport'), to: `/${auth.activeRole?.toLowerCase()}/support` }
-    : { label: t('safety.openHelpForm'), to: '/help#contact' },
+const reportRoute = computed(() =>
+  auth.isAuthenticated && auth.activeRole !== 'ADMIN' ? `/${auth.activeRole?.toLowerCase()}/support` : '/help#contact',
 )
 
 const sections = computed<LegalSection[]>(() =>
@@ -58,7 +58,6 @@ const sections = computed<LegalSection[]>(() =>
     id,
     title: t(title),
     bullets: bullets.map((bullet) => t(bullet)),
-    links: id === 'report' ? [reportLink.value] : undefined,
   })),
 )
 </script>

@@ -13,7 +13,6 @@ import type {
   PlanOptions,
   PlanOverview,
   RetakeResult,
-  TeacherLearningGoal,
 } from '@/types/plan'
 import type { MandarinLevel } from '@/types/learn'
 
@@ -48,13 +47,6 @@ export const planApi = {
   /** "Set up later". */
   skip() {
     return apiPost<PlanOverview>('/students/plan/skip')
-  },
-}
-
-export const teacherPlanApi = {
-  /** Null when the student has no plan; 403 for a student outside the teacher's classes. */
-  learningGoal(studentId: number) {
-    return apiGet<TeacherLearningGoal | null>(`/teachers/students/${studentId}/learning-goal`)
   },
 }
 

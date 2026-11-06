@@ -48,14 +48,19 @@ import com.example.aichinese.service.learn.PracticeService;
 import com.example.aichinese.service.learn.XpService;
 
 /**
- * Demo learning histories that match the prototype: Amira is in Unit 1 with two lessons done, about 240 XP, a 7-day
- * streak ending yesterday, 20 of 30 XP today, six mistakes waiting (four from Learn, two from Practice) and five
- * badges. Chen Hao and Zhang Yi have shorter histories; Nur Aisyah has not started. Dates are relative to today.
+ * Demo learning histories that match the prototype: Amira is in Unit 1 with two lessons done (next: Initials 1), 250 XP,
+ * a 7-day streak ending yesterday, 20 of 30 XP today, six mistakes waiting (two from Learn, four from Practice), five
+ * badges and a spread of skills with Listening the weakest. Chen Hao and Zhang Yi have shorter histories; Nur Aisyah
+ * has not started. Dates are relative to today. A database still holding an older Learn path is left as it is.
  */
 @Component
 @Order(5)
 @Profile("demo & !prod & !production")
 public class DemoLearnSeeder implements CommandLineRunner {
+
+    private static final String FOUR_TONES = "The four tones · 声调";
+    private static final String SIMPLE_FINALS = "Simple finals · a o e i u ü";
+    private static final String INITIALS_1 = "Initials 1 · b p m f and more";
 
     private final UserRepository userRepository;
     private final StudentProfileRepository studentProfileRepository;
@@ -104,7 +109,8 @@ public class DemoLearnSeeder implements CommandLineRunner {
     @Transactional
     public void run(String... args) {
         Optional<StudentProfile> amira = student(DemoPersonas.STUDENT);
-        if (amira.isEmpty() || lessonCompletionRepository.countByStudentId(amira.get().getId()) > 0) {
+        if (amira.isEmpty() || lessonCompletionRepository.countByStudentId(amira.get().getId()) > 0
+                || lessonRepository.findPathInOrder().stream().noneMatch(lesson -> INITIALS_1.equals(lesson.getTitle()))) {
             return;
         }
         seedAmira(amira.get());
@@ -114,38 +120,46 @@ public class DemoLearnSeeder implements CommandLineRunner {
 
     private void seedAmira(StudentProfile student) {
         History history = new History(student, 30);
-        history.lesson("Hello and goodbye", 7, 86);
-        history.practice(PracticeType.FLASHCARDS, "Campus Words", 7, 6, 6);
-        history.goal(7);
-        history.badge(RewardBadge.FIRST_STEPS, 7);
+        // Practice before the streak began: most of what her skills stand on.
+        history.practice(PracticeType.FLASHCARDS, "Campus Words", 12, 6, 6);
+        history.badge(RewardBadge.FIRST_STEPS, 12);
 
-        history.practice(PracticeType.QUIZZES, "Greetings Quiz", 6, 6, 6);
+        history.practice(PracticeType.QUIZZES, "Greetings Quiz", 11, 6, 6);
         history.xp(XpService.SOURCE_QUIZ_STREAK, history.setId(PracticeType.QUIZZES, "Greetings Quiz"), 5,
-                "Greetings Quiz", 6);
-        history.goal(6);
-        history.badge(RewardBadge.QUIZ_STAR, 6);
-        history.badge(RewardBadge.XP_STARTER, 6);
+                "Greetings Quiz", 11);
+        history.badge(RewardBadge.QUIZ_STAR, 11);
 
-        history.lesson("Polite phrases", 5, 80);
-        history.practice(PracticeType.MATCHING, "Numbers Match", 5, 4, 4);
+        history.practice(PracticeType.MATCHING, "Numbers Match", 10, 4, 4);
+        history.badge(RewardBadge.XP_STARTER, 10);
+
+        history.practice(PracticeType.DRAG_DROP, "Places on Campus", 9, 4, 4);
+        history.practice(PracticeType.DRAG_DROP, "Order a Drink", 9, 4, 4);
+
+        history.practice(PracticeType.FLASHCARDS, "Numbers and Prices", 8, 6, 6);
+        history.practice(PracticeType.TRACING, "Write 中文", 8, 1, 1);
+        history.practice(PracticeType.QUIZZES, "Numbers Quiz", 8, 6, 6);
+        history.practice(PracticeType.DRAG_DROP, "Ask the Way", 8, 4, 4);
+
+        // The 7-day streak.
+        history.lesson(FOUR_TONES, 7, 86);
+        history.goal(7);
+
+        history.goal(6);
+
+        history.lesson(SIMPLE_FINALS, 5, 80);
         history.goal(5);
         history.badge(RewardBadge.STREAK_EXPLORER, 5);
 
-        history.practice(PracticeType.LISTENING, "At the Café", 4, 5, 5);
         history.review(4);
         history.goal(4);
         history.badge(RewardBadge.LESSON_FINISHER, 4);
 
-        history.practice(PracticeType.DRAG_DROP, "Places on Campus", 3, 4, 4);
-        history.practice(PracticeType.FLASHCARDS, "Numbers and Prices", 3, 6, 6);
+        history.practice(PracticeType.DRAG_DROP, "Tell the Time", 3, 4, 4);
         history.goal(3);
 
-        history.practice(PracticeType.STORY, "A Day at the Library", 2, 2, 2);
-        history.practice(PracticeType.LISTENING, "Numbers You Hear", 2, 5, 5);
+        history.practice(PracticeType.MATCHING, "Family Words", 2, 4, 4);
         history.goal(2);
 
-        history.practice(PracticeType.TRACING, "Write 中文", 1, 1, 1);
-        history.practice(PracticeType.MATCHING, "Family Words", 1, 4, 4);
         history.practice(PracticeType.QUIZZES, "Food Quiz", 1, 4, 6);
         history.review(1);
         history.goal(1);
@@ -154,23 +168,24 @@ public class DemoLearnSeeder implements CommandLineRunner {
         history.practice(PracticeType.TRACING, "Write 学", 0, 1, 1);
         history.streak(7, 7, 1);
 
-        history.learnMistake("Hello and goodbye", LearnQuestionType.MEANING, 0, 0);
-        history.learnMistake("Hello and goodbye", LearnQuestionType.LISTEN_CHOOSE, 1, 0);
-        history.learnMistake("Polite phrases", LearnQuestionType.PINYIN, 0, 1);
-        history.learnMistake("Polite phrases", LearnQuestionType.HANZI, 1, 1);
-        history.practiceMistake(PracticeType.QUIZZES, "Food Quiz", 0, 1);
+        // Tap what you hear: pà, answered bà. The other Learn mistake is from the lesson before it.
+        history.learnMistake(INITIALS_1, LearnQuestionType.LISTEN_CHOOSE, 0, 1);
+        history.learnMistake(SIMPLE_FINALS, LearnQuestionType.PINYIN, 0, 2);
+        history.practiceMistake(PracticeType.QUIZZES, "Greetings Quiz", 0, 0);
+        history.practiceMistake(PracticeType.QUIZZES, "Greetings Quiz", 3, 0);
+        history.practiceMistake(PracticeType.QUIZZES, "Food Quiz", 0, 2);
         history.practiceMistake(PracticeType.QUIZZES, "Food Quiz", 5, 1);
         history.save();
     }
 
     private void seedChenHao(StudentProfile student) {
         History history = new History(student, 20);
-        history.lesson("Hello and goodbye", 3, 71);
+        history.lesson(FOUR_TONES, 3, 71);
         history.badge(RewardBadge.FIRST_STEPS, 3);
-        history.lesson("Polite phrases", 2, 86);
+        history.lesson(SIMPLE_FINALS, 2, 86);
         history.practice(PracticeType.FLASHCARDS, "Campus Words", 2, 6, 6);
         history.goal(2);
-        history.lesson("Introduce yourself", 1, 100);
+        history.lesson(INITIALS_1, 1, 100);
         history.practice(PracticeType.QUIZZES, "Numbers Quiz", 1, 5, 6);
         history.goal(1);
         history.badge(RewardBadge.XP_STARTER, 1);
@@ -180,17 +195,18 @@ public class DemoLearnSeeder implements CommandLineRunner {
 
     private void seedZhangYi(StudentProfile student) {
         History history = new History(student, 20);
-        history.lesson("Hello and goodbye", 14, 85);
+        history.lesson(FOUR_TONES, 14, 85);
         history.practice(PracticeType.FLASHCARDS, "Campus Words", 14, 6, 6);
         history.goal(14);
-        history.lesson("Polite phrases", 13, 90);
+        history.lesson(SIMPLE_FINALS, 13, 90);
         history.practice(PracticeType.FLASHCARDS, "Family", 13, 6, 6);
         history.goal(13);
-        history.lesson("Introduce yourself", 12, 80);
+        history.lesson(INITIALS_1, 12, 80);
         history.practice(PracticeType.MATCHING, "Numbers Match", 12, 4, 4);
         history.goal(12);
-        history.lesson("Numbers 1–10", 11, 75);
-        history.lesson("Family", 10, 88);
+        history.lesson("Initials 2 · zh ch sh and more", 11, 75);
+        history.lesson("Compound finals · ai ei ao ou", 10, 88);
+        history.lesson("Nasal finals · an en ang eng", 10, 84);
         history.lesson("Unit 1 review", 9, 82);
         history.badge(RewardBadge.FIRST_STEPS, 14);
         history.badge(RewardBadge.XP_STARTER, 12);

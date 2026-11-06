@@ -29,8 +29,17 @@ class MySqlMigrationSmokeTests {
         assertThat(flyway.info().current()).isNotNull();
         assertThat(Arrays.stream(flyway.info().applied())
                 .map(migration -> migration.getVersion().getVersion()))
-                .contains("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16");
+                .contains("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17");
         assertThat(count("select count(*) from roles")).isGreaterThanOrEqualTo(3);
+        // V17: the class themes (seeded on a fresh database), "best after" and the eight level check skills.
+        assertThat(jdbcTemplate.queryForList("select name from learning_categories order by sort_order", String.class))
+                .containsExactly("Travel", "Work and career", "Study or exchange", "Daily life", "Personal interest");
+        assertThat(count("""
+                select count(*) from information_schema.columns
+                where table_schema = database() and table_name = 'course_packages'
+                  and column_name in ('best_after_unit', 'pending_best_after_unit')
+                """)).isEqualTo(2L);
+        assertThat(columnType("level_check_questions", "skill")).contains("'NUMBERS'", "'GRAMMAR'", "'IDIOMS'");
         // V15: the learning plan and the sign-up e-mail confirmation.
         assertThat(count("""
                 select count(*) from information_schema.tables

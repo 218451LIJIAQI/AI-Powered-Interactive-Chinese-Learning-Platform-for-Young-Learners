@@ -30,6 +30,8 @@ public class TeacherContentAccessService {
      */
     private static final String APPROVED_TEACHER_FEATURE_MESSAGE = "Only approved teachers can use this teaching feature.";
 
+    private static final String DEFAULT_LEVEL = "Beginner 1";
+
     private final TeacherProfileRepository teacherProfileRepository;
     private final LearningLevelRepository learningLevelRepository;
     private final LearningCategoryRepository learningCategoryRepository;
@@ -87,6 +89,12 @@ public class TeacherContentAccessService {
     public LearningLevel requireLevel(Long levelId) {
         return learningLevelRepository.findById(levelId)
                 .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Selected learning level does not exist."));
+    }
+
+    /** The level of a class created without one; null only if the levels were never seeded. */
+    @Transactional(readOnly = true)
+    public LearningLevel defaultLevel() {
+        return learningLevelRepository.findByName(DEFAULT_LEVEL).orElse(null);
     }
 
     @Transactional(readOnly = true)

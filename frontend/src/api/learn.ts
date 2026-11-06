@@ -31,6 +31,7 @@ import type {
   PracticeType,
   ProgressOverview,
   QuestionAnswer,
+  SkillProgress,
   TodaySummary,
 } from '@/types/learn'
 
@@ -46,11 +47,6 @@ export const PRACTICE_TYPE_SLUGS = {
   MATCHING: 'matching',
   STORY: 'story',
 } as const satisfies Record<PracticeType, string>
-
-export function practiceTypeOfSlug(slug: string): PracticeType | null {
-  const entry = Object.entries(PRACTICE_TYPE_SLUGS).find(([, value]) => value === slug)
-  return entry ? (entry[0] as PracticeType) : null
-}
 
 const practicePath = (type: PracticeType, id?: number) =>
   `/students/practice/${PRACTICE_TYPE_SLUGS[type]}/sets${id === undefined ? '' : `/${id}`}`
@@ -121,6 +117,10 @@ export const xpApi = {
   /** `month` is `yyyy-MM`; omitted for this month. */
   progress(month?: string | null) {
     return apiGet<ProgressOverview>('/students/progress/overview', { params: month ? { month } : {} })
+  },
+  /** The Skills card: percent and weekly change per skill, and the weakest one. */
+  progressSkills() {
+    return apiGet<SkillProgress>('/students/progress/skills')
   },
 }
 

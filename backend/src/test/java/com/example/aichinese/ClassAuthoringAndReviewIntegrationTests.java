@@ -271,6 +271,85 @@ class ClassAuthoringAndReviewIntegrationTests extends ApiIntegrationTest {
     }
 
     @Test
+    void levelAndLearningTypeAreOptionalAndDefaultForANewClass() throws Exception {
+        String teacherToken = api.approvedTeacher(uniqueEmail("defaults-author"));
+        Long classId = api.id(mockMvc.perform(api.jsonPost(TEACHER + "/classes", teacherToken, Map.of(
+                        "title", "Theme only class",
+                        "topicId", 1,
+                        "bestAfterUnit", 3)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.levelName").value("Beginner 1"))
+                .andExpect(jsonPath("$.data.learningType").value("HYBRID"))
+                .andExpect(jsonPath("$.data.topicName").value("Travel"))
+                .andExpect(jsonPath("$.data.bestAfterUnit").value(3))
+                .andReturn());
+        String classPath = TEACHER + "/classes/" + classId;
+        mockMvc.perform(api.authGet(TEACHER + "/classes", teacherToken))
+                .andExpect(jsonPath("$.data[0].bestAfterUnit").value(3));
+
+        // Saving without them keeps what the class has; sending them still works.
+        mockMvc.perform(api.jsonPut(classPath, teacherToken, Map.of(
+                        "title", "Theme only class",
+                        "topicId", 1,
+                        "levelId", 2,
+                        "learningType", "LIVE",
+                        "bestAfterUnit", 5)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.levelName").value("Beginner 2"))
+                .andExpect(jsonPath("$.data.learningType").value("LIVE"))
+                .andExpect(jsonPath("$.data.bestAfterUnit").value(5));
+        mockMvc.perform(api.jsonPut(classPath, teacherToken, Map.of("title", "Renamed class", "topicId", 1)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.title").value("Renamed class"))
+                .andExpect(jsonPath("$.data.levelName").value("Beginner 2"))
+                .andExpect(jsonPath("$.data.learningType").value("LIVE"))
+                .andExpect(jsonPath("$.data.bestAfterUnit").value(5));
+
+        mockMvc.perform(api.jsonPut(classPath, teacherToken, Map.of("title", "Renamed class", "bestAfterUnit", 9)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.bestAfterUnit[0]").value("Best after unit must be between 1 and 8."));
+    }
+
+    @Test
+    void bestAfterUnitOfAPublishedClassChangesThroughReview() throws Exception {
+        String adminToken = api.adminToken();
+        String teacherToken = api.approvedTeacher(uniqueEmail("best-after-author"));
+        PublishedClass published = api.publishedClass(teacherToken, "Best after class");
+        String classPath = TEACHER + "/classes/" + published.classId();
+        Map<String, Object> details = Map.of(
+                "title", "Best after class",
+                "description", "A class for adult beginners",
+                "topicId", 1,
+                "bestAfterUnit", 4);
+        mockMvc.perform(get(PUBLIC_CLASSES + "/" + published.classId()))
+                .andExpect(jsonPath("$.data.summary.bestAfterUnit").doesNotExist());
+
+        mockMvc.perform(api.jsonPut(classPath, teacherToken, details))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.revision.bestAfterUnit").value(4))
+                .andExpect(jsonPath("$.data.bestAfterUnit").doesNotExist());
+        mockMvc.perform(api.authPost(classPath + "/submit", teacherToken)).andExpect(status().isOk());
+        mockMvc.perform(api.authGet(REVIEWS + "/classes/" + published.classId(), adminToken))
+                .andExpect(jsonPath("$.data.classPreview.bestAfterUnit").value(4))
+                .andExpect(jsonPath("$.data.changes[?(@.kind=='BEST_AFTER_UNIT')].count").value(org.hamcrest.Matchers.contains(4)));
+
+        // Requesting changes keeps the students' value; approving makes the new one live.
+        mockMvc.perform(api.jsonPost(REVIEWS + "/classes/" + published.classId() + "/request-changes", adminToken,
+                        Map.of("reason", "Check the unit.")))
+                .andExpect(status().isOk());
+        mockMvc.perform(get(PUBLIC_CLASSES + "/" + published.classId()))
+                .andExpect(jsonPath("$.data.summary.bestAfterUnit").doesNotExist());
+        mockMvc.perform(api.authPost(classPath + "/submit", teacherToken)).andExpect(status().isOk());
+        mockMvc.perform(api.authPost(REVIEWS + "/classes/" + published.classId() + "/approve", adminToken))
+                .andExpect(status().isOk());
+        mockMvc.perform(get(PUBLIC_CLASSES + "/" + published.classId()))
+                .andExpect(jsonPath("$.data.summary.bestAfterUnit").value(4));
+        mockMvc.perform(api.authGet(classPath, teacherToken))
+                .andExpect(jsonPath("$.data.bestAfterUnit").value(4))
+                .andExpect(jsonPath("$.data.revision").doesNotExist());
+    }
+
+    @Test
     void adminArchivesATeachersClassAndTheTeacherIsTold() throws Exception {
         String adminToken = api.adminToken();
         String teacherEmail = uniqueEmail("archived-author");
