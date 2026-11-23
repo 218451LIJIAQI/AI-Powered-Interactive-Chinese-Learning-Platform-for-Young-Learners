@@ -1,18 +1,16 @@
 package com.example.aichinese.security;
 
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
-import java.util.Set;
 
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
-import com.example.aichinese.entity.Role;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.RoleName;
+import com.example.aichinese.service.account.AccountGuards;
 
 public final class SecurityUserDetails implements UserDetails {
 
@@ -23,32 +21,42 @@ public final class SecurityUserDetails implements UserDetails {
     private final String password;
     private final boolean active;
     private final long sessionVersion;
-    private final int fallbackHashCode;
     private final List<GrantedAuthority> authorities;
-    private final List<String> roleNames;
+    private final boolean persistentSession;
+    /** The browser session (sign-in) of the request's access token; null when the token names none. */
+    private final String sessionId;
 
     public SecurityUserDetails(User user) {
-        Objects.requireNonNull(user, "user");
         this.userId = user.getId();
         this.username = user.getEmail();
         this.password = user.getPasswordHash();
-        this.active = user.isActive();
+        this.active = AccountGuards.isAvailable(user);
         this.sessionVersion = user.getSessionVersion();
-        this.fallbackHashCode = System.identityHashCode(user);
-        Set<Role> roles = user.getRoles() == null ? Set.of() : user.getRoles();
-        List<RoleName> validRoleNames = roles.stream()
-                .filter(Objects::nonNull)
-                .map(Role::getName)
-                .filter(Objects::nonNull)
-                .distinct()
-                .sorted(Comparator.comparing(RoleName::name))
+        this.authorities = user.orderedRoleNames()
+                .<GrantedAuthority>map(roleName -> new SimpleGrantedAuthority(roleName.authority()))
                 .toList();
-        this.authorities = validRoleNames.stream()
-                .map(roleName -> (GrantedAuthority) new SimpleGrantedAuthority(roleName.authority()))
-                .toList();
-        this.roleNames = validRoleNames.stream()
-                .map(RoleName::name)
-                .toList();
+        this.persistentSession = true;
+        this.sessionId = null;
+    }
+
+    private SecurityUserDetails(SecurityUserDetails source, boolean persistentSession, String sessionId) {
+        this.userId = source.userId;
+        this.username = source.username;
+        // JWT-authenticated requests never use password credentials; keep hashes out of SecurityContextHolder.
+        this.password = null;
+        this.active = source.active;
+        this.sessionVersion = source.sessionVersion;
+        this.authorities = source.authorities;
+        this.persistentSession = persistentSession;
+        this.sessionId = sessionId;
+    }
+
+    /**
+     * The same account, signed in by a request whose access token carries this "Keep me signed in" choice and names this
+     * browser session.
+     */
+    public SecurityUserDetails withSession(boolean persistent, String sessionId) {
+        return new SecurityUserDetails(this, persistent, sessionId);
     }
 
     public Long getUserId() {
@@ -59,13 +67,24 @@ public final class SecurityUserDetails implements UserDetails {
         return sessionVersion;
     }
 
+    /** Whether the sign-in behind this request chose "Keep me signed in" (true when the token does not say). */
+    public boolean isPersistentSession() {
+        return persistentSession;
+    }
+
+    /** The browser session of the request (Account › This device); null when the token names none. */
+    public String getSessionId() {
+        return sessionId;
+    }
+
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return authorities;
     }
 
-    public List<String> getRoleNames() {
-        return roleNames;
+    public boolean hasRole(RoleName role) {
+        String authority = role.authority();
+        return authorities.stream().anyMatch(granted -> authority.equals(granted.getAuthority()));
     }
 
     @Override
@@ -96,7 +115,7 @@ public final class SecurityUserDetails implements UserDetails {
 
     @Override
     public int hashCode() {
-        return userId == null ? fallbackHashCode : userId.hashCode();
+        return Objects.hashCode(userId);
     }
 
     @Override

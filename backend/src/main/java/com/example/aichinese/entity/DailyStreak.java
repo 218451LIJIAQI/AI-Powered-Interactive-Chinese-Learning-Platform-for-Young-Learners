@@ -7,7 +7,6 @@ import com.example.aichinese.entity.base.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
-import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -19,9 +18,7 @@ import lombok.Setter;
 @Getter
 @Setter
 @Entity
-@Table(name = "daily_streaks", indexes = {
-        @Index(name = "idx_daily_streaks_student_id", columnList = "student_id")
-}, uniqueConstraints = {
+@Table(name = "daily_streaks", uniqueConstraints = {
         @UniqueConstraint(name = "uk_daily_streaks_student", columnNames = { "student_id" })
 })
 public class DailyStreak extends BaseEntity {
@@ -38,7 +35,7 @@ public class DailyStreak extends BaseEntity {
 
     @Version
     @Column(name = "version", nullable = false)
-    private Long version = 0L;
+    private Long version;
 
     @Column(name = "last_learning_date")
     private LocalDate lastLearningDate;

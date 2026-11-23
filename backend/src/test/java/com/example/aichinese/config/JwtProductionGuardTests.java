@@ -8,6 +8,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.boot.env.YamlPropertySourceLoader;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.mock.env.MockEnvironment;
 
 class JwtProductionGuardTests {
@@ -26,6 +28,19 @@ class JwtProductionGuardTests {
     void allowsNonPlaceholderSecretInProduction() {
         assertThatCode(() -> createGuard(environment("prod"), CONFIGURED_SECRET, true))
                 .doesNotThrowAnyException();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"local", "demo"})
+    void rejectsTheSigningKeyShippedWithEachDevelopmentProfile(String profile) throws Exception {
+        var defaults = new MockEnvironment();
+        var profileFile = new ClassPathResource("application-" + profile + ".yml");
+        new YamlPropertySourceLoader().load(profile, profileFile).forEach(defaults.getPropertySources()::addLast);
+        String shippedSecret = defaults.getRequiredProperty("app.security.jwt.secret");
+
+        assertThatThrownBy(() -> createGuard(environment("prod"), shippedSecret, true))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("JWT_SECRET");
     }
 
     @Test

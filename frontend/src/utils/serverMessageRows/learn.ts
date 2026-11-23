@@ -1,15 +1,14 @@
-/**
- * Backend messages of the learn module, translated like the rows in utils/serverMessages.ts:
- * [English exactly as the backend sends it, Bahasa Melayu, Simplified Chinese].
- */
-export const LEARN_MESSAGES: readonly (readonly [en: string, ms: string, zh: string])[] = [
+import type { MessageRow } from './types'
+
+/** Backend messages of the learn module, translated like the rows in utils/serverMessages.ts. */
+export const LEARN_MESSAGES: readonly MessageRow[] = [
   // Request parameters (LearnParams)
   ['Unknown practice type.', 'Jenis latihan tidak dikenali.', '未知的练习类型。'],
-  ['Unknown stage.', 'Peringkat tidak dikenali.', '未知的阶段。'],
   ['Unknown mistake source.', 'Sumber kesilapan tidak dikenali.', '未知的错题来源。'],
   ['Month must look like 2026-05.', 'Bulan mesti dalam bentuk 2026-05.', '月份格式应为 2026-05。'],
 
   // Learn path and lesson player (LearnPathService)
+  ['This lesson has no questions yet.', 'Pelajaran ini belum mempunyai soalan.', '这节课还没有题目。'],
   ['This unit is not on the learning path.', 'Unit ini tiada dalam laluan pembelajaran.', '这个单元不在学习路径上。'],
   [
     'This lesson is not on the learning path.',
@@ -19,25 +18,15 @@ export const LEARN_MESSAGES: readonly (readonly [en: string, ms: string, zh: str
   [
     'This lesson is still locked. Finish the lessons before it first.',
     'Pelajaran ini masih dikunci. Selesaikan pelajaran sebelumnya dahulu.',
-    '这节课仍未解锁。请先完成前面的课程。',
+    '这节课仍未解锁。请先完成前面的课时。',
   ],
   ['This question is not part of the lesson.', 'Soalan ini bukan sebahagian daripada pelajaran.', '这道题不属于本课。'],
-  ['Answers are required.', 'Jawapan diperlukan.', '请提交答案。'],
-  ['Duration must not exceed one day.', 'Tempoh tidak boleh melebihi satu hari.', '用时不能超过一天。'],
-  ['Answer must not exceed 300 characters.', 'Jawapan tidak boleh melebihi 300 aksara.', '答案不能超过 300 个字符。'],
-  ['Too many strokes.', 'Terlalu banyak strok.', '笔画数太多。'],
-  ['Strokes must not be negative.', 'Bilangan strok tidak boleh negatif.', '笔画数不能为负数。'],
 
   // Mistakes review (MistakeService)
   [
     'This mistake is not on your list any more.',
     'Kesilapan ini sudah tiada dalam senarai anda.',
     '这道错题已不在你的列表中。',
-  ],
-  [
-    'Answer at least one mistake before you finish the review.',
-    'Jawab sekurang-kurangnya satu kesilapan sebelum menamatkan ulang kaji.',
-    '请至少回答一道错题再结束复习。',
   ],
 
   // Daily goal (XpService)
@@ -57,7 +46,11 @@ export const LEARN_MESSAGES: readonly (readonly [en: string, ms: string, zh: str
     '这个活动没有需要检查的答案。',
   ],
   ['Draw the character before you finish.', 'Tulis aksara itu sebelum anda selesai.', '请先写出这个汉字再完成。'],
-  ['Item is required.', 'Item diperlukan.', '请选择一项。'],
+  [
+    'Rate each card Got it or Still learning.',
+    'Nilaikan setiap kad sebagai Sudah faham atau Masih belajar.',
+    '请把每张卡片标为“记住了”或“还在学”。',
+  ],
   [
     'Add at least one item to this set.',
     'Tambah sekurang-kurangnya satu item pada set ini.',
@@ -68,11 +61,20 @@ export const LEARN_MESSAGES: readonly (readonly [en: string, ms: string, zh: str
     'Setiap kad memerlukan teks Cina dan maksud.',
     '每张卡片都需要中文和意思。',
   ],
-  ['Every question needs the question text.', 'Setiap soalan memerlukan teks soalan.', '每道题都需要题目内容。'],
+  [
+    'Add at least 2 cards with different meanings.',
+    'Tambah sekurang-kurangnya 2 kad dengan maksud yang berbeza.',
+    '请至少添加 2 张意思不同的卡片。',
+  ],
   [
     'Every question needs at least 2 answers with the right one ticked.',
     'Setiap soalan memerlukan sekurang-kurangnya 2 jawapan dengan jawapan betul ditanda.',
     '每道题至少需要 2 个答案，并勾选正确答案。',
+  ],
+  [
+    'The answers of a question must all be different.',
+    'Jawapan bagi sesuatu soalan mestilah berbeza antara satu sama lain.',
+    '同一道题的答案不能重复。',
   ],
   [
     'Every listening question needs the Chinese that is read aloud.',
@@ -81,6 +83,18 @@ export const LEARN_MESSAGES: readonly (readonly [en: string, ms: string, zh: str
   ],
   ['Add the characters to write.', 'Tambah aksara yang perlu ditulis.', '请添加要书写的汉字。'],
   ['Enter how many strokes the characters have.', 'Masukkan bilangan strok aksara itu.', '请输入这些汉字的笔画数。'],
+  ['Strokes must be between 1 and 60.', 'Bilangan strok mestilah antara 1 hingga 60.', '笔画数必须在 1 到 60 之间。'],
+  ['Each character needs 1 to 60 strokes.', 'Setiap aksara memerlukan 1 hingga 60 strok.', '每个汉字需要 1 到 60 笔。'],
+  [
+    'Total strokes must be between 1 and 600.',
+    'Jumlah strok mestilah antara 1 hingga 600.',
+    '总笔画数必须在 1 到 600 之间。',
+  ],
+  [
+    'Give the strokes of each character, adding up to the total.',
+    'Berikan bilangan strok setiap aksara, yang jumlahnya sama dengan jumlah keseluruhan.',
+    '请填写每个汉字的笔画数，加起来要等于总笔画数。',
+  ],
   [
     'Every sentence needs at least 2 tiles and a meaning.',
     'Setiap ayat memerlukan sekurang-kurangnya 2 jubin dan maksud.',
@@ -97,15 +111,25 @@ export const LEARN_MESSAGES: readonly (readonly [en: string, ms: string, zh: str
     'Setiap pasangan memerlukan maksud yang berbeza.',
     '每组配对的意思必须不同。',
   ],
-  ['Add the story text.', 'Tambah teks cerita.', '请添加故事内容。'],
   [
-    'Add at least one question about the story.',
-    'Tambah sekurang-kurangnya satu soalan tentang cerita.',
-    '请至少添加一道关于故事的问题。',
+    'Each pair needs different Chinese.',
+    'Setiap pasangan memerlukan teks Cina yang berbeza.',
+    '每组配对的中文必须不同。',
+  ],
+  [
+    'Put the characters of a tracing set in one row.',
+    'Masukkan semua aksara bagi set menyurih dalam satu baris.',
+    '请把同一组描红练习的汉字放在一行。',
+  ],
+  [
+    'A tracing set has at most 10 characters.',
+    'Set menyurih mempunyai paling banyak 10 aksara.',
+    '描红练习组最多 10 个汉字。',
   ],
 
   // Practice library (PracticeLibraryService)
   ['This set is already published.', 'Set ini sudah diterbitkan.', '这个练习组已发布。'],
+  ['Restore this set before you edit it.', 'Pulihkan set ini sebelum anda mengeditnya.', '编辑前请先恢复这个练习组。'],
   [
     'Restore this set instead of publishing it.',
     'Pulihkan set ini dan bukan menerbitkannya.',
@@ -126,88 +150,70 @@ export const LEARN_MESSAGES: readonly (readonly [en: string, ms: string, zh: str
     'Hanya set yang diarkibkan boleh dipulihkan.',
     '只有已归档的练习组才能恢复。',
   ],
-  ['XP must be between 0 and 100.', 'XP mestilah antara 0 dan 100.', 'XP 必须在 0 到 100 之间。'],
-  ['A set has at most 30 items.', 'Satu set mempunyai paling banyak 30 item.', '一个练习组最多 30 项。'],
-  ['A story has at most 20 lines.', 'Satu cerita mempunyai paling banyak 20 baris.', '一个故事最多 20 行。'],
-  ['Strokes must be between 1 and 60.', 'Bilangan strok mestilah antara 1 dan 60.', '笔画数必须在 1 到 60 之间。'],
-  ['Every story line needs Chinese text.', 'Setiap baris cerita memerlukan teks Cina.', '故事的每一行都需要中文。'],
-  [
-    'A story line must not exceed 300 characters.',
-    'Baris cerita tidak boleh melebihi 300 aksara.',
-    '故事的每一行不能超过 300 个字符。',
-  ],
-  [
-    'Story pinyin must not exceed 500 characters.',
-    'Pinyin cerita tidak boleh melebihi 500 aksara.',
-    '故事拼音不能超过 500 个字符。',
-  ],
-  [
-    'Story translation must not exceed 500 characters.',
-    'Terjemahan cerita tidak boleh melebihi 500 aksara.',
-    '故事翻译不能超过 500 个字符。',
-  ],
-  ['Meaning must not exceed 200 characters.', 'Maksud tidak boleh melebihi 200 aksara.', '意思不能超过 200 个字符。'],
-  ['Example must not exceed 200 characters.', 'Contoh tidak boleh melebihi 200 aksara.', '例句不能超过 200 个字符。'],
-  [
-    'Example meaning must not exceed 300 characters.',
-    'Maksud contoh tidak boleh melebihi 300 aksara.',
-    '例句意思不能超过 300 个字符。',
-  ],
-  [
-    'Extra tiles must not exceed 255 characters.',
-    'Jubin tambahan tidak boleh melebihi 255 aksara.',
-    '额外词块不能超过 255 个字符。',
-  ],
-  [
-    'Explanation must not exceed 500 characters.',
-    'Penerangan tidak boleh melebihi 500 aksara.',
-    '解释不能超过 500 个字符。',
-  ],
-  ['A question has at most 6 answers.', 'Satu soalan mempunyai paling banyak 6 jawapan.', '一道题最多 6 个答案。'],
-  [
-    'An answer must not exceed 200 characters.',
-    'Jawapan tidak boleh melebihi 200 aksara.',
-    '答案不能超过 200 个字符。',
-  ],
-  ['Pinyin must not exceed 200 characters.', 'Pinyin tidak boleh melebihi 200 aksara.', '拼音不能超过 200 个字符。'],
-  ['Tick the right answer.', 'Tandakan jawapan yang betul.', '请勾选正确答案。'],
 
   // Learning path admin and the level check (LearningPathAdminService, LevelCheckService)
   ['This unit is already published.', 'Unit ini sudah diterbitkan.', '这个单元已发布。'],
   ['This unit is already a draft.', 'Unit ini sudah menjadi draf.', '这个单元已是草稿。'],
   ['Level check question not found.', 'Soalan semakan tahap tidak ditemui.', '找不到该水平测试题。'],
+  ['This question is already published.', 'Soalan ini sudah diterbitkan.', '这道题已发布。'],
+  ['A question needs 2 to 6 answers.', 'Setiap soalan memerlukan 2 hingga 6 jawapan.', '每道题需要 2 至 6 个答案。'],
+  ['Every answer needs text.', 'Setiap jawapan memerlukan teks.', '每个答案都需要文字。'],
   ['Tick exactly one right answer.', 'Tandakan tepat satu jawapan yang betul.', '请只勾选一个正确答案。'],
-  ['Question is required.', 'Soalan diperlukan.', '请填写题目。'],
-  ['Question must not exceed 300 characters.', 'Soalan tidak boleh melebihi 300 aksara.', '题目不能超过 300 个字符。'],
-  [
-    'Chinese text must not exceed 100 characters.',
-    'Teks Cina tidak boleh melebihi 100 aksara.',
-    '中文不能超过 100 个字符。',
-  ],
-  [
-    'The Chinese read aloud must not exceed 200 characters.',
-    'Teks Cina yang dibacakan tidak boleh melebihi 200 aksara.',
-    '朗读的中文不能超过 200 个字符。',
-  ],
-  ['Skill is required.', 'Kemahiran diperlukan.', '请选择技能。'],
-  ['Difficulty is required.', 'Tahap kesukaran diperlukan.', '请选择难度。'],
-  ['Status is required.', 'Status diperlukan.', '请选择状态。'],
-  ['Add at least 2 answers.', 'Tambah sekurang-kurangnya 2 jawapan.', '请至少添加 2 个答案。'],
-  ['A question needs 2 to 6 answers.', 'Satu soalan memerlukan 2 hingga 6 jawapan.', '一道题需要 2 到 6 个答案。'],
-  ['Every answer needs text.', 'Setiap jawapan memerlukan teks.', '每个答案都需要内容。'],
-  [
-    'Explanation must not exceed 300 characters.',
-    'Penerangan tidak boleh melebihi 300 aksara.',
-    '解释不能超过 300 个字符。',
-  ],
   [
     'This question is not part of the level check.',
     'Soalan ini bukan sebahagian daripada semakan tahap.',
     '这道题不属于水平测试。',
   ],
   [
-    'The level check has at most 6 questions.',
-    'Semakan tahap mempunyai paling banyak 6 soalan.',
-    '水平测试最多 6 道题。',
+    'Answer each level-check skill only once.',
+    'Jawab setiap kemahiran semakan tahap sekali sahaja.',
+    '水平测试的每项技能只能作答一次。',
+  ],
+  ['The level check is already complete.', 'Semakan tahap sudah selesai.', '水平测试已完成。'],
+
+  // Hints and pinyin typing (PracticeService, HintPolicyService)
+  ['Checkpoints have no hints.', 'Titik semak tiada petunjuk.', '关卡没有提示。'],
+  ['Hints are off in your settings.', 'Petunjuk dimatikan dalam tetapan anda.', '你已在设置中关闭了提示。'],
+  [
+    'Answer or skip every question before you finish the lesson.',
+    'Jawab atau langkau setiap soalan sebelum anda menamatkan pelajaran.',
+    '请先回答或跳过每一道题，再完成本课。',
+  ],
+  [
+    'Answer or skip every item before you finish the set.',
+    'Jawab atau langkau setiap soalan sebelum menamatkan set latihan.',
+    '请先回答或跳过每一道题，再完成这组练习。',
+  ],
+  ['There is no further hint for this item.', 'Tiada petunjuk lagi untuk item ini.', '这道题没有更多提示了。'],
+  ['There are no hints left in this set.', 'Tiada petunjuk lagi dalam set ini.', '这组练习的提示已经用完了。'],
+  [
+    'Open the questions again to get a hint.',
+    'Buka semula soalan untuk mendapatkan petunjuk.',
+    '请重新打开题目再获取提示。',
+  ],
+  [
+    'Only typing sets offer words to choose from.',
+    'Hanya set menaip menawarkan perkataan untuk dipilih.',
+    '只有打字练习组会提供候选词。',
+  ],
+  [
+    'Add one rule for each level: HSK 1, HSK 2 and HSK 3.',
+    'Tambah satu peraturan untuk setiap tahap: HSK 1, HSK 2 dan HSK 3.',
+    '请为每个水平各添加一条规则：HSK 1、HSK 2 和 HSK 3。',
+  ],
+  [
+    'Every word needs Chinese, pinyin and a meaning.',
+    'Setiap perkataan memerlukan tulisan Cina, pinyin dan maksud.',
+    '每个词都需要中文、拼音和意思。',
+  ],
+  [
+    'Write the pinyin in letters, for example xièxie.',
+    'Tulis pinyin dengan huruf, contohnya xièxie.',
+    '请用字母写拼音，例如 xièxie。',
+  ],
+  [
+    'Every word needs at least 2 look-alike words that are not the answer.',
+    'Setiap perkataan memerlukan sekurang-kurangnya 2 perkataan serupa yang bukan jawapannya.',
+    '每个词至少需要 2 个不是答案的相似词。',
   ],
 ]

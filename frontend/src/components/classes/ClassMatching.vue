@@ -1,138 +1,253 @@
 <template>
   <div class="class-player">
-    <div class="class-player-head">
-      <span class="page-eyebrow student-classes-pigment class-player-kind"
-        ><IconGlyph name="puzzle" :size="16" />{{ t('classPlayer.matching.title') }}</span
-      >
-      <strong class="class-player-count">{{
-        t('classPlayer.matching.paired', { paired: pairedCount, total: words.length })
-      }}</strong>
-      <button
-        v-if="hintLimit > 0"
-        type="button"
-        class="btn btn-ghost btn-sm"
-        :disabled="hintsLeft === 0 || busy"
-        data-testid="matching-hint"
-        @click="askHint"
-      >
-        <IconGlyph name="hint" :size="16" />
-        {{
-          hintLimit === 1
-            ? hintsLeft
-              ? t('classPlayer.matching.useHint')
-              : t('classPlayer.matching.hintUsed')
-            : t('classPlayer.activity.showHint')
-        }}
-      </button>
-    </div>
-    <p class="class-player-instruction">{{ t('classPlayer.matching.instruction') }}</p>
-    <p v-if="hintText" class="callout is-compact" role="status">
-      <IconGlyph name="hint" :size="16" /><span>{{ hintText }}</span>
-    </p>
+    <AppToast :message="toast" />
+    <header class="class-focus-head">
+      <p class="page-eyebrow">{{ t('classPlayer.matching.title') }}</p>
+      <h1 class="focus-title"><CjkText :text="title" /></h1>
+      <div class="class-player-row class-focus-sub">
+        <span>{{
+          answersInChinese ? t('classPlayer.matching.instructionAnswers') : t('classPlayer.matching.instruction')
+        }}</span>
+        <strong class="class-player-count" aria-live="polite">
+          {{ t('classPlayer.matching.paired', { paired: pairedCount, total: words.length }) }}
+        </strong>
+      </div>
+    </header>
 
     <div class="class-matching">
       <div class="class-matching-column">
-        <h3 class="page-eyebrow">{{ t('classPlayer.matching.chinese') }}</h3>
+        <h2 class="page-eyebrow">
+          {{ answersInChinese ? t('classPlayer.matching.question') : t('classPlayer.matching.chinese') }}
+        </h2>
         <button
           v-for="word in words"
           :key="word.id"
+          :ref="(el) => setWordButton(word.id, el as HTMLButtonElement | null)"
           type="button"
           class="class-matching-item"
           :class="itemClass(word.id)"
           :aria-pressed="selectedWord === word.id"
+          :disabled="done || busy"
           :data-testid="`match-word-${word.id}`"
           @click="pickWord(word.id)"
         >
-          <span class="cjk-text class-matching-chinese" lang="zh-CN">{{ word.chinese }}</span>
-          <span v-if="word.pinyin && stage !== 'INDEPENDENT'" class="type-caption">{{ word.pinyin }}</span>
-          <span v-if="pairs[word.id]" class="class-matching-pair">
-            <IconGlyph name="link" :size="12" />{{ pairs[word.id] }}
+          <span class="class-matching-copy">
+            <span class="hanzi class-matching-chinese" lang="zh-CN">{{ word.chinese }}</span>
+            <span v-if="word.pinyin" class="type-caption">{{ word.pinyin }}</span>
           </span>
-          <span v-if="results[word.id] === false" class="sr-only">{{ t('classPlayer.matching.wrong') }}</span>
+          <span v-if="pairs[word.id]" class="class-matching-pair">
+            <IconGlyph :name="markIcon(word.id)" :size="14" />
+            <CjkText :text="pairs[word.id]" />
+            <span v-if="results[word.id] === false" class="sr-only">{{ t('classPlayer.matching.wrongPair') }}</span>
+          </span>
         </button>
       </div>
       <div class="class-matching-column">
-        <h3 class="page-eyebrow">{{ t('classPlayer.matching.meaning') }}</h3>
+        <h2 class="page-eyebrow">
+          {{ answersInChinese ? t('classPlayer.matching.answer') : t('classPlayer.matching.meaning') }}
+        </h2>
         <button
-          v-for="(meaning, meaningIndex) in meanings"
-          :key="`${meaning}-${meaningIndex}`"
+          v-for="{ text, word } in meaningRows"
+          :key="text"
           type="button"
           class="class-matching-item"
-          :class="{ 'is-paired': usedMeanings.has(meaning) }"
-          :disabled="selectedWord === null && !usedMeanings.has(meaning)"
-          @click="pickMeaning(meaning)"
+          :class="word ? itemClass(word.id) : undefined"
+          :disabled="done || busy || (selectedWord === null && !word)"
+          @click="pickMeaning(text)"
         >
-          {{ meaning }}
-          <span v-if="usedMeanings.has(meaning)" class="class-matching-pair cjk-text" lang="zh-CN">
-            <IconGlyph name="link" :size="12" />{{ wordFor(meaning) }}
+          <span class="class-matching-copy">
+            <span class="class-matching-meaning"><CjkText :text="text" /></span>
+          </span>
+          <span v-if="word" class="class-matching-pair">
+            <IconGlyph :name="markIcon(word.id)" :size="14" />
+            <span class="cjk-text" lang="zh-CN">{{ word.chinese }}</span>
+            <span v-if="results[word.id] === false" class="sr-only">{{ t('classPlayer.matching.wrongPair') }}</span>
           </span>
         </button>
       </div>
     </div>
 
-    <p v-if="checked" class="alert" :class="allRight ? 'alert-success' : 'alert-warning'" role="status">
-      {{ allRight ? t('classPlayer.matching.allRight') : t('classPlayer.matching.someWrong') }}
-    </p>
-
-    <div class="class-player-foot">
-      <span class="type-caption">{{ t('classPlayer.matching.undo') }}</span>
-      <div class="class-player-foot-actions">
-        <button type="button" class="btn btn-outline" :disabled="!pairedCount || busy" @click="reset">
-          <IconGlyph name="retry" :size="16" />{{ t('classPlayer.matching.reset') }}
-        </button>
+    <FocusFooter v-if="!done" :tone="wrongCount ? 'wrong' : null">
+      <template #start>
+        <!-- One button, Try again while a pair is wrong and Reset after: the focus stays on it. -->
         <button
           type="button"
-          class="btn btn-primary"
-          :disabled="pairedCount < words.length || busy"
+          class="btn btn-secondary btn-lg"
+          :disabled="busy"
+          :aria-disabled="busy || (!wrongCount && !pairedCount)"
+          @click="wrongCount ? tryAgain() : reset()"
+        >
+          {{ wrongCount ? t('classPlayer.matching.tryAgain') : t('classPlayer.matching.reset') }}
+        </button>
+      </template>
+      <template #middle>
+        <!-- Some pairs are wrong: a band that says how many, and how to fix them. -->
+        <div v-if="wrongCount" class="class-focus-band" role="status">
+          <span class="class-focus-band-mark is-wrong" aria-hidden="true"><IconGlyph name="close" :size="24" /></span>
+          <div class="class-focus-band-copy">
+            <p class="class-focus-band-title">
+              {{ t('classPlayer.matching.wrongTitle', { count: wrongCount, total: words.length }, wrongCount) }}
+            </p>
+            <p class="class-focus-sub">{{ t('classPlayer.matching.wrongHint') }}</p>
+          </div>
+        </div>
+        <ClassHint
+          v-else-if="hintsAllowed"
+          :offered="offer.offered.value"
+          :hint-id="hint?.wordId ?? null"
+          :text="hintText"
+          :loading="hintLoading"
+          :error="hintError"
+          :context="hintContext"
+          :reported-ids="reportedHintIds"
+          @show="askHint"
+          @reported="onHintReported"
+        />
+      </template>
+      <!-- The board checks itself once every pair is made (S11.08); only a check that failed to reach the server needs a
+           button, to send the same pairs again. -->
+      <template v-if="checkFailed" #end>
+        <button
+          type="button"
+          class="btn btn-primary btn-lg"
+          :disabled="busy"
           :aria-busy="busy"
-          data-testid="activity-finish"
+          data-testid="matching-check-again"
           @click="check"
         >
-          <IconGlyph name="check" :size="16" />{{ t('classPlayer.matching.check') }}
+          {{ t('classPlayer.matching.checkAgain') }}
         </button>
-      </div>
-    </div>
+      </template>
+    </FocusFooter>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 
 import { studentClassesApi } from '@/api/classes'
+import AppToast from '@/components/common/AppToast.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
+import FocusFooter from '@/components/layout/FocusFooter.vue'
+import CjkText from '@/components/learning/CjkText.vue'
+import { useHintOffer } from '@/composables/useHintOffer'
 import { useLocalMessages } from '@/composables/useLocalMessages'
+import { useToast } from '@/composables/useToast'
 import { classPlayerMessages } from '@/plugins/classPlayerMessages'
-import type { LearningStage } from '@/types/api'
-import type { ActivityOutcome, MatchWord } from '@/types/classes'
+import type { ActivityOutcome, MatchHint, MatchWord } from '@/types/classes'
 import { resolveApiError } from '@/utils/apiError'
+import { hasHan } from '@/utils/cjkText'
+
+import ClassHint from './ClassHint.vue'
 
 /**
- * Match each Chinese word with its meaning; the server checks the pairs and marks the wrong ones, which the student
- * fixes and checks again. Hints by stage: Guided any number, Supported one, Independent none (no pinyin either).
+ * Match each Chinese word with its meaning, or each question with its answer when the right column is Chinese too. The
+ * board is checked by the server as soon as every pair is made, with no Check button (S11.08): wrong pairs stay marked
+ * until the learner changes them, right ones stay, and the board is checked again once it is full with no pair marked
+ * wrong. A check that could not reach the server offers "Check again". Once all are right (`done`) the page's result
+ * band replaces the footer. When the lesson allows hints, the learner's setting controls when to offer the meaning
+ * of the chosen word, or of the first one not paired yet. `error` reports a failed
+ * check, and null when the next check starts, so the page never keeps an old failure beside a newer answer.
  */
 const props = defineProps<{
+  title: string
   activityId: number
+  lessonTitle: string
   words: readonly MatchWord[]
   meanings: readonly string[]
-  stage: LearningStage | null
+  hintsAllowed: boolean
+  done: boolean
 }>()
-const emit = defineEmits<{ outcome: [outcome: ActivityOutcome]; error: [message: string] }>()
+const emit = defineEmits<{
+  outcome: [outcome: ActivityOutcome]
+  error: [message: string | null]
+  busy: [busy: boolean]
+}>()
 
 const { t } = useLocalMessages({ classPlayer: classPlayerMessages })
+const { toast, showToast } = useToast()
 
 const pairs = ref<Record<number, string>>({})
 const selectedWord = ref<number | null>(null)
 const results = ref<Record<number, boolean>>({})
-const checked = ref(false)
-const allRight = ref(false)
 const busy = ref(false)
-const hintText = ref('')
-const hintsUsed = ref(0)
+watch(busy, (value) => emit('busy', value), { flush: 'sync' })
+const reportedHintIds = reactive(new Set<number>())
+function onHintReported(hintId: number): void {
+  reportedHintIds.add(hintId)
+  showToast(t('aiSafety.reportSent'))
+}
+/** The last check of a full board did not reach the server: the same pairs can be sent again. */
+const checkFailed = ref(false)
+const hint = ref<MatchHint | null>(null)
+const hintLoading = ref(false)
+const hintError = ref<string | null>(null)
+let active = true
+let hintVersion = 0
+const wordButtons = new Map<number, HTMLButtonElement>()
+function setWordButton(wordId: number, element: HTMLButtonElement | null): void {
+  if (element) wordButtons.set(wordId, element)
+  else wordButtons.delete(wordId)
+}
+onBeforeUnmount(() => {
+  active = false
+  hintVersion++
+  if (busy.value) emit('busy', false)
+})
 
-const hintLimit = computed(() => (props.stage === 'INDEPENDENT' ? 0 : props.stage === 'SCAFFOLDED' ? 1 : Infinity))
-const hintsLeft = computed(() => Math.max(0, hintLimit.value - hintsUsed.value))
+const answersInChinese = computed(() => props.meanings.some(hasHan))
+const hintText = computed(() => {
+  const answer = hint.value
+  if (!answer) return null
+  const word = props.words.find((item) => item.id === answer.wordId)
+  if (!word) return null
+  return t(answersInChinese.value ? 'classPlayer.matching.hintAnswer' : 'classPlayer.matching.hintMeaning', {
+    word: word.chinese,
+    meaning: answer.meaning,
+  })
+})
 const pairedCount = computed(() => Object.keys(pairs.value).length)
-const usedMeanings = computed(() => new Set(Object.values(pairs.value)))
+const wrongCount = computed(() => Object.values(results.value).filter((correct) => !correct).length)
+
+const wordsByMeaning = computed(() => {
+  const paired = new Map<string, MatchWord>()
+  for (const word of props.words) {
+    const meaning = pairs.value[word.id]
+    if (meaning !== undefined) paired.set(meaning, word)
+  }
+  return paired
+})
+const meaningRows = computed(() => props.meanings.map((text) => ({ text, word: wordsByMeaning.value.get(text) })))
+
+// A full board with no pair marked wrong is checked at once. A board that still has a wrong pair waits for it to change:
+// checking the same pairs again would only mark them again.
+watch(pairedCount, (count) => {
+  if (checkFailed.value) {
+    checkFailed.value = false
+    emit('error', null)
+  }
+  // The hint offer waits again for the new board, so an earlier hint request or error no longer applies.
+  hintVersion++
+  hintLoading.value = false
+  hintError.value = null
+  if (count === props.words.length && count > 0 && wrongCount.value === 0 && !props.done) void check()
+})
+
+const offer = useHintOffer({
+  itemKey: pairedCount,
+  open: computed(
+    () =>
+      props.hintsAllowed &&
+      !props.done &&
+      !busy.value &&
+      !hint.value &&
+      wrongCount.value === 0 &&
+      pairedCount.value < props.words.length,
+  ),
+})
+
+/** What a report of the hint is about: the lesson and the activity. */
+const hintContext = computed(() => `${props.lessonTitle} · ${props.title}`)
 
 function itemClass(wordId: number) {
   return {
@@ -143,18 +258,16 @@ function itemClass(wordId: number) {
   }
 }
 
-function wordFor(meaning: string): string {
-  const entry = Object.entries(pairs.value).find(([, value]) => value === meaning)
-  return props.words.find((word) => String(word.id) === entry?.[0])?.chinese ?? ''
+function markIcon(wordId: number): string {
+  if (results.value[wordId] === false) return 'close'
+  return results.value[wordId] === true ? 'check' : 'link'
 }
 
 function pickWord(wordId: number): void {
   if (pairs.value[wordId]) {
     // Clicking a paired word undoes the pair.
-    const next = { ...pairs.value }
-    delete next[wordId]
-    pairs.value = next
-    clearResult(wordId)
+    delete pairs.value[wordId]
+    delete results.value[wordId]
     selectedWord.value = null
     return
   }
@@ -162,74 +275,79 @@ function pickWord(wordId: number): void {
 }
 
 function pickMeaning(meaning: string): void {
-  if (usedMeanings.value.has(meaning)) {
-    const entry = Object.entries(pairs.value).find(([, value]) => value === meaning)
-    if (entry) pickWord(Number(entry[0]))
+  const pairedWord = wordsByMeaning.value.get(meaning)
+  if (pairedWord) {
+    pickWord(pairedWord.id)
+    // Unpairing disables the meaning button when no word is selected; move keyboard focus to the unpaired word.
+    void nextTick(() => {
+      if (active) wordButtons.get(pairedWord.id)?.focus({ preventScroll: true })
+    })
     return
   }
-  if (selectedWord.value === null) return
-  pairs.value = { ...pairs.value, [selectedWord.value]: meaning }
-  clearResult(selectedWord.value)
+  const wordId = selectedWord.value
+  if (wordId === null) return
+  pairs.value[wordId] = meaning
   selectedWord.value = null
+  // The next offer waits again when the pair count changes.
+  if (hint.value?.wordId === wordId) hint.value = null
 }
 
-function clearResult(wordId: number): void {
-  if (wordId in results.value) {
-    const next = { ...results.value }
-    delete next[wordId]
-    results.value = next
-  }
-  checked.value = false
-}
-
+/** With no pair made, Reset stays focusable (aria-disabled) and does nothing. */
 function reset(): void {
+  if (!pairedCount.value) return
   pairs.value = {}
   results.value = {}
   selectedWord.value = null
-  checked.value = false
+}
+
+/** Takes the wrong pairs apart; the right ones stay. */
+function tryAgain(): void {
+  for (const [wordId, correct] of Object.entries(results.value)) {
+    if (correct) continue
+    delete pairs.value[Number(wordId)]
+    delete results.value[Number(wordId)]
+  }
 }
 
 async function askHint(): Promise<void> {
   const wordId = selectedWord.value ?? props.words.find((word) => !pairs.value[word.id])?.id ?? null
-  if (wordId === null) {
-    hintText.value = t('classPlayer.matching.pickWordFirst')
-    return
-  }
-  busy.value = true
+  if (wordId === null || hintLoading.value) return
+  const version = ++hintVersion
+  hintLoading.value = true
+  hintError.value = null
   try {
-    const hint = await studentClassesApi.matchingHint(props.activityId, wordId)
-    hintsUsed.value++
-    const word = props.words.find((item) => item.id === hint.wordId)
-    hintText.value = t('classPlayer.matching.hintFor', { word: word?.chinese ?? '', meaning: hint.meaning })
+    const answer = await studentClassesApi.matchingHint(props.activityId, wordId)
+    if (!active || version !== hintVersion || props.done || pairs.value[answer.wordId] !== undefined) return
+    hint.value = answer
   } catch (reason) {
-    emit('error', resolveApiError(reason, t('classPlayer.matching.checkError')))
+    if (active && version === hintVersion && !props.done && pairs.value[wordId] === undefined) {
+      hintError.value = resolveApiError(reason, t('classPlayer.hint.error'))
+    }
   } finally {
-    busy.value = false
+    if (active && version === hintVersion) hintLoading.value = false
   }
 }
 
 async function check(): Promise<void> {
+  if (busy.value) return
   busy.value = true
+  checkFailed.value = false
+  emit('error', null)
   try {
     const outcome = await studentClassesApi.checkMatching(
       props.activityId,
       Object.entries(pairs.value).map(([wordId, meaning]) => ({ wordId: Number(wordId), meaning })),
     )
+    if (!active) return
     results.value = Object.fromEntries(outcome.pairs.map((pair) => [pair.wordId, pair.correct]))
-    checked.value = true
-    allRight.value = outcome.done
-    if (outcome.done) {
-      emit('outcome', outcome)
-    } else {
-      // Wrong pairs are taken apart so the student can try them again; right ones stay.
-      const kept = { ...pairs.value }
-      for (const pair of outcome.pairs) if (!pair.correct) delete kept[pair.wordId]
-      pairs.value = kept
-    }
+    hint.value = null
+    if (outcome.done) emit('outcome', outcome)
   } catch (reason) {
+    if (!active) return
+    checkFailed.value = true
     emit('error', resolveApiError(reason, t('classPlayer.matching.checkError')))
   } finally {
-    busy.value = false
+    if (active) busy.value = false
   }
 }
 </script>

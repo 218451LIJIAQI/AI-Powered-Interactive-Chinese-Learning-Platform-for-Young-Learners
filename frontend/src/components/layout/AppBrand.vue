@@ -1,37 +1,25 @@
 <template>
-  <component :is="to ? RouterLink : 'div'" :to="to" class="brand app-brand" :class="{ 'is-compact': compact }">
+  <RouterLink :to="to" class="brand app-brand">
     <!-- 火, "fire": the spark in the name, stamped like a seal. -->
     <span class="brand-seal seal" aria-hidden="true">火</span>
     <div class="brand-copy">
       <p class="brand-title">Mandarin<span class="accent">Spark</span></p>
-      <p v-if="!compact" class="brand-subtitle">{{ t('chrome.tagline') }}</p>
+      <p v-if="$slots.subtitle" class="brand-subtitle"><slot name="subtitle" /></p>
     </div>
-  </component>
+  </RouterLink>
 </template>
 
 <script setup lang="ts">
-import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 
-interface Props {
-  compact?: boolean
-  /** Makes the brand a link, e.g. home from the sign-in pages, which have no top navigation. */
-  to?: string
-}
-
-withDefaults(defineProps<Props>(), {
-  compact: false,
-  to: undefined,
-})
-
-const { t } = useI18n()
+/** The brand links home: the public landing page, or the role's home in the sidebar. */
+defineProps<{ to: string }>()
 </script>
 
 <style scoped>
-/* As a link, keep the click area to the brand itself rather than the full row. */
+/* Keep the click area to the brand itself rather than the full row. */
 a.app-brand {
   width: fit-content;
   max-width: 100%;
-  text-decoration: none;
 }
 </style>

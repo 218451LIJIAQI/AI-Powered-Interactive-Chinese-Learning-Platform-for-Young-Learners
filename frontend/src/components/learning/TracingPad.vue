@@ -2,35 +2,45 @@
   <canvas
     ref="canvas"
     v-bind="$attrs"
-    tabindex="0"
+    :tabindex="disabled ? -1 : 0"
     role="application"
     :aria-label="label"
     :aria-describedby="keysId"
+    :title="t('tracingPad.keyboard')"
+    @focus="onFocus"
+    @blur="onBlur"
     @pointerdown="onPointerDown"
     @pointermove="onPointerMove"
     @pointerup="endStroke"
     @pointercancel="cancelStroke"
-    @lostpointercapture="endStroke"
+    @lostpointercapture="cancelStroke"
     @keydown="onKeydown"
   />
   <p :id="keysId" class="sr-only">{{ t('tracingPad.keyboard') }}</p>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, useId, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, toRaw, useId, watch } from 'vue'
 
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { tracingPadMessages } from '@/plugins/tracingPadMessages'
-import { moveCursor, toCanvasPoint, type StrokePoint } from '@/utils/tracing'
+import { tracingGlyphs, moveCursor, toCanvasPoint, type StrokePoint } from '@/utils/tracing'
 
 /**
  * A 田字格 writing pad (purple guides, ink strokes), one square cell of `cellSize` per character, with an optional
  * faint model glyph under the strokes. The strokes are the v-model: the caller counts, undoes and clears them. Draw
  * with a mouse, a finger or a pen; keyboard: Space (or Enter) starts or ends a stroke, the arrow keys draw. The caller
  * styles the canvas through its class (keep `touch-action: none` there, so a finger draws instead of scrolling).
+ * `disabled` keeps the strokes on show and takes no more input.
  */
 defineOptions({ inheritAttrs: false })
-const props = defineProps<{ characters: string; showModel: boolean; label: string; cellSize: number }>()
+const props = defineProps<{
+  characters: string
+  showModel: boolean
+  label: string
+  cellSize: number
+  disabled?: boolean
+}>()
 const strokes = defineModel<StrokePoint[][]>('strokes', { required: true })
 
 const KEY_STEP = 10
@@ -44,17 +54,17 @@ const { t } = useLocalMessages({ tracingPad: tracingPadMessages })
 const keysId = `${useId()}-keys`
 
 const canvas = ref<HTMLCanvasElement | null>(null)
-const cells = computed(() => Math.max(1, Array.from(props.characters).length))
-const width = computed(() => cells.value * props.cellSize)
+const glyphs = computed(() => tracingGlyphs(props.characters))
+const width = computed(() => glyphs.value.length * props.cellSize)
 let current: StrokePoint[] | null = null
+let capturedPointer: number | null = null
+let windowPointerFallback = false
+let lastCommittedStrokes: StrokePoint[][] | null = null
+let disposed = false
 let cursor: StrokePoint = { x: props.cellSize / 2, y: props.cellSize / 2 }
+let showCursor = false
 let context: CanvasRenderingContext2D | null = null
-let palette = {
-  ink: '#152042',
-  guide: 'rgba(111, 76, 255, 0.3)',
-  model: 'rgba(21, 32, 66, 0.12)',
-  font: "'Noto Serif SC', 'Songti SC', 'STSong', 'SimSun', serif",
-}
+let palette = { ink: '', guide: '', model: '', font: '', cursor: '', paper: '' }
 
 function setup(): void {
   const element = canvas.value
@@ -66,12 +76,14 @@ function setup(): void {
   context?.setTransform(ratio, 0, 0, ratio, 0, 0)
   // Canvas cannot read var(); the tokens are read once the pad is mounted.
   const style = window.getComputedStyle(element)
-  const token = (name: string, fallback: string) => style.getPropertyValue(name).trim() || fallback
+  const token = (name: string) => style.getPropertyValue(name).trim()
   palette = {
-    ink: token('--color-ink-900', palette.ink),
-    guide: token('--grid-line', palette.guide),
-    model: token('--color-ink-a12', palette.model),
-    font: token('--font-hanzi', palette.font),
+    ink: token('--color-ink-900'),
+    guide: token('--grid-line'),
+    model: token('--color-ink-a12'),
+    font: token('--font-hanzi'),
+    cursor: token('--color-primary-700'),
+    paper: token('--surface-card'),
   }
   redraw()
 }
@@ -85,8 +97,13 @@ function redraw(): void {
   ctx.strokeStyle = palette.guide
   ctx.lineWidth = 1
   ctx.setLineDash([6, 6])
-  const glyphs = Array.from(props.characters)
-  for (let cell = 0; cell < cells.value; cell++) {
+  if (props.showModel) {
+    ctx.fillStyle = palette.model
+    ctx.font = `700 ${Math.round(size * GLYPH)}px ${palette.font}`
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+  }
+  for (const [cell, glyph] of glyphs.value.entries()) {
     const left = cell * size
     ctx.beginPath()
     ctx.moveTo(left + size / 2, 0)
@@ -98,12 +115,8 @@ function redraw(): void {
       ctx.lineTo(left, size)
     }
     ctx.stroke()
-    if (props.showModel && glyphs[cell]) {
-      ctx.fillStyle = palette.model
-      ctx.font = `${Math.round(size * GLYPH)}px ${palette.font}`
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'middle'
-      ctx.fillText(glyphs[cell]!, left + size / 2, size / 2 + Math.round(size * GLYPH_DROP))
+    if (props.showModel) {
+      ctx.fillText(glyph, left + size / 2, size / 2 + Math.round(size * GLYPH_DROP))
     }
   }
   ctx.restore()
@@ -113,12 +126,32 @@ function redraw(): void {
   ctx.lineWidth = Math.round(size * INK)
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
-  for (const stroke of current ? [...strokes.value, current] : strokes.value) {
-    ctx.beginPath()
-    stroke.forEach((point, index) => (index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y)))
-    ctx.stroke()
-  }
+  for (const stroke of strokes.value) drawStroke(ctx, stroke)
+  if (current) drawStroke(ctx, current)
   ctx.restore()
+
+  if (showCursor && !props.disabled) {
+    ctx.save()
+    ctx.beginPath()
+    ctx.arc(cursor.x, cursor.y, Math.max(6, size / 32), 0, 2 * Math.PI)
+    ctx.strokeStyle = palette.paper
+    ctx.lineWidth = 5
+    ctx.stroke()
+    ctx.strokeStyle = palette.cursor
+    ctx.lineWidth = 2
+    ctx.stroke()
+    if (current) {
+      ctx.fillStyle = palette.cursor
+      ctx.fill()
+    }
+    ctx.restore()
+  }
+}
+
+function drawStroke(ctx: CanvasRenderingContext2D, stroke: StrokePoint[]): void {
+  ctx.beginPath()
+  stroke.forEach((point, index) => (index === 0 ? ctx.moveTo(point.x, point.y) : ctx.lineTo(point.x, point.y)))
+  ctx.stroke()
 }
 
 function pointOf(event: PointerEvent): StrokePoint {
@@ -126,46 +159,138 @@ function pointOf(event: PointerEvent): StrokePoint {
   return toCanvasPoint(event.clientX, event.clientY, element.getBoundingClientRect(), width.value, props.cellSize)
 }
 
+function onWindowBlur(): void {
+  cancelStroke()
+}
+
+function attachWindowPointerFallback(): void {
+  if (windowPointerFallback) return
+  windowPointerFallback = true
+  window.addEventListener('pointermove', onPointerMove)
+  window.addEventListener('pointerup', endStroke)
+  window.addEventListener('pointercancel', cancelStroke)
+  window.addEventListener('blur', onWindowBlur)
+}
+
+function detachWindowPointerFallback(): void {
+  if (!windowPointerFallback) return
+  windowPointerFallback = false
+  window.removeEventListener('pointermove', onPointerMove)
+  window.removeEventListener('pointerup', endStroke)
+  window.removeEventListener('pointercancel', cancelStroke)
+  window.removeEventListener('blur', onWindowBlur)
+}
+
+function capturePointer(pointerId: number): boolean {
+  try {
+    canvas.value?.setPointerCapture?.(pointerId)
+    return Boolean(canvas.value?.hasPointerCapture?.(pointerId))
+  } catch {
+    return false
+  }
+}
+
 function onPointerDown(event: PointerEvent): void {
-  canvas.value?.setPointerCapture?.(event.pointerId)
+  if (props.disabled || event.button !== 0 || capturedPointer !== null) return
+  showCursor = false
+  cancelStroke()
+  capturedPointer = event.pointerId
+  if (!capturePointer(event.pointerId)) attachWindowPointerFallback()
   current = [pointOf(event)]
 }
 
 function onPointerMove(event: PointerEvent): void {
-  if (!current) return
+  if (props.disabled || !current || event.pointerId !== capturedPointer) return
+  if (windowPointerFallback && event.currentTarget === canvas.value) return
   current.push(pointOf(event))
   redraw()
 }
 
-function endStroke(): void {
-  if (current && current.length >= MIN_POINTS) strokes.value = [...strokes.value, current]
+function endStroke(event?: PointerEvent): void {
+  if (event && event.pointerId !== capturedPointer) return
+  if (!props.disabled && current && current.length >= MIN_POINTS) {
+    const next = [...strokes.value, current]
+    lastCommittedStrokes = next
+    strokes.value = next
+  }
+  cancelStroke()
+}
+
+function cancelStroke(event?: PointerEvent): void {
+  if (event && event.pointerId !== capturedPointer) return
   current = null
+  const pointer = capturedPointer
+  capturedPointer = null
+  detachWindowPointerFallback()
+  if (pointer !== null && canvas.value?.hasPointerCapture?.(pointer)) {
+    try {
+      canvas.value.releasePointerCapture(pointer)
+    } catch {
+      // Capture may already have been released by the browser.
+    }
+  }
   redraw()
 }
 
-function cancelStroke(): void {
-  current = null
+function onFocus(): void {
+  showCursor = canvas.value?.matches(':focus-visible') ?? false
   redraw()
+}
+
+function onBlur(): void {
+  showCursor = false
+  if (capturedPointer === null) endStroke()
 }
 
 function onKeydown(event: KeyboardEvent): void {
+  if (props.disabled || capturedPointer !== null) return
   if (event.key === ' ' || event.key === 'Enter') {
     event.preventDefault()
+    if (event.repeat) return
+    showCursor = true
     if (current) endStroke()
-    else current = [{ ...cursor }]
+    else {
+      current = [{ ...cursor }]
+      redraw()
+    }
     return
   }
-  const moved = moveCursor(cursor, event.key, KEY_STEP, width.value)
+  const moved = moveCursor(cursor, event.key, KEY_STEP, width.value, props.cellSize)
   if (!moved) return
   event.preventDefault()
-  cursor = { x: moved.x, y: Math.min(moved.y, props.cellSize) }
-  if (current) {
-    current.push({ ...cursor })
-    redraw()
-  }
+  showCursor = true
+  cursor = moved
+  if (current) current.push({ ...cursor })
+  redraw()
 }
 
-onMounted(setup)
-watch(width, setup)
-watch([strokes, () => props.characters, () => props.showModel], redraw)
+onMounted(() => {
+  setup()
+  // Redraw once the Hanzi webfont finishes loading so the model glyph never stays in fallback font.
+  void document.fonts?.ready.then(() => {
+    if (!disposed) redraw()
+  })
+})
+onBeforeUnmount(() => {
+  disposed = true
+  cancelStroke()
+})
+watch([() => props.characters, () => props.cellSize], () => {
+  cancelStroke()
+  cursor = { x: props.cellSize / 2, y: props.cellSize / 2 }
+  setup()
+})
+watch(
+  () => props.disabled,
+  (disabled) => {
+    if (disabled) cancelStroke()
+  },
+)
+watch(strokes, (value) => {
+  const isOwnCommit = lastCommittedStrokes !== null && toRaw(value) === toRaw(lastCommittedStrokes)
+  lastCommittedStrokes = null
+  if (isOwnCommit) redraw()
+  else cancelStroke()
+})
+watch(() => props.showModel, redraw)
 </script>

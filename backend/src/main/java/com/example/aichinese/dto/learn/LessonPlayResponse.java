@@ -1,28 +1,22 @@
 package com.example.aichinese.dto.learn;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import com.example.aichinese.entity.enums.LearnLessonKind;
 
 /**
- * A Learn stop ready to play: where it sits on the path and its questions without answers. {@code passPercent} is
- * set for a checkpoint (the share of right answers it needs).
+ * A Learn stop ready to play: its questions without answers. {@code passPercent} is set for a checkpoint (the share of
+ * right answers it needs).
+ *
+ * @param runStartedAt the start of this lesson run, sent with each hint request so its allowance is counted separately
+ * @param runSignature the server's signature of this run, sent back with {@code runStartedAt}
  */
 public record LessonPlayResponse(
-        Long id,
         String title,
         LearnLessonKind kind,
-        Long unitId,
-        int unitNumber,
-        String unitTitle,
-        int position,
-        int unitLessonCount,
-        int minutes,
-        int xpReward,
         Integer passPercent,
-        List<QuestionView> questions) {
-
-    public LessonPlayResponse {
-        questions = questions == null ? List.of() : List.copyOf(questions);
-    }
+        List<QuestionView> questions,
+        LocalDateTime runStartedAt,
+        String runSignature) {
 }

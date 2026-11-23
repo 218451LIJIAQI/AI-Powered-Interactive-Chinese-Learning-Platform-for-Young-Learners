@@ -1,24 +1,22 @@
 package com.example.aichinese.security;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.HexFormat;
-import java.util.Locale;
+import java.time.InstantSource;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import com.example.aichinese.util.TextUtils;
+import com.example.aichinese.service.SecureTokens;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 
+/**
+ * Brute-force guard of sign-in and of the current-password check (SDD 3.4): five failed attempts for one e-mail
+ * address from one client IP within 15 minutes lock that pair for 15 minutes. The address is compared ignoring case.
+ */
 @Component
 public class LoginAttemptLimiter {
 
@@ -33,82 +31,34 @@ public class LoginAttemptLimiter {
     static final int MAX_TRACKED_ATTEMPT_RECORDS = 10_000;
     private static final int MAX_EMAIL_KEY_LENGTH = 320;
     private static final int MAX_IP_KEY_LENGTH = 64;
-    private static final int ANONYMIZED_KEY_BYTES = 8;
+    private static final int ANONYMIZED_KEY_LENGTH = 16;
+    private static final int LOCK_STRIPES = 64;
 
-    private final Cache<String, AttemptRecord> attempts;
+    private final FixedWindowCounter attempts;
     private final Cache<String, Instant> lockouts;
-    private final Clock clock;
-    private final int maxFailedAttempts;
-    private final Duration attemptWindow;
-    private final Duration lockDuration;
+    private final InstantSource clock;
+    private final Object[] keyStripes;
 
     @Autowired
-    public LoginAttemptLimiter(
-            @Value("${app.security.login-rate-limit.max-failed-attempts:5}") int maxFailedAttempts,
-            @Value("${app.security.login-rate-limit.attempt-window-minutes:15}") long attemptWindowMinutes,
-            @Value("${app.security.login-rate-limit.lock-duration-minutes:15}") long lockDurationMinutes,
-            @Value("${app.security.login-rate-limit.max-tracked-records:10000}") int maxTrackedAttemptRecords) {
-        this(
-                Clock.systemUTC(),
-                maxFailedAttempts,
-                Duration.ofMinutes(attemptWindowMinutes),
-                Duration.ofMinutes(lockDurationMinutes),
-                maxTrackedAttemptRecords);
+    public LoginAttemptLimiter() {
+        this(InstantSource.system(), MAX_TRACKED_ATTEMPT_RECORDS);
     }
 
-    LoginAttemptLimiter(Clock clock) {
-        this(clock, MAX_TRACKED_ATTEMPT_RECORDS);
-    }
-
-    LoginAttemptLimiter(Clock clock, int maxTrackedAttemptRecords) {
-        this(clock, MAX_FAILED_ATTEMPTS, ATTEMPT_WINDOW, LOCK_DURATION, maxTrackedAttemptRecords);
-    }
-
-    LoginAttemptLimiter(
-            Clock clock,
-            int maxFailedAttempts,
-            Duration attemptWindow,
-            Duration lockDuration,
-            int maxTrackedAttemptRecords) {
-        if (maxFailedAttempts < 1
-                || attemptWindow == null || attemptWindow.isZero() || attemptWindow.isNegative()
-                || lockDuration == null || lockDuration.isZero() || lockDuration.isNegative()
-                || maxTrackedAttemptRecords < 1) {
-            throw new IllegalArgumentException("Login rate limit settings must be positive");
-        }
+    LoginAttemptLimiter(InstantSource clock, int maxTrackedAttemptRecords) {
         this.clock = clock;
-        this.maxFailedAttempts = maxFailedAttempts;
-        this.attemptWindow = attemptWindow;
-        this.lockDuration = lockDuration;
-        this.attempts = Caffeine.newBuilder()
-                .maximumSize(maxTrackedAttemptRecords)
-                .expireAfterAccess(attemptWindow)
-                .build();
+        this.attempts = new FixedWindowCounter(clock, ATTEMPT_WINDOW, maxTrackedAttemptRecords);
         this.lockouts = Caffeine.newBuilder()
                 .maximumSize(maxTrackedAttemptRecords)
-                .expireAfterWrite(lockDuration)
+                .expireAfterWrite(LOCK_DURATION)
+                .ticker(FixedWindowCounter.tickerFor(clock))
                 .build();
+        this.keyStripes = new Object[LOCK_STRIPES];
+        for (int i = 0; i < LOCK_STRIPES; i++) {
+            this.keyStripes[i] = new Object();
+        }
     }
 
-    public boolean isAllowed(String email, String clientIp) {
-        String key = key(email, clientIp);
-        Instant now = clock.instant();
-        Instant lockedUntil = lockouts.getIfPresent(key);
-        if (lockedUntil != null) {
-            if (lockedUntil.isAfter(now)) {
-                return false;
-            }
-            lockouts.invalidate(key);
-            return true;
-        }
-
-        AttemptRecord record = attempts.getIfPresent(key);
-        if (record != null && !record.firstFailureAt.plus(attemptWindow).isAfter(now)) {
-            attempts.asMap().remove(key, record);
-        }
-        return true;
-    }
-
+    /** How long the pair stays locked; zero when it is not locked. */
     public Duration retryAfter(String email, String clientIp) {
         String key = key(email, clientIp);
         Instant lockedUntil = lockouts.getIfPresent(key);
@@ -117,72 +67,63 @@ public class LoginAttemptLimiter {
         }
         Duration remaining = Duration.between(clock.instant(), lockedUntil);
         if (remaining.isZero() || remaining.isNegative()) {
-            lockouts.invalidate(key);
+            lockouts.asMap().remove(key, lockedUntil);
             return Duration.ZERO;
         }
         return remaining;
     }
 
+    /** Counts a failed attempt; returns {@code true} only when this failure engages a new lockout. */
     public boolean recordFailure(String email, String clientIp) {
         String key = key(email, clientIp);
-        Instant now = clock.instant();
-        Instant existingLockout = lockouts.getIfPresent(key);
-        if (existingLockout != null && existingLockout.isAfter(now)) {
-            return true;
-        }
+        synchronized (stripeFor(key)) {
+            Instant now = clock.instant();
+            Instant existingLockout = lockouts.getIfPresent(key);
+            if (existingLockout != null && existingLockout.isAfter(now)) {
+                return false;
+            }
 
-        AttemptRecord updated = attempts.asMap().compute(key, (ignored, existing) -> {
-            boolean freshWindow = existing == null || !existing.firstFailureAt.plus(attemptWindow).isAfter(now);
-            Instant firstFailureAt = freshWindow ? now : existing.firstFailureAt;
-            int nextCount = freshWindow ? 1 : existing.failedAttempts + 1;
-            return new AttemptRecord(firstFailureAt, nextCount);
-        });
-        attempts.cleanUp();
-
-        boolean nowLocked = updated.failedAttempts >= maxFailedAttempts;
-        if (nowLocked) {
-            Instant lockedUntil = now.plus(lockDuration);
-            lockouts.put(key, lockedUntil);
-            attempts.invalidate(key);
-            log.warn(
-                    "Login lockout engaged for key={} after {} failed attempts; locked until {}.",
-                    anonymizedKey(email, clientIp),
-                    updated.failedAttempts,
-                    lockedUntil);
+            long failedAttempts = attempts.increment(key);
+            boolean nowLocked = failedAttempts >= MAX_FAILED_ATTEMPTS;
+            if (nowLocked) {
+                Instant lockedUntil = now.plus(LOCK_DURATION);
+                lockouts.put(key, lockedUntil);
+                attempts.invalidate(key);
+                log.warn(
+                        "Login lockout engaged for key={} after {} failed attempts; locked until {}.",
+                        anonymized(key),
+                        failedAttempts,
+                        lockedUntil);
+            }
+            return nowLocked;
         }
-        return nowLocked;
     }
 
     public void recordSuccess(String email, String clientIp) {
         String key = key(email, clientIp);
-        attempts.invalidate(key);
-        lockouts.invalidate(key);
-    }
-
-    int trackedAttemptCount() {
-        attempts.cleanUp();
-        lockouts.cleanUp();
-        return Math.toIntExact(attempts.estimatedSize() + lockouts.estimatedSize());
-    }
-
-    private String key(String email, String clientIp) {
-        String normalisedEmail = TextUtils.safeTruncate(
-                email == null ? "" : email.strip().toLowerCase(Locale.ROOT), MAX_EMAIL_KEY_LENGTH);
-        String normalisedIp = TextUtils.safeTruncate(
-                clientIp == null ? "" : clientIp.strip(), MAX_IP_KEY_LENGTH);
-        return normalisedEmail + "|" + normalisedIp;
-    }
-
-    private String anonymizedKey(String email, String clientIp) {
-        try {
-            byte[] digest = MessageDigest.getInstance("SHA-256")
-                    .digest(key(email, clientIp).getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(digest, 0, ANONYMIZED_KEY_BYTES);
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 digest is unavailable.", exception);
+        synchronized (stripeFor(key)) {
+            attempts.invalidate(key);
+            lockouts.invalidate(key);
         }
     }
 
-    private record AttemptRecord(Instant firstFailureAt, int failedAttempts) {
+    int trackedAttemptCount() {
+        lockouts.cleanUp();
+        return Math.toIntExact(attempts.cleanUpAndEstimatedSize() + lockouts.estimatedSize());
+    }
+
+    private Object stripeFor(String key) {
+        return keyStripes[Math.floorMod(key.hashCode(), LOCK_STRIPES)];
+    }
+
+    private static String key(String email, String clientIp) {
+        String normalisedEmail = FixedWindowCounter.normalizeKeyPart(email, MAX_EMAIL_KEY_LENGTH, true);
+        String normalisedIp = FixedWindowCounter.normalizeKeyPart(clientIp, MAX_IP_KEY_LENGTH, false);
+        return normalisedEmail + "|" + normalisedIp;
+    }
+
+    /** The key for a log line: a prefix of its hash, so the line names neither the e-mail address nor the IP. */
+    private static String anonymized(String key) {
+        return SecureTokens.sha256Hex(key).substring(0, ANONYMIZED_KEY_LENGTH);
     }
 }

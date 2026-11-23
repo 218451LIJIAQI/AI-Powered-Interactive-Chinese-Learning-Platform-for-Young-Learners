@@ -2,7 +2,6 @@ package com.example.aichinese.security;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
-import java.util.Objects;
 import java.util.UUID;
 
 import javax.crypto.SecretKey;
@@ -14,41 +13,47 @@ import com.example.aichinese.entity.User;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.JwtParser;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 
 @Service
 public class JwtService {
 
-    private static final String BASE64_PREFIX = "base64:";
     private static final int MINIMUM_SECRET_BYTES = 32;
     private static final String CLAIM_SESSION_VERSION = "sessionVersion";
-    private static final long DEFAULT_SESSION_VERSION = 0L;
+    /** Whether the sign-in behind the token chose "Keep me signed in" (its refresh cookie outlives the browser). */
+    private static final String CLAIM_PERSISTENT_SESSION = "persistent";
+    /** The browser session (the sign-in's refresh-token rotation chain) the token belongs to. */
+    private static final String CLAIM_SESSION_ID = "sid";
 
     private final SecurityProperties securityProperties;
     private final SecretKey signingKey;
+    private final JwtParser parser;
 
     public JwtService(SecurityProperties securityProperties) {
         this.securityProperties = securityProperties;
-        this.signingKey = Keys.hmacShaKeyFor(resolveSigningKeyBytes(securityProperties.secret()));
+        byte[] keyBytes = securityProperties.secret().getBytes(StandardCharsets.UTF_8);
+        if (keyBytes.length < MINIMUM_SECRET_BYTES) {
+            throw new IllegalStateException("JWT secret is too short. Use a secret with at least 32 characters/bytes.");
+        }
+        this.signingKey = Keys.hmacShaKeyFor(keyBytes);
+        this.parser = Jwts.parser().verifyWith(signingKey).build();
     }
 
-    public String generateToken(User user) {
-        Objects.requireNonNull(user, "user");
-        String email = user.getEmail();
-        if (email == null || email.isBlank()) {
-            throw new IllegalArgumentException("Cannot mint a JWT for a user with no email address.");
-        }
-        if (user.getId() == null) {
-            throw new IllegalArgumentException("Cannot mint a JWT for a user with no id.");
-        }
-
+    /**
+     * An access token of the account's current session; {@code persistentSession} is the "Keep me signed in" choice of
+     * the sign-in it belongs to, so a session that replaces it (a password change) can keep that choice, and
+     * {@code sessionId} names that sign-in (its refresh-token chain), so signing out of one browser ends its tokens only.
+     */
+    public String generateToken(User user, boolean persistentSession, String sessionId) {
         Date now = new Date();
         Date expiry = new Date(Math.addExact(now.getTime(), securityProperties.expiration()));
         return Jwts.builder()
-                .subject(email)
+                .subject(user.getEmail())
                 .claim(CLAIM_SESSION_VERSION, user.getSessionVersion())
+                .claim(CLAIM_PERSISTENT_SESSION, persistentSession)
+                .claim(CLAIM_SESSION_ID, sessionId)
                 .id(UUID.randomUUID().toString())
                 .issuedAt(now)
                 .expiration(expiry)
@@ -61,56 +66,31 @@ public class JwtService {
      * {@link #extractAllClaims(String)}, so a request's token is parsed only once.
      */
     boolean isTokenValid(Claims claims, String email, long sessionVersion) {
-        if (claims == null || email == null || email.isBlank()) {
-            return false;
-        }
         try {
             Date expiration = claims.getExpiration();
-            String subject = claims.getSubject();
+            Long tokenSessionVersion = claims.get(CLAIM_SESSION_VERSION, Long.class);
             return expiration != null
-                    && subject != null
-                    && email.equalsIgnoreCase(subject)
                     && expiration.after(new Date())
-                    && extractSessionVersion(claims) == sessionVersion;
+                    && email.equalsIgnoreCase(claims.getSubject())
+                    && tokenSessionVersion != null
+                    && tokenSessionVersion == sessionVersion;
         } catch (JwtException | IllegalArgumentException exception) {
             return false;
         }
     }
 
+    /** The "Keep me signed in" choice the claims carry; a token without it (issued before the claim existed) kept it. */
+    boolean isPersistentSession(Claims claims) {
+        return !Boolean.FALSE.equals(claims.get(CLAIM_PERSISTENT_SESSION, Boolean.class));
+    }
+
+    /** The browser session the claims name; null for a token issued before the claim existed. */
+    String sessionId(Claims claims) {
+        return claims.get(CLAIM_SESSION_ID, String.class);
+    }
+
     /** Parses and verifies the signed token; throws {@link JwtException} or {@link IllegalArgumentException} if it is invalid. */
     Claims extractAllClaims(String token) {
-        return Jwts.parser()
-                .verifyWith(signingKey)
-                .build()
-                .parseSignedClaims(token)
-                .getPayload();
-    }
-
-    private static long extractSessionVersion(Claims claims) {
-        Number sessionVersion = claims.get(CLAIM_SESSION_VERSION, Number.class);
-        return sessionVersion == null ? DEFAULT_SESSION_VERSION : sessionVersion.longValue();
-    }
-
-    private static byte[] resolveSigningKeyBytes(String configuredSecret) {
-        byte[] keyBytes = configuredSecret.startsWith(BASE64_PREFIX)
-                ? decodeExplicitBase64Secret(configuredSecret.substring(BASE64_PREFIX.length()))
-                : configuredSecret.getBytes(StandardCharsets.UTF_8);
-
-        if (keyBytes.length < MINIMUM_SECRET_BYTES) {
-            throw new IllegalStateException(
-                    "JWT secret is too short. Use a plain-text secret with at least 32 characters/bytes, "
-                            + "or use the prefix 'base64:' with at least 32 decoded bytes.");
-        }
-
-        return keyBytes;
-    }
-
-    private static byte[] decodeExplicitBase64Secret(String base64Secret) {
-        try {
-            return Decoders.BASE64.decode(base64Secret);
-        } catch (RuntimeException exception) {
-            throw new IllegalStateException(
-                    "JWT secret uses the 'base64:' prefix but is not valid Base64.", exception);
-        }
+        return parser.parseSignedClaims(token).getPayload();
     }
 }

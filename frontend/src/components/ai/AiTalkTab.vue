@@ -4,253 +4,267 @@
     ref="summaryView"
     :scenario-label="t(currentScenario.labelKey)"
     :minutes="minutes"
-    :replies="studentEntries.length"
-    :voice-replies="voiceReplies"
-    :tips="tips"
     :entries="entries"
     :summary="summary"
     :loading="summaryLoading"
     :error="summaryError"
-    :speech="speech"
+    :ai-notice="aiNotice"
+    :live-video="hasLiveVideo"
+    :reported="summaryReported"
+    :memory="memory"
+    :memory-error="memoryError"
     @talk-again="restart(scenario)"
     @retry="loadSummary"
+    @report="reportSummary"
+    @forget="forgetNote"
   />
 
-  <section v-else class="ai-stage" :aria-labelledby="`${baseId}-stage`">
-    <h2 :id="`${baseId}-stage`" class="sr-only">{{ t('aiHelper.talkTitle') }}</h2>
+  <section v-else class="ai-talk" :class="{ 'is-live': liveCall }" :aria-labelledby="`${baseId}-stage`">
+    <h2 :id="`${baseId}-stage`" class="sr-only">{{ t('aiHelper.talk') }}</h2>
 
-    <aside class="ai-presence">
-      <XiaomeiAvatar class="ai-presence-portrait" :state="avatarState" />
-      <div class="ai-presence-who">
-        <p class="ai-presence-name">
-          <span class="hanzi" lang="zh-CN">小美</span>
-          <span class="ai-presence-latin">Xiaomei</span>
-        </p>
-        <p class="ai-presence-role">{{ t('aiHelper.xiaomeiRole') }}</p>
-        <p class="ai-presence-state" :class="`is-${avatarState}`" role="status" aria-live="polite">
-          <span class="ai-presence-dot" aria-hidden="true" />
-          {{ stageStateLabel }}
-        </p>
-      </div>
-
-      <div class="ai-talk-scenarios" role="group" :aria-labelledby="`${baseId}-scenario`">
-        <p :id="`${baseId}-scenario`" class="ai-overline">{{ t('aiHelper.scenario') }}</p>
-        <div class="ai-talk-scenario-list">
+    <!-- The avatar and video share the floor above the dialogue. -->
+    <div class="ai-talk-stage">
+      <div v-if="liveCall && hasLiveVideo" class="ai-talk-live">
+        <div class="ai-talk-live-video">
+          <XiaomeiLiveVideo
+            :deployment-id="tavusDeploymentId!"
+            :context="liveCall.context"
+            :greeting="liveCall.greeting"
+            @connected="liveConnected"
+            @ended="closeLiveVideo"
+            @failed="liveFailed"
+            @utterance="addLiveTurn"
+          />
+        </div>
+        <div class="ai-talk-live-controls">
+          <span role="status">
+            <StatusPill
+              :label="t(liveCall.connected ? 'aiHelper.liveVideoConnected' : 'aiHelper.liveVideoLoading')"
+              :tone="liveCall.connected ? 'success' : 'outline'"
+            />
+          </span>
           <button
-            v-for="option in XIAOMEI_SCENARIOS"
-            :key="option.key"
-            class="ai-talk-scenario"
+            ref="hangupButton"
+            class="btn btn-secondary btn-sm"
             type="button"
-            :aria-pressed="option.key === scenario"
-            :disabled="thinking"
-            @click="chooseScenario(option.key)"
+            data-testid="ai-talk-end"
+            @click="closeLiveVideo"
           >
-            {{ t(option.labelKey) }}
+            {{ t('aiHelper.liveVideoEnd') }}
           </button>
         </div>
       </div>
-    </aside>
-
-    <div class="ai-chat">
-      <header class="ai-chat-head">
-        <p class="ai-chat-title">
-          {{ t(currentScenario.labelKey) }}
-          <span>{{ t('aiHelper.messages', { count: entries.length }, entries.length) }}</span>
+      <div v-else class="ai-talk-floor">
+        <span class="ai-talk-state" role="status" aria-live="polite">
+          <StatusPill :label="stageStateLabel" :tone="avatarState === 'away' ? 'outline' : 'strong'" />
+        </span>
+        <div
+          v-if="speech.canSpeak.value"
+          class="filter-chips ai-talk-voice"
+          role="group"
+          :aria-label="t('aiHelper.voiceOptions')"
+        >
+          <button class="filter-chip" type="button" :aria-pressed="voiceOn" @click="toggleVoice">
+            {{ voiceOn ? t('aiHelper.voiceOn') : t('aiHelper.voiceOff') }}
+          </button>
+          <button class="filter-chip" type="button" :aria-pressed="slow" @click="slow = !slow">
+            {{ t('aiHelper.slow') }}
+          </button>
+        </div>
+        <XiaomeiAvatar class="ai-talk-face" :state="avatarState" />
+        <p class="ai-talk-name">
+          <span class="ai-talk-seal" aria-hidden="true"><IconGlyph name="about" :size="12" /></span>
+          <span><span lang="zh-CN">小美</span> Xiaomei</span>
+          <AiResultLabel v-if="currentEntry.ai" class="is-sm" />
         </p>
-        <div class="ai-chat-tools">
-          <div v-if="speech.canSpeak" class="ai-toggle-group" role="group" :aria-label="t('aiHelper.voiceOptions')">
-            <button class="ai-toggle" type="button" :aria-pressed="voiceOn" @click="toggleVoice">
-              <IconGlyph :name="voiceOn ? 'audio' : 'micOff'" :size="14" />
-              {{ t('aiHelper.voice') }}
-            </button>
-            <button class="ai-toggle" type="button" :aria-pressed="slow" @click="slow = !slow">
-              <IconGlyph name="slow" :size="14" />
-              {{ t('aiHelper.slow') }}
-            </button>
-          </div>
-          <div class="ai-toggle-group" role="group" :aria-label="t('aiHelper.lineOptions')">
-            <button class="ai-toggle" type="button" :aria-pressed="showPinyin" @click="showPinyin = !showPinyin">
-              {{ t('aiHelper.showPinyin') }}
+      </div>
+
+      <div class="ai-talk-middle">
+        <div v-if="listening" class="ai-talk-script" data-testid="ai-talk-listening">
+          <p class="ai-talk-line hanzi is-faded" lang="zh-CN">{{ currentEntry.chinese }}</p>
+          <p class="page-eyebrow">{{ t('aiHelper.youTimer', { time: formatClock(listenSeconds) }) }}</p>
+          <p class="ai-talk-heard hanzi" :lang="speech.heard.value ? 'zh-CN' : undefined">
+            {{ speech.heard.value || t('aiHelper.speakNow') }}
+          </p>
+          <span class="ai-talk-wave" aria-hidden="true"><span v-for="bar in 32" :key="bar" /></span>
+        </div>
+        <div v-else class="ai-talk-script">
+          <p v-if="lastReply && !liveCall" class="ai-talk-said">
+            <span class="page-eyebrow">{{
+              t(lastReply.via === 'voice' ? 'aiHelper.youVoice' : 'aiHelper.youTyped')
+            }}</span>
+            <span lang="zh-CN">{{ lastReply.chinese }}</span>
+          </p>
+          <p v-if="lastReply?.natural && !liveCall" class="ai-talk-tip" data-testid="ai-talk-tip">
+            <span class="page-eyebrow">{{ t('aiHelper.tip') }}</span>
+            <span>
+              {{ t('aiHelper.moreNatural') }} <strong lang="zh-CN">{{ lastReply.natural }}</strong>
+              <template v-if="lastReply.tip"> {{ lastReply.tip }}</template>
+            </span>
+          </p>
+          <p v-if="thinking" class="ai-dots ai-talk-typing" aria-hidden="true"><span /><span /><span /></p>
+          <template v-else>
+            <p class="ai-talk-line hanzi" lang="zh-CN" data-testid="ai-talk-line">{{ currentEntry.chinese }}</p>
+            <div
+              v-if="(showPinyin && currentEntry.pinyin) || (showTranslation && currentTranslation)"
+              class="ai-talk-gloss"
+            >
+              <p v-if="showPinyin && currentEntry.pinyin" :id="`${baseId}-pinyin`" lang="zh-Latn">
+                {{ currentEntry.pinyin }}
+              </p>
+              <p v-if="showTranslation && currentTranslation" :id="`${baseId}-translation`">
+                {{ currentTranslation }}
+              </p>
+            </div>
+          </template>
+          <div v-if="!liveCall" class="ai-talk-tools" role="group" :aria-label="t('aiHelper.lineOptions')">
+            <button
+              v-if="speech.canSpeak.value"
+              class="btn btn-ghost btn-sm"
+              type="button"
+              :disabled="thinking"
+              @click="speech.speak(currentEntry.chinese, slow)"
+            >
+              {{ t('aiHelper.listen') }}
             </button>
             <button
-              class="ai-toggle"
+              v-if="currentEntry.pinyin"
+              class="btn btn-ghost btn-sm"
               type="button"
-              :aria-pressed="showTranslation"
+              :disabled="thinking"
+              :aria-expanded="showPinyin"
+              :aria-controls="showPinyin && !thinking ? `${baseId}-pinyin` : undefined"
+              @click="showPinyin = !showPinyin"
+            >
+              {{ t(showPinyin ? 'aiHelper.hidePinyin' : 'aiHelper.pinyin') }}
+            </button>
+            <button
+              v-if="currentTranslation"
+              class="btn btn-ghost btn-sm"
+              type="button"
+              :disabled="thinking"
+              :aria-expanded="showTranslation"
+              :aria-controls="showTranslation && !thinking ? `${baseId}-translation` : undefined"
               @click="showTranslation = !showTranslation"
             >
-              {{ t('aiHelper.showTranslation') }}
+              {{ showTranslation ? t('aiHelper.hideEnglish') : t('aiHelper.showEnglish') }}
             </button>
+            <button
+              v-if="currentEntry.ai && !currentEntry.reported"
+              class="btn btn-ghost btn-sm"
+              type="button"
+              :disabled="thinking"
+              @click="reportLine"
+            >
+              {{ t('aiSafety.report') }}
+            </button>
+            <span v-else-if="currentEntry.reported" class="ai-reported">
+              <IconGlyph name="status" :size="14" />
+              {{ t('aiSafety.reported') }}
+            </span>
           </div>
         </div>
-      </header>
 
-      <div class="ai-chat-body">
-        <ol ref="transcript" class="ai-transcript" :aria-label="t('aiHelper.conversation')">
-          <li
-            v-for="entry in entries"
-            :key="entry.id"
-            :class="[`is-${entry.speaker.toLowerCase()}`, { 'is-current': entry === currentEntry }]"
-          >
-            <template v-if="entry.speaker === 'XIAOMEI'">
-              <p class="sr-only">小美</p>
-              <p
-                class="ai-line-zh cjk-text"
-                lang="zh-CN"
-                :data-testid="entry === currentEntry ? 'ai-talk-line' : undefined"
-              >
-                {{ entry.chinese }}
-              </p>
-              <p v-if="showPinyin && entry.pinyin" class="ai-line-py">{{ entry.pinyin }}</p>
-              <p v-if="showTranslation && entry.translation" class="ai-line-meaning">{{ entry.translation }}</p>
-              <div class="ai-line-actions">
-                <button
-                  v-if="speech.canSpeak"
-                  class="ai-line-action"
-                  type="button"
-                  @click="speech.speak(entry.chinese, slow)"
-                >
-                  <IconGlyph name="audio" :size="14" />
-                  {{ t('aiHelper.listen') }}
-                </button>
-                <button
-                  v-if="entry.ai && !entry.reported"
-                  class="ai-line-action"
-                  type="button"
-                  @click="reportEntry(entry)"
-                >
-                  <IconGlyph name="flag" :size="14" />
-                  {{ t('aiHelper.report') }}
-                </button>
-                <span v-else-if="entry.reported" class="ai-reported">
-                  <IconGlyph name="status" :size="14" />
-                  {{ t('aiHelper.reported') }}
-                </span>
-                <AiResultLabel v-if="entry.ai && entry === currentEntry" />
-              </div>
-            </template>
-            <template v-else>
-              <p class="ai-bubble cjk-text" lang="zh-CN">
-                <span class="sr-only">{{ t('aiHelper.you') }}: </span>{{ entry.chinese }}
-              </p>
-              <p class="ai-bubble-meta">
-                <IconGlyph :name="entry.via === 'voice' ? 'mic' : 'keyboard'" :size="12" />
-                {{ t(entry.via === 'voice' ? 'aiHelper.youVoice' : 'aiHelper.youTyped') }}
-              </p>
-              <p v-if="entry.natural" class="ai-tip" data-testid="ai-talk-tip">
-                <span class="ai-tip-label">{{ t('aiHelper.tip') }}</span>
-                <span>
-                  {{ t('aiHelper.moreNatural') }} <strong class="cjk-text" lang="zh-CN">{{ entry.natural }}</strong>
-                  <template v-if="entry.tip"> {{ entry.tip }}</template>
-                </span>
-              </p>
-            </template>
-          </li>
-        </ol>
-        <p v-if="thinking" class="ai-typing" aria-hidden="true"><span /><span /><span /></p>
-        <p v-else-if="!studentEntries.length && !blocked" class="ai-chat-hint">{{ t('aiHelper.firstReplyHint') }}</p>
+        <p v-if="error" class="callout is-compact is-danger" role="alert">{{ error }}</p>
       </div>
 
-      <div class="ai-composer" :class="{ 'is-idle': blocked }">
-        <p v-if="notice" class="callout is-compact" role="status">{{ notice }}</p>
-        <p v-if="error" class="callout is-compact is-danger" role="alert">{{ error }}</p>
-
-        <div class="ai-composer-bar">
-          <button
-            class="ai-help-chip"
-            type="button"
-            :aria-expanded="help.open"
-            :disabled="!help.open && !canSend"
-            @click="help.open ? (help.open = false) : openHelp()"
-          >
-            <IconGlyph name="hint" :size="14" />
-            {{ t('aiHelper.helpMeReply') }}
-          </button>
-          <button
-            class="ai-help-chip ai-talk-end"
-            type="button"
-            :disabled="!studentEntries.length || thinking || listening"
-            :aria-describedby="`${baseId}-end`"
-            data-testid="ai-talk-end"
-            @click="endConversation"
-          >
-            <IconGlyph name="checklist" :size="14" />
-            {{ t('aiHelper.endConversation') }}
-          </button>
-          <span :id="`${baseId}-end`" class="sr-only">
-            {{ studentEntries.length ? t('aiHelper.endHint') : t('aiHelper.replyOnceHint') }}
-          </span>
-        </div>
-
-        <section v-if="help.open" class="ai-suggest" :aria-labelledby="`${baseId}-help`">
-          <h3 :id="`${baseId}-help`" class="ai-overline">{{ t('aiHelper.trySaying') }}</h3>
-          <p v-if="help.loading" class="ai-thinking">
-            <span class="spinner is-sm" aria-hidden="true" />{{ t('aiHelper.findingIdeas') }}
-          </p>
-          <p v-else-if="help.error" class="callout is-compact is-danger" role="alert">{{ help.error }}</p>
-          <ul v-else class="ai-suggest-list">
-            <li v-for="line in help.lines" :key="line.chinese">
-              <button class="ai-suggest-option" type="button" :disabled="!canSend" @click="send(line.chinese, 'help')">
-                <span class="cjk-text" lang="zh-CN">{{ line.chinese }}</span>
-                <small>{{ line.translation }}</small>
-              </button>
-            </li>
-          </ul>
-        </section>
-
-        <div v-if="listening" class="ai-listening" data-testid="ai-talk-listening">
-          <span class="ai-listening-dot" aria-hidden="true" />
-          <p class="ai-listening-heard">
-            <span class="ai-listening-time">{{ t('aiHelper.youTimer', { time: formatClock(listenSeconds) }) }}</span>
-            <span class="cjk-text" lang="zh-CN">{{ speech.heard.value || t('aiHelper.speakNow') }}</span>
-          </p>
-          <div class="ai-talk-listening-actions">
-            <button class="btn btn-ghost" type="button" @click="cancelListening">{{ t('aiHelper.cancel') }}</button>
-            <button class="btn btn-primary" type="button" :disabled="!speech.heard.value" @click="sendHeard">
-              <IconGlyph name="send" :size="16" />
-              {{ t('aiHelper.send') }}
-            </button>
-          </div>
-        </div>
-
-        <form v-else class="ai-talk-type" @submit.prevent="send(draft, 'typed')">
+      <div v-if="!liveCall" class="ai-talk-reply">
+        <form v-if="typing" class="ai-talk-dock ai-talk-type" @submit.prevent="send(draft, 'typed')">
           <label class="sr-only" :for="`${baseId}-draft`">{{ t('aiHelper.typeReplyLabel') }}</label>
           <input
             :id="`${baseId}-draft`"
+            ref="draftInput"
             v-model="draft"
             class="input cjk-text"
             lang="zh-CN"
             autocomplete="off"
-            :maxlength="200"
+            :maxlength="MAX_REPLY"
             :disabled="!canSend"
             :placeholder="blocked ? t('aiHelper.talkBlockedPlaceholder') : t('aiHelper.typeReplyPlaceholder')"
           />
-          <button
-            class="btn btn-icon"
-            :class="draft.trim() && canSend ? 'btn-primary' : 'btn-secondary'"
-            type="submit"
-            :disabled="!canSend || !draft.trim()"
-            :aria-busy="thinking"
-            :aria-label="t('aiHelper.send')"
-          >
-            <IconGlyph v-if="!thinking" name="send" :size="18" />
-          </button>
-          <button
-            v-if="micReady"
-            class="ai-mic"
-            type="button"
-            :disabled="!canSend"
-            :aria-label="t('aiHelper.speakReply')"
-            data-testid="ai-talk-mic"
-            @click="startListening"
-          >
-            <IconGlyph name="mic" :size="22" />
+          <button class="btn btn-primary" type="submit" :disabled="!canSend || !draft.trim()" :aria-busy="thinking">
+            {{ t('aiHelper.send') }}
           </button>
         </form>
+        <div v-else class="ai-talk-dock ai-talk-voice-dock" :class="{ 'is-listening': listening }">
+          <button v-if="listening" class="btn btn-secondary is-start" type="button" @click="speech.cancelListening">
+            {{ t('common.cancel') }}
+          </button>
+          <button
+            ref="micButton"
+            class="ai-talk-mic"
+            :class="{ 'is-listening': listening }"
+            type="button"
+            :disabled="!listening && !canStartMic"
+            :aria-label="micLabel"
+            :aria-describedby="`${baseId}-mic-status`"
+            data-testid="ai-talk-mic"
+            @click="useMicrophone"
+          >
+            <IconGlyph :name="listening ? 'stop' : 'mic'" :size="24" />
+          </button>
+          <button
+            v-if="listening"
+            class="btn btn-primary"
+            type="button"
+            :disabled="!speech.heard.value"
+            @click="sendHeard"
+          >
+            {{ t('aiHelper.send') }}
+          </button>
+        </div>
+        <button
+          v-if="typing && hasMicMode"
+          class="ai-talk-hint-action"
+          type="button"
+          :disabled="!canStartMic"
+          @click="retryMicrophone"
+        >
+          {{ t('aiHelper.retryMicrophone') }}
+        </button>
+        <p v-else :id="`${baseId}-mic-status`" class="ai-talk-hint" role="status" data-testid="ai-talk-status">
+          <template v-if="listening">{{ t('aiHelper.hintListening') }}</template>
+          <template v-else-if="notHeard">{{ t('aiHelper.micNoSpeech') }}</template>
+          <template v-else-if="typing && !blocked">{{ t('aiHelper.hintTyping') }}</template>
+          <template v-else-if="hasLiveVideo || !blocked">{{ t('aiHelper.hintMic') }}</template>
+        </p>
       </div>
     </div>
+
+    <AiTalkRail
+      ref="talkRail"
+      :scenario="scenario"
+      :current-scenario-label="t(currentScenario.labelKey)"
+      :scenario-options="scenarioOptions"
+      :entries="entries"
+      :live-call="Boolean(liveCall)"
+      :has-live-video="hasLiveVideo"
+      :thinking="thinking"
+      :listening="listening"
+      :can-end="canEnd"
+      :ai-notice="aiNotice"
+      @choose-scenario="chooseScenario"
+      @end="endConversation"
+    />
   </section>
 
-  <AiReportDialog v-if="reportTarget" :target="reportTarget" @close="reportTarget = null" @sent="onReported" />
+  <ConfirmDialog
+    v-if="mic.asking.value"
+    :title="t('aiHelper.micAskTitle')"
+    :message="t('aiHelper.micAskTalk')"
+    :confirm-label="t('common.allowMicrophone')"
+    @confirm="mic.confirm"
+    @cancel="chooseTyping"
+  />
+  <AiReportDialog
+    v-if="reportTarget"
+    :payload="reportTarget.payload"
+    :title="t(reportTarget.titleKey)"
+    :subtitle="reportTarget.leadKey ? t(reportTarget.leadKey) : undefined"
+    :attached="t(reportTarget.attachedKey)"
+    @close="reportTarget = null"
+    @sent="onReported"
+  />
   <ConfirmDialog
     v-if="pendingScenario"
     :title="t('aiHelper.switchScenarioTitle')"
@@ -263,110 +277,192 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, reactive, ref, useId, watch } from 'vue'
+import '@/styles/ai-talk.css'
+
+import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, ref, useId } from 'vue'
 
 import { aiHelperApi } from '@/api/ai'
+import { getAuthSessionVersion } from '@/api/http'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
+import StatusPill from '@/components/common/StatusPill.vue'
+import { useIsUnmounted } from '@/composables/useIsUnmounted'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { useMandarinSpeech } from '@/composables/useMandarinSpeech'
 import { aiHelperMessages } from '@/plugins/aiHelperMessages'
-import { useUiStore } from '@/stores/ui'
-import type { XiaomeiScenario, XiaomeiSummary, XiaomeiTurn } from '@/types/ai'
-import type { AiStoryLine } from '@/types/api'
+import { aiTalkMessages } from '@/plugins/aiTalkMessages'
+import { appLocale } from '@/plugins/i18n'
+import type { XiaomeiScenario } from '@/types/ai'
 import { resolveApiError } from '@/utils/apiError'
 import { formatClock } from '@/utils/format'
-import { localizedServerMessage } from '@/utils/serverMessages'
+import { serverMessageOr } from '@/utils/serverMessages'
+import { truncateText } from '@/utils/truncateText'
 
-import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import AiReportDialog from './AiReportDialog.vue'
 import AiResultLabel from './AiResultLabel.vue'
-import AiTalkSummary, { type TalkTip } from './AiTalkSummary.vue'
+import AiTalkRail from './AiTalkRail.vue'
+import AiTalkSummary from './AiTalkSummary.vue'
 import XiaomeiAvatar, { type XiaomeiState } from './XiaomeiAvatar.vue'
+import XiaomeiLiveVideo from './XiaomeiLiveVideo.vue'
+import { revealResult, XIAOMEI_SCENARIOS, type AiBlockedReason } from './aiHelper'
+import { useXiaomeiLiveCall } from './useXiaomeiLiveCall'
+import { useXiaomeiSummaryMemory } from './useXiaomeiSummaryMemory'
+import { useXiaomeiVoiceReply } from './useXiaomeiVoiceReply'
 import {
-  lineText,
-  minutesBetween,
-  transcriptText,
-  XIAOMEI_SCENARIOS,
-  revealResult,
-  type AiBlockedReason,
-  type AiReportTarget,
-} from './aiHelper'
+  buildLineReportTarget,
+  buildSummaryReportTarget,
+  xiaomeiTurns,
+  type TalkEntry,
+  type TalkReportTarget,
+} from './xiaomeiReport'
 
-/**
- * Talk with Xiaomei: a conversation with a person, not a form. Xiaomei sits beside the chat with her live state
- * (your turn, listening, thinking, speaking, away); her lines show Chinese with pinyin and the meaning on request and
- * are read aloud when Voice is on; the student answers by voice (the browser writes it down in Chinese) or by typing
- * in the same composer, can ask for reply ideas, gets a gentle "more natural" tip, and ends with a summary. The
- * conversation lives only in this page.
- */
 const props = defineProps<{
   blocked: AiBlockedReason
+  aiNotice: string
+  tavusDeploymentId?: string
 }>()
-const emit = defineEmits<{ used: []; reported: [] }>()
+const emit = defineEmits<{
+  used: []
+  reported: []
+  toast: [message: string, action?: { label: string; run: () => void }]
+}>()
 
-interface TalkEntry extends AiStoryLine {
-  id: number
-  speaker: XiaomeiTurn['speaker']
-  /** False for the scenario's scripted opener. */
-  ai: boolean
-  via?: 'voice' | 'typed' | 'help'
-  natural?: string | null
-  tip?: string | null
-  reported?: boolean
-}
+const MAX_REPLY = 200
+const REPLIES_FOR_SUMMARY = 2
 
-const { t } = useLocalMessages({ aiHelper: aiHelperMessages })
-const ui = useUiStore()
+const { t } = useLocalMessages({ aiHelper: [aiHelperMessages, aiTalkMessages] })
 const speech = useMandarinSpeech()
 const baseId = useId()
+const isUnmounted = useIsUnmounted()
 
 const scenario = ref<XiaomeiScenario>('MEET_XIAOMEI')
 const entries = ref<TalkEntry[]>([])
-const startedAt = ref(Date.now())
-const endedAt = ref<number | null>(null)
+const ended = ref(false)
+const minutes = ref(1)
 const thinking = ref(false)
-/** Set when the browser refuses the microphone: the student types instead. */
-const micBlocked = ref(false)
 const draft = ref('')
-const transcript = ref<HTMLOListElement | null>(null)
+const draftInput = ref<HTMLInputElement | null>(null)
+const micButton = ref<HTMLButtonElement | null>(null)
+const hangupButton = ref<HTMLButtonElement | null>(null)
+const talkRail = ref<InstanceType<typeof AiTalkRail> | null>(null)
 const summaryView = ref<InstanceType<typeof AiTalkSummary> | null>(null)
+const typedMode = ref(false)
 const showPinyin = ref(true)
-const showTranslation = ref(false)
+const showTranslation = ref(true)
 const voiceOn = ref(true)
 const slow = ref(false)
 const error = ref<string | null>(null)
-const notice = ref<string | null>(null)
-const help = reactive({ open: false, loading: false, lines: [] as AiStoryLine[], error: null as string | null })
-const reportTarget = ref<AiReportTarget | null>(null)
-/** The reply being reported, marked once the report is sent. */
-const reportingId = ref<number | null>(null)
+const reportTarget = ref<TalkReportTarget | null>(null)
 const pendingScenario = ref<XiaomeiScenario | null>(null)
-const summary = ref<XiaomeiSummary | null>(null)
-const summaryLoading = ref(false)
-const summaryError = ref<string | null>(null)
-const listenSeconds = ref(0)
-let listenTimer: ReturnType<typeof setInterval> | null = null
+let startedAt = 0
 let nextId = 1
+let conversation = 0
+let onScreen = true
+
+const {
+  summary,
+  summaryLoading,
+  summaryError,
+  summaryReported,
+  memory,
+  memoryError,
+  reset: resetSummaryMemory,
+  loadSummary,
+  forgetNote,
+} = useXiaomeiSummaryMemory({
+  getConversation: () => conversation,
+  getScenario: () => scenario.value,
+  getTurns: () => xiaomeiTurns(entries.value),
+  isEndedOnScreen: () => ended.value && onScreen,
+  hasSummaryView: () => Boolean(summaryView.value),
+  t,
+  onUsed: () => {
+    if (!isUnmounted()) emit('used')
+  },
+  onToast: (message, action) => {
+    if (!isUnmounted()) emit('toast', message, action)
+  },
+})
+
+const hasLiveVideo = computed(() => Boolean(props.tavusDeploymentId))
+const hasMicMode = computed(() => hasLiveVideo.value || speech.canListen)
+const typing = computed(() => typedMode.value || !hasMicMode.value)
 
 const currentScenario = computed(() => XIAOMEI_SCENARIOS.find((option) => option.key === scenario.value)!)
-const ended = computed(() => endedAt.value !== null)
-const listening = computed(() => speech.listening.value)
-const micReady = computed(() => speech.canListen && !micBlocked.value)
-const canSend = computed(() => !props.blocked && !thinking.value && !listening.value)
 const studentEntries = computed(() => entries.value.filter((entry) => entry.speaker === 'STUDENT'))
+const canEnd = computed(() => studentEntries.value.length >= REPLIES_FOR_SUMMARY)
 const currentEntry = computed(() => entries.value.filter((entry) => entry.speaker === 'XIAOMEI').at(-1)!)
-const voiceReplies = computed(() => studentEntries.value.filter((entry) => entry.via === 'voice').length)
-const minutes = computed(() => minutesBetween(startedAt.value, endedAt.value ?? Date.now()))
-const tips = computed<TalkTip[]>(() =>
-  studentEntries.value
-    .filter((entry) => entry.natural)
-    .map((entry) => ({ said: entry.chinese, natural: entry.natural!, reason: entry.tip ?? '' })),
+const currentTranslation = computed(() =>
+  currentEntry.value.ai ? currentEntry.value.translation : t(currentScenario.value.opener.translationKey),
 )
+const lastReply = computed(() => studentEntries.value.at(-1))
+const scenarioOptions = computed(() =>
+  XIAOMEI_SCENARIOS.map((option) => ({ value: option.key, label: t(option.labelKey) })),
+)
+
+function stopAudio(): void {
+  speech.cancelListening()
+  speech.stopSpeaking()
+}
+
+async function showLatest(): Promise<void> {
+  await nextTick()
+  talkRail.value?.scrollToBottom()
+}
+
+const { liveCall, openLiveVideo, liveConnected, closeLiveVideo, liveFailed, addLiveTurn, clearLiveCall } =
+  useXiaomeiLiveCall({
+    entries,
+    nextEntryId: () => nextId++,
+    hasStudentTurns: () => studentEntries.value.length > 0,
+    getScenarioLabel: () => t(currentScenario.value.labelKey),
+    getScenarioOpener: () => currentScenario.value.opener.chinese,
+    isBlocked: () => Boolean(props.blocked),
+    stopAudio,
+    onError: (message) => {
+      error.value = message
+    },
+    onEnableTypedFallback: () => {
+      typedMode.value = true
+    },
+    onTurnAdded: () => void showLatest(),
+    focusHangup: () => hangupButton.value?.focus({ preventScroll: true }),
+    focusReplyControl: () => {
+      const replyControl = typing.value ? draftInput.value : micButton.value
+      replyControl?.focus({ preventScroll: true })
+    },
+    t,
+  })
+
+const canSend = computed(() => !props.blocked && !thinking.value && !speech.listening.value && !liveCall.value)
+const canStartMic = computed(() => (hasLiveVideo.value ? !thinking.value : canSend.value))
+
+const { mic, listening, listenSeconds, notHeard, chooseTyping, retryMicrophone, useMicrophone, sendHeard } =
+  useXiaomeiVoiceReply({
+    speech,
+    hasLiveVideo,
+    canStartMic,
+    typedMode,
+    isActiveOnScreen: () => onScreen && !ended.value,
+    onError: (message) => {
+      error.value = message
+    },
+    onSendVoice: (heard) => void send(heard, 'voice'),
+    onOpenLiveVideo: () => void openLiveVideo(),
+    focusDraft: () => draftInput.value?.focus(),
+    focusMic: () => micButton.value?.focus(),
+    t,
+  })
+
+const micLabel = computed(() => {
+  if (listening.value) return t('aiHelper.stopListening')
+  return t(hasLiveVideo.value ? 'aiHelper.liveVideoStart' : 'aiHelper.speakReply')
+})
 const avatarState = computed<XiaomeiState>(() => {
   if (thinking.value) return 'thinking'
   if (listening.value) return 'listening'
   if (speech.speaking.value) return 'speaking'
-  return props.blocked ? 'away' : 'idle'
+  return props.blocked && !hasLiveVideo.value ? 'away' : 'idle'
 })
 const stageStateLabel = computed(() => {
   switch (avatarState.value) {
@@ -383,70 +479,50 @@ const stageStateLabel = computed(() => {
   }
 })
 
-function opener(key: XiaomeiScenario): TalkEntry {
-  const option = XIAOMEI_SCENARIOS.find((item) => item.key === key)!
-  return {
-    id: nextId++,
-    speaker: 'XIAOMEI',
-    ai: false,
-    chinese: option.opener.chinese,
-    pinyin: option.opener.pinyin,
-    translation: t(option.opener.translationKey),
-  }
-}
-
 function restart(key: XiaomeiScenario): void {
-  speech.cancelListening()
-  speech.stopSpeaking()
+  mic.cancel()
+  conversation += 1
+  thinking.value = false
+  clearLiveCall()
+  stopAudio()
+  notHeard.value = false
   scenario.value = key
-  entries.value = [opener(key)]
-  startedAt.value = Date.now()
-  endedAt.value = null
-  summary.value = null
-  summaryError.value = null
+  const { opener } = currentScenario.value
+  entries.value = [{ id: nextId++, speaker: 'XIAOMEI', ai: false, chinese: opener.chinese, pinyin: opener.pinyin }]
+  startedAt = Date.now()
+  ended.value = false
+  resetSummaryMemory()
   pendingScenario.value = null
+  reportTarget.value = null
   error.value = null
-  notice.value = null
   draft.value = ''
-  help.open = false
 }
 
-restart('MEET_XIAOMEI')
-
-// The scripted opener follows the interface language.
-watch(
-  () => ui.locale,
-  () => {
-    const first = entries.value[0]
-    if (first && !first.ai) first.translation = t(currentScenario.value.opener.translationKey)
-  },
-)
+restart(scenario.value)
 
 function chooseScenario(key: XiaomeiScenario): void {
   if (key === scenario.value) return
+  speech.cancelListening()
   if (studentEntries.value.length) pendingScenario.value = key
   else restart(key)
 }
 
-function turns(list: readonly TalkEntry[]): XiaomeiTurn[] {
-  return list.map((entry) => ({ speaker: entry.speaker, text: entry.chinese }))
-}
-
-/** Brings the newest line into view above the pinned composer. */
-async function showLatest(): Promise<void> {
-  await nextTick()
-  transcript.value?.lastElementChild?.scrollIntoView?.({ block: 'nearest' })
-}
-
 async function send(text: string, via: TalkEntry['via']): Promise<void> {
-  const message = text.trim()
+  const message = truncateText(text.trim(), MAX_REPLY)
   if (!message || !canSend.value) return
+  const mine = conversation
+  const sessionVersion = getAuthSessionVersion()
+  const stillCurrent = () => mine === conversation && sessionVersion === getAuthSessionVersion()
   error.value = null
-  notice.value = null
-  help.open = false
-  const earlier = turns(entries.value)
-  const studentEntry: TalkEntry = { id: nextId++, speaker: 'STUDENT', ai: false, chinese: message, via }
-  entries.value.push(studentEntry)
+  notHeard.value = false
+  const earlier = xiaomeiTurns(entries.value)
+  entries.value.push({ id: nextId++, speaker: 'STUDENT', ai: false, chinese: message, via })
+  const student = entries.value.at(-1)!
+  const takeBack = (problem: string): void => {
+    entries.value = entries.value.filter((entry) => entry.id !== student.id)
+    if (via === 'typed') draft.value = message
+    error.value = problem
+  }
   draft.value = ''
   thinking.value = true
   void showLatest()
@@ -455,160 +531,74 @@ async function send(text: string, via: TalkEntry['via']): Promise<void> {
       scenario: scenario.value,
       turns: earlier,
       message,
-      languagePreference: ui.locale,
+      languagePreference: appLocale.value,
     })
+    if (!stillCurrent()) return
     if (result.status !== 'SUCCESS' || !result.reply) {
-      entries.value = entries.value.filter((entry) => entry.id !== studentEntry.id)
-      if (via === 'typed') draft.value = message
-      error.value = localizedServerMessage(result.message, t('aiHelper.xiaomeiError'))
+      takeBack(serverMessageOr(result.message, t('aiHelper.xiaomeiError')))
       return
     }
-    const added = entries.value.find((entry) => entry.id === studentEntry.id)
-    if (added) {
-      added.natural = result.naturalVersion ?? null
-      added.tip = result.tip ?? null
-    }
+    student.natural = result.naturalVersion ?? null
+    student.tip = result.tip ?? null
     entries.value.push({ id: nextId++, speaker: 'XIAOMEI', ai: true, ...result.reply })
-    if (voiceOn.value) speech.speak(result.reply.chinese, slow.value)
+    if (voiceOn.value && onScreen) speech.speak(result.reply.chinese, slow.value)
   } catch (reason) {
-    entries.value = entries.value.filter((entry) => entry.id !== studentEntry.id)
-    if (via === 'typed') draft.value = message
-    error.value = resolveApiError(reason, t('aiHelper.xiaomeiError'))
+    if (stillCurrent()) takeBack(resolveApiError(reason, t('aiHelper.xiaomeiError')))
   } finally {
-    thinking.value = false
-    emit('used')
-    await showLatest()
-  }
-}
-
-async function openHelp(): Promise<void> {
-  if (!canSend.value) return
-  help.open = true
-  help.loading = true
-  help.error = null
-  help.lines = []
-  try {
-    const result = await aiHelperApi.xiaomeiSuggestions({
-      scenario: scenario.value,
-      turns: turns(entries.value),
-      languagePreference: ui.locale,
-    })
-    if (result.status === 'SUCCESS') help.lines = result.suggestions
-    else help.error = localizedServerMessage(result.message, t('aiHelper.xiaomeiError'))
-  } catch (reason) {
-    help.error = resolveApiError(reason, t('aiHelper.xiaomeiError'))
-  } finally {
-    help.loading = false
-    emit('used')
-    void showLatest()
-  }
-}
-
-function startListening(): void {
-  error.value = null
-  if (!speech.listen()) {
-    micBlocked.value = true
-    error.value = t('aiHelper.micUnavailable')
-    return
-  }
-  listenSeconds.value = 0
-  listenTimer = setInterval(() => (listenSeconds.value += 1), 1000)
-}
-
-function stopTimer(): void {
-  if (listenTimer !== null) clearInterval(listenTimer)
-  listenTimer = null
-}
-
-function cancelListening(): void {
-  speech.cancelListening()
-  stopTimer()
-}
-
-function sendHeard(): void {
-  const heard = speech.heard.value
-  speech.cancelListening()
-  stopTimer()
-  void send(heard, 'voice')
-}
-
-watch(
-  () => speech.recognitionError.value,
-  (problem) => {
-    if (!problem) return
-    stopTimer()
-    if (problem === 'denied') {
-      micBlocked.value = true
-      error.value = t('aiHelper.micDenied')
-    } else {
-      error.value = problem === 'noSpeech' ? t('aiHelper.micNoSpeech') : t('aiHelper.micUnavailable')
+    if (!isUnmounted() && sessionVersion === getAuthSessionVersion()) emit('used')
+    if (mine === conversation) {
+      thinking.value = false
+      if (sessionVersion === getAuthSessionVersion()) await showLatest()
     }
-  },
-)
-
-// When the browser stops listening by itself (the student paused), what it heard is sent, as in a real conversation.
-// Cancel and Send clear `heard` first, so they never send twice.
-watch(listening, (active) => {
-  if (active) return
-  stopTimer()
-  const heard = speech.heard.value.trim()
-  if (heard && !speech.recognitionError.value) void send(heard, 'voice')
-})
+  }
+}
 
 function toggleVoice(): void {
   voiceOn.value = !voiceOn.value
   if (!voiceOn.value) speech.stopSpeaking()
 }
 
-function reportEntry(entry: TalkEntry): void {
-  const upTo = entries.value.slice(0, entries.value.indexOf(entry))
-  reportingId.value = entry.id
-  reportTarget.value = {
-    payload: {
-      featureKey: 'XIAOMEI_CONVERSATION',
-      promptSnapshot: transcriptText(turns(upTo), t('aiHelper.you')),
-      aiResponseSnapshot: lineText(entry),
-    },
-    titleKey: 'aiHelper.reportReplyTitle',
-    attachedKey: 'aiHelper.reportReplyAttached',
-  }
+function reportLine(): void {
+  reportTarget.value = buildLineReportTarget(entries.value, currentEntry.value, t('aiHelper.you'))
+}
+
+function reportSummary(): void {
+  if (!summary.value) return
+  reportTarget.value = buildSummaryReportTarget(entries.value, summary.value, t('aiHelper.you'))
 }
 
 function onReported(): void {
-  const reported = entries.value.find((entry) => entry.id === reportingId.value)
-  if (reported) reported.reported = true
+  const target = reportTarget.value
+  if (target?.targetId === 'summary') {
+    summaryReported.value = true
+  } else if (target) {
+    const entry = entries.value.find((item) => item.id === target.targetId)
+    if (entry) entry.reported = true
+  }
   reportTarget.value = null
-  notice.value = t('aiHelper.reportReplySent')
   emit('reported')
 }
 
-async function loadSummary(): Promise<void> {
-  summaryLoading.value = true
-  summaryError.value = null
-  try {
-    const result = await aiHelperApi.xiaomeiSummary({
-      scenario: scenario.value,
-      turns: turns(entries.value),
-      languagePreference: ui.locale,
-    })
-    if (result.status === 'SUCCESS') summary.value = result
-    else summaryError.value = localizedServerMessage(result.message, t('aiHelper.xiaomeiError'))
-  } catch (reason) {
-    summaryError.value = resolveApiError(reason, t('aiHelper.summaryError'))
-  } finally {
-    summaryLoading.value = false
-    emit('used')
-  }
-}
-
 async function endConversation(): Promise<void> {
-  speech.cancelListening()
+  mic.cancel()
   speech.stopSpeaking()
-  endedAt.value = Date.now()
+  minutes.value = Math.max(1, Math.round((Date.now() - startedAt) / 60_000))
+  ended.value = true
   void loadSummary()
   await nextTick()
-  revealResult(summaryView.value?.$el as Element | undefined)
+  if (!isUnmounted()) revealResult(summaryView.value?.$el as Element | undefined)
 }
 
-onBeforeUnmount(stopTimer)
+onBeforeUnmount(() => {
+  onScreen = false
+  conversation += 1
+})
+onActivated(() => {
+  onScreen = true
+})
+onDeactivated(() => {
+  onScreen = false
+  clearLiveCall()
+  stopAudio()
+})
 </script>

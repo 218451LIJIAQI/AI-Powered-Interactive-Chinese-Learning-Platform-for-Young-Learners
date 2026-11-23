@@ -1,13 +1,10 @@
 package com.example.aichinese.util;
 
-import java.util.Locale;
+import java.util.Set;
 
 /**
  * Interface languages supported by the platform: English ({@code en}), Bahasa Melayu
  * ({@code ms}) and Simplified Chinese ({@code zh-CN}, BCP-47).
- *
- * <p>The legacy code {@code zh} (and variants such as {@code zh_cn} or {@code zh-Hans})
- * is still accepted and mapped to {@code zh-CN}.</p>
  */
 public final class LanguageCodes {
 
@@ -17,31 +14,18 @@ public final class LanguageCodes {
 
     public static final String CHINESE_SIMPLIFIED = "zh-CN";
 
+    /** Validation regex matching a supported interface language code (use with {@code stripToNull} when optional). */
+    public static final String SUPPORTED_PATTERN = "^(en|ms|zh-CN)$";
+
+    private static final Set<String> SUPPORTED = Set.of(ENGLISH, MALAY, CHINESE_SIMPLIFIED);
+
     private LanguageCodes() {
     }
 
-    /**
-     * Maps a requested language tag to a supported code.
-     *
-     * @return {@code en}, {@code ms} or {@code zh-CN}; {@code null} when the value is blank
-     *         or not one of the supported languages.
-     */
+    /** The stripped value when it is a supported code; {@code null} when it is blank or anything else. */
     public static String normalize(String value) {
         String trimmed = TextUtils.trimToNull(value);
-        if (trimmed == null) {
-            return null;
-        }
-        String lower = trimmed.toLowerCase(Locale.ROOT);
-        if (lower.equals("en") || lower.startsWith("en-") || lower.startsWith("en_")) {
-            return ENGLISH;
-        }
-        if (lower.equals("ms") || lower.startsWith("ms-") || lower.startsWith("ms_")) {
-            return MALAY;
-        }
-        if (lower.equals("zh") || lower.startsWith("zh-") || lower.startsWith("zh_")) {
-            return CHINESE_SIMPLIFIED;
-        }
-        return null;
+        return trimmed != null && SUPPORTED.contains(trimmed) ? trimmed : null;
     }
 
     /** Same as {@link #normalize(String)} but falls back to English. */
@@ -50,16 +34,9 @@ public final class LanguageCodes {
         return normalized == null ? ENGLISH : normalized;
     }
 
-    /**
-     * A request's language field: en, ms or zh-CN (legacy zh mapped); any other value stripped and lower-cased so
-     * validation rejects it; null stays null.
-     */
-    public static String normalizeRequested(String value) {
-        if (value == null) {
-            return null;
-        }
-        String stripped = value.strip();
-        String normalized = normalize(stripped);
-        return normalized != null ? normalized : stripped.toLowerCase(Locale.ROOT);
+    /** The student's current interface language (en, ms or zh-CN) wins; the account preference is the fallback. */
+    public static String forRequest(String requestedLanguage, String accountLanguage) {
+        String requested = normalize(requestedLanguage);
+        return requested != null ? requested : normalizeOrDefault(accountLanguage);
     }
 }

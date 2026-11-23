@@ -1,380 +1,261 @@
 package com.example.aichinese;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyCollection;
-import static org.mockito.ArgumentMatchers.nullable;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.stream.LongStream;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
-import org.mockito.ArgumentMatchers;
-import org.mockito.stubbing.OngoingStubbing;
+import org.mockito.Captor;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
+import org.springframework.web.server.ResponseStatusException;
 
-import com.example.aichinese.entity.CoursePackage;
-import com.example.aichinese.entity.Lesson;
-import com.example.aichinese.entity.LiveClass;
 import com.example.aichinese.entity.Notification;
-import com.example.aichinese.entity.RecordedLessonVideo;
 import com.example.aichinese.entity.Role;
-import com.example.aichinese.entity.StudentProfile;
-import com.example.aichinese.entity.TeacherFeedback;
-import com.example.aichinese.entity.TeacherProfile;
 import com.example.aichinese.entity.User;
-import com.example.aichinese.entity.enums.ContentStatus;
 import com.example.aichinese.entity.enums.NotificationStatus;
 import com.example.aichinese.entity.enums.NotificationType;
 import com.example.aichinese.entity.enums.RoleName;
-import com.example.aichinese.entity.enums.TeacherStatus;
-import com.example.aichinese.repository.LiveClassRepository;
 import com.example.aichinese.repository.NotificationRepository;
-import com.example.aichinese.repository.RecordedLessonVideoRepository;
-import com.example.aichinese.repository.TeacherFeedbackRepository;
+import com.example.aichinese.repository.UserRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.NotificationService;
 
 /**
- * Unit coverage for {@code NotificationService} - pins input validation
- * and trimming on create, the fail-safe {@code safeCreateNotification}
- * path (independent transaction, sanitised log), hiding of notifications
- * whose target is no longer accessible, and the unread-count and
- * mark-all-read contracts across repository batches.
+ * Unit coverage for {@code NotificationService}: the fail-safe {@code safeCreateNotification} path (independent
+ * transaction, sanitised log), notifying the active admins, and "Mark all as read" with its Undo (the ids it marked,
+ * marked unread again) across repository batches.
  */
-@ExtendWith(OutputCaptureExtension.class)
+@ExtendWith({ OutputCaptureExtension.class, MockitoExtension.class })
 class NotificationServiceTests {
 
-    private static final long STUDENT_USER_ID = 1L;
-    private static final long TEACHER_USER_ID = 77L;
-    private static final long LESSON_ID = 10L;
-    private static final long FEEDBACK_ID = 20L;
-    private static final long LIVE_CLASS_ID = 33L;
-    private static final String TITLE = "Title";
-    private static final String MESSAGE = "Message";
-    private static final String STUDENT_PATH = "/student";
-    private static final String STUDENT_PROFILE_PATH = "/student/profile";
-    private static final String LIVE_CLASS_TARGET = "LIVE_CLASS";
-    private static final String RECORDED_VIDEO_TARGET = "RECORDED_VIDEO";
+    private static final long USER_ID = 1L;
+    private static final int BATCH = 1000;
 
     private final NotificationRepository notificationRepository = mock(NotificationRepository.class);
-    private final TeacherFeedbackRepository teacherFeedbackRepository = mock(TeacherFeedbackRepository.class);
-    private final LiveClassRepository liveClassRepository = mock(LiveClassRepository.class);
-    private final RecordedLessonVideoRepository recordedLessonVideoRepository = mock(RecordedLessonVideoRepository.class);
-    private final User studentUser = user(STUDENT_USER_ID, RoleName.STUDENT);
+    private final UserRepository userRepository = mock(UserRepository.class);
+    private final SecurityUserDetails learner = new SecurityUserDetails(user(USER_ID, RoleName.STUDENT, true));
 
-    @Test
-    void createNotificationRejectsInvalidRequiredFieldsBeforePersistence() {
-        NotificationService service = service();
+    private final PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
+    private final TransactionStatus transactionStatus = mock(TransactionStatus.class);
+    private final NotificationService service = new NotificationService(notificationRepository, transactionManager, userRepository);
 
-        assertThatThrownBy(() -> service.createNotification(null, NotificationType.SYSTEM, TITLE, MESSAGE, null, null, STUDENT_PATH, null))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("recipient");
-        assertThatThrownBy(() -> service.createNotification(studentUser, null, TITLE, MESSAGE, null, null, STUDENT_PATH, null))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("type");
-        assertThatThrownBy(() -> service.createNotification(studentUser, NotificationType.SYSTEM, " ", MESSAGE, null, null, STUDENT_PATH, null))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("title");
-        assertThatThrownBy(() -> service.createNotification(studentUser, NotificationType.SYSTEM, TITLE, "\t", null, null, STUDENT_PATH, null))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("message");
-    }
+    @Captor
+    private ArgumentCaptor<Iterable<Notification>> savedBatch;
 
-    @Test
-    void createNotificationTrimsDisplayFieldsAndOptionalTargets() {
-        NotificationService service = service();
-        when(notificationRepository.save(any(Notification.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
-        service.createNotification(
-                studentUser, NotificationType.SYSTEM, "  Title  ", "\nMessage\n", " TARGET ", 42L, " /student/profile ", null);
-
-        ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
-        verify(notificationRepository).save(captor.capture());
-        Notification saved = captor.getValue();
-        assertThat(saved.getTitle()).isEqualTo(TITLE);
-        assertThat(saved.getMessage()).isEqualTo(MESSAGE);
-        assertThat(saved.getTargetType()).isEqualTo("TARGET");
-        assertThat(saved.getTargetPath()).isEqualTo(STUDENT_PROFILE_PATH);
+    @BeforeEach
+    void prepareTransaction() {
+        when(transactionManager.getTransaction(any(TransactionDefinition.class))).thenReturn(transactionStatus);
     }
 
     @Test
     void safeCreateNotificationDoesNotPropagateNotificationFailures(CapturedOutput output) {
         when(notificationRepository.save(any(Notification.class)))
                 .thenThrow(new RuntimeException("notification store failed token=secret-token"));
-        PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
-        TransactionStatus transactionStatus = mock(TransactionStatus.class);
-        when(transactionManager.getTransaction(any(TransactionDefinition.class))).thenReturn(transactionStatus);
-        NotificationService service = service(transactionManager);
-
-        User recipient = new User();
-        recipient.setId(TEACHER_USER_ID);
-        recipient.setEmail("student@example.com");
-        recipient.setDisplayName("Student");
+        User recipient = user(77L, RoleName.ADMIN, true);
+        when(userRepository.findWithReadLockById(recipient.getId())).thenReturn(Optional.of(recipient));
 
         assertThatCode(() -> service.safeCreateNotification(
-                recipient, "Test notification", "This notification should fail safely.", STUDENT_PROFILE_PATH))
+                recipient, NotificationType.SYSTEM, "Test notification", "This notification should fail safely.",
+                null, null, "/admin"))
                 .doesNotThrowAnyException();
 
+        ArgumentCaptor<TransactionDefinition> definition = ArgumentCaptor.forClass(TransactionDefinition.class);
+        verify(transactionManager).getTransaction(definition.capture());
+        assertThat(definition.getValue().getPropagationBehavior())
+                .isEqualTo(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         verify(notificationRepository).save(any(Notification.class));
         verify(transactionManager).rollback(transactionStatus);
         assertThat(output)
-                .contains("Notification creation failed for recipient user id " + TEACHER_USER_ID + ": RuntimeException")
+                .contains("Notification creation failed for recipient user id 77: RuntimeException")
                 .contains("token=[REDACTED]")
                 .doesNotContain("secret-token")
                 .doesNotContain("at com.example.aichinese");
     }
 
-    @Test
-    void teacherFeedbackNotificationIsHiddenWhenLessonIsNoLongerPublished() {
-        stubOwnFeedback(feedback(student(studentUser), lesson(LESSON_ID, ContentStatus.ARCHIVED)));
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void onlyActiveAdminsAreNotifiedWhileTheTargetIsVisible(boolean targetVisible) {
+        User active = user(2L, RoleName.ADMIN, true);
+        User deactivated = user(4L, RoleName.ADMIN, false);
+        when(userRepository.findActiveIdsByRoleName(RoleName.ADMIN))
+                .thenReturn(List.of(active.getId(), deactivated.getId()));
+        when(userRepository.findWithReadLockByIdInOrderByIdAsc(List.of(2L, 4L)))
+                .thenReturn(List.of(active, deactivated));
 
-        assertThat(service().isNotificationCurrentlyAccessible(
-                new SecurityUserDetails(studentUser), unreadTeacherFeedbackNotification(studentUser))).isFalse();
-    }
+        service.notifyActiveAdmins(NotificationType.SUPPORT_REQUEST, "New support request", "#1042",
+                "SupportRequest", 9L, "/admin/support?request=9", () -> targetVisible);
 
-    @Test
-    void teacherFeedbackNotificationIsVisibleForPublishedLesson() {
-        stubOwnFeedback(feedback(student(studentUser), lesson(LESSON_ID, ContentStatus.PUBLISHED)));
-
-        assertThat(service().isNotificationCurrentlyAccessible(
-                new SecurityUserDetails(studentUser), unreadTeacherFeedbackNotification(studentUser))).isTrue();
-    }
-
-    @Test
-    void teacherKeepsOwnLiveClassNotificationWhenTheClassIsNotStudentVisible() {
-        NotificationService service = service();
-        User teacherUser = user(TEACHER_USER_ID, RoleName.TEACHER);
-        when(liveClassRepository.findByIdIn(anyCollection()))
-                .thenReturn(List.of(liveClass(LIVE_CLASS_ID, lesson(LESSON_ID, ContentStatus.SUBMITTED))));
-        // A student enrolled in the teacher's class while its lesson is back in review.
-        Notification teacherNotification = unreadNotification(teacherUser, LIVE_CLASS_TARGET, LIVE_CLASS_ID);
-
-        assertThat(service.isNotificationCurrentlyAccessible(new SecurityUserDetails(teacherUser), teacherNotification)).isTrue();
-        // The class is not looked up for a teacher recipient.
-        verify(liveClassRepository, never()).findByIdIn(anyCollection());
-
-        // The same class is hidden from a student, so the teacher result above is not just a missing class.
-        Notification studentNotification = unreadNotification(studentUser, LIVE_CLASS_TARGET, LIVE_CLASS_ID);
-        assertThat(service.isNotificationCurrentlyAccessible(new SecurityUserDetails(studentUser), studentNotification)).isFalse();
-    }
-
-    /** FRNOTIF02: a student opens a live-class notification only while the class's lesson and course are visible. */
-    @Test
-    void studentLiveClassNotificationFollowsTheClassContentVisibility() {
-        NotificationService service = service();
-        Lesson publishedLesson = lesson(LESSON_ID, ContentStatus.PUBLISHED);
-        LiveClass liveClass = liveClass(LIVE_CLASS_ID, publishedLesson);
-        when(liveClassRepository.findByIdIn(anyCollection())).thenReturn(List.of(liveClass));
-        Notification notification = unreadNotification(studentUser, LIVE_CLASS_TARGET, LIVE_CLASS_ID);
-
-        assertThat(service.isNotificationCurrentlyAccessible(new SecurityUserDetails(studentUser), notification)).isTrue();
-
-        // The class is also linked to a course that is not published (yet), which hides it again.
-        CoursePackage draftCourse = new CoursePackage();
-        draftCourse.setContentStatus(ContentStatus.DRAFT);
-        draftCourse.setTeacher(publishedLesson.getTeacher());
-        liveClass.setCoursePackage(draftCourse);
-        assertThat(service.isNotificationCurrentlyAccessible(new SecurityUserDetails(studentUser), notification)).isFalse();
-    }
-
-    /**
-     * FRNOTIF02: a student opens a recorded-video notification only while the video is active and its lesson is
-     * visible; a deleted video hides it too. The video targets of a batch are loaded in one query.
-     */
-    @Test
-    void studentRecordedVideoNotificationsAreHiddenWhenTheVideoIsNoLongerVisible() {
-        Lesson publishedLesson = lesson(LESSON_ID, ContentStatus.PUBLISHED);
-        when(recordedLessonVideoRepository.findByIdIn(anyCollection())).thenReturn(List.of(
-                recordedVideo(40L, publishedLesson, true),
-                recordedVideo(41L, publishedLesson, false),
-                recordedVideo(42L, lesson(LESSON_ID + 1, ContentStatus.SUBMITTED), true)));
-        Notification visible = unreadNotification(studentUser, RECORDED_VIDEO_TARGET, 40L);
-        stubUnreadBatches(List.of(
-                visible,
-                unreadNotification(studentUser, RECORDED_VIDEO_TARGET, 41L),
-                unreadNotification(studentUser, RECORDED_VIDEO_TARGET, 42L),
-                // A deleted video.
-                unreadNotification(studentUser, RECORDED_VIDEO_TARGET, 43L)));
-
-        service().markAllAsRead(new SecurityUserDetails(studentUser));
-
-        verify(notificationRepository).saveAll(List.of(visible));
-        verify(recordedLessonVideoRepository, times(1)).findByIdIn(anyCollection());
-    }
-
-    @Test
-    void liveClassTargetsOfABatchAreLoadedTogetherAndHiddenWhileTheirLessonIsNotPublished() {
-        stubUnreadBatches(List.of(
-                unreadNotification(studentUser, LIVE_CLASS_TARGET, 30L),
-                unreadNotification(studentUser, LIVE_CLASS_TARGET, 31L),
-                // A deleted class.
-                unreadNotification(studentUser, LIVE_CLASS_TARGET, 32L)));
-        when(liveClassRepository.findByIdIn(anyCollection())).thenReturn(List.of(
-                liveClass(30L, lesson(LESSON_ID, ContentStatus.PUBLISHED)),
-                liveClass(31L, lesson(LESSON_ID + 1, ContentStatus.SUBMITTED))));
-
-        assertThat(service().getUnreadCount(new SecurityUserDetails(studentUser)).unreadCount()).isEqualTo(1);
-        verify(liveClassRepository, times(1)).findByIdIn(anyCollection());
-    }
-
-    @Test
-    void unreadCountExcludesInaccessibleTargetedNotifications() {
-        stubUnreadBatches(List.of(
-                unreadTeacherFeedbackNotification(studentUser), unreadNotification(studentUser, null, null)));
-        stubOwnFeedback();
-
-        assertThat(service().getUnreadCount(new SecurityUserDetails(studentUser)).unreadCount()).isEqualTo(1);
-    }
-
-    @Test
-    void markAllAsReadOnlyUpdatesAccessibleNotifications() {
-        Notification hidden = unreadTeacherFeedbackNotification(studentUser);
-        Notification visible = unreadNotification(studentUser, null, null);
-        stubUnreadBatches(List.of(hidden, visible));
-        stubOwnFeedback();
-
-        service().markAllAsRead(new SecurityUserDetails(studentUser));
-
-        assertThat(hidden.getNotificationStatus()).isEqualTo(NotificationStatus.UNREAD);
-        assertThat(visible.getNotificationStatus()).isEqualTo(NotificationStatus.READ);
-        verify(notificationRepository).saveAll(List.of(visible));
-    }
-
-    @Test
-    void unreadCountProcessesMoreThanOneRepositoryBatch() {
-        List<Notification> firstBatch = new ArrayList<>();
-        LocalDateTime now = LocalDateTime.now();
-        for (long id = 300; id > 50; id--) {
-            Notification notification = unreadNotification(studentUser, null, null);
-            notification.setId(id);
-            notification.setCreatedAt(now.minusSeconds(300 - id));
-            firstBatch.add(notification);
-        }
-        Notification finalNotification = unreadNotification(studentUser, null, null);
-        finalNotification.setId(50L);
-        finalNotification.setCreatedAt(now.minusSeconds(250));
-        stubUnreadBatches(firstBatch, List.of(finalNotification));
-
-        assertThat(service().getUnreadCount(new SecurityUserDetails(studentUser)).unreadCount()).isEqualTo(251);
-        verify(notificationRepository, times(2))
-                .findUserStatusBatchBefore(any(), any(), nullable(LocalDateTime.class), any(), any());
-    }
-
-    private NotificationService service() {
-        return service(mock(PlatformTransactionManager.class));
-    }
-
-    private NotificationService service(PlatformTransactionManager transactionManager) {
-        return new NotificationService(
-                notificationRepository,
-                transactionManager,
-                teacherFeedbackRepository,
-                recordedLessonVideoRepository,
-                liveClassRepository);
-    }
-
-    /** The unread notifications of the user, as the successive repository batches return them. */
-    @SafeVarargs
-    private void stubUnreadBatches(List<Notification> firstBatch, List<Notification>... laterBatches) {
-        OngoingStubbing<List<Notification>> stubbing = when(notificationRepository.findUserStatusBatchBefore(
-                any(), any(), nullable(LocalDateTime.class), any(), any())).thenReturn(firstBatch);
-        for (List<Notification> batch : laterBatches) {
-            stubbing = stubbing.thenReturn(batch);
+        if (targetVisible) {
+            verify(notificationRepository).saveAll(savedBatch.capture());
+            assertThat(savedBatch.getValue()).extracting(Notification::getUser).containsExactly(active);
+        } else {
+            verify(notificationRepository, never()).saveAll(any());
         }
     }
 
-    /** The feedback targets of a batch come from one query limited to the student's own feedback. */
-    private void stubOwnFeedback(TeacherFeedback... feedback) {
-        when(teacherFeedbackRepository.findAll(
-                ArgumentMatchers.<Specification<TeacherFeedback>>any(), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of(feedback)));
+    @Test
+    void failedAdminLookupRollsBackOnlyTheNotification(CapturedOutput output) {
+        when(userRepository.findActiveIdsByRoleName(RoleName.ADMIN))
+                .thenThrow(new IllegalStateException("Recipient lookup unavailable"));
+
+        assertThatCode(() -> service.notifyActiveAdmins(NotificationType.SUPPORT_REQUEST,
+                "New support request", "#1042", "SupportRequest", 9L, "/admin/support?request=9", () -> true))
+                .doesNotThrowAnyException();
+
+        verify(transactionManager).rollback(transactionStatus);
+        verifyNoInteractions(notificationRepository);
+        assertThat(output).contains("Admin notification creation failed for SupportRequest:9");
     }
 
-    private static TeacherFeedback feedback(StudentProfile student, Lesson lesson) {
-        TeacherFeedback feedback = new TeacherFeedback();
-        feedback.setId(FEEDBACK_ID);
-        feedback.setStudent(student);
-        feedback.setLesson(lesson);
-        return feedback;
+    @Test
+    void notifyActiveAdminsForUserTargetLocksUsersInAscendingIdOrder() {
+        User targetStudent = user(3L, RoleName.STUDENT, true);
+        User adminHigh = user(10L, RoleName.ADMIN, true);
+        User adminLow = user(1L, RoleName.ADMIN, true);
+        when(userRepository.findActiveIdsByRoleName(RoleName.ADMIN)).thenReturn(List.of(10L, 1L));
+        when(userRepository.findWithReadLockByIdInOrderByIdAsc(List.of(1L, 3L, 10L)))
+                .thenReturn(List.of(adminLow, targetStudent, adminHigh));
+
+        service.notifyActiveAdminsForUserTarget(NotificationType.ADMIN_TASK, "AI report needs review", "Report",
+                "AI_RESPONSE_REPORT", 55L, "/admin/ai?report=55", 3L);
+
+        verify(userRepository).findWithReadLockByIdInOrderByIdAsc(List.of(1L, 3L, 10L));
+        verify(notificationRepository).saveAll(savedBatch.capture());
+        assertThat(savedBatch.getValue()).extracting(Notification::getUser).containsExactly(adminHigh, adminLow);
     }
 
-    private static LiveClass liveClass(Long id, Lesson lesson) {
-        LiveClass liveClass = new LiveClass();
-        liveClass.setId(id);
-        liveClass.setLesson(lesson);
-        return liveClass;
+    @Test
+    void notifyActiveAdminsForUserTargetSkipsWhenTargetUserWasDeleted() {
+        User deletedStudent = user(3L, RoleName.STUDENT, false);
+        deletedStudent.setDeletedAt(LocalDateTime.now().minusMinutes(1));
+        User admin = user(1L, RoleName.ADMIN, true);
+        when(userRepository.findActiveIdsByRoleName(RoleName.ADMIN)).thenReturn(List.of(1L));
+        when(userRepository.findWithReadLockByIdInOrderByIdAsc(List.of(1L, 3L)))
+                .thenReturn(List.of(admin, deletedStudent));
+
+        service.notifyActiveAdminsForUserTarget(NotificationType.ADMIN_TASK, "AI report needs review", "Report",
+                "AI_RESPONSE_REPORT", 55L, "/admin/ai?report=55", 3L);
+
+        verify(notificationRepository, never()).saveAll(any());
     }
 
-    private static RecordedLessonVideo recordedVideo(Long id, Lesson lesson, boolean active) {
-        RecordedLessonVideo video = new RecordedLessonVideo();
-        video.setId(id);
-        video.setLesson(lesson);
-        video.setActive(active);
-        return video;
+    @Test
+    void safeCreatePersonalizedNotificationsBatchesActiveRecipientsWithDistinctMessages() {
+        User first = user(11L, RoleName.STUDENT, true);
+        User second = user(12L, RoleName.STUDENT, true);
+        User inactive = user(13L, RoleName.STUDENT, false);
+        when(userRepository.findWithReadLockByIdInOrderByIdAsc(List.of(11L, 12L, 13L)))
+                .thenReturn(List.of(first, second, inactive));
+        Map<Long, Notification> drafts = Map.of(
+                11L, NotificationService.draft(NotificationType.DAILY_GOAL_REMINDER, "Daily goal reminder",
+                        "You are 10 XP away from today's goal.", null, null, "/student/learn"),
+                12L, NotificationService.draft(NotificationType.DAILY_GOAL_REMINDER, "Daily goal reminder",
+                        "You are 5 XP away from today's goal.", null, null, "/student/learn"),
+                13L, NotificationService.draft(NotificationType.DAILY_GOAL_REMINDER, "Daily goal reminder",
+                        "Inactive learner should be skipped.", null, null, "/student/learn"));
+
+        service.safeCreatePersonalizedNotifications(drafts, NotificationType.DAILY_GOAL_REMINDER);
+
+        verify(notificationRepository).saveAll(savedBatch.capture());
+        assertThat(savedBatch.getValue())
+                .extracting(n -> n.getUser().getId(), Notification::getMessage)
+                .containsExactlyInAnyOrder(
+                        tuple(11L, "You are 10 XP away from today's goal."),
+                        tuple(12L, "You are 5 XP away from today's goal."));
     }
 
-    private static User user(Long id, RoleName roleName) {
+    /** Every unread notification is marked read, batch after batch, and their ids come back for the Undo. */
+    @Test
+    void markAllAsReadMarksEveryBatchAndReturnsTheIds() {
+        List<Long> ids = LongStream.rangeClosed(1, BATCH + 3).boxed().toList();
+        when(notificationRepository.lockUnreadIds(USER_ID)).thenReturn(ids);
+
+        List<Long> marked = service.markAllAsRead(learner);
+
+        assertThat(marked).containsExactlyElementsOf(ids);
+        ArgumentCaptor<LocalDateTime> readAt = ArgumentCaptor.forClass(LocalDateTime.class);
+        verify(notificationRepository).markLockedRead(eq(USER_ID), eq(ids.subList(0, BATCH)), readAt.capture());
+        verify(notificationRepository).markLockedRead(eq(USER_ID), eq(ids.subList(BATCH, ids.size())), readAt.capture());
+        assertThat(readAt.getAllValues()).doesNotContainNull().containsOnly(readAt.getValue());
+    }
+
+    @Test
+    void markAllAsReadWithNothingUnreadReturnsNoIds() {
+        when(notificationRepository.lockUnreadIds(USER_ID)).thenReturn(List.of());
+
+        assertThat(service.markAllAsRead(learner)).isEmpty();
+        verify(notificationRepository, never()).markLockedRead(any(), any(), any());
+    }
+
+    /** The Undo marks the user's own read notifications unread again; it never reaches another user's. */
+    @Test
+    void markUnreadOnlyTouchesTheCallersReadNotifications() {
+        List<Long> requested = List.of(5L, 6L, 999L);
+        when(notificationRepository.lockReadIds(USER_ID, requested)).thenReturn(List.of(5L));
+
+        List<Long> restored = service.markUnread(learner, requested);
+
+        assertThat(restored).containsExactly(5L);
+        verify(notificationRepository).markLockedUnread(eq(USER_ID), eq(List.of(5L)), any(LocalDateTime.class));
+    }
+
+    @Test
+    void markUnreadOfNothingChangesNothing() {
+        assertThat(service.markUnread(learner, List.of())).isEmpty();
+        verifyNoInteractions(notificationRepository);
+    }
+
+    @Test
+    void markUnreadRefusesMoreIdsThanOnePageOfUndo() {
+        List<Long> ids = LongStream.rangeClosed(1, 1001).boxed().toList();
+
+        assertThatThrownBy(() -> service.markUnread(learner, ids))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Too many notifications to mark as unread at once.");
+    }
+
+    @Test
+    void unreadCountIsTheUsersUnreadNotifications() {
+        when(notificationRepository.countByUserIdAndNotificationStatus(USER_ID, NotificationStatus.UNREAD)).thenReturn(4L);
+
+        assertThat(service.getUnreadCount(learner).unreadCount()).isEqualTo(4L);
+    }
+
+    private static User user(long id, RoleName roleName, boolean active) {
         Role role = new Role();
         role.setName(roleName);
         User user = new User();
         user.setId(id);
-        user.setEmail("user-" + id + "@example.com");
+        user.setEmail("user" + id + "@example.com");
+        user.setPasswordHash("hash");
         user.setDisplayName("User " + id);
-        user.setPasswordHash("password");
-        user.getRoles().add(role);
+        user.setActive(active);
+        user.setRoles(Set.of(role));
         return user;
-    }
-
-    private static StudentProfile student(User user) {
-        StudentProfile student = new StudentProfile();
-        student.setId(2L);
-        student.setUser(user);
-        return student;
-    }
-
-    /** A lesson of an approved, active teacher (student visibility needs both, FRTVER04). */
-    private static Lesson lesson(Long id, ContentStatus status) {
-        User teacherUser = new User();
-        teacherUser.setActive(true);
-        TeacherProfile teacher = new TeacherProfile();
-        teacher.setUser(teacherUser);
-        teacher.setTeacherStatus(TeacherStatus.APPROVED);
-        Lesson lesson = new Lesson();
-        lesson.setId(id);
-        lesson.setTitle("Lesson " + id);
-        lesson.setTeacher(teacher);
-        lesson.setContentStatus(status);
-        return lesson;
-    }
-
-    private static Notification unreadNotification(User user, String targetType, Long targetId) {
-        Notification notification = new Notification();
-        notification.setUser(user);
-        notification.setTargetType(targetType);
-        notification.setTargetId(targetId);
-        notification.setNotificationStatus(NotificationStatus.UNREAD);
-        return notification;
-    }
-
-    private static Notification unreadTeacherFeedbackNotification(User user) {
-        return unreadNotification(user, "TEACHER_FEEDBACK", FEEDBACK_ID);
     }
 }

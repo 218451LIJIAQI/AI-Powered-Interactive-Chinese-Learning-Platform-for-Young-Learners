@@ -1,28 +1,19 @@
 <template>
   <div class="page-stack">
-    <div class="admin-head">
-      <PageHeaderBlock :title="t('adminLearning.libraryPageTitle')" :description="t('adminLearning.libraryNote')">
-        <template #actions>
-          <button class="btn btn-primary" type="button" data-testid="new-activity" @click="openEditor(null)">
-            <IconGlyph name="plus" :size="16" />{{ t('adminLearning.newActivity') }}
-          </button>
-        </template>
-      </PageHeaderBlock>
-      <AdminContentTabs />
-    </div>
-    <DataNotice :success="actionSuccess" :error="actionError">
-      <template v-if="restorable" #actions>
-        <button class="btn btn-secondary btn-sm" type="button" @click="runAction('restore', restorable)">
-          {{ t('adminLearning.restore') }}
-        </button>
-      </template>
-    </DataNotice>
+    <PageHeaderBlock :title="t('adminLearning.libraryPageTitle')" hide-title />
+    <AdminContentTabs>
+      <button class="btn btn-primary" type="button" data-testid="new-activity" @click="openEditor(null)">
+        <IconGlyph name="plus" :size="16" />
+        <span>{{ t('adminLearning.newActivity') }}</span>
+      </button>
+    </AdminContentTabs>
+    <DataNotice :error="actionError" />
 
-    <section class="admin-sheet" aria-labelledby="library-title">
-      <h2 id="library-title" class="sr-only">{{ t('adminLearning.libraryHeading') }}</h2>
-      <div class="admin-toolbar">
-        <div class="field admin-toolbar-search">
-          <label class="field-label" for="library-search">{{ t('adminLearning.search') }}</label>
+    <section class="panel admin-table-card">
+      <h2 id="library-title" class="sr-only">{{ t('adminLearning.libraryPageTitle') }}</h2>
+      <div class="admin-filters">
+        <div class="field is-search">
+          <label class="field-label" for="library-search">{{ t('common.search') }}</label>
           <div class="input-with-icon">
             <IconGlyph class="input-icon" name="search" :size="16" />
             <input
@@ -37,71 +28,85 @@
         </div>
         <div class="field">
           <label class="field-label" for="library-type">{{ t('adminLearning.type') }}</label>
-          <select id="library-type" v-model="typeFilter" class="select" @change="applyFilters">
+          <select id="library-type" v-model="typeFilter" class="select">
             <option :value="null">{{ t('adminLearning.allTypes') }}</option>
             <option v-for="option in PRACTICE_TYPES" :key="option" :value="option">
-              {{ t(practiceTypeKey(option)) }}
+              {{ t(`practiceType.${option}`) }}
             </option>
           </select>
         </div>
         <div class="field">
-          <label class="field-label" for="library-stage">{{ t('adminLearning.stage') }}</label>
-          <select id="library-stage" v-model="stageFilter" class="select" @change="applyFilters">
-            <option :value="null">{{ t('adminLearning.allStages') }}</option>
-            <option v-for="stage in STAGES" :key="stage" :value="stage">{{ t(stageKey(stage)) }}</option>
-          </select>
-        </div>
-        <div class="field">
           <label class="field-label" for="library-status">{{ t('adminLearning.status') }}</label>
-          <select id="library-status" v-model="statusFilter" class="select" @change="applyFilters">
-            <option v-for="option in STATUS_FILTERS" :key="option.labelKey" :value="option.value">
-              {{ t(option.labelKey) }}
+          <select id="library-status" v-model="statusFilter" class="select">
+            <option :value="null">{{ t('adminLearning.statusAll') }}</option>
+            <option v-for="status in CONTENT_STATUSES" :key="status" :value="status">
+              {{ t(setStatusKey(status)) }}
             </option>
           </select>
         </div>
       </div>
 
-      <div v-if="library.loading.value" class="admin-sheet-body">
-        <StatePanel
-          tone="loading"
-          :title="t('adminLearning.libraryLoading')"
-          :message="t('adminLearning.libraryLoadingHint')"
-        />
-      </div>
-      <div v-else-if="library.error.value && !rows.length" class="admin-sheet-body">
-        <StatePanel tone="error" icon="alert" :title="t('adminLearning.libraryError')" :message="library.error.value">
-          <template #actions>
-            <button class="btn btn-primary" type="button" @click="library.reload">
-              {{ t('adminLearning.retry') }}
-            </button>
-          </template>
-        </StatePanel>
-      </div>
-      <div v-else-if="!rows.length" class="admin-sheet-body">
-        <StatePanel
-          tone="empty"
-          icon="search"
-          :title="t('adminLearning.noActivities')"
-          :message="t('adminLearning.noActivitiesHint')"
-        >
-          <template #actions>
-            <button class="btn btn-secondary" type="button" @click="clearFilters">
-              {{ t('adminLearning.clearFilters') }}
-            </button>
-          </template>
-        </StatePanel>
-      </div>
+      <StatePanel
+        v-if="library.loading.value"
+        tone="loading"
+        :title="t('adminLearning.libraryLoading')"
+        :message="t('adminLearning.libraryLoadingHint')"
+      />
+      <StatePanel
+        v-else-if="library.error.value"
+        tone="error"
+        icon="alert"
+        :title="t('adminLearning.libraryError')"
+        :message="library.error.value"
+        @retry="library.reload"
+      />
+      <StatePanel
+        v-else-if="!rows.length"
+        tone="empty"
+        :icon="hasFilters ? 'search' : 'layers'"
+        spacious
+        :title="
+          !hasFilters
+            ? t('adminLearning.libraryEmpty')
+            : keyword
+              ? t('adminLearning.noActivitiesSearch', { term: keyword })
+              : t('adminLearning.noActivities')
+        "
+        :message="
+          !hasFilters
+            ? t('adminLearning.libraryEmptyHint')
+            : searchOnly
+              ? t('adminLearning.noActivitiesSearchHint')
+              : t('adminLearning.noActivitiesHint')
+        "
+      >
+        <template #actions>
+          <button
+            v-if="hasFilters"
+            class="btn btn-secondary"
+            type="button"
+            data-testid="library-clear"
+            @click="clearFilters"
+          >
+            {{ searchOnly ? t('common.clearSearch') : t('common.clearFilters') }}
+          </button>
+          <button v-else class="btn btn-primary" type="button" @click="openEditor(null)">
+            <IconGlyph name="plus" :size="16" />
+            <span>{{ t('adminLearning.newActivity') }}</span>
+          </button>
+        </template>
+      </StatePanel>
       <template v-else>
-        <div class="data-table-wrap" role="region" :aria-label="t('adminLearning.libraryHeading')" tabindex="0">
-          <table class="data-table admin-table">
+        <div class="data-table-wrap admin-table-wrap" role="region" aria-labelledby="library-title" tabindex="0">
+          <table class="data-table admin-table admin-table-fixed admin-library-table">
             <thead>
               <tr>
                 <th scope="col">{{ t('adminLearning.title') }}</th>
-                <th scope="col">{{ t('adminLearning.type') }}</th>
-                <th scope="col">{{ t('adminLearning.stageLevel') }}</th>
-                <th scope="col">{{ t('adminLearning.status') }}</th>
-                <th scope="col" class="col-numeric">{{ t('adminLearning.updated') }}</th>
-                <th scope="col" class="col-actions">
+                <th scope="col" class="admin-library-col-type">{{ t('adminLearning.type') }}</th>
+                <th scope="col" class="admin-library-col-level">{{ t('adminLearning.level') }}</th>
+                <th scope="col" class="admin-library-col-status">{{ t('adminLearning.status') }}</th>
+                <th scope="col" class="admin-library-col-updated">{{ t('adminLearning.updated') }}</th>
+                <th scope="col" class="col-actions admin-library-col-open">
                   <span class="sr-only">{{ t('adminLearning.actions') }}</span>
                 </th>
               </tr>
@@ -110,80 +115,87 @@
               <tr
                 v-for="row in rows"
                 :key="`${row.type}-${row.id}`"
-                :class="{ 'is-selected': detailsOpen && openRow?.type === row.type && openRow?.id === row.id }"
+                :class="{ 'is-selected': inDrawer(row) }"
                 data-testid="library-row"
                 @click="openDetails(row)"
               >
-                <td class="admin-learning-title-cell">{{ row.title }}</td>
+                <td class="admin-cell-strong">{{ row.title }}</td>
                 <td>
-                  <span class="tag">{{ t(practiceTypeKey(row.type)) }}</span>
+                  <span class="tag is-outline">{{ t(`practiceType.${row.type}`) }}</span>
                 </td>
-                <td class="admin-learning-stage-cell">
-                  {{ t(stageKey(row.stage)) }}<template v-if="row.hskLevel"> · HSK {{ row.hskLevel }}</template>
+                <td class="admin-cell-muted">
+                  {{ row.hskLevel ? t('hsk.number', { level: row.hskLevel }) : '—' }}
                 </td>
-                <td><StatusPill :label="t(setStatusKey(row.status))" :tone="setStatusTone(row.status)" /></td>
-                <td class="col-numeric admin-cell-date">
-                  {{ formatShortDate(row.updatedAt) }}
-                </td>
+                <td><StatusPill :label="t(setStatusKey(row.status))" :tone="contentStatusTone(row.status)" /></td>
+                <td class="admin-cell-date">{{ formatShortDate(row.updatedAt) }}</td>
                 <td class="col-actions">
+                  <!-- An archived set is brought back from its row (A4.14, A4.19); every other row opens. -->
                   <button
-                    class="btn btn-ghost btn-icon btn-sm"
+                    v-if="row.status === 'ARCHIVED'"
+                    class="btn btn-secondary btn-sm"
+                    type="button"
+                    :disabled="busyKeys.has(setKeyString(row))"
+                    :aria-label="t('adminLearning.restoreActivity', { title: row.title })"
+                    data-testid="library-restore"
+                    @click.stop="runAction('restore', row)"
+                  >
+                    {{ t('adminLearning.restore') }}
+                  </button>
+                  <button
+                    v-else
+                    class="btn btn-secondary btn-sm"
                     type="button"
                     :aria-label="t('adminLearning.openActivity', { title: row.title })"
                     @click.stop="openDetails(row)"
                   >
-                    <IconGlyph name="chevronRight" :size="16" />
+                    {{ t('common.open') }}
                   </button>
                 </td>
               </tr>
             </tbody>
           </table>
         </div>
-        <div class="admin-sheet-foot">
-          <PaginationBar
-            :current-page="page + 1"
-            :total-pages="totalPages"
-            :info="t('adminLearning.showing', range)"
-            :label="t('adminLearning.libraryPages')"
-            icon-only
-            @update:current-page="goToPage($event - 1)"
-          />
-        </div>
+        <PaginationBar
+          :page="displayedPage"
+          :total-pages="totalPages"
+          :label="t('adminLearning.libraryPages')"
+          icon-only
+          @update:page="goToPage"
+        />
       </template>
     </section>
 
     <PracticeSetDetails
-      :open="detailsOpen"
-      :set="details"
-      :loading="detailsLoading"
-      :error="detailsError"
-      @close="detailsOpen = false"
-      @retry="loadDetails"
-      @edit="openEditor(details)"
-      @action="requestAction"
+      v-if="openRow !== null"
+      :set="details.data.value"
+      :loading="details.loading.value"
+      :error="details.error.value"
+      :busy="busyKeys.has(setKeyString(openRow))"
+      :action-error="detailsActionError"
+      @close="closeDetails()"
+      @retry="details.reload"
+      @edit="openEditor(details.data.value)"
+      @action="onDetailsAction"
     />
-    <PracticeSetEditor :open="editorOpen" :existing="editing" @close="editorOpen = false" @saved="onSaved" />
-    <ConfirmDialog
-      :open="confirming !== null"
-      :tone="confirming === 'archive' ? 'danger' : 'primary'"
-      :title="confirmTitle"
-      :message="confirming === 'archive' ? t('adminLearning.archiveMessage') : t('adminLearning.unpublishMessage')"
-      :confirm-label="
-        confirming === 'archive' ? t('adminLearning.archiveActivity') : t('adminLearning.unpublishActivity')
-      "
-      :cancel-label="confirming === 'archive' ? t('adminLearning.keepActivity') : t('adminLearning.keepPublished')"
-      :busy="busy"
-      @confirm="confirmAction"
-      @cancel="confirming = null"
+    <PracticeSetEditor
+      v-if="editing !== undefined"
+      :existing="editing"
+      :save-set="saveSet"
+      @close="closeEditor"
+      @saved="onSaved"
     />
+    <AppToast :message="toast" :action="toastAction" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 
 import { adminLearningApi } from '@/api/learn'
 import AdminContentTabs from '@/components/admin/AdminContentTabs.vue'
+import { contentStatusTone } from '@/components/admin/adminDisplay'
+import { reloadContentCounts } from '@/components/admin/adminContentCounts'
+import AppToast from '@/components/common/AppToast.vue'
 import DataNotice from '@/components/common/DataNotice.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import PaginationBar from '@/components/common/PaginationBar.vue'
@@ -191,40 +203,46 @@ import StatePanel from '@/components/common/StatePanel.vue'
 import StatusPill from '@/components/common/StatusPill.vue'
 import PracticeSetDetails from '@/components/learn/admin/PracticeSetDetails.vue'
 import PracticeSetEditor from '@/components/learn/admin/PracticeSetEditor.vue'
-import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
-import { useActionFeedback } from '@/composables/useActionFeedback'
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
+import { useIsUnmounted } from '@/composables/useIsUnmounted'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { useResource, useServerPage } from '@/composables/useResource'
-import { adminLearningMessages } from '@/plugins/adminLearningMessages'
-import { classesMessages } from '@/plugins/classesMessages'
-import type { ContentStatus, LearningStage } from '@/types/api'
-import type { AdminPracticeSetDetail, AdminPracticeSetRow, PracticeType } from '@/types/learn'
+import { useToast } from '@/composables/useToast'
+import { PRACTICE_TYPES } from '@/config/practiceActivities'
+import { adminLearningSharedMessages } from '@/plugins/adminLearningSharedMessages'
+import { adminPracticeLibraryMessages } from '@/plugins/adminPracticeLibraryMessages'
+import { CONTENT_STATUSES, type ContentStatus } from '@/types/api'
+import type { AdminPracticeSetDetail, AdminPracticeSetRow, PracticeSetAction, PracticeType } from '@/types/learn'
 import { resolveApiError } from '@/utils/apiError'
 import { formatShortDate } from '@/utils/format'
-import { PRACTICE_TYPES, practiceTypeKey, setStatusKey, setStatusTone, STAGES, stageKey } from '@/utils/learnLabels'
+import { setStatusKey } from '@/utils/learnLabels'
+import '@/styles/admin-shared.css'
 import '@/styles/learn-admin.css'
 
+/** A set by its type and id: each type keeps its sets in a table of its own, so an id alone is not unique. */
+type SetKey = Pick<AdminPracticeSetRow, 'type' | 'id'>
+
 const PAGE_SIZE = 10
-const STATUS_FILTERS: readonly { value: ContentStatus | null; labelKey: string }[] = [
-  { value: null, labelKey: 'adminLearning.statusAll' },
-  { value: 'PUBLISHED', labelKey: 'adminLearning.published' },
-  { value: 'DRAFT', labelKey: 'adminLearning.draft' },
-  { value: 'ARCHIVED', labelKey: 'adminLearning.archived' },
-]
-type SetAction = 'publish' | 'unpublish' | 'archive' | 'restore'
+/**
+ * The change an Undo in the toast runs to take one back. Archive has its own inverse on the server.
+ */
+const UNDO_ACTIONS: Readonly<Partial<Record<PracticeSetAction, PracticeSetAction>>> = {
+  publish: 'unpublish',
+  unpublish: 'publish',
+  archive: 'unarchive',
+  restore: 'archive',
+}
 
-const { t } = useLocalMessages({ adminLearning: adminLearningMessages, classes: classesMessages })
-const feedback = useActionFeedback()
-const { actionError, actionSuccess } = feedback
+const { t } = useLocalMessages({ adminLearning: [adminLearningSharedMessages, adminPracticeLibraryMessages] })
+const actionError = ref<string | null>(null)
+const { toast, toastAction, showToast, hideToast } = useToast()
 
-// ----- list -----
+// The list
 
 const { searchTerm, keyword, clear: clearSearch } = useDebouncedSearch()
 const typeFilter = ref<PracticeType | null>(null)
 const statusFilter = ref<ContentStatus | null>(null)
-const stageFilter = ref<LearningStage | null>(null)
 const page = ref(0)
 
 const library = useResource(() =>
@@ -232,119 +250,120 @@ const library = useResource(() =>
     q: keyword.value,
     type: typeFilter.value,
     status: statusFilter.value,
-    stage: stageFilter.value,
     page: page.value,
     size: PAGE_SIZE,
   }),
 )
-const { items: rows, totalPages, range, goToPage } = useServerPage(library, page)
+const { items: rows, displayedPage, totalPages, goToPage } = useServerPage(library, page, { stepBackFromEmpty: true })
 
-function applyFilters(): void {
+watch([keyword, typeFilter, statusFilter], () => {
   page.value = 0
+  library.data.value = null
   void library.reload()
-}
-
-watch(keyword, applyFilters)
+})
 
 function clearFilters(): void {
   clearSearch()
   typeFilter.value = null
   statusFilter.value = null
-  stageFilter.value = null
-  applyFilters()
 }
 
-// ----- details -----
+const hasFilters = computed(() => Boolean(keyword.value) || typeFilter.value !== null || statusFilter.value !== null)
+/** Only the search box narrows the list: the empty state then offers "Clear search", not "Clear filters" (A4.15). */
+const searchOnly = computed(() => Boolean(keyword.value) && typeFilter.value === null && statusFilter.value === null)
 
-const detailsOpen = ref(false)
-const openRow = ref<{ type: PracticeType; id: number } | null>(null)
-const details = ref<AdminPracticeSetDetail | null>(null)
-const detailsLoading = ref(false)
-const detailsError = ref<string | null>(null)
+// The details drawer
 
-function openDetails(row: AdminPracticeSetRow): void {
-  openRow.value = { type: row.type, id: row.id }
-  details.value = null
-  detailsOpen.value = true
-  void loadDetails()
+const openRow = ref<SetKey | null>(null)
+const details = useResource(() => adminLearningApi.practiceSet(openRow.value!.type, openRow.value!.id), false)
+/** A failed action on the set in the open drawer, shown there: the drawer's scrim covers the page notice. */
+const detailsActionError = ref<string | null>(null)
+/** Counts the drawer's openings: a change that ends after the drawer was opened again leaves that drawer open. */
+let detailsVersion = 0
+
+/** The drawer is open on this set. */
+function inDrawer(set: SetKey): boolean {
+  return openRow.value?.type === set.type && openRow.value.id === set.id
 }
 
-async function loadDetails(): Promise<void> {
-  if (!openRow.value) return
-  detailsLoading.value = true
-  detailsError.value = null
-  try {
-    details.value = await adminLearningApi.practiceSet(openRow.value.type, openRow.value.id)
-  } catch (reason) {
-    detailsError.value = resolveApiError(reason, t('adminLearning.activityLoadFailed'))
-  } finally {
-    detailsLoading.value = false
-  }
+/** Closes the details drawer and invalidates any in-flight detail fetch. */
+function closeDetails(): void {
+  openRow.value = null
+  details.clear()
+  detailsActionError.value = null
 }
 
-// ----- editor -----
+/** Opens the drawer on a set; details already at hand (a save's answer, with its History) are not loaded again. */
+function openDetails(set: SetKey, loaded: AdminPracticeSetDetail | null = null): void {
+  if (!loaded && toastAction.value) hideToast()
+  detailsVersion += 1
+  openRow.value = { type: set.type, id: set.id }
+  details.clear()
+  details.data.value = loaded
+  detailsActionError.value = null
+  if (!loaded) void details.reload()
+}
 
-const editorOpen = ref(false)
-const editing = ref<AdminPracticeSetDetail | null>(null)
+// The editor
+
+const isUnmounted = useIsUnmounted()
+const editing = ref<AdminPracticeSetDetail | null>()
+/** Counts editor sessions so a background save from a closed editor reports its outcome on the page. */
+let editorSession = 0
 
 function openEditor(set: AdminPracticeSetDetail | null): void {
+  if (toastAction.value) hideToast()
+  editorSession += 1
   editing.value = set
-  detailsOpen.value = false
-  editorOpen.value = true
+  closeDetails()
 }
 
-function onSaved(set: AdminPracticeSetDetail): void {
-  editorOpen.value = false
-  restorable.value = null
-  feedback.showSuccess(
-    editing.value ? t('adminLearning.changesSaved', { title: set.title }) : t('adminLearning.activitySaved'),
-  )
-  void library.reload()
+function closeEditor(): void {
+  editorSession += 1
+  editing.value = undefined
 }
 
-// ----- status changes -----
-
-const confirming = ref<'archive' | 'unpublish' | null>(null)
-const busy = ref(false)
-const restorable = ref<{ type: PracticeType; id: number } | null>(null)
-
-const confirmTitle = computed(() => {
-  const title = details.value?.title ?? ''
-  return confirming.value === 'archive'
-    ? t('adminLearning.archiveTitle', { title })
-    : t('adminLearning.unpublishTitle', { title })
-})
-
-function requestAction(action: SetAction): void {
-  if (action === 'archive' || action === 'unpublish') {
-    confirming.value = action
-    return
-  }
-  if (details.value) void runAction(action, { type: details.value.type, id: details.value.id })
-}
-
-function confirmAction(): void {
-  const action = confirming.value
-  if (action && details.value) void runAction(action, { type: details.value.type, id: details.value.id })
-}
-
-async function runAction(action: SetAction, target: { type: PracticeType; id: number }): Promise<void> {
-  busy.value = true
-  const succeeded = await feedback.runAction(t('adminLearning.saveFailed'), async () => {
-    const updated = await adminLearningApi.changePracticeSet(target.type, target.id, action)
-    if (details.value?.id === updated.id && details.value.type === updated.type) details.value = updated
-    restorable.value = action === 'archive' ? { type: updated.type, id: updated.id } : null
-    return outcome(action, updated.title)
-  })
-  busy.value = false
-  confirming.value = null
-  if (succeeded) {
-    detailsOpen.value = false
+/** A committed save refreshes the library even if its editor was closed while the request was pending. */
+const saveSet: typeof adminLearningApi.savePracticeSet = async (type, id, payload) => {
+  const session = editorSession
+  try {
+    const set = await adminLearningApi.savePracticeSet(type, id, payload)
+    if (id === null) void reloadContentCounts()
+    if (isUnmounted()) return set
     void library.reload()
+    if (inDrawer(set)) void details.reload()
+    if (session !== editorSession && editing.value === undefined) {
+      actionError.value = null
+      showToast(t('adminLearning.activitySaved'))
+    }
+    return set
+  } catch (reason) {
+    if (!isUnmounted() && session !== editorSession) {
+      actionError.value = resolveApiError(reason, t('adminLearning.saveFailed'))
+    }
+    throw reason
   }
 }
 
-function outcome(action: SetAction, title: string): string {
+/** "Activity saved.", for a new set or an edit (draft or published); an edited set's details open again. */
+function onSaved(set: AdminPracticeSetDetail): void {
+  const wasEditing = Boolean(editing.value)
+  closeEditor()
+  actionError.value = null
+  showToast(t('adminLearning.activitySaved'))
+  if (wasEditing) openDetails(set, set)
+}
+
+// Status changes run at once per set, without a question: each is easy to take back with the Undo in its toast.
+
+const busyKeys = reactive(new Set<string>())
+function setKeyString(set: SetKey): string {
+  return `${set.type}:${set.id}`
+}
+
+/** What became of the set, as its toast says it (A4.13, A4.14, A4.18, A4.19). */
+function outcome(action: PracticeSetAction, set: AdminPracticeSetDetail): string {
+  const title = set.title
   switch (action) {
     case 'publish':
       return t('adminLearning.publishedNotice', { title })
@@ -352,12 +371,54 @@ function outcome(action: SetAction, title: string): string {
       return t('adminLearning.unpublishedNotice', { title })
     case 'archive':
       return t('adminLearning.archivedNotice', { title })
-    default:
-      return t('adminLearning.restoredNotice', { title })
+    case 'restore':
+    case 'unarchive':
+      // The server decides where the set goes back to: the drafts, or published again.
+      return t(set.status === 'DRAFT' ? 'adminLearning.restoredDraftNotice' : 'adminLearning.restoredNotice', { title })
   }
 }
 
-watch(actionError, (error) => {
-  if (error) restorable.value = null
-})
+function onDetailsAction(action: PracticeSetAction): void {
+  if (details.data.value) void runAction(action, details.data.value, { fromDrawer: true })
+}
+
+/**
+ * Runs a status change of a set from its drawer or its row. Run from the drawer, the drawer then closes on the list,
+ * which shows the new status; a drawer opened on the set meanwhile shows it instead. The toast's Undo runs the reverse
+ * change, whose own toast offers none. A failure is said in the drawer while it shows the set, otherwise on the page.
+ */
+async function runAction(
+  action: PracticeSetAction,
+  target: SetKey,
+  { undoable = true, fromDrawer = false }: { undoable?: boolean; fromDrawer?: boolean } = {},
+): Promise<void> {
+  const key = setKeyString(target)
+  if (busyKeys.has(key)) return
+  hideToast()
+  const version = detailsVersion
+  const undo = undoable ? UNDO_ACTIONS[action] : undefined
+  busyKeys.add(key)
+  actionError.value = null
+  if (fromDrawer) detailsActionError.value = null
+  try {
+    const updated = await adminLearningApi.changePracticeSet(target.type, target.id, action)
+    showToast(
+      outcome(action, updated),
+      undo
+        ? { label: t('common.undo'), run: () => void runAction(undo, updated, { undoable: false, fromDrawer: false }) }
+        : undefined,
+    )
+    if (inDrawer(target)) {
+      if (fromDrawer && version === detailsVersion) closeDetails()
+      else void details.reload()
+    }
+    void library.reload()
+  } catch (reason) {
+    const message = resolveApiError(reason, t('adminLearning.saveFailed'))
+    if (inDrawer(target)) detailsActionError.value = message
+    else actionError.value = message
+  } finally {
+    busyKeys.delete(key)
+  }
+}
 </script>

@@ -3,16 +3,15 @@ package com.example.aichinese.service.ai;
 import org.springframework.stereotype.Service;
 
 import com.example.aichinese.config.AiProperties;
-import com.example.aichinese.dto.ai.AiAvailabilityResponse;
-import com.example.aichinese.util.TextUtils;
+
+import lombok.RequiredArgsConstructor;
 
 @Service
+@RequiredArgsConstructor
 public class AiAvailabilityService {
 
     public static final String FRIENDLY_UNAVAILABLE_MESSAGE =
             "AI tutor is currently unavailable. Please try again later.";
-
-    static final String AVAILABLE_MESSAGE = "AI provider is configured.";
 
     static final String DISABLED_MESSAGE =
             "AI provider is disabled in the current backend configuration.";
@@ -31,34 +30,57 @@ public class AiAvailabilityService {
 
     private final AiProperties aiProperties;
 
-    public AiAvailabilityService(AiProperties aiProperties) {
-        this.aiProperties = aiProperties;
+    /**
+     * Whether the AI provider can answer. When it cannot, {@code message} is the configuration reason, a technical
+     * detail only written to the admin AI usage log. Handwriting uses the general provider's image input.
+     * Pronunciation uses its own provider and can be configured independently.
+     */
+    public record Availability(
+            boolean available,
+            String provider,
+            String model,
+            String message,
+            boolean imageAnalysisAvailable,
+            boolean speechAnalysisAvailable) {
+
+        public static Availability available(
+                String provider, String model, boolean imageAnalysisAvailable, boolean speechAnalysisAvailable) {
+            return new Availability(true, provider, model, null, imageAnalysisAvailable, speechAnalysisAvailable);
+        }
+
+        public static Availability unavailable(String provider, String model, String message) {
+            return new Availability(false, provider, model, message, false, false);
+        }
     }
 
-    public AiAvailabilityResponse getAvailability() {
+    public Availability getAvailability() {
         String provider = aiProperties.normalizedProvider();
-        String model = TextUtils.trimToNull(aiProperties.getModelName());
+        String model = aiProperties.getModelName();
 
         if (!aiProperties.isEnableRealProvider()) {
-            return AiAvailabilityResponse.unavailable(provider, model, DISABLED_MESSAGE);
+            return Availability.unavailable(provider, model, DISABLED_MESSAGE);
         }
+        boolean speech = aiProperties.getPronunciation().configured();
+        String reason = unavailableReason(provider, model);
+        if (reason != null) {
+            return new Availability(false, provider, model, reason, false, speech);
+        }
+        return Availability.available(provider, model, AiProperties.OPENAI.equals(provider), speech);
+    }
+
+    private String unavailableReason(String provider, String model) {
         if (!AiProperties.SUPPORTED_PROVIDERS.contains(provider)) {
-            return AiAvailabilityResponse.unavailable(provider, model, UNSUPPORTED_PROVIDER_MESSAGE);
+            return UNSUPPORTED_PROVIDER_MESSAGE;
         }
-        if (TextUtils.trimToNull(aiProperties.getApiKey()) == null) {
-            return AiAvailabilityResponse.unavailable(provider, model, MISSING_API_KEY_MESSAGE);
+        if (aiProperties.getApiKey() == null) {
+            return MISSING_API_KEY_MESSAGE;
         }
         if (model == null) {
-            return AiAvailabilityResponse.unavailable(provider, null, MISSING_MODEL_MESSAGE);
+            return MISSING_MODEL_MESSAGE;
         }
-        if (AiProviderSupport.validateAndNormalizeBaseUrl(aiProperties.getApiBaseUrl()) == null) {
-            return AiAvailabilityResponse.unavailable(provider, model, INVALID_BASE_URL_MESSAGE);
+        if (aiProperties.normalizedApiBaseUrl() == null) {
+            return INVALID_BASE_URL_MESSAGE;
         }
-
-        // Only the OpenAI Responses client sends image input, and only OpenAI offers the speech-to-text endpoint;
-        // the Chat Completions-compatible alternatives are text only.
-        boolean openAi = AiProperties.OPENAI.equals(provider);
-        boolean speech = openAi && TextUtils.trimToNull(aiProperties.getTranscriptionModel()) != null;
-        return AiAvailabilityResponse.available(provider, model, AVAILABLE_MESSAGE, openAi, speech);
+        return null;
     }
 }

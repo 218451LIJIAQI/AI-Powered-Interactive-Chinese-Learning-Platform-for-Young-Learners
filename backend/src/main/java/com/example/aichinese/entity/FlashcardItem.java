@@ -12,10 +12,7 @@ import lombok.Setter;
 
 import com.example.aichinese.entity.base.BaseEntity;
 
-/**
- * One card of a flashcard set (a Practice "Flashcards" set has several cards; its first card is also kept in the
- * flashcard's own front and back text).
- */
+/** One card of a flashcard set: a Practice "Flashcards" set or the Flashcards activity of a class lesson. */
 @Getter
 @Setter
 @Entity

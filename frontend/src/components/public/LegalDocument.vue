@@ -1,82 +1,100 @@
 <template>
-  <article class="legal-page">
-    <PageHeaderBlock :title="title" :description="intro">
+  <article class="public-page public-doc">
+    <PageHeaderBlock :title="title" :description="updatedLine">
       <template #before>
-        <AppBreadcrumb :items="[{ label: t('legal.home'), to: '/' }, { label: title }]" />
+        <AppBreadcrumb :items="[{ label: t('nav.home'), to: '/' }, { label: title }]" />
       </template>
-      <template v-if="$slots.lead || $slots.links" #meta>
-        <slot name="lead" />
-        <div v-if="$slots.links" class="legal-related-links">
-          <slot name="links" />
-        </div>
+      <template v-if="$slots.meta" #meta>
+        <slot name="meta" />
       </template>
     </PageHeaderBlock>
 
-    <div class="legal-layout">
-      <nav class="legal-toc" :aria-label="t('legal.onThisPage')">
-        <p class="legal-toc-title" aria-hidden="true">{{ t('legal.onThisPage') }}</p>
-        <ol>
-          <li v-for="section in sections" :key="section.id">
-            <a :href="`#${section.id}`">{{ section.title }}</a>
+    <div class="public-rail-layout">
+      <nav ref="rail" class="panel public-rail" :aria-label="t('legal.onThisPage')">
+        <p class="page-eyebrow" aria-hidden="true">{{ t('legal.onThisPage') }}</p>
+        <ol class="public-rail-list">
+          <li v-for="(section, index) in sections" :key="section.id">
+            <a
+              class="public-rail-link"
+              :class="{ 'is-active': section.id === activeId }"
+              :href="`#${section.id}`"
+              :aria-current="section.id === activeId ? 'location' : undefined"
+              @click.exact="pinSection(section.id)"
+            >
+              <span class="public-rail-number" aria-hidden="true">{{ index + 1 }}.</span>
+              <span>{{ section.title }}</span>
+            </a>
           </li>
         </ol>
       </nav>
 
-      <div class="legal-body">
+      <div class="panel legal-body">
         <section
-          v-for="(section, index) in sections"
+          v-for="section in sections"
           :id="section.id"
           :key="section.id"
           class="legal-section"
           :aria-labelledby="`${section.id}-title`"
         >
-          <h2 :id="`${section.id}-title`">
-            <span class="legal-section-number" aria-hidden="true">{{ String(index + 1).padStart(2, '0') }}</span>
-            {{ section.title }}
-          </h2>
+          <h2 :id="`${section.id}-title`">{{ section.title }}</h2>
+          <p v-if="section.note" class="callout legal-note">
+            <IconGlyph name="shield" :size="18" />
+            <span>
+              <strong>{{ section.note.label }}</strong> {{ section.note.text }}
+            </span>
+          </p>
           <p v-for="paragraph in section.paragraphs ?? []" :key="paragraph">{{ paragraph }}</p>
           <ul v-if="section.bullets?.length" class="legal-bullets">
-            <li v-for="bullet in section.bullets" :key="bullet">{{ bullet }}</li>
+            <li v-for="bullet in section.bullets" :key="typeof bullet === 'string' ? bullet : bullet.slot">
+              <template v-if="typeof bullet === 'string'">{{ bullet }}</template>
+              <slot v-else :name="bullet.slot" />
+            </li>
           </ul>
-          <p v-if="section.links?.length" class="legal-section-links">
-            <RouterLink v-for="link in section.links" :key="link.label" class="btn btn-link" :to="link.to">
-              {{ link.label }}
-              <IconGlyph name="chevronRight" :size="14" />
-            </RouterLink>
-          </p>
         </section>
-        <slot name="footer" />
       </div>
     </div>
   </article>
 </template>
 
 <script setup lang="ts">
-import { RouterLink, type RouteLocationRaw } from 'vue-router'
+import { computed, useTemplateRef } from 'vue'
 
 import AppBreadcrumb from '@/components/common/AppBreadcrumb.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
+import { usePublicSectionNav } from '@/components/public/usePublicSectionNav'
 import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { legalMessages } from '@/plugins/legalMessages'
+import { formatDate } from '@/utils/format'
 
 export interface LegalSection {
   readonly id: string
   readonly title: string
+  /** A boxed statement under the heading, such as what is shown with every AI answer. */
+  readonly note?: { readonly label: string; readonly text: string }
   readonly paragraphs?: readonly string[]
-  readonly bullets?: readonly string[]
-  readonly links?: readonly { readonly label: string; readonly to: RouteLocationRaw }[]
+  /** A plain sentence, or `{ slot }`: the page fills the slot of that name (a sentence with a link in it). */
+  readonly bullets?: readonly (string | { readonly slot: string })[]
 }
 
 /**
- * The reading layout of the Terms, Privacy, Responsible AI and Safety pages: breadcrumb and header, a numbered
- * "On this page" list built from the sections (sticky beside the text), and the text at a 68-character measure.
+ * The reading layout of the Terms, Privacy, Responsible AI and Safety pages: breadcrumb and H1, a numbered "On this page"
+ * rail built from the sections (sticky beside the text, the section in view marked) and one card holding the text.
  */
-defineProps<{
+const props = defineProps<{
   title: string
-  intro: string
   sections: readonly LegalSection[]
+  /** The day the document last changed (`yyyy-MM-dd`), shown under the H1 in the reader's language. */
+  updated?: string
 }>()
 
-const { t } = useLocalMessages({ legal: legalMessages })
+const { t, locale } = useLocalMessages({ legal: legalMessages })
+
+const UPDATED_DATE: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'long', year: 'numeric' }
+
+const updatedLine = computed(() =>
+  props.updated ? t('legal.lastUpdated', { date: formatDate(props.updated, UPDATED_DATE, locale.value) }) : '',
+)
+
+const { activeId, pinSection } = usePublicSectionNav(() => props.sections, useTemplateRef<HTMLElement>('rail'))
 </script>

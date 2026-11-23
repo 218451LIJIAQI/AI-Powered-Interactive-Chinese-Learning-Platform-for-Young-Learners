@@ -4,13 +4,12 @@ import static com.example.aichinese.support.ConfigFixtures.environment;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import java.util.List;
-import java.util.Map;
-
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.web.cors.CorsConfiguration;
-import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 /**
@@ -25,7 +24,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
  */
 class CorsConfigTests {
 
-    private static final String LOCALHOST_VITE_ORIGIN = "http://localhost:5173";
+    private static final String LOCALHOST_VITE_ORIGIN = "http://localhost:5174";
     private static final String EXAMPLE_ORIGIN = "https://example.test";
 
     private final CorsConfig config = new CorsConfig(environment());
@@ -40,7 +39,9 @@ class CorsConfigTests {
         assertThat(api.getAllowCredentials()).isTrue();
         assertThat(api.getAllowedMethods()).containsExactly("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS");
         assertThat(api.getAllowedHeaders())
-                .containsExactly("Authorization", "Content-Type", "Accept", "X-Requested-With", "X-Request-ID");
+                .containsExactly("Authorization", "Content-Type", "Accept");
+        // The web app reads the sign-in pause and a download's file name, which a cross-origin page cannot see otherwise.
+        assertThat(api.getExposedHeaders()).containsExactly("Retry-After", "Content-Disposition");
         // Pattern-based allow list must remain unused so '*' cannot ever sneak
         // through with credentials enabled.
         assertThat(api.getAllowedOriginPatterns()).isNull();
@@ -68,59 +69,37 @@ class CorsConfigTests {
                 .containsExactly(LOCALHOST_VITE_ORIGIN, EXAMPLE_ORIGIN);
     }
 
-    @Test
-    void rejectsOriginsWithPathsQueriesFragmentsOrCredentials() {
-        assertThatThrownBy(() -> config.corsConfigurationSource("https://example.test/app"))
+    @ParameterizedTest
+    @CsvSource({
+            "https://example.test/app, path",
+            "https://example.test?debug=true, query string",
+            "https://example.test#fragment, fragment",
+            "https://user:secret@example.test, embedded credentials",
+            "https://example.test:65536, port",
+            "https://example.test:0, port"
+    })
+    void rejectsAnInvalidConfiguredOrigin(String origin, String expectedMessage) {
+        assertThatThrownBy(() -> config.corsConfigurationSource(origin))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("path");
-        assertThatThrownBy(() -> config.corsConfigurationSource("https://example.test?debug=true"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("query string");
-        assertThatThrownBy(() -> config.corsConfigurationSource("https://example.test#fragment"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("fragment");
-        assertThatThrownBy(() -> config.corsConfigurationSource("https://user:secret@example.test"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("embedded credentials");
+                .hasMessageContaining(expectedMessage);
     }
 
     @Test
     void normalizesOriginsAndRemovesDuplicatesInConfiguredOrder() {
         CorsConfiguration api = apiCorsConfiguration(
-                "  HTTPS://Example.Test:443,https://example.test:443,http://LOCALHOST:5173 ");
+                "  HTTPS://Example.Test:443,https://example.test,http://LOCALHOST:5173,http://example.test:80 ");
 
         assertThat(api.getAllowedOrigins())
-                .containsExactly("https://example.test:443", "http://localhost:5173");
+                .containsExactly(EXAMPLE_ORIGIN, "http://localhost:5173", "http://example.test");
+        assertThat(api.checkOrigin(EXAMPLE_ORIGIN)).isEqualTo(EXAMPLE_ORIGIN);
     }
 
+    /** The fallback that applies when no origins are configured must only ever name this machine. */
     @Test
-    void defaultLocalDevOriginsCoverLoopbackAndViteFallbackPorts() {
+    void defaultLocalDevOriginsAreLoopbackOnly() {
         assertThat(CorsConfig.DEFAULT_LOCAL_DEV_ORIGINS)
-                .containsExactly(
-                        "http://localhost:4173",
-                        "http://127.0.0.1:4173",
-                        "http://localhost:5173",
-                        "http://127.0.0.1:5173",
-                        "http://localhost:5174",
-                        "http://127.0.0.1:5174",
-                        "http://localhost:5175",
-                        "http://127.0.0.1:5175",
-                        "http://localhost:5176",
-                        "http://127.0.0.1:5176",
-                        "http://localhost:5177",
-                        "http://127.0.0.1:5177",
-                        "http://localhost:5178",
-                        "http://127.0.0.1:5178",
-                        "http://localhost:5179",
-                        "http://127.0.0.1:5179",
-                        "http://localhost:5180",
-                        "http://127.0.0.1:5180",
-                        "http://localhost:5181",
-                        "http://127.0.0.1:5181",
-                        "http://localhost:5182",
-                        "http://127.0.0.1:5182",
-                        "http://localhost:5183",
-                        "http://127.0.0.1:5183");
+                .contains(LOCALHOST_VITE_ORIGIN)
+                .allMatch(origin -> origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:"));
     }
 
     @Test
@@ -144,6 +123,37 @@ class CorsConfigTests {
                 .hasMessageContaining("non-loopback public host");
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "https://10.0.0.8",
+            "https://[fd00::2]",
+            "https://workstation.localhost",
+            "https://0177.0.0.1",
+            "https://012.0.0.1",
+            "https://0x7f000001",
+            "https://0.1.2.3",
+            "https://100.64.0.1",
+            "https://255.255.255.255",
+            "https://[2001:db8::1]",
+            "https://[::127.0.0.1]",
+            "https://[::ffff:0:127.0.0.1]",
+            "https://[2002:7f00:0001::1]"
+    })
+    void productionRefusesLocalDestinations(String origin) {
+        CorsConfig prod = new CorsConfig(environment("production"));
+        assertThatThrownBy(() -> prod.corsConfigurationSource(origin))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("public host");
+    }
+
+    @Test
+    void aNumberedDnsLabelRemainsAHostName() {
+        CorsConfig prod = new CorsConfig(environment("prod"));
+        String origin = "https://127.campus.example.test";
+        UrlBasedCorsConfigurationSource source = (UrlBasedCorsConfigurationSource) prod.corsConfigurationSource(origin);
+        assertThat(source.getCorsConfigurations().get("/api/**").checkOrigin(origin)).isEqualTo(origin);
+    }
+
     @Test
     void springWiredBeanAppliesProdProfileOriginRules() {
         new ApplicationContextRunner()
@@ -159,18 +169,8 @@ class CorsConfigTests {
     }
 
     private CorsConfiguration apiCorsConfiguration(String allowedOrigins) {
-        CorsConfigurationSource source = config.corsConfigurationSource(allowedOrigins);
-        assertThat(source).isInstanceOf(UrlBasedCorsConfigurationSource.class);
-        UrlBasedCorsConfigurationSource urlSource = (UrlBasedCorsConfigurationSource) source;
-        // The bean registers /api/** specifically; ensure it is the same
-        // configuration we just built rather than a fallback default.
-        List<CorsConfiguration> matched = urlSource.getCorsConfigurations()
-                .entrySet()
-                .stream()
-                .filter(entry -> entry.getKey().equals("/api/**"))
-                .map(Map.Entry::getValue)
-                .toList();
-        assertThat(matched).hasSize(1);
-        return matched.get(0);
+        UrlBasedCorsConfigurationSource source =
+                (UrlBasedCorsConfigurationSource) config.corsConfigurationSource(allowedOrigins);
+        return source.getCorsConfigurations().get("/api/**");
     }
 }

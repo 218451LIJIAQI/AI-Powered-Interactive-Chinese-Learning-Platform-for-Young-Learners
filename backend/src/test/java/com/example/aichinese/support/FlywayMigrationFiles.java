@@ -9,11 +9,18 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
-/** Reads the versioned Flyway migrations ({@code V{n}__*.sql}) in the order Flyway applies them. */
+import org.flywaydb.core.api.MigrationVersion;
+
+/**
+ * Reads the versioned Flyway migrations ({@code V5__*.sql}, and steps such as {@code V5_1__*.sql}) in the order Flyway
+ * applies them.
+ */
 public final class FlywayMigrationFiles {
 
     public static final Path MIGRATION_DIRECTORY = Path.of("src", "main", "resources", "db", "migration");
-    private static final Pattern MIGRATION_VERSION = Pattern.compile("^V(\\d+)__.+\\.sql$");
+    public static final List<String> EXPECTED_VERSIONS =
+            List.of("1", "2", "3", "4", "5", "5.1", "5.2", "6", "7", "8", "9", "10", "11");
+    private static final Pattern MIGRATION_VERSION = Pattern.compile("^V(\\d+(?:_\\d+)*)__.+\\.sql$");
 
     private FlywayMigrationFiles() {
     }
@@ -22,25 +29,17 @@ public final class FlywayMigrationFiles {
         try (Stream<Path> files = Files.list(MIGRATION_DIRECTORY)) {
             return files
                     .filter(path -> MIGRATION_VERSION.matcher(path.getFileName().toString()).matches())
-                    .sorted(Comparator.comparingInt(FlywayMigrationFiles::version))
+                    .sorted(Comparator.comparing(path -> MigrationVersion.fromVersion(version(path))))
                     .toList();
         }
     }
 
-    /** All versioned migrations concatenated in version order, i.e. the schema Flyway would build. */
-    public static String combined() throws IOException {
-        StringBuilder combined = new StringBuilder();
-        for (Path migration : inVersionOrder()) {
-            combined.append(Files.readString(migration)).append('\n');
-        }
-        return combined.toString();
-    }
-
-    public static int version(Path migration) {
+    /** The version as Flyway writes it: {@code 5} for {@code V5__...sql}, {@code 5.1} for {@code V5_1__...sql}. */
+    public static String version(Path migration) {
         Matcher matcher = MIGRATION_VERSION.matcher(migration.getFileName().toString());
         if (!matcher.matches()) {
             throw new AssertionError("Not a versioned Flyway migration: " + migration);
         }
-        return Integer.parseInt(matcher.group(1));
+        return matcher.group(1).replace('_', '.');
     }
 }

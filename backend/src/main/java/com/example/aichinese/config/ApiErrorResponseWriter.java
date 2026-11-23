@@ -27,6 +27,9 @@ public final class ApiErrorResponseWriter {
             HttpServletResponse response,
             HttpStatus status,
             String message) throws IOException {
+        if (response.isCommitted()) {
+            return;
+        }
         response.setStatus(status.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());

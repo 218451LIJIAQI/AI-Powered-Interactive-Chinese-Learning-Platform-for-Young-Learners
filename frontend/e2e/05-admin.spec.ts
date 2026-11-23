@@ -1,116 +1,301 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 
 import { E2E_ACCOUNTS } from './accounts'
-import { sidebar, signIn, signOut } from './support'
+import { API_BASE_URL, apiAuthHeaders, sidebar, signIn } from './support'
 
-// This file changes shared data, so it runs after the visitor, applicant and teacher files that expect the seeded
-// state: it approves Li Wei's in-review class and Mei Lin's application.
-const IN_REVIEW_CLASS = 'Chinese Culture and Festivals'
-const IN_REVIEW_REVISION = 'Ordering Food at the Canteen'
+// Admins are the MandarinSpark team: they answer support, review AI reports and make the classes learners join.
+// The demo profile seeds two class drafts and the eight published catalogue classes.
+const DRAFTS = ['Chinese Culture and Festivals', 'Study Group Mandarin']
 
-test.beforeEach(async ({ page }) => {
-  await signIn(page, E2E_ACCOUNTS.admin)
-  await expect(page).toHaveURL(/\/admin\/dashboard$/)
+async function signInAdmin(page: Page, redirect?: string): Promise<void> {
+  await signIn(page, E2E_ACCOUNTS.admin, redirect)
+  if (!redirect) await expect(page).toHaveURL(/\/admin\/dashboard$/)
+}
+
+test('the compact navigation supports keyboard travel and docks when the window widens', async ({ page }) => {
+  await signInAdmin(page)
+  await page.setViewportSize({ width: 720, height: 450 })
+  const opener = page.getByRole('button', { name: 'Workspace navigation' })
+  const drawer = page.getByRole('dialog', { name: 'Workspace navigation' })
+  await opener.focus()
+  await page.keyboard.press('Enter')
+  await expect(drawer.getByRole('button', { name: 'Close' })).toBeFocused()
+  await page.keyboard.press('Shift+Tab')
+  await expect(drawer.getByRole('link').last()).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(opener).toBeFocused()
+  await opener.click()
+  await drawer.getByRole('link', { name: 'Audit log' }).click()
+  await expect(page).toHaveURL(/\/admin\/audit-log$/)
+  await expect(drawer).toHaveCount(0)
+  await expect(page.getByRole('main')).toBeFocused()
+  await opener.click()
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await expect(drawer).toHaveCount(0)
+  await expect(sidebar(page).getByRole('link', { name: 'Audit log' })).toBeFocused()
 })
 
-test('the dashboard shows what needs attention and the platform numbers', async ({ page }) => {
-  await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Teacher applications (2)' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Review queue (2)' })).toBeVisible()
+test('the unit confirmation traps keyboard focus and returns it through both dialogs', async ({ page }) => {
+  await signInAdmin(page, '/admin/content/learning-path')
+  const opener = page.getByTestId('open-unit-1')
+  await opener.focus()
+  await page.keyboard.press('Enter')
+  const drawer = page.getByTestId('unit-detail')
+  const unpublish = drawer.getByTestId('unit-unpublish')
+  await unpublish.focus()
+  await page.keyboard.press('Enter')
 
-  const numbers = page.getByRole('region', { name: 'The platform in numbers' })
-  await expect(numbers).toContainText(/Users\s*12\s*5 students · 6 teachers · 1 admin/)
-  await expect(numbers.getByRole('term')).toHaveText(['Users', 'Published content', 'AI requests', 'Audit events'])
+  const dialog = page.getByRole('alertdialog')
+  const close = dialog.getByRole('button', { name: 'Close' })
+  await expect(dialog.getByTestId('confirm-dialog-cancel')).toBeFocused()
+  await expect(drawer).toHaveAttribute('inert', '')
+  await close.focus()
+  await page.keyboard.press('Shift+Tab')
+  await expect(dialog.getByTestId('confirm-dialog-confirm')).toBeFocused()
+  await page.keyboard.press('Tab')
+  await expect(close).toBeFocused()
+
+  await page.keyboard.press('Escape')
+  await expect(dialog).toHaveCount(0)
+  await expect(unpublish).toBeFocused()
+  await expect(page.locator('#app')).toHaveAttribute('inert', '')
+  await page.keyboard.press('Escape')
+  await expect(drawer).toHaveCount(0)
+  await expect(opener).toBeFocused()
+  await expect(page.locator('#app')).not.toHaveAttribute('inert', '')
 })
 
-test('Users lists the accounts and search finds a student', async ({ page }) => {
+test('the dashboard lists what needs attention, and Analytics has the platform numbers', async ({ page }) => {
+  await signInAdmin(page)
+  const main = page.getByRole('main')
+  await expect(main.getByRole('heading', { name: 'Needs attention' })).toBeVisible()
+  await expect(main.getByRole('heading', { name: /^Class drafts/ })).toBeVisible()
+  await expect(main.getByRole('heading', { name: /^AI reports/ })).toBeVisible()
+  await expect(main.getByRole('heading', { name: /^Support/ })).toBeVisible()
+  for (const title of DRAFTS) await expect(main.getByRole('link', { name: new RegExp(title) })).toBeVisible()
+  // No teacher applications or review queue any more.
+  await expect(main).not.toContainText('Teacher applications')
+  await expect(main).not.toContainText('Review queue')
+
+  await sidebar(page).getByRole('link', { name: 'Analytics' }).click()
+  await expect(page).toHaveURL(/\/admin\/analytics$/)
+  const registrations = page.getByRole('region', { name: 'Registrations' })
+  await expect(registrations).toContainText(/learners?/)
+  await expect(registrations).toContainText(/admins?/)
+  await expect(registrations).not.toContainText(/teacher/i)
+})
+
+test('Users finds a learner and her row opens her account', async ({ page }) => {
+  await signInAdmin(page)
   await sidebar(page)
     .getByRole('link', { name: /^Users/ })
     .click()
-
-  await expect(page).toHaveURL(/\/admin\/users$/)
-  await expect(page.getByRole('heading', { name: 'Users', level: 1 })).toBeVisible()
-  await expect(page.getByText('Showing 1–10 of 12')).toBeVisible()
-  await expect(page.getByRole('row', { name: /^Li Wei teacher@fyp\.local Teacher Active Approved/ })).toBeVisible()
+  await expect(page).toHaveURL(/\/admin\/users(\?user=\d+)?$/)
 
   await page.getByRole('searchbox', { name: 'Search' }).fill('Amira')
-  await expect(page.getByText('Showing 1–1 of 1')).toBeVisible()
-  await expect(page.getByRole('row', { name: /^Amira Hassan student@fyp\.local Student Active/ })).toBeVisible()
-  await expect(page.getByRole('row', { name: /^Li Wei / })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Open Amira Hassan' }).click()
+  const main = page.getByRole('main')
+  await expect(main.getByRole('heading', { name: 'Amira Hassan', level: 2 })).toBeVisible()
+  await expect(main).toContainText('student@fyp.local')
+  await expect(main).toContainText('Learner')
+  await expect(main.getByRole('button', { name: 'Deactivate' })).toBeVisible()
 })
 
-test.describe.serial('content review', () => {
-  test('approving the in-review class takes it out of the queue and publishes it', async ({ page }) => {
-    await sidebar(page)
-      .getByRole('link', { name: /^Content/ })
-      .click()
+test('Content › Classes lists classes and lessons with their status', async ({ page }) => {
+  await signInAdmin(page)
+  await sidebar(page)
+    .getByRole('link', { name: /^Content/ })
+    .click()
+  await expect(page).toHaveURL(/\/admin\/content$/)
+  await expect(page.getByRole('link', { name: /^Classes/ })).toBeVisible()
+  const table = page.getByRole('table')
+  for (const title of DRAFTS) {
+    await expect(table.getByRole('row', { name: new RegExp(`^${title} Class .*Draft`) })).toBeVisible()
+  }
 
-    await expect(page).toHaveURL(/\/admin\/content$/)
-    await expect(page.getByRole('heading', { name: 'Review queue', level: 1 })).toBeVisible()
-    const classItem = page.getByRole('button', { name: new RegExp(`^${IN_REVIEW_CLASS} Class New class`) })
-    const revisionItem = page.getByRole('button', { name: new RegExp(`^${IN_REVIEW_REVISION} Lesson Revision`) })
-    await expect(classItem).toBeVisible()
-    await expect(revisionItem).toBeVisible()
-
-    await classItem.click()
-    await expect(page.getByRole('heading', { name: IN_REVIEW_CLASS, level: 2 })).toBeVisible()
-    await page.getByRole('button', { name: 'Approve', exact: true }).click()
-    // Confirm steps (ConfirmDialog) are alert dialogs; drawers and forms (AppOverlay) are plain dialogs.
-    const dialog = page.getByRole('alertdialog', { name: `Approve "${IN_REVIEW_CLASS}"?` })
-    await dialog.getByRole('button', { name: 'Approve' }).click()
-
-    await expect(dialog).toBeHidden()
-    await expect(page.getByText(`"${IN_REVIEW_CLASS}" was approved.`)).toBeVisible()
-    await expect(classItem).toHaveCount(0)
-    await expect(revisionItem).toBeVisible()
-    await expect(page.getByRole('link', { name: 'Review queue 1' })).toBeVisible()
-
-    // The public catalogue now lists it with the 8 classes published before.
-    await page.goto('/classes')
-    await expect(page.getByRole('heading', { name: '9 classes matched' })).toBeVisible()
-    await page.getByRole('link', { name: IN_REVIEW_CLASS }).click()
-    await expect(page.getByRole('heading', { name: IN_REVIEW_CLASS, level: 1 })).toBeVisible()
-    await expect(page.getByRole('complementary')).toContainText('Li Wei')
-  })
-
-  test('the audit log lists the approval', async ({ page }) => {
-    await sidebar(page).getByRole('link', { name: 'Audit log' }).click()
-
-    await expect(page).toHaveURL(/\/admin\/audit-log$/)
-    await expect(page.getByRole('heading', { name: 'Audit log', level: 1 })).toBeVisible()
-    // Event (an approval, naming the class), category Content, and the admin who approved it.
-    const entries = page.getByRole('region', { name: 'Audit entries' }).getByRole('table')
-    await expect(
-      entries.getByRole('row', {
-        name: new RegExp(`approved ${IN_REVIEW_CLASS} Content Platform Administrator admin@fyp\\.local`, 'i'),
-      }),
-    ).toBeVisible()
-  })
+  await page.getByLabel('Status').selectOption({ label: 'Published' })
+  await expect(table.getByRole('row', { name: /Published/ }).first()).toBeVisible()
+  await expect(table.getByRole('row', { name: /Draft/ })).toHaveCount(0)
 })
 
-test('approving Mei Lin’s application unlocks her teacher tools after she signs in again', async ({ page }) => {
-  await page.goto('/admin/users/applications')
-  await expect(page.getByRole('heading', { name: 'Teacher applications', level: 1 })).toBeVisible()
-  const waiting = page.getByRole('list', { name: 'Applications waiting for a decision' })
-  const application = waiting.getByRole('button', { name: /^Mei Lin applicant@fyp\.local In review/ })
-  await application.click()
+test('an admin creates, edits and deletes a draft class with an audit trail', async ({ page, request }) => {
+  await signInAdmin(page, '/admin/content')
+  const classTitle = `E2E Hawker Mandarin ${Date.now()}`
+  let createdClassId: number | null = null
+  let deleted = false
 
-  const details = page.getByRole('region', { name: 'Mei Lin' })
-  await expect(details.getByRole('heading', { name: 'Documents' })).toBeVisible()
-  await details.getByRole('button', { name: 'Approve' }).click()
-  const dialog = page.getByRole('dialog', { name: 'Approve Mei Lin?' })
-  await expect(dialog).toContainText('Mei Lin can use all teaching tools straight away.')
-  await dialog.getByRole('button', { name: 'Approve' }).click()
+  try {
+    await test.step('create a draft that cannot be published yet', async () => {
+      await page.getByRole('button', { name: 'New class' }).first().click()
+      const dialog = page.getByRole('dialog', { name: 'New class' })
+      const title = dialog.getByLabel(/^Title/)
+      await title.focus()
+      await title.blur()
+      await expect(dialog.getByText('Add a class title.')).toBeVisible()
+      await expect(dialog.getByRole('button', { name: 'Create class' })).toBeDisabled()
 
-  await expect(dialog).toBeHidden()
-  await expect(page.getByText('Mei Lin is approved and can use all teaching tools now.')).toBeVisible()
-  await expect(application).toHaveCount(0)
+      await title.fill(classTitle)
+      await dialog.getByRole('button', { name: 'Create class' }).click()
+      await expect(page).toHaveURL(/\/admin\/content\/classes\/\d+$/)
+      createdClassId = Number(/\/admin\/content\/classes\/(\d+)$/.exec(page.url())![1])
+      await expect(page.getByRole('heading', { name: classTitle, level: 1 })).toBeVisible()
+      await expect(page.getByTestId('class-notice')).toContainText('Learners can’t see this class yet.')
+      await expect(page.getByRole('button', { name: 'Publish class' })).toBeDisabled()
+    })
 
-  await signOut(page, E2E_ACCOUNTS.admin)
-  await signIn(page, E2E_ACCOUNTS.applicant)
-  await expect(sidebar(page).getByRole('link', { name: 'Classes', exact: true })).toBeVisible()
-  await page.goto('/teacher/classes')
-  await expect(page).toHaveURL(/\/teacher\/classes$/)
-  await expect(page.getByRole('heading', { name: 'Classes', level: 1 })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'New class' }).first()).toBeVisible()
+    await test.step('add a unit and open a new lesson in its editor', async () => {
+      await page.goto('/admin/content')
+      await page.getByRole('searchbox').fill(classTitle)
+      await page.getByRole('link', { name: `Open ${classTitle}` }).click()
+
+      await page.getByTestId('add-first-unit').click()
+      const unitDialog = page.getByRole('dialog', { name: 'Add a unit' })
+      await unitDialog.getByLabel(/^Unit title/).fill('Unit 1: At the stall')
+      await unitDialog.getByTestId('unit-dialog-confirm').click()
+      await expect(page.getByTestId('toast')).toContainText('Unit added.')
+      await expect(page.getByTestId('class-unit')).toHaveCount(1)
+
+      await page.getByRole('button', { name: 'Add lesson to Unit 1: At the stall' }).click()
+      const lessonDialog = page.getByRole('dialog', { name: 'Add a lesson' })
+      await lessonDialog.getByLabel(/^Lesson title/).fill('Ordering chicken rice')
+      await lessonDialog.getByTestId('unit-dialog-confirm').click()
+
+      await expect(page).toHaveURL(/\/admin\/content\/classes\/\d+\/lessons\/\d+$/)
+      await expect(page.getByRole('heading', { name: 'Ordering chicken rice', level: 1 })).toBeVisible()
+      // A new lesson is a draft and can't be published until it is complete.
+      await expect(page.getByRole('button', { name: 'Publish', exact: true })).toBeDisabled()
+      await expect(page.getByRole('main')).toContainText('To publish, add')
+    })
+
+    await test.step('delete the draft and find its creation and deletion records', async () => {
+      await page.goto('/admin/content')
+      await page.getByRole('searchbox').fill(classTitle)
+      await page.getByRole('link', { name: `Open ${classTitle}` }).click()
+
+      await page.getByTestId('delete-class').click()
+      const confirm = page.getByRole('alertdialog', { name: `Delete “${classTitle}”?` })
+      await confirm.getByRole('button', { name: 'Delete class' }).click()
+      await expect(page).toHaveURL(/\/admin\/content(\?.*)?$/)
+      deleted = true
+      await expect(page.getByTestId('toast')).toContainText(`“${classTitle}” deleted.`)
+      await page.getByRole('searchbox').fill(classTitle)
+      await expect(page.getByRole('heading', { name: `No classes or lessons match “${classTitle}”` })).toBeVisible()
+      await expect(page.getByRole('row', { name: new RegExp(classTitle) })).toHaveCount(0)
+
+      await sidebar(page).getByRole('link', { name: 'Audit log' }).click()
+      await page.getByRole('searchbox', { name: 'Search', exact: true }).fill(classTitle)
+      const entries = page.getByRole('row').filter({ hasText: classTitle })
+      await expect(entries.filter({ hasText: 'Class created' })).toHaveCount(1)
+      await expect(entries.filter({ hasText: 'Draft class deleted' })).toHaveCount(1)
+    })
+  } finally {
+    if (createdClassId !== null && !deleted) {
+      try {
+        const headers = await apiAuthHeaders(request, E2E_ACCOUNTS.admin)
+        await request.delete(`${API_BASE_URL}/admin/classes/${createdClassId}`, { headers })
+      } catch {
+        // Best-effort teardown: do not mask the primary test failure.
+      }
+    }
+  }
+})
+
+test('Support opens a request, marks it solved with Undo, and switches queue tabs', async ({ page, request }) => {
+  await signInAdmin(page, '/admin/support')
+  const openTab = page.getByTestId('admin-support-tab-open')
+  await expect(openTab).toHaveAttribute('aria-pressed', 'true')
+
+  const list = page.getByRole('list', { name: 'Requests' })
+  const videoItem = list.getByRole('button', { name: /#1042.*Lesson video won’t play/ })
+  await expect(videoItem).toBeVisible()
+  await expect(list.getByRole('button', { name: /#1041.*Can't sign in after resetting my password/ })).toBeVisible()
+  await videoItem.click()
+
+  await expect(page).toHaveURL(/[?&]request=\d+/)
+  const requestId = Number(/[?&]request=(\d+)/.exec(page.url())![1])
+  const detail = page.getByTestId('admin-support-detail')
+  await expect(detail.getByRole('heading', { name: '#1042 · Lesson video won’t play', level: 2 })).toBeVisible()
+  await expect(detail).toContainText('Amira Hassan')
+  await expect(detail).toContainText('The video “Meeting a classmate”')
+  await expect(detail.getByRole('link', { name: 'View the account of Amira Hassan' })).toHaveAttribute(
+    'href',
+    /\/admin\/users\?user=\d+/,
+  )
+  await expect(detail.getByTestId('admin-support-send')).toBeDisabled()
+
+  let solved = false
+  let reopened = false
+  try {
+    await detail.getByTestId('admin-support-solve').click()
+    solved = true
+    const solvedToast = page.getByRole('status').filter({ hasText: '#1042 marked as solved.' })
+    await expect(solvedToast).toBeVisible()
+    const undo = solvedToast.getByRole('button', { name: 'Undo' })
+    await undo.hover()
+    await expect(detail).toContainText('Solved')
+    await expect(detail.getByTestId('admin-support-reply')).toHaveCount(0)
+
+    await undo.click()
+    await expect(detail).toContainText('Open')
+    reopened = true
+    await expect(detail.getByTestId('admin-support-reply')).toBeVisible()
+    await expect(videoItem).toBeVisible()
+  } finally {
+    if (solved && !reopened) {
+      try {
+        const headers = await apiAuthHeaders(request, E2E_ACCOUNTS.admin)
+        await request.post(`${API_BASE_URL}/admin/support/${requestId}/reopen`, { headers })
+      } catch {
+        // Best-effort teardown: do not mask the primary test failure.
+      }
+    }
+  }
+
+  await page.getByTestId('admin-support-tab-answered').click()
+  await expect(list.getByRole('button', { name: /#1039.*How do I change my email address\?/ })).toBeVisible()
+  await page.getByTestId('admin-support-tab-solved').click()
+  const solvedItem = list.getByRole('button', { name: /#1021.*Change my display name/ })
+  await expect(solvedItem).toBeVisible()
+  await solvedItem.click()
+  await expect(detail.getByRole('heading', { name: '#1021 · Change my display name', level: 2 })).toBeVisible()
+  await expect(detail).toContainText('Marked as solved by support')
+  await expect(detail.getByTestId('admin-support-reply')).toHaveCount(0)
+})
+
+test('AI shows open and resolved reports, validates the review note, and opens Usage and Settings', async ({
+  page,
+}) => {
+  await signInAdmin(page, '/admin/ai/reports')
+  const tabs = page.getByRole('navigation', { name: 'AI sections' })
+  await expect(tabs.getByRole('link')).toHaveText([/^Reports\s*\d*$/, 'Usage', 'Settings'])
+
+  const detail = page.getByTestId('admin-ai-report-detail')
+  await expect(detail.getByRole('heading', { name: 'Incorrect content', level: 2 })).toBeVisible()
+  await expect(detail).toContainText('Amira Hassan · student@fyp.local')
+  await expect(detail).toContainText('How do I introduce myself in Mandarin?')
+  await expect(detail).toContainText('The answer mixes 我是 and 我叫.')
+
+  // Both Resolve and Dismiss require a note to the learner before submitting.
+  await detail.getByRole('button', { name: 'Resolve', exact: true }).click()
+  await expect(detail.getByRole('alert')).toContainText('Write a note to the learner before you resolve or dismiss.')
+  await expect(detail.getByRole('button', { name: 'Resolve', exact: true })).toBeDisabled()
+  await expect(detail.getByRole('button', { name: 'Dismiss', exact: true })).toBeDisabled()
+
+  // Selecting a resolved report displays the stored admin note without decision controls.
+  await page.getByRole('button', { name: /Unclear explanation.*Resolved.*Amira Hassan/ }).click()
+  await expect(detail).toContainText('What is the difference between 再见 and 拜拜?')
+  await expect(detail).toContainText('Thanks — the answer was too short. SparkBot now explains both.')
+  await expect(detail.getByRole('button', { name: 'Resolve', exact: true })).toHaveCount(0)
+
+  await tabs.getByRole('link', { name: 'Usage', exact: true }).click()
+  await expect(page).toHaveURL(/\/admin\/ai\/usage$/)
+  await expect(page.getByRole('heading', { name: 'Request log', level: 2 })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Export CSV' })).toBeVisible()
+
+  await tabs.getByRole('link', { name: 'Settings', exact: true }).click()
+  await expect(page).toHaveURL(/\/admin\/ai\/settings$/)
+  await expect(page.getByRole('heading', { name: 'AI settings', level: 2 })).toBeVisible()
+  await expect(page.getByLabel(/^AI notice text/)).toBeVisible()
+  await expect(page.getByRole('switch', { name: /Sensitive-word filter/ })).toBeVisible()
+  await expect(page.getByRole('switch', { name: /AI safety check/ })).toBeVisible()
 })

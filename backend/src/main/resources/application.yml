@@ -2,30 +2,25 @@ spring:
   application:
     name: ai-chinese-learning-platform-backend
   datasource:
-    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3307}/${DB_NAME:ai_chinese_learning}?useSSL=false&allowPublicKeyRetrieval=true&connectionTimeZone=Asia/Singapore&useUnicode=true&characterEncoding=utf8
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3307}/${DB_NAME:ai_chinese_learning}?sslMode=${DB_SSL_MODE:DISABLED}&allowPublicKeyRetrieval=${DB_ALLOW_PUBLIC_KEY_RETRIEVAL:true}&connectionTimeZone=${APP_DEFAULT_TIME_ZONE:Asia/Singapore}&useUnicode=true&characterEncoding=utf8
     username: ${DB_USERNAME:}
     password: ${DB_PASSWORD:}
     hikari:
       initialization-fail-timeout: 60000
       maximum-pool-size: ${DB_MAX_POOL_SIZE:30}
       minimum-idle: ${DB_MIN_IDLE:2}
-      connection-timeout: ${DB_CONNECTION_TIMEOUT_MS:30000}
   jpa:
     hibernate:
       ddl-auto: validate
     open-in-view: false
   flyway:
     enabled: true
-    baseline-on-migrate: true
-    baseline-version: 1
-    validate-on-migrate: true
-    clean-disabled: true
+    baseline-on-migrate: ${FLYWAY_BASELINE_ON_MIGRATE:false}
   servlet:
     multipart:
-      max-file-size: ${MAX_VIDEO_FILE_SIZE:100MB}
-      # The whole request also carries the form fields and multipart boundaries, so it must be a little larger
-      # than the largest allowed file; otherwise a video exactly at the 100 MB limit (SRS FRCONT04) is refused.
-      max-request-size: ${MAX_REQUEST_SIZE:101MB}
+      # Each feature enforces its own file limit. Leave room for form fields and multipart boundaries.
+      max-file-size: ${MAX_REQUEST_SIZE:201MB}
+      max-request-size: ${MAX_REQUEST_SIZE:201MB}
   mail:
     host: ${SMTP_HOST:}
     port: ${SMTP_PORT:587}
@@ -34,55 +29,48 @@ spring:
     properties:
       mail:
         smtp:
-          auth: ${SMTP_AUTH_ENABLED:true}
-          starttls:
-            enable: ${SMTP_STARTTLS_ENABLED:true}
-            required: ${SMTP_STARTTLS_REQUIRED:false}
+          auth: true
           ssl:
-            enable: ${SMTP_SSL_ENABLED:false}
-          connectiontimeout: ${SMTP_CONNECTION_TIMEOUT_MS:5000}
-          timeout: ${SMTP_TIMEOUT_MS:5000}
-          writetimeout: ${SMTP_WRITE_TIMEOUT_MS:5000}
-  lifecycle:
-    timeout-per-shutdown-phase: ${SHUTDOWN_TIMEOUT:30s}
-
-server:
-  port: ${SERVER_PORT:8080}
-  # Let Spring Boot finish in-flight requests when the local app is stopped.
-  shutdown: graceful
+            checkserveridentity: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+        smtps:
+          auth: true
+          ssl:
+            checkserveridentity: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
 
 # SpringDoc OpenAPI at its default paths: the Swagger UI lives at
 # /swagger-ui.html and reads the JSON description from /v3/api-docs.
 springdoc:
+  default-produces-media-type: application/json
   swagger-ui:
+    # Keep resource resolution aligned with the patched WebJar in pom.xml.
+    version: '@swagger-ui.version@'
     operations-sorter: alpha
     tags-sorter: alpha
     display-request-duration: true
 
-sentry:
-  dsn: ${SENTRY_DSN:}
-  environment: ${APP_ENVIRONMENT:local}
-  release: ${APP_RELEASE:}
-  traces-sample-rate: ${SENTRY_TRACES_SAMPLE_RATE:0.0}
-
 app:
+  bootstrap-admin:
+    email: ${DEFAULT_ADMIN_EMAIL:}
+    password: ${DEFAULT_ADMIN_PASSWORD:}
   platform:
     default-time-zone: ${APP_DEFAULT_TIME_ZONE:Asia/Singapore}
-  async:
-    core-pool-size: ${ASYNC_CORE_POOL_SIZE:2}
-    max-pool-size: ${ASYNC_MAX_POOL_SIZE:4}
-    queue-capacity: ${ASYNC_QUEUE_CAPACITY:100}
+  scheduling:
+    # Background jobs on the platform day: the admins' daily summary e-mail from 8:00, the learners' daily-goal
+    # reminder from 19:00 and the weekly mistakes reminder from Monday 10:00.
+    enabled: ${APP_SCHEDULING_ENABLED:true}
   security:
-    login-rate-limit:
-      max-failed-attempts: ${LOGIN_MAX_FAILED_ATTEMPTS:5}
-      attempt-window-minutes: ${LOGIN_ATTEMPT_WINDOW_MINUTES:15}
-      lock-duration-minutes: ${LOGIN_LOCK_DURATION_MINUTES:15}
-      max-tracked-records: ${LOGIN_MAX_TRACKED_RECORDS:10000}
     public-auth-rate-limit:
       register-requests: ${REGISTER_REQUESTS_PER_WINDOW:100}
       forgot-password-requests: ${FORGOT_PASSWORD_REQUESTS_PER_WINDOW:10}
-      window-minutes: ${PUBLIC_AUTH_WINDOW_MINUTES:15}
-      max-tracked-records: ${PUBLIC_AUTH_MAX_TRACKED_RECORDS:10000}
     jwt:
       # JWT_SECRET must be supplied via environment variable; the default is empty so the
       # SecurityProperties constructor rejects it at startup if it is not set.
@@ -95,24 +83,31 @@ app:
       refresh-token-cookie-secure: ${JWT_REFRESH_COOKIE_SECURE:false}
       refresh-token-same-site: ${JWT_REFRESH_COOKIE_SAME_SITE:Strict}
     forwarded:
-      # Comma-separated proxy IPs/CIDRs that are allowed to supply
-      # X-Forwarded-For on auth endpoints. Loopback addresses are trusted
-      # automatically for local development and MockMvc tests.
+      # Comma-separated proxy IPs/CIDRs whose X-Forwarded-For names the client address that the per-IP rate
+      # limits and the refresh-token records use (ClientIpResolver). Loopback addresses are always trusted.
       trusted-proxies: ${APP_SECURITY_FORWARDED_TRUSTED_PROXIES:}
+  cors:
+    # Comma-separated exact origins of the web app, allowed to call the API with credentials (CorsConfig). Empty:
+    # the Vite dev server outside production; the prod profile refuses to start without public https origins.
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:}
   upload:
     directory: ${UPLOAD_DIR:./uploads}
     max-file-size: ${MAX_FILE_SIZE:10MB}
-    verification-document-max-file-size: ${MAX_VERIFICATION_DOCUMENT_FILE_SIZE:5MB}
+    support-screenshot-max-file-size: ${MAX_SUPPORT_SCREENSHOT_FILE_SIZE:5MB}
     ai-audio-max-file-size: ${MAX_AI_AUDIO_FILE_SIZE:10MB}
     ai-image-max-file-size: ${MAX_AI_IMAGE_FILE_SIZE:10MB}
     recorded-video-directory: ${RECORDED_VIDEO_UPLOAD_DIR:./uploads/recorded-videos}
-    max-video-file-size: ${MAX_VIDEO_FILE_SIZE:100MB}
+    max-video-file-size: ${MAX_VIDEO_FILE_SIZE:200MB}
   ai:
     provider: ${AI_PROVIDER:openai}
     api-base-url: ${AI_API_BASE_URL:https://api.openai.com/v1}
     api-key: ${AI_API_KEY:}
     model-name: ${AI_MODEL_NAME:gpt-5.6-luna}
-    transcription-model: ${AI_TRANSCRIPTION_MODEL:gpt-4o-mini-transcribe}
+    pronunciation:
+      secret-id: ${TENCENT_SOE_SECRET_ID:}
+      secret-key: ${TENCENT_SOE_SECRET_KEY:}
+      soe-app-id: ${TENCENT_SOE_APP_ID:}
+      ffmpeg-path: ${AI_FFMPEG_PATH:ffmpeg}
     timeout-seconds: ${AI_TIMEOUT_SECONDS:30}
     max-output-tokens: ${AI_MAX_OUTPUT_TOKENS:1200}
     enable-real-provider: ${AI_ENABLE_REAL_PROVIDER:false}
@@ -125,11 +120,15 @@ app:
     password-reset-base-url: ${PASSWORD_RESET_BASE_URL:${FRONTEND_BASE_URL:http://localhost:5174}/reset-password}
 
 ---
-# Swagger UI and the OpenAPI JSON are for local development and demonstrations only.
+# Production overrides: require encrypted MySQL transport, refuse implicit Flyway baselines, and disable API docs.
 spring:
   config:
     activate:
       on-profile: prod | production
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3307}/${DB_NAME:ai_chinese_learning}?sslMode=${DB_SSL_MODE:REQUIRED}&allowPublicKeyRetrieval=false&connectionTimeZone=${APP_DEFAULT_TIME_ZONE:Asia/Singapore}&useUnicode=true&characterEncoding=utf8
+  flyway:
+    baseline-on-migrate: false
 springdoc:
   api-docs:
     enabled: false

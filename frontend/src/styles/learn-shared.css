@@ -1,0 +1,546 @@
+/* Shared Learn exercise primitives used across Learn, Lesson player, Practice, Mistakes review, Level check,
+   and Setup: DailyGoalMeter, ListenButtons, RankUpDialog, QuestionStage, sentence tiles, CheckBar, and finished stats. */
+
+/* Daily goal meter: rail block (Learn) and inline strip (Practice). */
+.learn-goal {
+  display: grid;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.learn-goal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.learn-goal-label {
+  font-size: var(--type-body-size);
+  font-weight: var(--font-weight-heading);
+  line-height: var(--line-height-normal);
+}
+
+.learn-goal-value {
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-strong);
+  line-height: var(--line-height-normal);
+  white-space: nowrap;
+}
+
+.learn-goal-hint {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--type-caption-size);
+  line-height: var(--line-height-normal);
+}
+
+.practice-goal-line {
+  min-height: var(--space-5);
+}
+
+.practice-goal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  min-width: 0;
+  font-size: var(--type-body-size);
+  font-weight: var(--font-weight-strong);
+  line-height: var(--line-height-normal);
+}
+
+.practice-goal-bar {
+  flex: 1 1 0;
+  min-width: var(--space-16);
+}
+
+.practice-goal-note {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--text-secondary);
+  font-size: var(--type-caption-size);
+  font-weight: var(--font-weight-medium);
+}
+
+/* The track stays visible at 0 XP across both meter layouts. */
+.learn-goal .progress-bar,
+.practice-goal .progress-bar {
+  background: var(--border-default);
+}
+
+.learn-goal.is-reached .learn-goal-hint,
+.practice-goal.is-reached .practice-goal-note {
+  color: var(--color-success-text);
+}
+
+/* Listen buttons (speech synthesis): a small Listen for rows, the 56 speaker beside a question's word, the 84 speaker of
+   a listening question with Slow beside it. */
+.learn-listen {
+  display: inline-flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 100%;
+}
+
+.learn-listen.is-prompt .learn-listen-play {
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border-radius: var(--radius-lg);
+}
+
+.learn-listen.is-large {
+  gap: var(--space-3);
+}
+
+.learn-listen.is-large .learn-listen-play {
+  width: 84px;
+  height: 84px;
+  padding: 0;
+  border-radius: var(--radius-xl);
+}
+
+.learn-listen.is-large .learn-listen-slow {
+  min-height: 56px;
+  border-radius: var(--radius-lg);
+}
+
+/* Audio that did not play: what happened, then Retry; as tall as the 84px listening speaker so the question stays put. */
+.learn-listen.is-failed {
+  min-height: 84px;
+}
+
+.learn-listen-failed {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+  color: var(--color-danger-text);
+  font-size: var(--type-body-size);
+  font-weight: var(--font-weight-strong);
+  line-height: var(--line-height-normal);
+}
+
+/* Rank-up dialog: a medal with the rank reached over the line that says what it took and what comes next. */
+.learn-rank-up {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-4);
+  text-align: center;
+}
+
+.learn-rank-medal {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 88px;
+  height: 88px;
+  border-radius: var(--radius-round);
+  background:
+    var(--pattern-grid-night) 0 0 / var(--pattern-grid-size),
+    var(--surface-brand);
+  box-shadow:
+    0 0 0 6px var(--color-primary-100),
+    var(--shadow-sm);
+  color: var(--text-on-primary);
+  animation: learn-pop var(--duration-slow) var(--ease-spring) both;
+}
+
+.learn-rank-medal-number {
+  font-size: var(--font-size-5xl);
+  font-weight: var(--font-weight-heading);
+  line-height: 1;
+}
+
+.learn-rank-medal-spark {
+  position: absolute;
+  top: calc(-1 * var(--space-1));
+  right: calc(-1 * var(--space-1));
+  color: var(--color-accent-600);
+  fill: var(--color-accent-500);
+}
+
+/* Question stage (lesson player, mistakes review, Practice listening and sentences, level check). */
+.learn-question {
+  display: grid;
+  gap: var(--space-6);
+  width: 100%;
+  min-width: 0;
+  max-width: var(--focus-column);
+  margin: 0 auto;
+}
+
+.learn-question .focus-title {
+  overflow-wrap: anywhere;
+}
+
+.learn-question-context {
+  margin: calc(-1 * var(--space-4)) 0 0;
+  color: var(--text-secondary);
+  font-size: var(--type-body-size);
+}
+
+/* What the question is about: its speaker, then the word and its pinyin. */
+.learn-question-prompt {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.learn-question-word {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.learn-question-hanzi {
+  margin: 0;
+  font-size: var(--font-size-4xl);
+  line-height: var(--line-height-snug);
+  overflow-wrap: anywhere;
+}
+
+.learn-question-meaning {
+  margin: 0;
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-heading);
+  line-height: var(--line-height-snug);
+  overflow-wrap: anywhere;
+}
+
+.learn-question-pinyin {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--type-body-size);
+  line-height: var(--line-height-normal);
+}
+
+/* Answers: one column of option rows (.option-row), numbered for the keyboard. */
+.learn-options {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.learn-option {
+  height: 100%;
+}
+
+.learn-option-text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--space-2);
+  min-width: 0;
+  font-size: var(--type-card-title-size);
+  line-height: var(--line-height-normal);
+  overflow-wrap: anywhere;
+}
+
+.learn-option-hanzi {
+  font-size: var(--font-size-xl);
+  line-height: var(--line-height-snug);
+}
+
+.learn-option-pinyin {
+  color: var(--text-secondary);
+  font-size: var(--type-body-size);
+  font-weight: var(--font-weight-medium);
+}
+
+.learn-option-mark {
+  flex: 0 0 auto;
+}
+
+.learn-option-mark.is-incorrect {
+  color: var(--color-danger-text);
+}
+
+/* On the filled correct option the tick and the pinyin are white, like its text. */
+.option-row.is-correct :is(.learn-option-mark, .learn-option-pinyin) {
+  color: var(--color-white);
+}
+
+/* Sentence building: the answer on a ruled line, a second rule, then the bank of tiles. */
+.learn-build {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.learn-build-answer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 76px;
+  padding: var(--space-3) 0;
+  border-bottom: var(--border-width-thick) solid var(--border-default);
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    background-color var(--duration-fast) var(--ease-standard);
+}
+
+.learn-build-answer.is-correct,
+.learn-build-answer.is-wrong {
+  padding-inline: var(--space-3);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.learn-build-answer.is-correct {
+  border-bottom-color: var(--color-success);
+  background: var(--color-success-soft);
+}
+
+.learn-build-answer.is-wrong {
+  border-bottom-color: var(--color-danger);
+  background: var(--color-danger-soft);
+}
+
+.learn-build-placeholder {
+  color: var(--text-secondary);
+  font-size: var(--type-body-size);
+}
+
+.learn-build-bank {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.focus-stage .learn-build-bank {
+  padding-top: var(--space-6);
+  border-top: var(--border-width-thick) solid var(--border-default);
+}
+
+.learn-tile {
+  min-width: 52px;
+  min-height: 52px;
+  padding: var(--space-2) var(--space-4);
+  border: var(--border-width-thick) solid var(--border-strong);
+  border-radius: var(--radius-btn-lg);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-strong);
+  line-height: var(--line-height-snug);
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    background-color var(--duration-fast) var(--ease-standard);
+}
+
+/* :where keeps hover below the tile's states, so a placed tile in a Practice stage (learn-practice.css) stays filled
+   under the pointer whichever of the two stylesheets loads first. */
+.learn-tile:where(:hover:not(:disabled)) {
+  border-color: var(--border-interactive);
+  background: var(--surface-hover);
+}
+
+/* A used tile keeps its place in the bank as an empty slot. */
+.learn-tile.is-used {
+  border-color: transparent;
+  background: var(--surface-sunken);
+  color: transparent;
+}
+
+/* An answer or tile a hint ruled out: faded, struck through, no longer chosen. */
+.option-row.is-ruled-out,
+.learn-tile.is-ruled-out {
+  background: var(--surface-subtle);
+  color: var(--text-disabled);
+  text-decoration: line-through;
+}
+
+.option-row.is-ruled-out {
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
+}
+
+.option-row.is-ruled-out .learn-option-pinyin {
+  color: inherit;
+}
+
+.learn-tile.is-ruled-out {
+  border-color: var(--border-subtle);
+}
+
+/* Check bar: the shared footer (FocusFooter) of a question. After the answer it is a band with the verdict on the left
+   and Continue on the right. */
+.learn-checkbar:is(.is-correct, .is-wrong) .focus-footer-inner {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.learn-checkbar-feedback {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+  animation: learn-rise var(--duration-base) var(--ease-out);
+}
+
+.learn-checkbar-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 60px;
+  height: 60px;
+  border-radius: var(--radius-round);
+  background: var(--color-success);
+  color: var(--color-white);
+  animation: learn-pop var(--duration-slow) var(--ease-spring);
+}
+
+.learn-checkbar.is-wrong .learn-checkbar-icon {
+  background: var(--color-danger-strong);
+}
+
+.learn-checkbar-copy {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.learn-checkbar-copy p {
+  margin: 0;
+}
+
+.learn-checkbar-title {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-heading);
+  line-height: var(--line-height-snug);
+}
+
+.learn-checkbar.is-correct .learn-checkbar-title {
+  color: var(--color-success-text);
+}
+
+.learn-checkbar.is-wrong .learn-checkbar-title {
+  color: var(--color-danger-text);
+}
+
+.learn-checkbar-answer {
+  color: var(--color-ink-700);
+  font-size: var(--type-card-title-size);
+  font-weight: var(--font-weight-strong);
+  line-height: var(--line-height-normal);
+  overflow-wrap: anywhere;
+}
+
+.learn-checkbar-explanation {
+  color: var(--color-ink-700);
+  font-size: var(--type-body-size);
+  line-height: var(--line-height-normal);
+  overflow-wrap: anywhere;
+}
+
+/* The figures of a finished lesson, and of a finished mistakes review: each label under its figure, side by side. */
+.learn-done-stats {
+  display: flex;
+  justify-content: center;
+  margin: 0;
+}
+
+.learn-done-stats > div {
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-1);
+  min-width: 0;
+  padding-inline: var(--space-6);
+}
+
+.learn-done-stats > div + div {
+  border-left: 1px solid var(--border-default);
+}
+
+.learn-done-stats dt,
+.learn-done-label {
+  color: var(--text-secondary);
+  font-size: var(--type-overline-size);
+  font-weight: var(--font-weight-heading);
+  letter-spacing: var(--letter-spacing-wide);
+  line-height: var(--line-height-snug);
+  text-transform: uppercase;
+}
+
+.learn-done-stats dd {
+  margin: 0;
+  font-size: var(--type-stat-size);
+  font-weight: var(--font-weight-heading);
+  line-height: var(--line-height-snug);
+}
+
+.learn-done-stats .is-xp dd {
+  color: var(--text-brand);
+}
+
+@keyframes learn-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes learn-pop {
+  from {
+    transform: scale(0.6);
+  }
+
+  to {
+    transform: scale(1);
+  }
+}
+
+@media (max-width: 48rem) {
+  .learn-goal-head,
+  .learn-done-stats {
+    flex-wrap: wrap;
+  }
+
+  .learn-done-stats {
+    gap: var(--space-3) var(--space-6);
+  }
+
+  .learn-done-stats > div {
+    padding-inline: var(--space-2);
+  }
+
+  .learn-done-stats > div + div {
+    border-left: 0;
+  }
+
+  .learn-checkbar:is(.is-correct, .is-wrong) .focus-footer-inner {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .learn-checkbar-icon {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+@media (forced-colors: active) {
+  .learn-tile.is-used {
+    border: 1px dashed GrayText;
+    background: Canvas;
+    color: transparent;
+    forced-color-adjust: none;
+  }
+}

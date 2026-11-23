@@ -1,37 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { effectScope } from 'vue'
+import { effectScope, watch } from 'vue'
 
-import { MAX_RECORDING_SECONDS, RECORDER_MIME_TYPE } from '@/utils/practiceUpload'
+import { FakeMediaRecorder } from '@/test/fakeMediaRecorder'
+import { deferred } from '@/test/helpers'
+import { MAX_RECORDING_SECONDS } from '@/utils/practiceUpload'
 
 import { useAudioRecorder } from './useAudioRecorder'
-
-/**
- * MediaRecorder stand-in for the recorder tests: a browser that records RECORDER_MIME_TYPE. It keeps every instance
- * (reset `instances` before each test); stop() delivers one chunk of audio and then fires `stop`.
- */
-class FakeMediaRecorder {
-  static instances: FakeMediaRecorder[] = []
-  static isTypeSupported = (type: string): boolean => type === RECORDER_MIME_TYPE
-  state = 'inactive'
-  ondataavailable: ((event: { data: Blob }) => void) | null = null
-  onstop: (() => void) | null = null
-  readonly options: { mimeType?: string } | undefined
-
-  constructor(_stream: MediaStream, options?: { mimeType?: string }) {
-    this.options = options
-    FakeMediaRecorder.instances.push(this)
-  }
-
-  start(): void {
-    this.state = 'recording'
-  }
-
-  stop(): void {
-    this.state = 'inactive'
-    this.ondataavailable?.({ data: new Blob(['voice'], { type: RECORDER_MIME_TYPE }) })
-    this.onstop?.()
-  }
-}
 
 function fakeStream() {
   const track = { stop: vi.fn() }
@@ -64,26 +38,30 @@ afterEach(() => {
 })
 
 describe('useAudioRecorder', () => {
-  it('reports unsupported (file-upload fallback) without getUserMedia or MediaRecorder', async () => {
+  it('reports unsupported (file-upload fallback) without getUserMedia or MediaRecorder', () => {
     const noDevices = setup({ getUserMedia: undefined })
     expect(noDevices.recorder.supported).toBe(false)
-    await expect(noDevices.recorder.start()).resolves.toBe(false)
 
     const noRecorder = setup({ MediaRecorder: undefined })
     expect(noRecorder.recorder.supported).toBe(false)
-
-    // Browsers that cannot record WEBM/Opus (none of the supported ones) get the file upload too.
-    const noWebm = setup({
-      MediaRecorder: Object.assign(class extends FakeMediaRecorder {}, { isTypeSupported: () => false }),
-    })
-    expect(noWebm.recorder.supported).toBe(false)
   })
+
+  it.each([undefined, () => false])(
+    'keeps the microphone closed when WebM support cannot be confirmed',
+    async (isTypeSupported) => {
+      const { recorder, getUserMedia } = setup({ MediaRecorder: { isTypeSupported } })
+      expect(recorder.supported).toBe(false)
+      await recorder.start()
+      expect(getUserMedia).not.toHaveBeenCalled()
+      expect(recorder.status.value).toBe('error')
+    },
+  )
 
   it('records, stops every track and exposes a WEBM file with a preview URL', async () => {
     const { recorder, track, getUserMedia } = setup()
     expect(recorder.supported).toBe(true)
 
-    await expect(recorder.start()).resolves.toBe(true)
+    await recorder.start()
     expect(getUserMedia).toHaveBeenCalledWith({ audio: true })
     expect(recorder.status.value).toBe('recording')
     expect(FakeMediaRecorder.instances[0]?.options).toEqual({ mimeType: 'audio/webm;codecs=opus' })
@@ -100,6 +78,27 @@ describe('useAudioRecorder', () => {
     expect(urlApi.createObjectURL).toHaveBeenCalledWith(recorder.recording.value)
   })
 
+  it('keeps the recording when Stop is pressed again before the recorder has delivered its data', async () => {
+    // A browser's recorder is inactive as soon as it is stopped; its data and `stop` event come a moment later.
+    class BrowserRecorder extends FakeMediaRecorder {
+      override stop(): void {
+        this.state = 'inactive'
+        queueMicrotask(() => super.stop())
+      }
+    }
+    const { recorder } = setup({ MediaRecorder: BrowserRecorder })
+    await recorder.start()
+    const statuses: string[] = []
+    watch(recorder.status, (status) => statuses.push(status), { flush: 'sync' })
+
+    recorder.stop()
+    recorder.stop()
+    await Promise.resolve()
+
+    expect(statuses).toEqual(['recorded'])
+    expect(recorder.recording.value?.size).toBeGreaterThan(0)
+  })
+
   it('stops automatically at the maximum length', async () => {
     const { recorder } = setup()
     await recorder.start()
@@ -108,11 +107,26 @@ describe('useAudioRecorder', () => {
     expect(recorder.elapsedSeconds.value).toBe(MAX_RECORDING_SECONDS)
   })
 
+  it('releases the microphone on a recorder error and discards the final partial data', async () => {
+    const { recorder, track } = setup()
+    await recorder.start()
+    const active = FakeMediaRecorder.instances[0]!
+    active.state = 'inactive'
+    active.onerror?.()
+    active.stop()
+
+    expect(recorder.status.value).toBe('error')
+    expect(recorder.recording.value).toBeNull()
+    expect(recorder.previewUrl.value).toBeNull()
+    expect(track.stop).toHaveBeenCalledOnce()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   it('reports a denied microphone permission so the page can offer a file upload', async () => {
     const { recorder } = setup({
       getUserMedia: () => Promise.reject(Object.assign(new Error('no'), { name: 'NotAllowedError' })),
     })
-    await expect(recorder.start()).resolves.toBe(false)
+    await recorder.start()
     expect(recorder.status.value).toBe('denied')
   })
 
@@ -136,19 +150,33 @@ describe('useAudioRecorder', () => {
 
   it('stops a microphone stream that arrives after the scope was disposed', async () => {
     const { track, stream } = fakeStream()
-    let grant: (value: MediaStream) => void = () => undefined
-    const { recorder, scope } = setup({
-      getUserMedia: () => new Promise<MediaStream>((resolve) => (grant = resolve)),
-    })
+    const microphone = deferred<MediaStream>()
+    const { recorder, scope } = setup({ getUserMedia: () => microphone.promise })
 
     const started = recorder.start()
     expect(recorder.status.value).toBe('requesting')
     scope.stop()
-    grant(stream)
+    microphone.resolve(stream)
 
-    await expect(started).resolves.toBe(false)
+    await started
     expect(track.stop).toHaveBeenCalled()
     expect(FakeMediaRecorder.instances).toHaveLength(0)
+  })
+
+  it('calls off a start that is still waiting for the microphone when it is stopped', async () => {
+    const { track, stream } = fakeStream()
+    const microphone = deferred<MediaStream>()
+    const { recorder } = setup({ getUserMedia: () => microphone.promise })
+
+    const started = recorder.start()
+    recorder.stop()
+    expect(recorder.status.value).toBe('idle')
+    microphone.resolve(stream)
+
+    await started
+    expect(track.stop).toHaveBeenCalled()
+    expect(FakeMediaRecorder.instances).toHaveLength(0)
+    expect(recorder.status.value).toBe('idle')
   })
 })
 

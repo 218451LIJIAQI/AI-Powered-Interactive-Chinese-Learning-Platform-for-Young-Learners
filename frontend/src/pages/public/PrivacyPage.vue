@@ -1,38 +1,69 @@
 <template>
-  <LegalDocument :title="t('legal.privacy.title')" :intro="t('legal.privacy.intro')" :sections="sections">
-    <template #lead>
-      <p class="legal-official-title" data-testid="official-title">{{ t('legal.officialTitle') }}</p>
-    </template>
-    <template #links>
-      <RouterLink class="btn btn-link" :to="{ name: 'terms' }">{{ t('legal.termsLink') }}</RouterLink>
-      <RouterLink class="btn btn-link" :to="{ name: 'responsible-ai' }">{{ t('legal.responsibleAiLink') }}</RouterLink>
-    </template>
-  </LegalDocument>
+  <LegalDocument :title="t('legal.privacy.title')" :sections="sections" :updated="UPDATED" />
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { RouterLink } from 'vue-router'
 
 import LegalDocument from '@/components/public/LegalDocument.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
+import {
+  aiProviderNameKey,
+  configuredTavusDeploymentId,
+  usePublicPlatformSettings,
+} from '@/composables/usePublicPlatformSettings'
 import { legalMessages } from '@/plugins/legalMessages'
 
 const { t } = useLocalMessages({ legal: legalMessages })
+const { aiProvider } = usePublicPlatformSettings()
+const hasLiveVideo = Boolean(configuredTavusDeploymentId())
 
-/** The AI section keeps the id `ai-provider` (linked as /privacy#ai-provider). */
+/** The day this notice last changed. */
+const UPDATED = '2026-11-19'
+
+/** `ai-provider` says what really leaves the server, by the provider the server reports (aiParagraphs). */
 const SECTIONS = [
-  { id: 'privacy-data', title: 'legal.privacy.dataTitle', copy: 'legal.privacy.dataCopy' },
-  { id: 'privacy-purpose', title: 'legal.privacy.purposeTitle', copy: 'legal.privacy.purposeCopy' },
-  { id: 'ai-provider', title: 'legal.privacy.aiTitle', copy: 'legal.privacy.aiCopy' },
-  { id: 'privacy-minimisation', title: 'legal.privacy.minimisationTitle', copy: 'legal.privacy.minimisationCopy' },
-  { id: 'privacy-files', title: 'legal.privacy.filesTitle', copy: 'legal.privacy.filesCopy' },
-  { id: 'privacy-retention', title: 'legal.privacy.retentionTitle', copy: 'legal.privacy.retentionCopy' },
-  { id: 'privacy-rights', title: 'legal.privacy.rightsTitle', copy: 'legal.privacy.rightsCopy' },
-  { id: 'privacy-law', title: 'legal.privacy.lawTitle', copy: 'legal.privacy.lawCopy' },
-  { id: 'privacy-third-parties', title: 'legal.privacy.thirdPartiesTitle', copy: 'legal.privacy.thirdPartiesCopy' },
-  { id: 'privacy-contact', title: 'legal.privacy.contactTitle', copy: 'legal.privacy.contactCopy' },
+  { id: 'privacy-data', key: 'data' },
+  { id: 'privacy-purpose', key: 'purpose' },
+  { id: 'ai-provider', key: 'ai' },
+  { id: 'privacy-minimisation', key: 'minimisation' },
+  { id: 'privacy-retention', key: 'retention' },
+  { id: 'privacy-rights', key: 'rights' },
+  { id: 'privacy-law', key: 'law' },
+  { id: 'privacy-third-parties', key: 'thirdParties' },
+  { id: 'privacy-contact', key: 'contact' },
 ] as const
 
-const sections = computed(() => SECTIONS.map(({ id, title, copy }) => ({ id, title: t(title), paragraphs: [t(copy)] })))
+/** OpenAI-specific handling only for OpenAI; nothing certain before the server has answered. */
+const aiCopy = computed(() => {
+  const ai = aiProvider.value
+  switch (ai.kind) {
+    case 'openai':
+      return t('legal.privacy.aiOpenAi')
+    case 'other': {
+      const nameKey = aiProviderNameKey(ai.provider)
+      return t('legal.privacy.aiOther', { provider: nameKey ? t(`legal.${nameKey}`) : ai.provider })
+    }
+    case 'off':
+      return t('legal.privacy.aiOff')
+    default:
+      return t('legal.privacy.aiUnknown')
+  }
+})
+
+/** Pronunciation scoring and configured live calls have their own providers and can work without the text service. */
+const aiParagraphs = computed(() => [
+  aiCopy.value,
+  t('legal.privacy.aiPronunciation'),
+  ...(hasLiveVideo ? [t('legal.privacy.aiLiveVideo')] : []),
+  ...(aiProvider.value.kind === 'off' ? [] : [t('legal.privacy.aiXiaomei')]),
+])
+
+const sections = computed(() =>
+  SECTIONS.map(({ id, key }) => ({
+    id,
+    title: t(`legal.privacy.${key}Title`),
+    paragraphs: key === 'ai' ? aiParagraphs.value : [t(`legal.privacy.${key}Copy`)],
+  })),
+)
 </script>

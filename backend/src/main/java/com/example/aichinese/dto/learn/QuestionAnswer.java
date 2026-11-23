@@ -1,6 +1,7 @@
 package com.example.aichinese.dto.learn;
 
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
 /**
@@ -9,6 +10,7 @@ import jakarta.validation.constraints.Size;
  */
 public record QuestionAnswer(
         @NotNull(message = "Question is required.")
+        @Positive(message = "Question is required.")
         Long questionId,
 
         @Size(max = 300, message = "Answer must not exceed 300 characters.")

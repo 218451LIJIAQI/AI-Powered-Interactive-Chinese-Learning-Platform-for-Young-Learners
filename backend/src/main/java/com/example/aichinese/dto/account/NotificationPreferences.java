@@ -1,13 +1,9 @@
 package com.example.aichinese.dto.account;
 
 /**
- * The e-mail notifications a user can switch off, per role: students get live session reminders and feedback,
- * teachers live session reminders and content reviews, admins the review queue digest. A preference that does not
- * apply to the user's role is null (in a request it is ignored). Account and security e-mails are always sent.
+ * The e-mail notifications a user can switch off: an admin's "Daily summary" ({@code reviewQueues}: AI reports and
+ * support requests waiting). Learners have none to switch (account and security e-mails are always sent), so it is
+ * null for them, and ignored in a learner's request.
  */
-public record NotificationPreferences(
-        Boolean liveSessionReminders,
-        Boolean feedback,
-        Boolean contentReviews,
-        Boolean reviewQueues) {
+public record NotificationPreferences(Boolean reviewQueues) {
 }

@@ -24,16 +24,15 @@ import com.example.aichinese.service.support.SupportService;
 
 import jakarta.validation.Valid;
 
-/** The admin Support queue: Open / Answered / Solved tabs, one request, reply and mark as solved. */
+import lombok.RequiredArgsConstructor;
+
+/** The admin Support queue: Open / Answered / Solved tabs, one request, reply, mark as solved and reopen. */
 @RestController
 @RequestMapping("/api/v1/admin/support")
+@RequiredArgsConstructor
 public class AdminSupportController {
 
     private final SupportService supportService;
-
-    public AdminSupportController(SupportService supportService) {
-        this.supportService = supportService;
-    }
 
     @GetMapping
     public ApiResponse<SupportQueueResponse> queue(
@@ -65,6 +64,15 @@ public class AdminSupportController {
         return ApiResponse.success("Marked as solved.", supportService.solve(currentUser, id));
     }
 
+    /** Reopens a solved request (the Undo of "Mark as solved"): back to Answered after a reply, otherwise Open. */
+    @PostMapping("/{id}/reopen")
+    public ApiResponse<SupportRequestDetailResponse> reopen(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long id) {
+        return ApiResponse.success("Request reopened.", supportService.reopen(currentUser, id));
+    }
+
+    @StoredFileResponse
     @GetMapping("/attachments/{messageId}")
     public ResponseEntity<Resource> attachment(@PathVariable Long messageId) {
         return FileDownloadResponseBuilder.buildAttachmentDownloadResponse(supportService.attachment(messageId));

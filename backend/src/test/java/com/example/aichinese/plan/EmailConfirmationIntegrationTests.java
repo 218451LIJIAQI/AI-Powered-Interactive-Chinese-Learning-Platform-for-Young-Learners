@@ -6,31 +6,30 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.MediaType;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.event.ApplicationEvents;
+import org.springframework.test.context.event.RecordApplicationEvents;
+import org.springframework.test.web.servlet.RequestBuilder;
+import org.springframework.web.util.UriComponentsBuilder;
 
-import com.example.aichinese.entity.EmailConfirmationToken;
 import com.example.aichinese.entity.User;
-import com.example.aichinese.repository.EmailConfirmationTokenRepository;
-import com.example.aichinese.service.SecureTokens;
+import com.example.aichinese.service.TransactionalEmailDispatcher.EmailDeliveryRequested;
 import com.example.aichinese.support.ApiIntegrationTest;
 
 /** A new student's e-mail confirmation: the link sent at sign-up, sending it again, and opening it. */
+@RecordApplicationEvents
 class EmailConfirmationIntegrationTests extends ApiIntegrationTest {
 
     private static final String CONFIRM = "/api/v1/auth/confirm-signup-email";
     private static final String RESEND = "/api/v1/users/me/email-confirmation";
 
     @Autowired
-    private EmailConfirmationTokenRepository tokenRepository;
-
-    @Autowired
-    private JdbcTemplate jdbcTemplate;
+    private ApplicationEvents events;
 
     @Test
     void signUpSendsALinkAndOpeningItConfirmsTheAddressOnce() throws Exception {
@@ -38,9 +37,10 @@ class EmailConfirmationIntegrationTests extends ApiIntegrationTest {
         String token = api.registerStudent(email);
         User user = user(email);
         assertThat(user.getEmailVerifiedAt()).isNull();
-        assertThat(tokenRepository.findFirstByUserIdOrderByCreatedAtDescIdDesc(user.getId())).isPresent();
+        assertThat(jdbc.queryForObject("select count(*) from email_confirmation_tokens where user_id = ?",
+                Long.class, user.getId())).isEqualTo(1L);
 
-        String raw = knownLink(user, LocalDateTime.now().plusDays(1));
+        String raw = latestConfirmationToken(email);
         mockMvc.perform(confirm(raw))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.email").value(email));
@@ -59,8 +59,11 @@ class EmailConfirmationIntegrationTests extends ApiIntegrationTest {
     @Test
     void anExpiredOrUnknownLinkIsRefused() throws Exception {
         String email = uniqueEmail("confirm-expired");
-        api.registerStudent(email);
-        String raw = knownLink(user(email), LocalDateTime.now().minusMinutes(1));
+        api.registerStudentAccount(email);
+        User user = user(email);
+        String raw = latestConfirmationToken(email);
+        assertThat(jdbc.update("update email_confirmation_tokens set expires_at = ? where user_id = ? and used_at is null",
+                Timestamp.valueOf(LocalDateTime.now().minusMinutes(1)), user.getId())).isOne();
         mockMvc.perform(confirm(raw))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("This confirmation link has expired. Send a new one from Home."));
@@ -77,15 +80,38 @@ class EmailConfirmationIntegrationTests extends ApiIntegrationTest {
                 .andExpect(status().isTooManyRequests());
 
         User user = user(email);
-        String older = knownLink(user, LocalDateTime.now().plusDays(1));
-        jdbcTemplate.update("update email_confirmation_tokens set created_at = ? where user_id = ?",
-                LocalDateTime.now().minusMinutes(2), user.getId());
+        String older = latestConfirmationToken(email);
+        ageOpenLink(user);
         mockMvc.perform(api.authPost(RESEND, token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.email").value(email))
                 .andExpect(jsonPath("$.data.confirmed").value(false));
         mockMvc.perform(confirm(older))
                 .andExpect(status().isBadRequest());
+        mockMvc.perform(confirm(latestConfirmationToken(email)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.email").value(email));
+    }
+
+    /** Home can say which limit stopped "Send the link again": the reason reaches the student, not a general sentence. */
+    @Test
+    void theStudentIsToldWhichLimitStoppedTheLink() throws Exception {
+        String email = uniqueEmail("confirm-limits");
+        String token = api.registerStudent(email);
+        mockMvc.perform(api.authPost(RESEND, token))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.message").value("We just sent a link. Please wait a minute before asking for another one."));
+
+        // Five links in the last day, the newest more than a minute ago.
+        User user = user(email);
+        for (int link = 1; link < 5; link++) {
+            ageOpenLink(user);
+            mockMvc.perform(api.authPost(RESEND, token)).andExpect(status().isOk());
+        }
+        ageOpenLink(user);
+        mockMvc.perform(api.authPost(RESEND, token))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.message").value("You asked for several links today. Please try again tomorrow."));
     }
 
     @Test
@@ -94,20 +120,27 @@ class EmailConfirmationIntegrationTests extends ApiIntegrationTest {
                 .andExpect(status().isUnauthorized());
     }
 
-    /** A link whose raw token the test knows (only hashes are stored). */
-    private String knownLink(User user, LocalDateTime expiresAt) {
-        String raw = SecureTokens.newHexToken();
-        EmailConfirmationToken link = new EmailConfirmationToken();
-        link.setUser(user);
-        link.setEmail(user.getEmail());
-        link.setTokenHash(SecureTokens.sha256Hex(raw));
-        link.setExpiresAt(expiresAt);
-        tokenRepository.save(link);
-        return raw;
+    private String latestConfirmationToken(String email) {
+        String body = events.stream(EmailDeliveryRequested.class)
+                .filter(message -> email.equals(message.email()))
+                .map(EmailDeliveryRequested::body)
+                .toList().getLast();
+        String link = body.lines().filter(line -> line.startsWith("http")).findFirst().orElseThrow();
+        var url = UriComponentsBuilder.fromUriString(link).build();
+        assertThat(url.getPath()).endsWith("/confirm-email");
+        assertThat(url.getQueryParams().getFirst("kind")).isEqualTo("signup");
+        String token = url.getQueryParams().getFirst("token");
+        assertThat(token).isNotBlank();
+        return token;
     }
 
-    private org.springframework.test.web.servlet.RequestBuilder confirm(String raw) throws Exception {
-        return post(CONFIRM).contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of("token", raw)));
+    private void ageOpenLink(User user) {
+        int updated = jdbc.update("update email_confirmation_tokens set created_at = ? where user_id = ? and used_at is null",
+                Timestamp.valueOf(LocalDateTime.now().minusMinutes(2)), user.getId());
+        assertThat(updated).isOne();
+    }
+
+    private RequestBuilder confirm(String raw) throws Exception {
+        return api.jsonPost(CONFIRM, null, Map.of("token", raw));
     }
 }

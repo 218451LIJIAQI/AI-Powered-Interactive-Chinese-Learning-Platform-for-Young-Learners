@@ -15,14 +15,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.nio.charset.StandardCharsets;
-import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
@@ -32,19 +31,13 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import org.springframework.test.web.servlet.request.MockMultipartHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
-import com.example.aichinese.entity.TeacherProfile;
-import com.example.aichinese.entity.User;
-import com.example.aichinese.entity.enums.TeacherStatus;
-import com.example.aichinese.repository.TeacherProfileRepository;
-import com.example.aichinese.repository.UserRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * Small MockMvc client shared by the integration tests: accounts, approved teachers, classes with published
- * lessons and quizzes (through the teacher-submit / admin-approve review), joining and taking quizzes, live
- * sessions, the Ask SparkBot stream and JSON helpers. Requires the test context properties DEFAULT_ADMIN_EMAIL /
- * DEFAULT_ADMIN_PASSWORD below.
+ * Small MockMvc client shared by the integration tests: accounts, classes with published lessons and quizzes (made
+ * through the admin's class authoring), joining and taking quizzes, the Ask SparkBot stream and JSON helpers. Requires
+ * the test context properties DEFAULT_ADMIN_EMAIL / DEFAULT_ADMIN_PASSWORD below.
  */
 public final class LearningApiTestClient {
 
@@ -53,36 +46,33 @@ public final class LearningApiTestClient {
     public static final String USER_PASSWORD = "Password123!";
     /** The largest page the list endpoints return, whatever size is requested. */
     public static final int MAX_PAGE_SIZE = 100;
+    public static final String PLAN = "/api/v1/students/plan";
+    public static final Map<String, Object> SKIPPED_CHECK = Map.of("selfLevel", "NEW_TO_MANDARIN", "skipped", true);
     public static final String AI_CHAT_STREAM_PATH = "/api/v1/ai/chat/stream";
     private static final String CHAT_COMPLETE_EVENT = "event:complete\ndata:";
     private static final long CHAT_STREAM_WAIT_MS = 5_000;
-    private static final long BEGINNER_LEVEL_ID = 1L;
-    private static final long TOPIC_ID = 1L;
+    private static final long CATEGORY_ID = 1L;
     private static final String OVERSIZED_PAGE_SIZE = "100000";
+    /** Thread-safe allocator over RFC 2544 benchmarking block 198.18.0.0/15 so shared rate-limit buckets never collide. */
+    private static final AtomicInteger NEXT_CLIENT_IP = new AtomicInteger(1);
 
     private final MockMvc mockMvc;
     private final ObjectMapper objectMapper;
-    private final UserRepository userRepository;
-    private final TeacherProfileRepository teacherProfileRepository;
-    /** Classes of the lessons and quizzes this client published, so a student can join before taking a quiz. */
-    private final Map<Long, Long> classOfLesson = new HashMap<>();
+    /** Classes of the quizzes this client published, so a learner can join before taking a quiz. */
     private final Map<Long, Long> classOfQuiz = new HashMap<>();
 
-    public LearningApiTestClient(
-            MockMvc mockMvc,
-            ObjectMapper objectMapper,
-            UserRepository userRepository,
-            TeacherProfileRepository teacherProfileRepository) {
+    public LearningApiTestClient(MockMvc mockMvc, ObjectMapper objectMapper) {
         this.mockMvc = mockMvc;
         this.objectMapper = objectMapper;
-        this.userRepository = userRepository;
-        this.teacherProfileRepository = teacherProfileRepository;
     }
 
-    // ----- accounts -----
+    // Accounts
 
-    public static String uniqueEmail(String prefix) {
-        return prefix + "-" + UUID.randomUUID() + "@example.com";
+    /** Keep the full random suffix and fit the test label into the 64-character email local part. */
+    public static String uniqueEmail(String label) {
+        String suffix = "-" + UUID.randomUUID();
+        int labelLength = Math.min(label.length(), 64 - suffix.length());
+        return label.substring(0, labelLength) + suffix + "@example.com";
     }
 
     /** Eight random characters, to keep titles and search markers of one test apart from the others. */
@@ -90,73 +80,49 @@ public final class LearningApiTestClient {
         return UUID.randomUUID().toString().substring(0, 8);
     }
 
-    /** Registers a student named "Student {email}" and signs in. */
+    /** A unique non-loopback IPv4 client address (198.18.x.y with y in 1..254) for isolated rate-limit buckets. */
+    public static String nextClientIp() {
+        int sequence = NEXT_CLIENT_IP.getAndIncrement();
+        int thirdOctet = (sequence / 254) % 256;
+        int fourthOctet = (sequence % 254) + 1;
+        return "198.18." + thirdOctet + "." + fourthOctet;
+    }
+
+    /** Registers a learner named "Student {email}" and signs in. */
     public String registerStudent(String email) throws Exception {
-        mockMvc.perform(jsonPost("/api/v1/auth/register/student", null, Map.of(
-                        "fullName", "Student " + email,
-                        "email", email,
-                        "password", USER_PASSWORD,
-                        "confirmPassword", USER_PASSWORD,
-                        "preferredLanguage", "en")))
-                .andExpect(status().isOk());
+        registerStudentAccount(email);
         return login(email, USER_PASSWORD);
     }
 
-    /** Registers a (pending) teacher named "Teacher {email}" and signs in. */
-    public String registerTeacher(String email) throws Exception {
-        mockMvc.perform(jsonPost("/api/v1/auth/register/teacher", null, Map.of(
-                        "fullName", "Teacher " + email,
-                        "email", email,
-                        "password", USER_PASSWORD,
-                        "confirmPassword", USER_PASSWORD,
-                        "bio", "Mandarin teacher for young adult learners")))
-                .andExpect(status().isOk());
-        return login(email, USER_PASSWORD);
-    }
-
-    /**
-     * Registers a teacher, uploads the required documents (teaching certificate and identity document) and submits
-     * the application; the teacher stays PENDING, in review.
-     */
-    public TeacherProfile registerTeacherWithDocument(String email) throws Exception {
-        String token = registerTeacher(email);
-        uploadVerificationDocument(token, "CERTIFICATE");
-        uploadVerificationDocument(token, "IDENTITY");
-        mockMvc.perform(jsonPost("/api/v1/teachers/verification/submit", token, Map.of("acceptedStandards", true)))
-                .andExpect(status().isOk());
-        User user = userRepository.findByEmailWithRoles(email).orElseThrow();
-        return teacherProfileRepository.findDetailedByUserId(user.getId()).orElseThrow();
-    }
-
-    /** Uploads one verification document (a minimal PDF) of the given type for the signed-in teacher. */
-    public void uploadVerificationDocument(String teacherToken, String documentType) throws Exception {
-        MockMultipartFile file = new MockMultipartFile(
-                "file", documentType + ".pdf", "application/pdf", TestUploadFixtures.minimalPdf());
-        mockMvc.perform(authMultipart("/api/v1/teachers/verification-documents", teacherToken)
-                        .file(file)
-                        .param("documentType", documentType))
+    /** Registers a learner without creating a sign-in session. */
+    public void registerStudentAccount(String email) throws Exception {
+        mockMvc.perform(studentRegistrationRequest(email, USER_PASSWORD))
                 .andExpect(status().isOk());
     }
 
-    /** Registers a teacher with a verification document and lets the admin approve it. */
-    private TeacherProfile approveTeacher(String email) throws Exception {
-        TeacherProfile profile = registerTeacherWithDocument(email);
-        mockMvc.perform(jsonPost("/api/v1/admin/teachers/" + profile.getId() + "/approve", adminToken(),
-                        Map.of("note", "Approved")))
-                .andExpect(status().isOk());
-        assertThat(teacherProfileRepository.findById(profile.getId()).orElseThrow().getTeacherStatus())
-                .isEqualTo(TeacherStatus.APPROVED);
-        return profile;
-    }
-
-    /** {@link #approveTeacher(String)}, then signs the approved teacher in. */
-    public String approvedTeacher(String email) throws Exception {
-        approveTeacher(email);
-        return login(email, USER_PASSWORD);
+    public MockHttpServletRequestBuilder studentRegistrationRequest(String email, String password) throws Exception {
+        return jsonPost("/api/v1/auth/register/student", null, Map.of(
+                "fullName", "Student " + email,
+                "email", email,
+                "password", password,
+                "confirmPassword", password,
+                "preferredLanguage", "en"));
     }
 
     public String adminToken() throws Exception {
         return login(ADMIN_EMAIL, ADMIN_PASSWORD);
+    }
+
+    public JsonNode startTravelPlan(String token) throws Exception {
+        return startPlan(token, Map.of("reason", "TRAVEL", "goals", List.of("ORDER_FOOD"),
+                "pace", "HOURS_1_TO_2", "focus", List.of()), SKIPPED_CHECK);
+    }
+
+    /** Build the plan, then confirm it through the same endpoints as the learner. */
+    public JsonNode startPlan(String token, Map<String, Object> goal, Map<String, Object> levelCheck) throws Exception {
+        mockMvc.perform(jsonPost(PLAN, token, Map.of("goal", goal, "levelCheck", levelCheck)))
+                .andExpect(status().isOk());
+        return data(mockMvc.perform(authPost(PLAN + "/confirm", token)).andExpect(status().isOk()).andReturn());
     }
 
     public String login(String email, String password) throws Exception {
@@ -169,28 +135,34 @@ public final class LearningApiTestClient {
         return jsonPost("/api/v1/auth/login", null, Map.of("email", email, "password", password));
     }
 
-    // ----- classes (teacher authoring, admin review, student access), exactly as in production -----
+    public MockHttpServletRequestBuilder changePasswordRequest(
+            String token, String currentPassword, String newPassword, String confirmPassword) throws Exception {
+        return jsonPost("/api/v1/users/me/password", token, Map.of(
+                "currentPassword", currentPassword,
+                "newPassword", newPassword,
+                "confirmPassword", confirmPassword));
+    }
 
-    /** Ids of a published class with one unit, one lesson and the lesson's quiz. */
+    // Classes: admin authoring and learner access, through the production endpoints
+
+    /** Ids of a published class (2 units of 2 published lessons) with its first unit, lesson and lesson quiz. */
     public record PublishedClass(Long classId, Long unitId, Long lessonId, Long quizId) {
     }
 
-    /** A draft class of the teacher (Beginner 1, the first topic, hybrid). */
-    public Long draftClass(String teacherToken, String title) throws Exception {
-        return data(mockMvc.perform(jsonPost("/api/v1/teachers/classes", teacherToken, Map.of(
+    /** A draft class in the first category. */
+    public Long draftClass(String adminToken, String title) throws Exception {
+        return data(mockMvc.perform(jsonPost("/api/v1/admin/classes", adminToken, Map.of(
                         "title", title,
                         "description", "A class for adult beginners",
-                        "levelId", BEGINNER_LEVEL_ID,
-                        "topicId", TOPIC_ID,
-                        "learningType", "HYBRID")))
+                        "categoryId", CATEGORY_ID)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("DRAFT"))
                 .andReturn()).path("id").asLong();
     }
 
     /** Adds a unit to the class and returns its id. */
-    public Long unit(String teacherToken, Long classId, String title) throws Exception {
-        JsonNode units = data(mockMvc.perform(jsonPost("/api/v1/teachers/classes/" + classId + "/units", teacherToken,
+    public Long unit(String adminToken, Long classId, String title) throws Exception {
+        JsonNode units = data(mockMvc.perform(jsonPost("/api/v1/admin/classes/" + classId + "/units", adminToken,
                         Map.of("title", title)))
                 .andExpect(status().isOk())
                 .andReturn()).path("units");
@@ -198,106 +170,158 @@ public final class LearningApiTestClient {
     }
 
     /** A draft lesson in the unit; returns its id. */
-    public Long draftLesson(String teacherToken, Long unitId, String title) throws Exception {
-        return data(mockMvc.perform(jsonPost("/api/v1/teachers/units/" + unitId + "/lessons", teacherToken,
+    public Long draftLesson(String adminToken, Long unitId, String title) throws Exception {
+        return createLesson(adminToken, unitId, title).path("lessonId").asLong();
+    }
+
+    private JsonNode createLesson(String adminToken, Long unitId, String title) throws Exception {
+        return data(mockMvc.perform(jsonPost("/api/v1/admin/units/" + unitId + "/lessons", adminToken,
                         Map.of("title", title)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("DRAFT"))
-                .andReturn()).path("lessonId").asLong();
+                .andReturn());
     }
 
     /**
-     * Fills a lesson so it passes the submit checklist: a key phrase, a flashcards activity and a 3-question quiz
-     * (each question 5 marks). Returns the editor.
+     * Fills a lesson so it can be published: a key phrase, a video, its three activities (flashcards, tracing 你,
+     * matching two greetings) and a 5-question quiz (each question 5 marks: "hello", a fill-in, "goodbye", "thank you"
+     * and "sorry") with "Allow SparkBot hints" on. Returns the editor.
      */
-    public JsonNode readyLesson(String teacherToken, Long lessonId, String summary) throws Exception {
-        String base = "/api/v1/teachers/lessons/" + lessonId;
-        JsonNode editor = data(mockMvc.perform(jsonPut(base + "/content", teacherToken, Map.of(
-                        "title", data(mockMvc.perform(authGet(base, teacherToken)).andReturn()).path("title").asText(),
+    public JsonNode readyLesson(String adminToken, Long lessonId, String summary) throws Exception {
+        String title = data(mockMvc.perform(authGet("/api/v1/admin/lessons/" + lessonId, adminToken))
+                .andExpect(status().isOk()).andReturn()).path("title").asText();
+        return fillLesson(adminToken, lessonId, title, summary, true, null);
+    }
+
+    private JsonNode fillLesson(String adminToken, Long lessonId, String title, String summary, boolean hintsAllowed,
+            String hint) throws Exception {
+        String base = "/api/v1/admin/lessons/" + lessonId;
+        mockMvc.perform(jsonPut(base + "/content", adminToken, Map.of(
+                        "title", title,
                         "minutes", 12,
                         "summary", summary,
                         "keyPhrases", List.of(Map.of("chinese", "你好", "pinyin", "nǐ hǎo", "meaning", "hello")))))
-                .andExpect(status().isOk())
-                .andReturn());
-        mockMvc.perform(jsonPost(base + "/activities", teacherToken, Map.of(
-                        "type", "FLASHCARDS", "title", "Greeting cards", "stage", "GUIDED")))
                 .andExpect(status().isOk());
-        editor = data(mockMvc.perform(jsonPost(base + "/quizzes", teacherToken, Map.of(
-                        "title", "Lesson quiz", "timeLimitMinutes", 10, "learningStage", "GUIDED")))
+        uploadLessonVideo(adminToken, lessonId, "Saying hello");
+        mockMvc.perform(jsonPost(base + "/activities", adminToken, Map.of(
+                        "type", "FLASHCARDS", "title", "Greeting cards")))
+                .andExpect(status().isOk());
+        mockMvc.perform(jsonPost(base + "/activities", adminToken, Map.of(
+                        "type", "TRACING", "title", "Trace 你",
+                        "characters", List.of(Map.of("character", "你", "pinyin", "nǐ", "meaning", "you")))))
+                .andExpect(status().isOk());
+        mockMvc.perform(jsonPost(base + "/activities", adminToken, Map.of(
+                        "type", "MATCHING", "title", "Match the greetings",
+                        "pairs", List.of(
+                                Map.of("chinese", "你好", "pinyin", "nǐ hǎo", "meaning", "hello"),
+                                Map.of("chinese", "再见", "pinyin", "zàijiàn", "meaning", "goodbye")))))
+                .andExpect(status().isOk());
+        JsonNode editor = data(mockMvc.perform(jsonPost(base + "/quizzes", adminToken,
+                        Map.of("title", "Lesson quiz", "hintsAllowed", hintsAllowed)))
                 .andExpect(status().isOk())
                 .andReturn());
-        long quizId = editor.path("quizzes").get(editor.path("quizzes").size() - 1).path("id").asLong();
-        for (Map<String, ?> question : List.of(optionQuestion("Which word means hello?", "你好", "再见", null),
-                fillBlankQuestion(), optionQuestion("Which word means goodbye?", "再见", "你好", null))) {
-            editor = data(mockMvc.perform(jsonPost(base + "/quizzes/" + quizId + "/questions", teacherToken, question))
+        long quizId = editor.path("quizzes").get(0).path("id").asLong();
+        for (Map<String, ?> question : quizQuestions(hint)) {
+            editor = data(mockMvc.perform(jsonPost(base + "/quizzes/" + quizId + "/questions", adminToken, question))
                     .andExpect(status().isOk())
                     .andReturn());
         }
         return editor;
     }
 
-    /** A published class whose one lesson passed review (the class goes live with it). */
-    public PublishedClass publishedClass(String teacherToken, String title) throws Exception {
-        return publishedClass(teacherToken, title, title + " lesson", "Lesson summary");
+    /** The five questions of {@link #readyLesson}'s quiz, in order; the wrong answer of the first has feedback. */
+    public static List<Map<String, ?>> quizQuestions(String hint) {
+        return List.of(
+                optionQuestion("Which word means hello?", "你好", "再见", hint, "That's goodbye."),
+                fillBlankQuestion(),
+                optionQuestion("Which word means goodbye?", "再见", "你好", null, null),
+                optionQuestion("Which word means thank you?", "谢谢", "再见", null, null),
+                optionQuestion("Which word means sorry?", "对不起", "谢谢", null, null));
     }
 
-    public PublishedClass publishedClass(String teacherToken, String classTitle, String lessonTitle, String summary)
-            throws Exception {
-        Long classId = draftClass(teacherToken, classTitle);
-        Long unitId = unit(teacherToken, classId, "Unit 1");
-        Long lessonId = draftLesson(teacherToken, unitId, lessonTitle);
-        JsonNode editor = readyLesson(teacherToken, lessonId, summary);
-        mockMvc.perform(authPost("/api/v1/teachers/lessons/" + lessonId + "/submit", teacherToken))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.status").value("SUBMITTED"));
-        mockMvc.perform(authPost("/api/v1/admin/class-reviews/classes/" + classId + "/approve", adminToken()))
+    /** Uploads a lesson video (a minimal MP4) to the lesson's working copy. */
+    public void uploadLessonVideo(String adminToken, Long lessonId, String title) throws Exception {
+        MockMultipartFile file = new MockMultipartFile("file", "lesson.mp4", "video/mp4", TestUploadFixtures.minimalMp4());
+        mockMvc.perform(authMultipart("/api/v1/admin/lessons/" + lessonId + "/video", adminToken)
+                        .file(file)
+                        .param("title", title)
+                        .param("durationSeconds", "280"))
                 .andExpect(status().isOk());
-        Long quizId = editor.path("quizzes").get(0).path("id").asLong();
-        classOfLesson.put(lessonId, classId);
-        classOfQuiz.put(quizId, classId);
-        return new PublishedClass(classId, unitId, lessonId, quizId);
     }
 
-    /** A published lesson (in a class of its own); {@code content} becomes its summary. */
-    public Long publishedLesson(String teacherToken, String title, String content) throws Exception {
-        return publishedClass(teacherToken, "Class: " + title, title, content).lessonId();
+    /** Publishes the lesson (a draft, or the unpublished changes of a published lesson); returns the editor. */
+    public JsonNode publishLesson(String adminToken, Long lessonId) throws Exception {
+        return data(mockMvc.perform(authPost("/api/v1/admin/lessons/" + lessonId + "/publish", adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("PUBLISHED"))
+                .andReturn());
+    }
+
+    /** A complete lesson in the unit, published; returns the editor. */
+    public JsonNode publishedLesson(String adminToken, Long unitId, String title, String summary, boolean hintsAllowed,
+            String hint) throws Exception {
+        JsonNode draft = createLesson(adminToken, unitId, title);
+        long lessonId = draft.path("lessonId").asLong();
+        fillLesson(adminToken, lessonId, draft.path("title").asText(), summary, hintsAllowed, hint);
+        return publishLesson(adminToken, lessonId);
+    }
+
+    /** A published class: 2 units of 2 published lessons (the shape a class needs to go live). */
+    public PublishedClass publishedClass(String adminToken, String title) throws Exception {
+        return publishedClass(adminToken, title, title + " lesson", "Lesson summary");
+    }
+
+    public PublishedClass publishedClass(String adminToken, String classTitle, String lessonTitle, String summary)
+            throws Exception {
+        return publishedClass(adminToken, classTitle, lessonTitle, summary, true, null);
     }
 
     /**
-     * Adds a quiz to a published lesson through a reviewed revision: an option question (5 marks, the optional
-     * hint), a fill-blank question answered "hǎo" (5 marks) and an option question (5 marks).
+     * A published class whose first lesson's quiz has "Allow SparkBot hints" as given and the optional {@code hint} on
+     * its first question; the quizzes are otherwise those of {@link #readyLesson}.
      */
-    public Long publishedQuiz(String teacherToken, Long lessonId, String learningStage, String hint) throws Exception {
-        String base = "/api/v1/teachers/lessons/" + lessonId;
-        Map<String, Object> quiz = new HashMap<>(Map.of("title", "Greeting quiz", "description", "Greetings practice"));
-        if (learningStage != null) {
-            quiz.put("learningStage", learningStage);
-        }
-        JsonNode editor = data(mockMvc.perform(jsonPost(base + "/quizzes", teacherToken, quiz))
-                .andExpect(status().isOk())
-                .andReturn());
-        long quizId = editor.path("quizzes").get(editor.path("quizzes").size() - 1).path("id").asLong();
-        for (Map<String, ?> question : List.of(optionQuestion("Which word means hello?", "你好", "再见", hint),
-                fillBlankQuestion(), optionQuestion("Which word means goodbye?", "再见", "你好", null))) {
-            mockMvc.perform(jsonPost(base + "/quizzes/" + quizId + "/questions", teacherToken, question))
-                    .andExpect(status().isOk());
-        }
-        mockMvc.perform(authPost(base + "/submit", teacherToken)).andExpect(status().isOk());
-        mockMvc.perform(authPost("/api/v1/admin/class-reviews/lessons/" + lessonId + "/approve", adminToken()))
-                .andExpect(status().isOk());
-        classOfQuiz.put(quizId, classOfLesson.get(lessonId));
-        return quizId;
+    public PublishedClass publishedClassWithQuiz(String adminToken, String title, boolean hintsAllowed, String hint)
+            throws Exception {
+        return publishedClass(adminToken, title, title + " lesson", "Lesson summary", hintsAllowed, hint);
     }
 
-    private static Map<String, Object> optionQuestion(String text, String correct, String wrong, String hint) {
+    private PublishedClass publishedClass(
+            String adminToken, String classTitle, String lessonTitle, String summary, boolean hintsAllowed, String hint)
+            throws Exception {
+        Long classId = draftClass(adminToken, classTitle);
+        Long unitId = unit(adminToken, classId, "Unit 1");
+        Long secondUnitId = unit(adminToken, classId, "Unit 2");
+        JsonNode first = publishedLesson(adminToken, unitId, lessonTitle, summary, hintsAllowed, hint);
+        publishedLesson(adminToken, unitId, lessonTitle + " 2", summary, true, null);
+        publishedLesson(adminToken, secondUnitId, lessonTitle + " 3", summary, true, null);
+        publishedLesson(adminToken, secondUnitId, lessonTitle + " 4", summary, true, null);
+        publishClass(adminToken, classId);
+        Long quizId = first.path("quizzes").get(0).path("id").asLong();
+        classOfQuiz.put(quizId, classId);
+        return new PublishedClass(classId, unitId, first.path("lessonId").asLong(), quizId);
+    }
+
+    /** Publishes the class (it must have its shape: 2 units holding 4 to 6 published lessons). */
+    public void publishClass(String adminToken, Long classId) throws Exception {
+        mockMvc.perform(authPost("/api/v1/admin/classes/" + classId + "/publish", adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("PUBLISHED"));
+    }
+
+    private static Map<String, Object> optionQuestion(String text, String correct, String wrong, String hint,
+            String wrongFeedback) {
+        Map<String, Object> wrongOption = new HashMap<>(Map.of("optionText", wrong, "correctOption", false));
+        if (wrongFeedback != null) {
+            wrongOption.put("feedback", wrongFeedback);
+        }
         Map<String, Object> question = new HashMap<>(Map.of(
                 "questionType", "MULTIPLE_CHOICE",
                 "questionText", text,
                 "points", 5,
                 "explanation", correct + " is the answer.",
                 "options", List.of(
-                        Map.of("optionText", correct, "correctOption", true, "displayOrder", 1),
-                        Map.of("optionText", wrong, "correctOption", false, "displayOrder", 2))));
+                        Map.of("optionText", correct, "correctOption", true),
+                        wrongOption)));
         if (hint != null) {
             question.put("hint", hint);
         }
@@ -313,13 +337,13 @@ public final class LearningApiTestClient {
                 "explanation", "nǐ hǎo");
     }
 
-    /** The student joins the class (joining twice is harmless). */
+    /** The learner joins the class (joining twice is harmless). */
     public void join(String studentToken, Long classId) throws Exception {
         mockMvc.perform(authPost("/api/v1/students/classes/" + classId + "/join", studentToken))
                 .andExpect(status().isOk());
     }
 
-    /** Starts (or resumes) the student's attempt at the quiz; the student joins its class first. */
+    /** Starts (or resumes) the learner's attempt at the quiz; the learner joins its class first. */
     public JsonNode startQuiz(String studentToken, Long quizId) throws Exception {
         if (classOfQuiz.containsKey(quizId)) {
             join(studentToken, classOfQuiz.get(quizId));
@@ -334,11 +358,19 @@ public final class LearningApiTestClient {
         return jsonPut("/api/v1/students/classes/quiz-attempts/" + attemptId + "/answers", studentToken, answer);
     }
 
-    /**
-     * Takes the quiz of {@link #readyLesson} or {@link #publishedQuiz}: the first option question right or wrong, the
-     * fill-blank answer as given and the last option question right; then submits.
-     */
+    /** Takes the quiz of {@link #readyLesson} as {@link #answerQuiz} answers it, then submits. */
     public MvcResult submitQuiz(String studentToken, Long quizId, boolean optionCorrect, String fillBlank) throws Exception {
+        long attemptId = answerQuiz(studentToken, quizId, optionCorrect, fillBlank);
+        return mockMvc.perform(authPost("/api/v1/students/classes/quiz-attempts/" + attemptId + "/submit", studentToken))
+                .andExpect(status().isOk())
+                .andReturn();
+    }
+
+    /**
+     * Answers the quiz of {@link #readyLesson} without submitting it: the first option question right or wrong, the
+     * fill-in answer as given and the other option questions right. Returns the attempt's id.
+     */
+    public long answerQuiz(String studentToken, Long quizId, boolean optionCorrect, String fillBlank) throws Exception {
         JsonNode session = startQuiz(studentToken, quizId);
         long attemptId = session.path("attemptId").asLong();
         JsonNode questions = session.path("questions");
@@ -353,47 +385,10 @@ public final class LearningApiTestClient {
             }
             mockMvc.perform(saveAnswer(studentToken, attemptId, answer)).andExpect(status().isOk());
         }
-        return mockMvc.perform(authPost("/api/v1/students/classes/quiz-attempts/" + attemptId + "/submit", studentToken))
-                .andExpect(status().isOk())
-                .andReturn();
+        return attemptId;
     }
 
-    // ----- live sessions -----
-
-    /** A live-session form for 45 minutes from {@code start} (wall-clock time in the session zone) on Google Meet. */
-    public static Map<String, Object> liveSessionBody(Long classId, Long lessonId, String title, LocalDateTime start) {
-        Map<String, Object> body = new HashMap<>(Map.of(
-                "title", title,
-                "classId", classId,
-                "startTime", start.toString(),
-                "endTime", start.plusMinutes(45).toString(),
-                "meetingLink", "https://meet.google.com/" + UUID.randomUUID(),
-                "meetingPlatform", "GOOGLE_MEET"));
-        if (lessonId != null) {
-            body.put("lessonId", lessonId);
-        }
-        return body;
-    }
-
-    /** Schedules a session of the lesson's class (see {@link #publishedLesson}) for 45 minutes from {@code start}. */
-    public Long scheduledLiveClass(String teacherToken, Long lessonId, String title, LocalDateTime start) throws Exception {
-        return id(mockMvc.perform(jsonPost("/api/v1/teachers/live-sessions", teacherToken,
-                        liveSessionBody(classOfLesson.get(lessonId), lessonId, title, start)))
-                .andExpect(status().isOk())
-                .andReturn());
-    }
-
-    /** A student action on a live session: {@code book}, {@code cancel-booking} or {@code join}. */
-    public MockHttpServletRequestBuilder liveSessionAction(String studentToken, Long sessionId, String action) {
-        return authPost("/api/v1/students/classes/live-sessions/" + sessionId + "/" + action, studentToken);
-    }
-
-    /** The class a lesson created by {@link #publishedLesson} belongs to. */
-    public Long classOfLesson(Long lessonId) {
-        return classOfLesson.get(lessonId);
-    }
-
-    // ----- AI Helper -----
+    // AI Helper
 
     /**
      * Asks SparkBot through {@link #AI_CHAT_STREAM_PATH} and returns the whole event stream once it has ended: the
@@ -415,13 +410,15 @@ public final class LearningApiTestClient {
     /** The chat turn sent as the {@code complete} event of {@link #chatStream}; fails when the stream ended otherwise. */
     public JsonNode chat(String studentToken, Map<String, ?> body) throws Exception {
         String stream = chatStream(studentToken, body);
-        int event = stream.indexOf(CHAT_COMPLETE_EVENT);
+        int event = stream.lastIndexOf(CHAT_COMPLETE_EVENT);
         assertThat(event).as("complete event in %s", stream).isNotNegative();
         int start = event + CHAT_COMPLETE_EVENT.length();
-        return objectMapper.readTree(stream.substring(start, stream.indexOf('\n', start)));
+        int end = stream.indexOf('\n', start);
+        String payload = (end < 0 ? stream.substring(start) : stream.substring(start, end)).stripTrailing();
+        return objectMapper.readTree(payload);
     }
 
-    // ----- HTTP helpers -----
+    // HTTP helpers
 
     public MockHttpServletRequestBuilder authGet(String path, String token) {
         return get(path).header(HttpHeaders.AUTHORIZATION, bearer(token));
@@ -446,11 +443,7 @@ public final class LearningApiTestClient {
 
     /** A multipart upload of the signed-in user; files and form fields are added by the caller. */
     public MockMultipartHttpServletRequestBuilder authMultipart(String path, String token) {
-        return authMultipart(HttpMethod.POST, path, token);
-    }
-
-    public MockMultipartHttpServletRequestBuilder authMultipart(HttpMethod method, String path, String token) {
-        MockMultipartHttpServletRequestBuilder builder = multipart(method, path);
+        MockMultipartHttpServletRequestBuilder builder = multipart(path);
         builder.header(HttpHeaders.AUTHORIZATION, bearer(token));
         return builder;
     }
@@ -461,10 +454,6 @@ public final class LearningApiTestClient {
 
     public MockHttpServletRequestBuilder jsonPut(String path, String token, Object body) throws Exception {
         return json(put(path), token, body);
-    }
-
-    public MockHttpServletRequestBuilder jsonPatch(String path, String token, Object body) throws Exception {
-        return json(patch(path), token, body);
     }
 
     /** A null token sends no Authorization header (an anonymous request), never "Bearer null". */
@@ -489,7 +478,7 @@ public final class LearningApiTestClient {
     }
 
     public JsonNode data(MvcResult result) throws Exception {
-        return objectMapper.readTree(result.getResponse().getContentAsString()).path("data");
+        return objectMapper.readTree(result.getResponse().getContentAsByteArray()).path("data");
     }
 
     public Long id(MvcResult result) throws Exception {

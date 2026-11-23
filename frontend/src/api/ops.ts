@@ -1,13 +1,12 @@
 /**
- * API of the ops module: the public Help form and account links, the Account page, Help & support, teacher
- * verification, and the admin users, applications, support queue, dashboard, analytics and audit log.
+ * API of the ops module: the public Help form and account links, the Account page, support requests, and the admin
+ * users, support queue, dashboard, analytics and audit log.
  */
-import { apiDownload, apiGet, apiPost, apiPut } from './services'
+import { apiDelete, apiDownload, apiGet, apiPost, apiPut } from './request'
 import type {
   AccountSettingsResponse,
   AdminAnalyticsResponse,
   AdminDashboardResponse,
-  AdminDeactivationResult,
   AdminInvite,
   AdminUserDetail,
   AdminUserListItem,
@@ -19,21 +18,18 @@ import type {
   NewSupportRequest,
   NotificationPreferences,
   SupportQueueResponse,
+  SupportRequestCreated,
   SupportRequestDetail,
-  SupportRequestSummary,
   SupportStatus,
-  TeacherApplication,
-  TeacherApplicationSummary,
-  TeacherDocumentType,
-  TeacherProfileResponse,
   VisitorSupportMessage,
 } from '@/types/ops'
-import type { CurrentUserResponse, PageResponse, RegistrationResponse } from '@/types/api'
+import type { AppLanguage, AuthResponse, CurrentUserResponse, PageResponse } from '@/types/api'
+import type { PasswordChangeForm } from '@/utils/password'
 
 /** Links sent by e-mail (reset password, confirm a new e-mail address, admin invite) and the public Help form. */
 export const publicOpsApi = {
   sendHelpMessage(payload: VisitorSupportMessage) {
-    return apiPost<{ number: number; email: string }>('/public/support', payload)
+    return apiPost<SupportRequestCreated>('/public/support', payload)
   },
   checkResetLink(token: string) {
     return apiPost<LinkTokenResponse>('/auth/reset-password/check', { token })
@@ -44,8 +40,15 @@ export const publicOpsApi = {
   checkAdminInvite(token: string) {
     return apiPost<LinkTokenResponse>('/auth/admin-invite/check', { token })
   },
-  acceptAdminInvite(payload: { token: string; fullName: string; password: string; confirmPassword: string }) {
-    return apiPost<RegistrationResponse>('/auth/admin-invite/accept', payload)
+  /** Creates the admin account; `preferredLanguage` (the page's language) becomes its language, as at sign-up. */
+  acceptAdminInvite(payload: {
+    token: string
+    fullName: string
+    password: string
+    confirmPassword: string
+    preferredLanguage: AppLanguage
+  }) {
+    return apiPost<LinkTokenResponse>('/auth/admin-invite/accept', payload)
   },
 }
 
@@ -54,8 +57,10 @@ export const accountOpsApi = {
   settings() {
     return apiGet<AccountSettingsResponse>('/users/me/account')
   },
-  /** Saves the name; the interface language goes along so the header switch's choice is remembered. */
-  updateProfile(payload: { displayName: string; preferredLanguage: string }) {
+  /** Only the submitted fields change, including when another device edits the same profile. */
+  updateProfile(
+    payload: { displayName: string; preferredLanguage?: AppLanguage } | { preferredLanguage: AppLanguage },
+  ) {
     return apiPut<CurrentUserResponse>('/users/me/profile', payload)
   },
   updatePreferences(payload: Partial<NotificationPreferences>) {
@@ -64,100 +69,73 @@ export const accountOpsApi = {
   requestEmailChange(payload: { newEmail: string; currentPassword: string }) {
     return apiPost<EmailChangeResponse>('/users/me/email-change', payload)
   },
+  /** "Resend link": a new link to the address that waits for confirmation; the link sent before stops working. */
+  resendEmailChange() {
+    return apiPost<EmailChangeResponse>('/users/me/email-change/resend')
+  },
+  /** "Cancel change": the waiting e-mail change ends and its link stops working. */
+  cancelEmailChange() {
+    return apiDelete<null>('/users/me/email-change')
+  },
+  /** Returns a fresh access token; the server revokes every other session and sets a new refresh cookie (FRAUTH08). */
+  changePassword(payload: PasswordChangeForm) {
+    return apiPost<AuthResponse>('/users/me/password', payload)
+  },
   deleteAccount(confirmEmail: string) {
     return apiPost<null>('/users/me/delete', { confirmEmail })
   },
 }
 
-/** Help & support for signed-in students and teachers: their own requests. */
+/**
+ * A signed-in learner's "Contact support" (S11.03, X2.21): support answers by e-mail, so the answer is the request's
+ * number and the address the reply goes to.
+ */
 export const supportApi = {
-  list() {
-    return apiGet<SupportRequestSummary[]>('/users/me/support')
-  },
-  get(id: number) {
-    return apiGet<SupportRequestDetail>(`/users/me/support/${id}`)
-  },
   create(request: NewSupportRequest) {
     const form = new FormData()
     form.append('topic', request.topic)
     form.append('subject', request.subject)
     form.append('message', request.message)
     if (request.screenshot) form.append('screenshot', request.screenshot)
-    return apiPost<SupportRequestDetail>('/users/me/support', form)
-  },
-  reply(id: number, body: string) {
-    return apiPost<SupportRequestDetail>(`/users/me/support/${id}/replies`, { body })
-  },
-  solve(id: number) {
-    return apiPost<SupportRequestDetail>(`/users/me/support/${id}/solve`)
-  },
-  attachment(messageId: number) {
-    return apiDownload(`/users/me/support/attachments/${messageId}`)
+    return apiPost<SupportRequestCreated>('/users/me/support', form)
   },
 }
 
-/** The teacher's teaching profile and verification (open before approval). */
-export const teacherVerificationApi = {
-  profile() {
-    return apiGet<TeacherProfileResponse>('/teachers/me')
-  },
-  updateProfile(payload: { fullName: string; bio: string }) {
-    return apiPut<TeacherProfileResponse>('/teachers/me/profile', payload)
-  },
-  upload(documentType: TeacherDocumentType, file: File) {
-    const form = new FormData()
-    form.append('file', file)
-    form.append('documentType', documentType)
-    return apiPost<TeacherProfileResponse>('/teachers/verification-documents', form)
-  },
-  submit() {
-    return apiPost<TeacherProfileResponse>('/teachers/verification/submit', { acceptedStandards: true })
-  },
-  document(id: number) {
-    return apiDownload(`/teachers/verification-documents/${id}`)
-  },
-}
-
-/** The admin Users section: users, admin invites and teacher applications. */
+/** The admin Users section: users and admin invites. */
 export const adminUsersApi = {
-  list(query: AdminUserQuery = {}) {
+  list(query: AdminUserQuery) {
     return apiGet<PageResponse<AdminUserListItem>>('/admin/users', { params: query })
   },
   get(id: number) {
     return apiGet<AdminUserDetail>(`/admin/users/${id}`)
   },
   deactivate(id: number, reason: string) {
-    return apiPost<AdminDeactivationResult>(`/admin/users/${id}/deactivate`, { reason })
+    return apiPost<AdminUserDetail>(`/admin/users/${id}/deactivate`, { reason })
   },
-  reactivate(id: number, reason: string) {
-    return apiPost<AdminUserDetail>(`/admin/users/${id}/reactivate`, { reason })
+  /** Runs at once: reactivating needs no reason. */
+  reactivate(id: number) {
+    return apiPost<AdminUserDetail>(`/admin/users/${id}/reactivate`)
   },
   invites() {
     return apiGet<AdminInvite[]>('/admin/admin-invites')
   },
+  /** Sends an invite, or sends a pending one again ("Resend"): a new link replaces the one sent before. */
   invite(email: string) {
     return apiPost<AdminInvite>('/admin/admin-invites', { email })
   },
-  applications() {
-    return apiGet<TeacherApplicationSummary[]>('/admin/teacher-applications')
+  /** Withdraws a pending invite: its e-mail link stops working until the cancel is undone. */
+  cancelInvite(id: number) {
+    return apiDelete<null>(`/admin/admin-invites/${id}`)
   },
-  application(teacherId: number) {
-    return apiGet<TeacherApplication>(`/admin/teacher-applications/${teacherId}`)
-  },
-  approve(teacherId: number) {
-    return apiPost<TeacherApplication>(`/admin/teachers/${teacherId}/approve`, {})
-  },
-  requestChanges(teacherId: number, reason: string) {
-    return apiPost<TeacherApplication>(`/admin/teachers/${teacherId}/reject`, { reason })
-  },
-  document(documentId: number) {
-    return apiDownload(`/admin/teacher-documents/${documentId}`)
+  /** The Undo of a cancel: the invite is pending again and the link already sent works again. */
+  restoreInvite(id: number) {
+    return apiPost<AdminInvite>(`/admin/admin-invites/${id}/restore`)
   },
 }
 
 /** The admin Support queue. */
 export const adminSupportApi = {
-  queue(status: SupportStatus, page = 0, size = 20) {
+  queue(status: SupportStatus, page: number, size: number) {
     return apiGet<SupportQueueResponse>('/admin/support', { params: { status, page, size } })
   },
   get(id: number) {
@@ -169,6 +147,10 @@ export const adminSupportApi = {
   solve(id: number) {
     return apiPost<SupportRequestDetail>(`/admin/support/${id}/solve`)
   },
+  /** The Undo of Mark as solved: back to Answered after a reply, otherwise Open. */
+  reopen(id: number) {
+    return apiPost<SupportRequestDetail>(`/admin/support/${id}/reopen`)
+  },
   attachment(messageId: number) {
     return apiDownload(`/admin/support/attachments/${messageId}`)
   },
@@ -179,10 +161,10 @@ export const adminOverviewApi = {
   dashboard() {
     return apiGet<AdminDashboardResponse>('/admin/dashboard')
   },
-  analytics(days: 7 | 30) {
+  analytics(days: AdminAnalyticsResponse['days']) {
     return apiGet<AdminAnalyticsResponse>('/admin/analytics', { params: { days } })
   },
-  auditLog(query: AuditQuery = {}) {
+  auditLog(query: AuditQuery) {
     return apiGet<PageResponse<AuditEntry>>('/admin/audit-logs', { params: query })
   },
   auditEntry(id: number) {
@@ -191,7 +173,7 @@ export const adminOverviewApi = {
   auditActions() {
     return apiGet<string[]>('/admin/audit-logs/actions')
   },
-  exportAuditLog(query: Omit<AuditQuery, 'page' | 'size'> = {}) {
+  exportAuditLog(query: Omit<AuditQuery, 'page' | 'size'>) {
     return apiDownload('/admin/audit-logs/export', { params: query })
   },
 }

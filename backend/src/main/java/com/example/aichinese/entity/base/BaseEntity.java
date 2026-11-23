@@ -2,7 +2,7 @@ package com.example.aichinese.entity.base;
 
 import java.time.LocalDateTime;
 
-import org.hibernate.Hibernate;
+import org.hibernate.proxy.HibernateProxy;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.GeneratedValue;
@@ -29,6 +29,7 @@ public abstract class BaseEntity {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    /** Keeps a creation or change time set before the first save; the ones not set become now. */
     @PrePersist
     protected void onCreate() {
         final LocalDateTime now = LocalDateTime.now();
@@ -40,6 +41,10 @@ public abstract class BaseEntity {
         }
     }
 
+    /**
+     * Stamps each flushed change of a row with now, replacing an updatedAt set by hand. Bulk JPQL updates skip this
+     * callback, so those queries set updatedAt themselves where it matters.
+     */
     @PreUpdate
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
@@ -50,24 +55,29 @@ public abstract class BaseEntity {
         if (this == other) {
             return true;
         }
-        if (!(other instanceof BaseEntity that)) {
+        if (!(other instanceof BaseEntity that) || entityType() != that.entityType()) {
             return false;
         }
-        if (!Hibernate.getClass(this).equals(Hibernate.getClass(that))) {
-            return false;
-        }
-        // getId(), not the field: an uninitialised Hibernate proxy only returns its identifier through the getter.
-        Long thatId = that.getId();
-        return thatId != null && thatId.equals(getId());
+        Long thisId = entityId();
+        return thisId != null && thisId.equals(that.entityId());
     }
 
     @Override
     public final int hashCode() {
-        return Hibernate.getClass(this).hashCode();
+        return entityType().hashCode();
     }
 
     @Override
-    public String toString() {
-        return Hibernate.getClass(this).getSimpleName() + "(id=" + id + ")";
+    public final String toString() {
+        return entityType().getSimpleName() + "(id=" + entityId() + ")";
+    }
+
+    // All concrete entities have their own table. The proxy already knows its type and key, even after detachment.
+    private Class<?> entityType() {
+        return this instanceof HibernateProxy proxy ? proxy.getHibernateLazyInitializer().getPersistentClass() : getClass();
+    }
+
+    protected final Long entityId() {
+        return this instanceof HibernateProxy proxy ? (Long) proxy.getHibernateLazyInitializer().getInternalIdentifier() : id;
     }
 }

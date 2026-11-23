@@ -17,6 +17,4 @@ public interface ClassActivityCompletionRepository extends JpaRepository<ClassAc
             Long activityId);
 
     List<ClassActivityCompletion> findByStudentIdAndLessonIdIn(Long studentId, Collection<Long> lessonIds);
-
-    List<ClassActivityCompletion> findByStudentIdInAndLessonIdIn(Collection<Long> studentIds, Collection<Long> lessonIds);
 }

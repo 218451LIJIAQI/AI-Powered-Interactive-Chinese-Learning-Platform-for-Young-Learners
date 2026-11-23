@@ -1,5 +1,7 @@
 package com.example.aichinese.entity;
 
+import org.hibernate.annotations.DynamicUpdate;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -22,6 +24,8 @@ import com.example.aichinese.entity.enums.PublishStatus;
 @Getter
 @Setter
 @Entity
+// The learner's check increments answer totals independently of admin edits.
+@DynamicUpdate
 @Table(name = "level_check_questions", indexes = {
         @Index(name = "idx_level_check_questions_pick", columnList = "publish_status,mandarin_level,difficulty")
 })

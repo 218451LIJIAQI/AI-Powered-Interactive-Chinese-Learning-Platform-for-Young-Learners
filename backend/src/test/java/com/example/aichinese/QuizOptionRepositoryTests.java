@@ -24,7 +24,7 @@ class QuizOptionRepositoryTests {
     @Test
     void findForQuestionsRunsNoQueryForNoQuestions() {
         assertThat(repository.findForQuestions(List.of())).isEmpty();
-        verify(repository, never()).findByQuestionIdInOrderBySortOrderAscCreatedAtAsc(anyCollection());
+        verify(repository, never()).findInDisplayOrder(anyCollection());
     }
 
     @Test
@@ -35,7 +35,7 @@ class QuizOptionRepositoryTests {
         QuizOption firstA = option(101L, first);
         QuizOption secondB = option(202L, second);
         doReturn(List.of(secondA, firstA, secondB))
-                .when(repository).findByQuestionIdInOrderBySortOrderAscCreatedAtAsc(List.of(10L, 20L));
+                .when(repository).findInDisplayOrder(List.of(10L, 20L));
 
         Map<Long, List<QuizOption>> grouped = repository.findForQuestions(List.of(first, second, first));
 

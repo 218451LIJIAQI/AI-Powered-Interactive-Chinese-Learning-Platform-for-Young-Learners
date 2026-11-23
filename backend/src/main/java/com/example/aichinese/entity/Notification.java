@@ -23,11 +23,9 @@ import lombok.Setter;
 @Setter
 @Entity
 @Table(name = "notifications", indexes = {
-        @Index(name = "idx_notifications_user_id", columnList = "user_id"),
-        @Index(name = "idx_notifications_status", columnList = "notification_status"),
-        @Index(name = "idx_notifications_type", columnList = "notification_type"),
         @Index(name = "idx_notifications_user_created_id", columnList = "user_id,created_at,id"),
-        @Index(name = "idx_notifications_user_status_created_id", columnList = "user_id,notification_status,created_at,id")
+        @Index(name = "idx_notifications_user_status_created_id", columnList = "user_id,notification_status,created_at,id"),
+        @Index(name = "idx_notifications_target", columnList = "target_type,target_id")
 })
 public class Notification extends BaseEntity {
 
@@ -58,10 +56,6 @@ public class Notification extends BaseEntity {
 
     @Column(name = "target_path", updatable = false, length = 255)
     private String targetPath;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "created_by_user_id", updatable = false)
-    private User createdByUser;
 
     @Column(name = "read_at")
     private LocalDateTime readAt;

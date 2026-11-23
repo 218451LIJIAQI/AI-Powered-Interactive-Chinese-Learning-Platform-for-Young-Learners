@@ -1,0 +1,169 @@
+/* Admin console: patterns genuinely shared across ops-admin and learn-admin pages (loaded ahead of ops-admin.css
+   and learn-admin.css). A table is one .panel with its filters and paging; colour only for status. */
+
+/* Filters above a table: labels on top, the fields share the card's whole width. */
+.admin-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.admin-filters > .field {
+  flex: 1 1 140px;
+}
+
+.admin-filters > .is-search {
+  flex: 2 1 180px;
+}
+
+.admin-filters > .field-error {
+  flex: 1 1 100%;
+}
+
+/* A table card (.panel): filters, table and paging share the card's padding box. */
+.admin-table-card {
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+}
+
+.admin-table-card > * {
+  min-width: 0;
+}
+
+/* The first column lines up with the filters and the actions with their right edge. The wrap reaches 12 past the padding
+   box only so a hovered or selected row can tint around its text; the hairlines stay inside. */
+.admin-table-wrap {
+  margin-inline: calc(-1 * var(--space-3));
+  padding-inline: var(--space-3);
+  max-width: none;
+}
+
+.admin-table th:first-child,
+.admin-table td:first-child {
+  padding-left: 0;
+}
+
+.admin-table thead th:first-child {
+  border-start-start-radius: var(--radius-sm);
+  box-shadow: calc(-1 * var(--space-3)) 0 var(--surface-sunken);
+}
+
+.admin-table thead th:last-child {
+  border-start-end-radius: var(--radius-sm);
+  box-shadow: var(--space-3) 0 var(--surface-sunken);
+}
+
+.admin-table th:last-child,
+.admin-table td:last-child {
+  padding-right: 0;
+}
+
+.admin-table tbody tr {
+  cursor: pointer;
+}
+
+.admin-table tbody tr:hover :is(td, th):first-child {
+  box-shadow: calc(-1 * var(--space-3)) 0 0 var(--color-ink-25);
+}
+
+.admin-table tbody tr:hover :is(td, th):last-child {
+  box-shadow: var(--space-3) 0 0 var(--color-ink-25);
+}
+
+.admin-table tbody tr:is(.is-selected, :has(:focus-visible)) :is(td, th) {
+  background: var(--color-primary-50);
+}
+
+.admin-table tbody tr:is(.is-selected, :has(:focus-visible)) :is(td, th):first-child {
+  box-shadow: calc(-1 * var(--space-3)) 0 0 var(--color-primary-50);
+}
+
+.admin-table tbody tr:is(.is-selected, :has(:focus-visible)) :is(td, th):last-child {
+  box-shadow: var(--space-3) 0 0 var(--color-primary-50);
+}
+
+/* Tables with fixed desktop column widths that relax to content-sized scrolling columns under 75rem. */
+.admin-table-fixed {
+  table-layout: fixed;
+}
+
+.admin-cell-strong {
+  font-weight: var(--font-weight-strong);
+  overflow-wrap: break-word;
+}
+
+.admin-cell-muted,
+.admin-cell-date {
+  color: var(--text-secondary);
+  overflow-wrap: break-word;
+}
+
+.admin-cell-date {
+  white-space: nowrap;
+}
+
+/* Section heads and metadata shared by cards and drawers across all admin areas. */
+.admin-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  min-width: 0;
+}
+
+.admin-section {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.admin-section-title {
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-strong);
+  line-height: var(--line-height-normal);
+}
+
+.admin-meta {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-normal);
+  overflow-wrap: anywhere;
+}
+
+.admin-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+@media (max-width: 75rem) {
+  .admin-table-fixed {
+    min-width: 36rem;
+    table-layout: auto;
+  }
+
+  .admin-table-fixed th:not(.col-actions) {
+    width: auto;
+  }
+
+  .admin-table-fixed th,
+  .admin-table-fixed td {
+    padding-inline: var(--space-2);
+  }
+}
+
+@media (forced-colors: active) {
+  .admin-table tbody tr.is-selected {
+    outline: var(--border-width-thick) solid Highlight;
+    outline-offset: calc(-1 * var(--border-width-thick));
+  }
+}

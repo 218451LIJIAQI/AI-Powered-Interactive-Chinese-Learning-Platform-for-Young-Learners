@@ -10,9 +10,11 @@ describe('tracing pad geometry', () => {
   })
 
   it('moves the keyboard pen cursor with arrow keys inside the pad', () => {
-    expect(moveCursor({ x: 10, y: 10 }, 'ArrowRight', 12, 320)).toEqual({ x: 22, y: 10 })
-    expect(moveCursor({ x: 5, y: 5 }, 'ArrowUp', 12, 320)).toEqual({ x: 5, y: 0 })
-    expect(moveCursor({ x: 315, y: 5 }, 'ArrowRight', 12, 320)).toEqual({ x: 320, y: 5 })
-    expect(moveCursor({ x: 5, y: 5 }, 'Enter', 12, 320)).toBeNull()
+    expect(moveCursor({ x: 10, y: 10 }, 'ArrowRight', 12, 640, 320)).toEqual({ x: 22, y: 10 })
+    expect(moveCursor({ x: 5, y: 5 }, 'ArrowUp', 12, 640, 320)).toEqual({ x: 5, y: 0 })
+    expect(moveCursor({ x: 635, y: 5 }, 'ArrowRight', 12, 640, 320)).toEqual({ x: 640, y: 5 })
+    expect(moveCursor({ x: 5, y: 315 }, 'ArrowDown', 12, 640, 320)).toEqual({ x: 5, y: 320 })
+    expect(moveCursor({ x: 5, y: 5 }, 'Enter', 12, 640, 320)).toBeNull()
+    expect(moveCursor({ x: 5, y: 5 }, 'constructor', 12, 640, 320)).toBeNull()
   })
 })

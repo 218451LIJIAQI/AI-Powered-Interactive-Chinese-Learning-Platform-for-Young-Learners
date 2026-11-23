@@ -1,5 +1,6 @@
 package com.example.aichinese.dto.ai;
 
+import static com.example.aichinese.dto.DtoNormalization.redactLength;
 import static com.example.aichinese.dto.DtoNormalization.strip;
 import static com.example.aichinese.dto.DtoNormalization.stripToNull;
 
@@ -16,5 +17,12 @@ public record AiStoryGeneratorRequest(
     public AiStoryGeneratorRequest {
         topic = strip(topic);
         languagePreference = stripToNull(languagePreference);
+    }
+
+    @Override
+    public String toString() {
+        return "AiStoryGeneratorRequest[topic=" + redactLength(topic)
+                + ", languagePreference=" + languagePreference
+                + "]";
     }
 }

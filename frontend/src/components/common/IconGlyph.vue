@@ -1,12 +1,19 @@
 <template>
-  <component :is="resolved" :size="size" :stroke-width="ICON_STROKE_WIDTH" class="icon-glyph" />
+  <!-- Icons are decorative: the text or the aria-label of their control says what they mean, so assistive technology
+       skips them instead of announcing an unnamed image. -->
+  <component
+    :is="resolved"
+    :size="size"
+    :stroke-width="ICON_STROKE_WIDTH"
+    class="icon-glyph"
+    aria-hidden="true"
+    focusable="false"
+  />
 </template>
 
-<script setup lang="ts">
+<script lang="ts">
 import {
   Archive,
-  ArrowDown,
-  ArrowUp,
   BadgeHelp,
   BarChart3,
   Bell,
@@ -21,10 +28,10 @@ import {
   ChartColumnBig,
   ChartNoAxesCombined,
   Check,
-  CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   CircleCheck,
   CircleHelp,
   CircleX,
@@ -33,28 +40,20 @@ import {
   Copy,
   Crown,
   Download,
-  Ear,
-  Eraser,
   ExternalLink,
   Eye,
   EyeOff,
-  FileBadge,
   FileText,
   Flag,
   Flame,
-  Funnel,
-  Gift,
   Globe2,
   GraduationCap,
   Hand,
   Headphones,
   History,
   House,
-  Image as ImageIcon,
   Inbox,
   Info,
-  KeyRound,
-  Keyboard,
   Languages,
   Layers,
   LayoutDashboard,
@@ -69,18 +68,15 @@ import {
   Mail,
   MessageCircle,
   Mic,
-  MicOff,
+  PanelLeft,
   Paperclip,
   PartyPopper,
   PenLine,
   Pencil,
   PlayCircle,
   Plus,
-  Presentation,
   Puzzle,
-  Radio,
   RefreshCcw,
-  Reply,
   RotateCcw,
   Route,
   School,
@@ -90,18 +86,15 @@ import {
   Settings,
   ShieldCheck,
   ShoppingBag,
-  Snail,
   Sparkles,
   Square,
   Star,
   Target,
-  Timer,
   Trash2,
   TriangleAlert,
   Trophy,
   Undo2,
   Upload,
-  UserCheck,
   UserCog,
   UserPlus,
   UserRound,
@@ -113,53 +106,49 @@ import {
   X,
   Zap,
 } from '@lucide/vue'
-import { computed, type Component } from 'vue'
+import type { Component } from 'vue'
 
 const DEFAULT_ICON = BookOpen
 const ICON_STROKE_WIDTH = 2.2
 const warnedUnknownIcons = new Set<string>()
 
-const iconMap: Readonly<Record<string, Component>> = {
+/** Also holds the unit icons the backend sends as `iconKey` (see `LearnPathContent`). */
+const iconMap = {
   home: House,
   about: Sparkles,
   shield: ShieldCheck,
   learn: BookOpen,
   practice: Compass,
   classes: School,
-  rewards: Gift,
   ai: Bot,
   profile: UserRound,
   dashboard: LayoutDashboard,
+  sidebar: PanelLeft,
   content: BookMarked,
   students: GraduationCap,
   users: Users,
-  verification: FileBadge,
   analytics: ChartNoAxesCombined,
   settings: Settings,
   search: Search,
   bell: Bell,
   streak: Flame,
   play: PlayCircle,
-  live: Radio,
-  teacher: Presentation,
-  verified: UserCheck,
   help: CircleHelp,
   file: FileText,
   chart: BarChart3,
-  admin: BriefcaseBusiness,
   trophy: Trophy,
   star: Star,
   language: Languages,
   globe: Globe2,
-  status: CheckCircle2,
+  status: CircleCheck,
   flag: Flag,
   progress: ChartColumnBig,
   quiz: BadgeHelp,
-  filter: Funnel,
   download: Download,
   chevronLeft: ChevronLeft,
   chevronRight: ChevronRight,
   chevronDown: ChevronDown,
+  chevronUp: ChevronUp,
   calendar: CalendarDays,
   refresh: RefreshCcw,
   history: History,
@@ -169,13 +158,10 @@ const iconMap: Readonly<Record<string, Component>> = {
   mic: Mic,
   stop: Square,
   upload: Upload,
-  image: ImageIcon,
   pen: PenLine,
-  eraser: Eraser,
   hint: Lightbulb,
   retry: RotateCcw,
   account: UserCog,
-  key: KeyRound,
   audio: Volume2,
   logout: LogOut,
   info: Info,
@@ -198,7 +184,6 @@ const iconMap: Readonly<Record<string, Component>> = {
   send: Send,
   video: Video,
   clock: Clock,
-  timer: Timer,
   edit: Pencil,
   copy: Copy,
   eye: Eye,
@@ -207,11 +192,7 @@ const iconMap: Readonly<Record<string, Component>> = {
   link: Link,
   userPlus: UserPlus,
   mail: Mail,
-  reply: Reply,
   attach: Paperclip,
-  arrowUp: ArrowUp,
-  arrowDown: ArrowDown,
-  keyboard: Keyboard,
   magic: WandSparkles,
   celebrate: PartyPopper,
   crown: Crown,
@@ -221,18 +202,21 @@ const iconMap: Readonly<Record<string, Component>> = {
   correct: CircleCheck,
   incorrect: CircleX,
   undo: Undo2,
-  micOff: MicOff,
   checklist: ListChecks,
-  ear: Ear,
   hand: Hand,
   utensils: UtensilsCrossed,
   shopping: ShoppingBag,
   briefcase: BriefcaseBusiness,
-  slow: Snail,
-}
+} as const satisfies Record<string, Component>
+
+export type IconName = keyof typeof iconMap
+</script>
+
+<script setup lang="ts">
+import { computed } from 'vue'
 
 interface Props {
-  name: string
+  name: IconName | (string & {})
   size?: number
 }
 
@@ -241,7 +225,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const resolved = computed<Component>(() => {
-  const icon = iconMap[props.name]
+  const icon = Object.hasOwn(iconMap, props.name) ? iconMap[props.name as IconName] : undefined
   if (!icon && import.meta.env.DEV && !warnedUnknownIcons.has(props.name)) {
     warnedUnknownIcons.add(props.name)
     console.warn(`[IconGlyph] Unknown icon name: "${props.name}". Falling back to BookOpen.`)

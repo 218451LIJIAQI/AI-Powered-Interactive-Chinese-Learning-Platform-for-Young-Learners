@@ -8,10 +8,10 @@ import java.util.Base64;
 import java.util.HexFormat;
 
 /**
- * Random one-time tokens (refresh, password-reset, e-mail change and admin invite tokens) and the SHA-256 hashes that
- * are stored instead of them (SDD Table 4.2), so a leaked database row cannot be used as a token. Each token carries
- * 256 random bits; every hash column is UNIQUE in the schema, so a (practically impossible) collision can never be
- * stored.
+ * Random one-time tokens (refresh, password-reset, e-mail change, e-mail confirmation and admin invite tokens) and the
+ * SHA-256 hashes that are stored instead of them (SDD Table 4.2), so a leaked database row cannot be used as a token.
+ * Each token carries 256 random bits; every hash column is UNIQUE in the schema, so a (practically impossible) collision
+ * can never be stored.
  */
 public final class SecureTokens {
 
@@ -26,7 +26,7 @@ public final class SecureTokens {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes());
     }
 
-    /** 64 lower-case hex characters, the letters-and-digits form a reset link and the reset form use. */
+    /** 64 lower-case hex characters, the letters-and-digits form the links sent by e-mail carry. */
     public static String newHexToken() {
         return HexFormat.of().formatHex(randomBytes());
     }

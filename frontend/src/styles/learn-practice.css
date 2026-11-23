@@ -1,858 +1,575 @@
-/* Practice: the room (hub), a type's sets and players, Mistakes and the Mistakes review. Page-prefixed classes
-   (`.practice-*`). Each type wears its own pigment; a row, a page or a tile sets it with `.practice-pigment-*`. */
+/* Practice: the tabs, one stage per tab (a set's players and result, Mistakes), and the Mistakes review.
+   Shared DailyGoalMeter, ListenButtons, QuestionStage, tile and CheckBar primitives live in learn-shared.css. */
 
-.practice-pigment-cobalt {
-  --practice-pigment: var(--pigment-cobalt);
-  --practice-pigment-soft: var(--pigment-cobalt-soft);
+/* The section fills the content column to the bottom of the window; the stage takes what the tabs and the goal leave. */
+.practice-page {
+  min-height: calc(100vh - var(--topbar-height) - var(--page-top) - var(--page-bottom));
 }
 
-.practice-pigment-cinnabar {
-  --practice-pigment: var(--pigment-cinnabar);
-  --practice-pigment-soft: var(--pigment-cinnabar-soft);
-}
-
-.practice-pigment-teal {
-  --practice-pigment: var(--pigment-teal);
-  --practice-pigment-soft: var(--pigment-teal-soft);
-}
-
-.practice-pigment-ink {
-  --practice-pigment: var(--pigment-ink);
-  --practice-pigment-soft: var(--pigment-ink-soft);
-}
-
-.practice-pigment-plum {
-  --practice-pigment: var(--pigment-plum);
-  --practice-pigment-soft: var(--pigment-plum-soft);
-}
-
-.practice-pigment-jade {
-  --practice-pigment: var(--pigment-jade);
-  --practice-pigment-soft: var(--pigment-jade-soft);
-}
-
-.practice-pigment-ochre {
-  --practice-pigment: var(--pigment-ochre);
-  --practice-pigment-soft: var(--pigment-ochre-soft);
-}
-
-/* A type's glyph: the 田字格 tile drawn in the type's pigment. */
-.practice-glyph {
-  --practice-glyph-size: 52px;
-  --practice-glyph-line: color-mix(in srgb, var(--practice-pigment) 34%, transparent);
-  display: inline-grid;
-  flex: 0 0 auto;
-  place-items: center;
-  width: var(--practice-glyph-size);
-  height: var(--practice-glyph-size);
-  border: 1.5px solid var(--practice-pigment);
-  border-radius: var(--radius-xs);
-  background:
-    repeating-linear-gradient(to right, var(--practice-glyph-line) 0 4px, transparent 4px 8px) center / 100% 1px
-      no-repeat,
-    repeating-linear-gradient(to bottom, var(--practice-glyph-line) 0 4px, transparent 4px 8px) center / 1px 100%
-      no-repeat,
-    var(--practice-pigment-soft);
-  color: var(--practice-pigment);
-  font-family: var(--font-hanzi);
-  font-size: calc(var(--practice-glyph-size) * 0.56);
-  font-weight: var(--font-weight-bold);
-  line-height: 1;
-}
-
-.practice-glyph.is-lg {
-  --practice-glyph-size: 72px;
-}
-
-/* The room (hub)
-   -------------------------------------------------------------------------- */
-.practice-hub {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 248px;
-  grid-template-areas:
-    'head head'
-    'main rail';
-  gap: var(--page-gap) var(--space-12);
-  align-items: start;
-}
-
-.practice-hub-head {
-  grid-area: head;
-}
-
-.practice-hub-main {
-  grid-area: main;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-10);
-  min-width: 0;
-}
-
-.practice-hub-rail {
-  grid-area: rail;
-}
-
-/* Mistakes waiting: the first call of the room. */
-.practice-call {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--space-4) var(--space-6);
-  padding: var(--space-6) var(--space-8);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  background: var(--surface-card);
-  box-shadow: var(--shadow-sm);
-}
-
-.practice-call-seal {
-  --seal-size: 64px;
-}
-
-.practice-call-copy {
-  display: grid;
-  gap: var(--space-1);
-  min-width: 0;
-}
-
-.practice-call-title,
-.practice-mistakes-title {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0 var(--space-2);
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--type-h2-size);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-snug);
-}
-
-.practice-call-title .stat-figure,
-.practice-mistakes-title .stat-figure {
-  color: var(--text-brand);
-}
-
-.practice-call-text {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-md);
-}
-
-.practice-call-actions {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-1);
-}
-
-/* The seven activities: one row each, told apart by pigment and glyph. The name is the row's link. */
-.practice-room {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-.practice-room-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-1) var(--space-4);
-}
-
-.practice-room-total {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-}
-
-.practice-room-list {
-  margin: 0;
-  padding: 0;
-  border-top: 1px solid var(--border-subtle);
-  list-style: none;
-}
-
-.practice-room-row {
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.practice-room-item {
-  position: relative;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: var(--space-2) var(--space-5);
-  margin: var(--space-1) calc(-1 * var(--space-3));
-  padding: var(--space-4) var(--space-3);
-  border-radius: var(--radius-md);
-  transition: background-color var(--duration-fast) var(--ease-standard);
-}
-
-.practice-room-item:hover,
-.practice-room-row.is-open .practice-room-item {
-  background: var(--surface-card);
-}
-
-.practice-room-copy {
-  display: grid;
-  gap: var(--space-0-5);
-  min-width: 0;
-}
-
-.practice-room-copy p {
-  margin: 0;
-}
-
-.practice-room-name {
-  justify-self: start;
-  color: var(--text-primary);
-  font-family: var(--font-display);
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-snug);
-  text-decoration: none;
-}
-
-/* The whole row opens the type; the toggle sits above the stretched link. */
-.practice-room-name::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-}
-
-.practice-room-item:hover .practice-room-name {
-  color: var(--practice-pigment);
-}
-
-.practice-room-name:focus-visible {
-  outline: none;
-}
-
-.practice-room-name:focus-visible::after {
-  outline: var(--border-width-focus) solid var(--focus-ring-color);
-  outline-offset: var(--focus-ring-offset);
-}
-
-.practice-room-trains {
-  font-size: var(--font-size-md);
-}
-
-.practice-room-meta {
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.practice-room-progress {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: var(--space-1-5);
-  min-width: 120px;
-}
-
-.practice-room-squares {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: var(--space-1);
-  max-width: 132px;
-}
-
-.practice-room-square {
-  width: 10px;
-  height: 10px;
-  border: 1px solid var(--border-strong);
-  border-radius: calc(var(--radius-xs) / 2);
-}
-
-.practice-room-square.is-done {
-  border-color: var(--practice-pigment);
-  background: var(--practice-pigment);
-}
-
-.practice-room-square.is-next {
-  border-color: var(--practice-pigment);
-}
-
-.practice-room-count {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1-5);
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  white-space: nowrap;
-}
-
-.practice-room-seal {
-  --seal-size: 20px;
-}
-
-.practice-room-toggle {
-  position: relative;
-  z-index: var(--z-raised);
-}
-
-.practice-room-toggle {
-  color: var(--text-secondary);
-}
-
-.practice-room-toggle svg {
-  transition: transform var(--duration-fast) var(--ease-standard);
-}
-
-.practice-room-toggle[aria-expanded='true'] svg {
-  transform: rotate(180deg);
-}
-
-/* A type's sets, opened from its row. */
-.practice-room-sets {
-  display: grid;
-  gap: var(--space-0-5);
-  margin: 0 0 var(--space-4);
-  padding: 0 0 0 calc(52px + var(--space-5));
-  list-style: none;
-}
-
-.practice-room-set {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-sm);
-  color: var(--text-primary);
-  font-size: var(--font-size-md);
-  text-decoration: none;
-}
-
-.practice-room-set:hover {
-  background: var(--surface-card);
-}
-
-.practice-room-set-title {
-  min-width: 0;
-  font-weight: var(--font-weight-semibold);
-  overflow-wrap: anywhere;
-}
-
-.practice-room-set-next {
-  color: var(--practice-pigment);
-  font-size: var(--type-overline-size);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: var(--letter-spacing-wide);
-  text-transform: uppercase;
-}
-
-.practice-room-set-meta {
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-  white-space: nowrap;
-}
-
-/* A set's tick: empty ring, filled in the type's pigment once done (the set's name says so in words). */
-.practice-room-set-mark,
-.practice-set-mark {
-  display: grid;
-  flex: 0 0 auto;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  border: 1.5px solid var(--border-strong);
-  border-radius: var(--radius-round);
-  color: var(--text-on-primary);
-}
-
-.practice-room-set.is-done .practice-room-set-mark,
-.practice-set.is-done .practice-set-mark {
-  border-color: var(--practice-pigment);
-  background: var(--practice-pigment);
-}
-
-/* Today rail: a slim column beside the activities. */
-.practice-today {
-  position: sticky;
-  top: calc(var(--topbar-height) + var(--space-6));
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-6);
-  padding-left: var(--space-6);
-  border-left: 1px solid var(--border-subtle);
-}
-
-.practice-today p {
-  margin: 0;
-}
-
-.practice-today-block {
-  display: grid;
-  gap: var(--space-2);
-}
-
-.practice-today-figure {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0 var(--space-1-5);
-  color: var(--text-secondary);
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-semibold);
-}
-
-.practice-today-figure .stat-figure {
-  color: var(--text-primary);
-}
-
-.practice-today-figure.is-quiet {
-  color: var(--text-primary);
-  font-family: var(--font-display);
-  font-size: var(--font-size-lg);
-}
-
-.practice-today-caption {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.practice-today-lines {
-  display: grid;
-  gap: var(--space-2);
-  margin: 0;
-  padding: var(--space-4) 0 0;
-  border-top: 1px solid var(--border-subtle);
-  font-size: var(--font-size-md);
-  list-style: none;
-}
-
-.practice-today-lines li {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-/* A room's header (a type, Mistakes): back to all activities, the room's mark, the h1 and a lede.
-   -------------------------------------------------------------------------- */
-.practice-head {
-  display: grid;
-  justify-items: start;
-  gap: var(--space-3);
-}
-
-.practice-head-back {
-  margin-left: calc(-1 * var(--space-0-5));
-}
-
-.practice-head-title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-5);
-  min-width: 0;
-}
-
-.practice-head-copy {
-  display: grid;
-  gap: var(--space-1-5);
-  min-width: 0;
-}
-
-.practice-head h1,
-.practice-head p {
-  margin: 0;
-}
-
-.practice-head h1 {
-  font-family: var(--font-display);
-  font-size: var(--type-h1-size);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-tight);
-  letter-spacing: var(--letter-spacing-display);
-}
-
-.practice-head p {
-  color: var(--text-secondary);
-}
-
-/* A type: the stage with the chosen set, and the type's sets beside it
-   -------------------------------------------------------------------------- */
-.practice-type {
-  --progress-color: var(--practice-pigment);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-8);
-}
-
-.practice-run {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-8) var(--space-10);
-  align-items: start;
-}
-
-.practice-run.has-sets {
-  grid-template-columns: minmax(0, 1fr) 240px;
-}
-
+/* The stage: one card that keeps its height between states */
 .practice-stage {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
-  gap: var(--space-6);
+  gap: var(--space-4);
   min-width: 0;
-  min-height: 520px;
-  padding: var(--space-8);
+  padding: var(--card-padding);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-2xl);
   background: var(--surface-card);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-xs);
 }
 
-.practice-stage-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding-bottom: var(--space-5);
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.practice-stage-copy {
-  display: grid;
-  gap: var(--space-1);
-  min-width: 0;
-}
-
-.practice-stage-title {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--type-h2-size);
-  font-weight: var(--font-weight-semibold);
+.practice-done-title {
+  font-size: var(--type-question-size);
   line-height: var(--line-height-snug);
 }
 
-.practice-stage-meta {
+/* A loading, error or empty state takes the stage's activity area, on the same sunken fill as a card. */
+.practice-stage-state {
+  flex: 1 1 auto;
+  background: var(--surface-sunken);
+}
+
+.practice-stage-state .state-icon {
+  background: var(--surface-card);
+}
+
+.practice-stage-state .skeleton {
+  background-image: linear-gradient(90deg, var(--surface-card), var(--color-ink-50), var(--surface-card));
+}
+
+/* Where the learner is, once and as text ("Card 1 of 6"), at the top left of the stage. */
+.practice-counter,
+.practice-mistakes-more,
+.practice-mistakes-call {
   margin: 0;
   color: var(--text-secondary);
-  font-size: var(--font-size-sm);
+  font-size: var(--type-caption-size);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-normal);
 }
 
-/* In a practice card the question uses the card's width, like its header and footer. */
-.practice-stage .learn-question {
-  max-width: none;
+/* An activity: the set list beside the stage */
+.practice-workspace {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: var(--practice-list-width, 296px) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--grid-gap);
 }
 
-.practice-sets {
+/* The stage alone when the activity has no sets yet. */
+.practice-workspace > .practice-stage:only-child {
+  grid-column: 1 / -1;
+}
+
+.practice-workspace > .practice-stage {
+  container-type: inline-size;
+  align-self: stretch;
+}
+
+.practice-set-list {
+  container-type: inline-size;
   position: sticky;
-  top: calc(var(--topbar-height) + var(--space-6));
+  top: calc(var(--topbar-sticky-offset) + var(--space-4));
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+  max-height: calc(100vh - var(--topbar-sticky-offset) - var(--space-8));
+  padding: var(--space-4);
+  overflow-y: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-2xl);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-xs);
+}
+
+.practice-set-group {
   display: grid;
   gap: var(--space-2);
   min-width: 0;
 }
 
-.practice-sets-head {
+.practice-set-group-title {
+  font-size: inherit;
+}
+
+.practice-set-group-toggle {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  margin: 0;
-  padding: 0 var(--space-3) var(--space-2);
-  border-bottom: 1px solid var(--border-subtle);
+  width: 100%;
+  min-height: var(--control-height-sm);
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-primary);
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-heading);
+  text-align: left;
 }
 
-.practice-sets-count {
+.practice-set-group-toggle:hover {
+  background: var(--surface-subtle);
+}
+
+.practice-set-group-count {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--space-1);
   color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--type-caption-size);
+  font-weight: var(--font-weight-medium);
 }
 
-.practice-sets-list {
+.practice-set-rows {
   display: grid;
-  gap: var(--space-0-5);
+  gap: var(--space-1);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.practice-set {
+/* A set: name over its size and XP, its status at the end; the open one has a 2px ring that does not move its text. */
+.practice-set-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  grid-template-areas:
-    'mark title'
-    '. meta';
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 0 var(--space-2-5);
-  padding: var(--space-2-5) var(--space-3);
-  border-left: var(--border-width-thick) solid transparent;
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
   color: var(--text-primary);
-  text-decoration: none;
-  transition: background-color var(--duration-fast) var(--ease-standard);
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
 }
 
-.practice-set:hover {
-  background: var(--surface-card);
+.practice-set-row:hover {
+  background: var(--surface-subtle);
 }
 
-.practice-set.is-current {
-  border-left-color: var(--practice-pigment);
-  background: var(--surface-card);
+.practice-set-row[aria-current='true'] {
+  background: var(--color-primary-50);
+  box-shadow: inset 0 0 0 var(--border-width-thick) var(--color-primary-500);
 }
 
-.practice-set-mark {
-  grid-area: mark;
-}
-
-.practice-set.is-current:not(.is-done) .practice-set-mark {
-  border-color: var(--practice-pigment);
-}
-
-.practice-set-title {
-  grid-area: title;
-  min-width: 0;
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-semibold);
-  overflow-wrap: anywhere;
-}
-
-.practice-set.is-current .practice-set-title {
-  font-weight: var(--font-weight-bold);
-}
-
-.practice-set-meta {
-  grid-area: meta;
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-/* Players: one chrome (a meter, a calm stage, a footer of actions)
-   -------------------------------------------------------------------------- */
-.practice-player {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-6);
+.practice-set-row-copy {
+  display: grid;
   min-width: 0;
 }
 
-.practice-meter {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2) var(--space-4);
-}
-
-.practice-meter-bar {
-  flex: 1 1 160px;
-}
-
-.practice-counter {
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-  font-variant-numeric: tabular-nums;
-  font-weight: var(--font-weight-bold);
+.practice-set-row-title,
+.practice-set-row-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.practice-hint {
-  margin: 0;
+.practice-set-row-title {
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-strong);
+  line-height: var(--line-height-normal);
+}
+
+.practice-set-row-meta {
   color: var(--text-secondary);
-  font-size: var(--font-size-sm);
+  font-size: var(--type-caption-size);
+  line-height: var(--line-height-normal);
 }
 
-.practice-feedback {
+/* No set matches the search: a dashed tile that says why and offers to clear it. */
+.practice-set-empty {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-2);
+  padding: var(--space-6) var(--space-4);
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  text-align: center;
+}
+
+.practice-set-empty p {
   margin: 0;
-  font-weight: var(--font-weight-bold);
 }
 
+.practice-set-empty-title {
+  font-size: var(--type-body-size);
+  font-weight: var(--font-weight-heading);
+  line-height: var(--line-height-normal);
+  overflow-wrap: anywhere;
+}
+
+.practice-set-empty-text {
+  color: var(--text-secondary);
+  font-size: var(--type-caption-size);
+  line-height: var(--line-height-normal);
+}
+
+.practice-set-empty .btn {
+  margin-top: var(--space-2);
+}
+
+.practice-set-skeleton {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.practice-set-skeleton-row {
+  height: 44px;
+  border-radius: var(--radius-md);
+}
+
+/* Players: the counter, the activity, a footer pinned to the bottom of the stage */
+.practice-player {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  /* Its longest state (four pairs and a feedback bar), so the stage keeps its height in a short window too. */
+  min-height: 472px;
+}
+
+/* Stage footer: [Reset / Skip / Previous] left, [Show meaning / Still learning · Got it / Guessing · Sure / Check /
+   Done] right. */
 .practice-footer {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  padding-top: var(--space-5);
-  border-top: 1px solid var(--border-subtle);
+  margin-top: auto;
 }
 
-.practice-footer > :only-child {
+.practice-footer-end {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
   margin-left: auto;
 }
 
-.practice-nav {
+/* The verdict: a bar in the stage, semantic colour, any XP at its end. */
+.practice-feedback {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--space-12);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-btn-lg);
+  font-size: var(--type-body-size);
+  animation: practice-rise var(--duration-base) var(--ease-out);
+}
+
+.practice-feedback.is-correct {
+  background: var(--color-success-soft);
+}
+
+.practice-feedback.is-wrong {
+  background: var(--color-danger-soft);
+}
+
+.practice-feedback-icon {
+  color: var(--color-success-text);
+}
+
+.practice-feedback.is-wrong .practice-feedback-icon {
+  color: var(--color-danger-text);
+}
+
+.practice-feedback-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: var(--font-weight-strong);
+  overflow-wrap: anywhere;
+}
+
+.practice-feedback .tag {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.practice-feedback-copy p,
+.practice-typing p,
+.practice-card p,
+.practice-trace-model p,
+.practice-review-done p {
+  margin: 0;
+}
+
+.practice-feedback-title {
+  margin-right: var(--space-1-5);
+  font-weight: var(--font-weight-heading);
+}
+
+.practice-feedback.is-correct .practice-feedback-title {
+  color: var(--color-success-text);
+}
+
+.practice-feedback.is-wrong .practice-feedback-title {
+  color: var(--color-danger-text);
+}
+
+.practice-feedback-note {
+  color: var(--color-ink-700);
+  font-size: var(--type-caption-size);
+  font-weight: var(--font-weight-medium);
+}
+
+@keyframes practice-rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* How sure are you? The label, then two buttons that look the same, so neither is the expected one. */
+.practice-confidence {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+.practice-confidence-label {
+  color: var(--text-secondary);
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-medium);
+}
+
+/* Typing: the meaning to say, the pinyin field, the words it spells */
+.practice-typing {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.practice-typing-label {
+  color: var(--text-secondary);
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-normal);
+}
+
+.practice-typing-meaning {
+  font-size: var(--type-question-size);
+  font-weight: var(--font-weight-heading);
+  line-height: var(--line-height-snug);
+  overflow-wrap: anywhere;
+}
+
+.practice-typing-input.input {
+  min-height: var(--control-height-lg);
+  margin-top: var(--space-2);
+  border-width: var(--border-width-thick);
+  font-size: var(--type-h2-size);
+  font-weight: var(--font-weight-strong);
+}
+
+.practice-candidates {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
 }
 
-.practice-pill {
+.practice-candidate {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
-  padding: var(--space-0-5) var(--space-2-5);
-  border-radius: var(--radius-pill);
-  background: var(--color-ink-100);
-  color: var(--color-ink-700);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-bold);
-}
-
-.practice-pill.is-hot {
-  background: var(--color-accent-100);
-  color: var(--color-accent-800);
-}
-
-.practice-timer {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-  font-variant-numeric: tabular-nums;
-  font-weight: var(--font-weight-bold);
-}
-
-.practice-inline-tools {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: calc(-1 * var(--space-3));
-}
-
-/* Flashcards: dots for the cards seen, the word in 田字格 tiles, the meaning on the back. */
-.practice-dots {
-  display: flex;
-  flex: 1 1 auto;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: var(--space-1-5);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.practice-dots li {
-  width: 10px;
-  height: 10px;
-  border: 1.5px solid var(--border-strong);
-  border-radius: var(--radius-pill);
+  gap: var(--space-2);
+  min-height: var(--control-height-md);
+  padding: var(--space-1) var(--space-3) var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  box-shadow: inset 0 0 0 1px var(--border-default);
+  color: var(--text-primary);
+  font-size: var(--type-h2-size);
   transition:
-    width var(--duration-base) var(--ease-standard),
-    background-color var(--duration-base) var(--ease-standard);
+    background var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
 }
 
-.practice-dots li.is-seen {
-  border-color: var(--practice-pigment);
-  background: var(--practice-pigment-soft);
+/* :where keeps hover below the chosen state, so a picked word shows its ring while the pointer is still on it. */
+.practice-candidate:where(:hover:not(:disabled)) {
+  background: var(--surface-subtle);
+  box-shadow: inset 0 0 0 1px var(--border-interactive);
 }
 
-.practice-dots li.is-current {
-  width: 24px;
-  border-color: var(--practice-pigment);
-  background: var(--practice-pigment);
+.practice-candidate[aria-pressed='true'] {
+  background: var(--color-primary-50);
+  box-shadow: inset 0 0 0 var(--border-width-thick) var(--color-primary-500);
 }
 
-.practice-card-frame {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-4);
+/* The product's one marking after a check: the correct word is filled, the learner's wrong pick is a quiet tint. */
+.practice-candidate.is-correct {
+  background: var(--color-success-text);
+  box-shadow: inset 0 0 0 var(--border-width-thick) var(--color-success-text);
+  color: var(--color-white);
 }
 
+.practice-candidate.is-wrong {
+  background: var(--color-danger-soft);
+  box-shadow: inset 0 0 0 var(--border-width-thick) var(--color-danger);
+  color: var(--color-danger-text);
+}
+
+.practice-candidate.is-correct .practice-candidate-key {
+  background: var(--color-white-a16);
+  color: var(--color-white);
+}
+
+.practice-candidate:disabled {
+  cursor: default;
+}
+
+.practice-candidate.is-ruled-out {
+  background: var(--surface-subtle);
+  box-shadow: inset 0 0 0 1px var(--border-subtle);
+  color: var(--text-disabled);
+  text-decoration: line-through;
+}
+
+.practice-candidate-key {
+  display: grid;
+  place-items: center;
+  width: var(--space-5);
+  height: var(--space-5);
+  border-radius: var(--radius-xs);
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+  font-size: var(--type-caption-size);
+  font-weight: var(--font-weight-strong);
+}
+
+.practice-typing-nomatch,
+.practice-typing-help {
+  color: var(--text-secondary);
+  font-size: var(--type-caption-size);
+  line-height: var(--line-height-normal);
+}
+
+.practice-typing-nomatch {
+  color: var(--color-warning-text);
+  font-weight: var(--font-weight-medium);
+}
+
+/* Flashcards: a white card lying on practice paper, turned by a click anywhere on it. The front shows the word; turned
+   over, the card wears a violet edge and shows the meaning. */
 .practice-card {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--space-3);
-  width: 100%;
-  max-width: 560px;
-  min-height: 320px;
-  padding: var(--space-10) var(--space-6);
-  border: 1px solid var(--border-default);
+  gap: var(--space-4);
+  min-height: 300px;
+  padding: var(--card-padding);
+  border: 1px solid var(--color-primary-100);
   border-radius: var(--radius-xl);
-  background: var(--surface-subtle);
-  box-shadow: var(--shadow-sm);
+  background:
+    var(--pattern-grid-paper) 50% 50% / var(--pattern-grid-size),
+    var(--color-primary-50);
   text-align: center;
+  cursor: pointer;
 }
 
-.practice-card.is-flipped {
-  border-color: var(--practice-pigment);
-  background: var(--practice-pigment-soft);
+/* The live region around the turning face (it announces the side now showing): as wide as the stage, so the face
+   keeps its own width, and centred like the buttons under it. */
+.practice-card-stage {
+  display: grid;
+  justify-items: center;
+  width: 100%;
+  min-width: 0;
 }
 
-.practice-card p {
-  margin: 0;
+.practice-card-face {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: var(--space-3);
+  width: min(100%, 440px);
+  min-height: 220px;
+  padding: var(--space-8) var(--space-6);
+  border-radius: var(--radius-2xl);
+  background: var(--surface-card);
+  box-shadow:
+    inset 0 0 0 1px var(--border-subtle),
+    var(--shadow-md);
+  transition: box-shadow var(--duration-base) var(--ease-standard);
+}
+
+.practice-card:hover .practice-card-face {
+  box-shadow:
+    inset 0 0 0 1px var(--border-interactive),
+    var(--shadow-md);
+}
+
+/* After the hover, so a turned card keeps its edge under the pointer. */
+.practice-card.is-flipped .practice-card-face {
+  box-shadow:
+    inset 0 0 0 var(--border-width-thick) var(--color-primary-500),
+    var(--shadow-md);
 }
 
 .practice-card-label {
-  color: var(--practice-pigment);
+  color: var(--text-secondary);
   font-size: var(--type-overline-size);
-  font-weight: var(--font-weight-bold);
+  font-weight: var(--font-weight-heading);
   letter-spacing: var(--letter-spacing-wide);
+  line-height: var(--line-height-snug);
   text-transform: uppercase;
-}
-
-.practice-card-tiles {
-  display: flex;
-  justify-content: center;
-  gap: var(--space-2);
-  margin-block: var(--space-1);
-}
-
-.practice-card-tiles .hanzi-tile {
-  --hanzi-tile-size: 128px;
-}
-
-.practice-card-tiles.is-long .hanzi-tile {
-  --hanzi-tile-size: 96px;
 }
 
 .practice-card-hanzi {
   font-size: var(--font-size-6xl);
+  line-height: var(--line-height-tight);
   overflow-wrap: anywhere;
 }
 
 .practice-card-pinyin {
   color: var(--text-secondary);
-  font-size: var(--font-size-xl);
+  font-size: var(--type-h2-size);
+  line-height: var(--line-height-snug);
 }
 
 .practice-card-meaning {
-  font-family: var(--font-display);
+  max-width: 100%;
   font-size: var(--font-size-4xl);
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-heading);
   line-height: var(--line-height-snug);
+  overflow-wrap: anywhere;
 }
 
 .practice-card-word {
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
   align-items: baseline;
+  justify-content: center;
   gap: var(--space-2);
   color: var(--text-secondary);
+  font-size: var(--type-body-size);
 }
 
 .practice-card-word .hanzi {
   color: var(--text-primary);
-  font-size: var(--font-size-2xl);
+  font-size: var(--type-question-size);
 }
 
 .practice-card-example {
-  max-width: 48ch;
+  max-width: 64ch;
   color: var(--text-secondary);
-  font-size: var(--font-size-md);
-}
-
-.practice-card-tools {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: var(--space-2);
+  font-size: var(--type-body-size);
 }
 
 /* Turning a card: a quick quarter turn out and back in. */
@@ -869,40 +586,171 @@
   transform: perspective(900px) rotateY(70deg);
 }
 
-/* Tracing: the word to write, then a 田字格 pad (purple guides, ink strokes). */
-.practice-trace-target {
+/* Tags over an item: "Once more, to make sure" when a right guess comes back. */
+.practice-combo {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2) var(--space-4);
+  gap: var(--space-2);
 }
 
-.practice-trace-glyph {
-  font-size: var(--font-size-5xl);
-  line-height: var(--line-height-tight);
+/* The question inside a stage: a section-size title, with answers in a 2 x 2 grid. */
+.practice-stage .learn-question {
+  gap: var(--space-4);
+  max-width: none;
+  margin: 0;
 }
 
-.practice-trace-meaning {
+.practice-stage .focus-title {
+  font-size: var(--type-h2-size);
+  line-height: var(--line-height-snug);
+}
+
+.practice-stage .learn-options {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.practice-stage .option-row {
+  min-height: 72px;
+}
+
+/* Hanzi over its pinyin, as an answer in a stage has the height for both. */
+.practice-stage .learn-option-text {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.practice-stage .learn-option-pinyin {
+  font-size: var(--type-caption-size);
+  line-height: var(--line-height-normal);
+}
+
+/* Drag & Drop: the instruction small, the sentence to say in the question size, tiles on a rule over the bank. */
+.practice-stage .learn-question:has(.learn-build) {
+  gap: var(--space-1);
+}
+
+.practice-stage .learn-question:has(.learn-build) .focus-title {
+  color: var(--text-secondary);
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-normal);
+}
+
+.practice-stage .learn-question-meaning {
+  font-size: var(--type-question-size);
+  line-height: var(--line-height-snug);
+}
+
+.practice-stage .learn-build {
+  gap: var(--space-4);
+  margin-top: var(--space-3);
+}
+
+.practice-stage .learn-build-answer {
+  gap: var(--space-3);
+  min-height: 84px;
+  padding: var(--space-4) 0;
+  border-bottom-width: 1px;
+}
+
+.practice-stage .learn-build-answer:not(.is-correct, .is-wrong) {
+  border-bottom-color: var(--border-strong);
+}
+
+/* The verdict is the bar under the bank; the sentence only colours its rule. */
+.practice-stage .learn-build-answer:is(.is-correct, .is-wrong) {
+  padding-inline: 0;
+  border-radius: 0;
+  background: none;
+}
+
+.practice-stage .learn-build-bank {
+  justify-content: flex-start;
+  gap: var(--space-3);
+}
+
+.practice-stage .learn-tile {
+  border-width: 1px;
+}
+
+.practice-stage .learn-tile[draggable='true'] {
+  cursor: grab;
+}
+
+/* A placed tile is filled, the next place in the sentence a dashed slot. */
+.practice-stage .learn-build-answer .learn-tile {
+  border-color: var(--color-primary-500);
+  background: var(--color-primary-500);
+  color: var(--text-on-primary);
+}
+
+.practice-stage .learn-build-answer:not(.is-correct, .is-wrong)::after {
+  content: '';
+  width: 72px;
+  height: 52px;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+}
+
+/* A used tile stays in the bank, faded, so the bank never reflows. */
+.practice-stage .learn-tile.is-used {
+  border-color: var(--border-subtle);
+  background: var(--surface-card);
+  color: var(--text-disabled);
+}
+
+/* Tracing: the model on the left, the pad on the right. */
+.practice-trace {
   display: grid;
   flex: 1 1 auto;
-  color: var(--text-secondary);
-  font-size: var(--font-size-md);
+  grid-template-columns: 200px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-6);
 }
 
-.practice-trace-pinyin {
-  color: var(--text-primary);
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
+.practice-trace-model,
+.practice-trace-board {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.practice-trace-model {
+  text-align: center;
+}
+
+.practice-trace-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.practice-trace-tiles .hanzi-tile {
+  --hanzi-tile-size: 96px;
+}
+
+.practice-trace-tiles .hanzi-tile:only-child {
+  --hanzi-tile-size: 120px;
+}
+
+.practice-trace-word {
+  font-size: var(--type-body-size);
+  font-weight: var(--font-weight-strong);
 }
 
 .practice-trace-pad {
   width: 100%;
-  margin: 0 auto;
   overflow: hidden;
-  border: 1.5px solid var(--color-primary-300);
-  border-radius: var(--radius-xs);
+  border: var(--border-width-thick) solid var(--color-primary-500);
+  border-radius: var(--radius-2xl);
   background: var(--surface-card);
-  box-shadow: var(--shadow-sm);
+}
+
+.practice-trace-pad:has(:focus-visible) {
+  box-shadow: var(--focus-halo);
 }
 
 .practice-trace-canvas {
@@ -913,26 +761,18 @@
   touch-action: none;
 }
 
-.practice-trace-tools {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: var(--space-2);
+.practice-trace-canvas:focus-visible {
+  outline: none;
 }
 
-/* Matching: words on the left, meanings on the right; pairs carry a number, so they read without colour. */
-.practice-match-hint {
-  margin-top: calc(-1 * var(--space-3));
-}
-
+/* Matching: words on the left, meanings on the right; pairs carry a number, so they read across and without colour. */
 .practice-match {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-4) var(--space-6);
+  gap: var(--space-6);
 }
 
-/* Both columns stretch to the same height and share it into equal rows, so a two-line word never puts the two
-   columns out of step; each tile fills its row. */
+/* Equal rows, so a long word never puts the columns out of step. */
 .practice-match-column {
   display: grid;
   grid-auto-rows: 1fr;
@@ -946,270 +786,162 @@
   display: grid;
 }
 
+/* Number, centred word, mark: the side columns match, so the word stays centred in every state. */
 .practice-match-tile {
-  display: flex;
+  display: grid;
+  grid-template-columns: var(--space-6) minmax(0, 1fr) var(--space-6);
   align-items: center;
   gap: var(--space-3);
   width: 100%;
-  min-height: 64px;
+  min-height: 72px;
   padding: var(--space-2) var(--space-4);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
+  border: 0;
+  border-radius: var(--radius-btn-lg);
   background: var(--surface-card);
-  box-shadow: var(--shadow-xs);
+  box-shadow: inset 0 0 0 1px var(--border-default);
   color: var(--text-primary);
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-semibold);
-  text-align: left;
+  font-size: var(--type-card-title-size);
+  font-weight: var(--font-weight-strong);
+  text-align: center;
   transition:
-    border-color var(--duration-fast) var(--ease-standard),
-    background-color var(--duration-fast) var(--ease-standard);
+    background-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
 }
 
-.practice-match-tile:hover:not(:disabled) {
-  border-color: var(--border-interactive);
+/* :where keeps hover below .is-selected so a selected tile keeps its ring while hovered. */
+.practice-match-tile:where(:hover:not(:disabled)) {
   background: var(--surface-subtle);
+  box-shadow: inset 0 0 0 1px var(--border-interactive);
 }
 
 .practice-match-tile:disabled {
   cursor: default;
 }
 
-.practice-match-tile.is-meaning:disabled:not(.is-paired, .is-correct, .is-wrong) {
-  color: var(--text-secondary);
+.practice-match-tile.is-paired {
+  background: var(--color-primary-500);
+  box-shadow: none;
+  color: var(--text-on-primary);
 }
 
-.practice-match-tile.is-paired {
-  border-color: var(--practice-pigment);
+.practice-match-tile.is-paired:where(:hover:not(:disabled)) {
+  background: var(--color-primary-600);
+  box-shadow: none;
 }
 
 .practice-match-tile.is-selected {
-  border-color: var(--practice-pigment);
-  background: var(--practice-pigment-soft);
-  box-shadow: inset 0 0 0 1px var(--practice-pigment);
+  background: var(--color-primary-50);
+  box-shadow: inset 0 0 0 var(--border-width-thick) var(--color-primary-500);
+  color: var(--text-primary);
+}
+
+.practice-match-tile.is-paired.is-selected:not(.is-correct, .is-wrong) .practice-match-index {
+  background: var(--color-primary-500);
+  color: var(--text-on-primary);
 }
 
 .practice-match-tile.is-correct {
-  border-color: var(--color-success);
   background: var(--color-success-soft);
+  box-shadow: inset 0 0 0 var(--border-width-thick) var(--color-success);
   color: var(--color-success-text);
 }
 
 .practice-match-tile.is-wrong {
-  border-color: var(--color-danger);
   background: var(--color-danger-soft);
+  box-shadow: inset 0 0 0 var(--border-width-thick) var(--color-danger);
   color: var(--color-danger-text);
 }
 
 .practice-match-index {
   display: grid;
-  flex: 0 0 auto;
   place-items: center;
-  min-width: 24px;
-  height: 24px;
+  width: var(--space-6);
+  height: var(--space-6);
   border-radius: var(--radius-round);
-  background: var(--practice-pigment);
-  color: var(--text-on-primary);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-bold);
+  background: var(--surface-card);
+  color: var(--color-primary-700);
+  font-size: var(--type-caption-size);
+  font-weight: var(--font-weight-strong);
 }
 
 .practice-match-index:empty {
-  border: 1.5px dashed var(--border-strong);
-  background: transparent;
+  visibility: hidden;
+}
+
+.practice-match-tile:is(.is-correct, .is-wrong) .practice-match-index {
+  box-shadow: inset 0 0 0 1px currentColor;
+  color: inherit;
+}
+
+.practice-match-word {
+  display: grid;
+  justify-items: center;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .practice-match-hanzi {
-  font-size: var(--font-size-2xl);
+  font-size: var(--type-question-size);
+  line-height: var(--line-height-snug);
 }
 
 .practice-match-pinyin {
-  flex: 1 1 auto;
   color: var(--text-secondary);
-  font-size: var(--font-size-sm);
+  font-size: var(--type-caption-size);
   font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-normal);
 }
 
-/* Story: the text on its own sheet with pinyin / translation switches, then the questions. */
-.practice-story-tools {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-3) var(--space-5);
+.practice-match-tile:is(.is-paired, .is-correct, .is-wrong) .practice-match-pinyin {
+  color: inherit;
 }
 
-.practice-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-semibold);
-  cursor: pointer;
-}
-
-.practice-story-lines {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  margin: 0;
-  padding: var(--space-6) var(--space-8);
-  border: 1px solid var(--border-subtle);
-  border-left: var(--border-width-thick) solid var(--practice-pigment);
-  border-radius: 0 var(--radius-md) var(--radius-md) 0;
-  background: var(--surface-subtle);
-  list-style: none;
-}
-
-.practice-story-line p {
-  margin: 0;
-}
-
-.practice-story-hanzi {
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-medium);
-}
-
-.practice-story-pinyin {
+.practice-match-tile.is-selected:not(.is-correct, .is-wrong) .practice-match-pinyin {
   color: var(--text-secondary);
-  font-size: var(--font-size-md);
 }
 
-.practice-story-translation {
-  color: var(--text-secondary);
-  font-size: var(--font-size-md);
-  font-style: italic;
+.practice-match-mark {
+  grid-column: 3;
+  justify-self: end;
 }
 
-.practice-story-question {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
-.practice-story-question legend {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin-bottom: var(--space-3);
-  padding: 0;
-  font-weight: var(--font-weight-bold);
-}
-
-.practice-story-number {
-  display: grid;
-  flex: 0 0 auto;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border: 1.5px solid var(--practice-pigment);
-  border-radius: var(--radius-round);
-  color: var(--practice-pigment);
-  font-size: var(--font-size-xs);
-}
-
-.practice-story-options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-.practice-story-option {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1-5);
-  min-height: var(--control-height-md);
-  padding: 0 var(--space-4);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-pill);
-  background: var(--surface-card);
-  color: var(--text-primary);
-  font-weight: var(--font-weight-semibold);
-  transition:
-    border-color var(--duration-fast) var(--ease-standard),
-    background-color var(--duration-fast) var(--ease-standard);
-}
-
-.practice-story-option:hover:not(:disabled) {
-  border-color: var(--border-interactive);
-  background: var(--surface-subtle);
-}
-
-.practice-story-option:disabled {
-  cursor: default;
-}
-
-.practice-story-option.is-selected {
-  border-color: var(--practice-pigment);
-  background: var(--practice-pigment-soft);
-  box-shadow: inset 0 0 0 1px var(--practice-pigment);
-}
-
-.practice-story-option.is-correct {
-  border-color: var(--color-success);
-  background: var(--color-success-soft);
-  color: var(--color-success-text);
-}
-
-.practice-story-option.is-wrong {
-  border-color: var(--color-danger);
-  background: var(--color-danger-soft);
-  color: var(--color-danger-text);
-}
-
-.practice-story-explanation {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-md);
-}
-
-/* A finished set: the type's tile stamped with a seal, the result, XP and what next. */
+/* A finished set: the Complete card, in the place of the activity. */
 .practice-done {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-5);
-  padding: var(--space-6) 0 var(--space-2);
+  justify-content: center;
+  gap: var(--space-3);
+  min-height: 300px;
+  padding: var(--card-padding);
+  border-radius: var(--radius-lg);
+  background: var(--surface-sunken);
   text-align: center;
-}
-
-.practice-done p {
-  margin: 0;
 }
 
 .practice-done-stamp {
   display: grid;
-  justify-items: center;
-  gap: var(--space-3);
-  margin: 0;
-}
-
-.practice-done-marks {
-  position: relative;
-  display: inline-grid;
-  padding: 0 var(--space-10) var(--space-5) 0;
-}
-
-.practice-done-seal {
-  --seal-size: 52px;
-  position: absolute;
-  right: 0;
-  bottom: 0;
+  place-items: center;
+  width: var(--space-16);
+  height: var(--space-16);
+  border: var(--border-width-thick) solid var(--color-success);
+  border-radius: var(--radius-round);
+  background: var(--surface-card);
+  color: var(--color-success-text);
   transform: rotate(-8deg);
   animation: practice-stamp var(--duration-slow) var(--ease-spring) both;
 }
 
-.practice-done-seal.is-outline {
-  background: var(--surface-card);
+.practice-done-stamp.is-open {
+  border-color: var(--border-strong);
+  color: var(--text-secondary);
 }
 
 @keyframes practice-stamp {
   from {
     opacity: 0;
-    transform: rotate(-8deg) scale(1.6);
+    transform: rotate(-8deg) scale(1.5);
   }
 
   to {
@@ -1218,448 +950,223 @@
   }
 }
 
-.practice-done-caption {
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-}
-
-.practice-done-copy {
-  display: grid;
-  gap: var(--space-1-5);
-}
-
-.practice-done-title {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--type-h1-size);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-tight);
-  letter-spacing: var(--letter-spacing-display);
-}
-
-.practice-done-sub,
-.practice-done-note {
-  color: var(--text-secondary);
-}
-
-.practice-done-reward {
-  display: grid;
-  justify-items: center;
-  gap: var(--space-2);
-  padding: var(--space-4) var(--space-8);
-  border-block: 1px solid var(--border-subtle);
-}
-
-.practice-done-xp {
-  color: var(--text-brand);
-}
-
-.practice-done-goal {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1-5);
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-semibold);
-}
-
-.practice-done-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: var(--space-2);
-}
-
-/* Mistakes
-   -------------------------------------------------------------------------- */
-.practice-mistakes-page {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-8);
-}
-
-/* The same size as an activity's mark (.practice-glyph.is-lg), so every room's title starts at the same x. */
-.practice-mistakes-seal {
-  --seal-size: 72px;
-}
-
-/* The list on the left, the count and its one action in a sticky card on the right. */
-.practice-mistakes {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 288px;
-  grid-template-rows: auto 1fr;
-  grid-template-areas:
-    'filter summary'
-    'body summary';
-  gap: var(--space-5) var(--space-10);
-  align-items: start;
-}
-
-.practice-mistakes.is-clear {
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto;
-  row-gap: 0;
-  grid-template-areas:
-    'summary'
-    'body';
-}
-
-.practice-mistakes-summary {
-  position: sticky;
-  top: calc(var(--topbar-height) + var(--space-6));
-  grid-area: summary;
-  display: grid;
-  gap: var(--space-5);
-  padding: var(--space-6);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  background: var(--surface-card);
-  box-shadow: var(--shadow-sm);
-}
-
-.practice-mistakes.is-clear .practice-mistakes-summary {
-  position: static;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-.practice-mistakes-body {
-  grid-area: body;
-  display: grid;
-  gap: var(--space-4);
-  min-width: 0;
-}
-
-.practice-mistakes-count {
-  display: grid;
-  gap: var(--space-2);
-  min-width: 0;
-}
-
-.practice-mistakes-title {
-  flex-direction: column;
-  align-items: flex-start;
-}
-
-.practice-mistakes-title .stat-figure {
-  font-size: var(--font-size-7xl);
-  line-height: 0.9;
-}
-
-.practice-mistakes-text {
+.practice-done-sub {
   margin: 0;
   color: var(--text-secondary);
-  font-size: var(--font-size-md);
+  font-size: var(--type-body-size);
 }
 
-.practice-mistakes-actions {
-  display: grid;
-  justify-items: center;
-  gap: var(--space-2);
-}
-
-.practice-mistakes-filter {
-  grid-area: filter;
-  justify-self: start;
-}
-
+/* Mistakes: the source filters with their counts, rows on a sunken fill, and the review's one line by its button */
 .practice-mistake-list {
+  display: grid;
+  gap: var(--space-3);
   margin: 0;
   padding: 0;
-  border-top: 1px solid var(--border-subtle);
   list-style: none;
 }
 
 .practice-mistake {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: var(--space-2) var(--space-4);
-  padding: var(--space-4) 0;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.practice-mistake p {
-  margin: 0;
-}
-
-.practice-mistake-copy {
-  display: grid;
-  gap: var(--space-1);
-  min-width: 0;
-}
-
-.practice-mistake-question {
-  font-weight: var(--font-weight-bold);
-  overflow-wrap: anywhere;
-}
-
-.practice-mistake-answers {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-1) var(--space-2);
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-  overflow-wrap: anywhere;
-}
-
-.practice-mistake-yours,
-.practice-mistake-right {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-}
-
-.practice-mistake-yours svg {
-  color: var(--color-danger);
-}
-
-.practice-mistake-right {
-  color: var(--color-success-text);
-  font-weight: var(--font-weight-semibold);
-}
-
-.practice-mistake-source {
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-  white-space: nowrap;
-}
-
-/* Mistakes review (focus mode): a tally that counts down, then "All fixed" or what is left
-   -------------------------------------------------------------------------- */
-.practice-review-track {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3) var(--space-6);
-  max-width: 720px;
-  margin: 0 auto var(--space-6);
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-btn-lg);
+  background: var(--surface-sunken);
 }
 
-.practice-review-tally {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1-5);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.practice-review-tally li {
+.practice-mistake-copy {
   display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border: 1.5px solid var(--border-default);
-  border-radius: var(--radius-xs);
-  background: var(--surface-card);
-  transition:
-    background-color var(--duration-base) var(--ease-standard),
-    border-color var(--duration-base) var(--ease-standard);
+  flex: 1 1 12rem;
+  gap: var(--space-1);
+  min-width: 0;
 }
 
-.practice-review-tally li.is-now {
-  border-color: var(--color-primary-500);
-  box-shadow: inset 0 0 0 1px var(--color-primary-500);
-}
-
-.practice-review-tally li.is-right {
-  border-color: var(--color-success);
-  background: var(--color-success);
-  color: var(--text-on-primary);
-}
-
-.practice-review-tally li.is-wrong {
-  border-color: var(--color-danger-border);
-  background: var(--color-danger-soft);
-  color: var(--color-danger-text);
-}
-
-.practice-review-left {
+.practice-mistake-copy p {
   margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--font-size-xl);
-  font-variant-numeric: tabular-nums;
-  font-weight: var(--font-weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.practice-mistake-question {
+  font-size: var(--type-body-size);
+  font-weight: var(--font-weight-strong);
+  line-height: var(--line-height-normal);
+}
+
+.practice-mistake-answers {
+  color: var(--text-secondary);
+  font-size: var(--type-caption-size);
+  line-height: var(--line-height-normal);
+}
+
+.practice-mistake-tags {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  max-width: 100%;
+}
+
+.practice-mistake .tag {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+/* The review question keeps its place between steps and leaves room for feedback in a short desktop window. */
+.practice-review {
+  --focus-label-width: 176px;
+  --focus-stage-top: clamp(var(--space-6), calc(45dvh - 16rem), 152px);
 }
 
 .practice-review-done {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-4);
-  max-width: 600px;
-  margin: 0 auto;
-  text-align: center;
-}
-
-.practice-review-done p {
-  margin: 0;
-}
-
-.practice-review-stamp {
   display: grid;
   justify-items: center;
-  gap: var(--space-3);
-  margin: 0;
-}
-
-.practice-review-seal {
-  --seal-size: 88px;
-  transform: rotate(-6deg);
-  animation: practice-review-stamp var(--duration-slow) var(--ease-spring) both;
-}
-
-@keyframes practice-review-stamp {
-  from {
-    opacity: 0;
-    transform: rotate(-6deg) scale(1.6);
-  }
-
-  to {
-    opacity: 1;
-    transform: rotate(-6deg) scale(1);
-  }
-}
-
-.practice-review-caption {
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-}
-
-.practice-review-title {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--type-display-size);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-tight);
-  letter-spacing: var(--letter-spacing-display);
-}
-
-.practice-review-sub,
-.practice-review-note {
-  color: var(--text-secondary);
-}
-
-.practice-review-note {
-  font-size: var(--font-size-md);
-}
-
-.practice-review-done .practice-review-tally {
-  justify-content: center;
-  margin-block: var(--space-2);
-}
-
-.practice-review-stats {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  width: 100%;
-  margin: 0;
-  border-block: 1px solid var(--border-subtle);
-}
-
-.practice-review-stats > div {
-  display: flex;
-  flex-direction: column-reverse;
-  gap: var(--space-1);
-  padding: var(--space-4) var(--space-2);
-}
-
-.practice-review-stats > div + div {
-  border-left: 1px solid var(--border-subtle);
-}
-
-.practice-review-stats dt {
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.practice-review-stats dd {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--font-size-3xl);
-  font-variant-numeric: tabular-nums;
-  font-weight: var(--font-weight-semibold);
-  line-height: 1;
-}
-
-.practice-review-stats dd.is-xp {
-  color: var(--text-brand);
+  gap: var(--space-4);
+  text-align: center;
 }
 
 .practice-review-streak {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1-5);
-  color: var(--color-primary-600);
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-semibold);
+  gap: var(--space-2);
+  min-height: var(--space-8);
+  padding: var(--space-1) var(--space-4) var(--space-1) var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-strong);
 }
 
-.practice-review-later {
-  display: grid;
-  gap: var(--space-0-5);
-  width: 100%;
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--color-warning-border);
-  border-radius: var(--radius-md);
-  background: var(--color-warning-soft);
-  color: var(--color-warning-text);
-  font-size: var(--font-size-md);
-}
-
-/* Responsive
-   -------------------------------------------------------------------------- */
-@media (max-width: 1200px) {
-  .practice-hub {
-    grid-template-columns: minmax(0, 1fr) 220px;
-    column-gap: var(--space-8);
-  }
-
-  /* The actions drop under the copy, so the title keeps its line in the narrower column. */
-  .practice-call {
-    grid-template-columns: auto minmax(0, 1fr);
-  }
-
-  .practice-call-actions {
-    grid-column: 2;
-    flex-direction: row;
-    gap: var(--space-4);
-  }
-
-  .practice-run.has-sets {
-    grid-template-columns: minmax(0, 1fr) 210px;
-    column-gap: var(--space-6);
-  }
-
-  /* Below 1200px the summary becomes a row above the list (a narrow column would break its lines). */
-  .practice-mistakes,
-  .practice-mistakes.is-clear {
+/* Responsive */
+/* A narrow stage (a small window, the set list beside it) puts the answers in one column. */
+@container (max-width: 35rem) {
+  .practice-stage .learn-options {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto;
-    grid-template-areas:
-      'summary'
-      'filter'
-      'body';
   }
 
-  .practice-mistakes-summary {
+  .practice-stage .option-row {
+    min-height: 60px;
+  }
+}
+
+/* A narrower set list puts a set's status under its size and XP so neither is clipped. */
+@container (max-width: 16rem) {
+  .practice-set-row {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: start;
+    gap: var(--space-1);
+  }
+}
+
+@media (max-width: 75rem) {
+  .practice-workspace {
+    --practice-list-width: clamp(11rem, 30%, 15.5rem);
+  }
+
+  /* The seven tabs fit the narrower column without their icons. */
+  .practice-page .route-tabs {
+    column-gap: var(--space-4);
+  }
+
+  .practice-page .route-tab .icon-glyph {
+    display: none;
+  }
+
+  .practice-trace {
+    grid-template-columns: 160px minmax(0, 1fr);
+  }
+
+  .practice-trace-tiles .hanzi-tile {
+    --hanzi-tile-size: 72px;
+  }
+}
+
+@media (max-width: 63.9375rem) {
+  .practice-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .practice-workspace:has(> .practice-set-list) {
+    grid-template-rows: auto 1fr;
+  }
+
+  .practice-set-list {
     position: static;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
+    max-height: 16rem;
+  }
+}
+
+@container (max-width: 28rem) {
+  .practice-match {
+    gap: var(--space-3);
   }
 
-  .practice-mistakes-title {
-    flex-direction: row;
-    align-items: baseline;
+  .practice-match-tile {
+    grid-template-columns: var(--space-5) minmax(0, 1fr) var(--space-5);
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-2-5);
   }
 
-  .practice-mistakes-title .stat-figure {
-    font-size: var(--font-size-5xl);
+  .practice-match-index {
+    width: var(--space-5);
+    height: var(--space-5);
+  }
+}
+
+@container (max-width: 26rem) {
+  .practice-trace {
+    grid-template-columns: minmax(0, 1fr);
+    align-content: center;
+  }
+}
+
+@media (max-height: 37.5rem) {
+  .practice-player {
+    min-height: 0;
+  }
+}
+
+@media (forced-colors: active) {
+  .practice-trace-pad:has(:focus-visible) {
+    outline: var(--border-width-focus) solid Highlight;
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  .practice-candidate,
+  .practice-card-face,
+  .practice-match-tile {
+    border: 1px solid ButtonText;
+  }
+
+  .practice-set-row[aria-current='true'],
+  .practice-card.is-flipped .practice-card-face,
+  .practice-candidate[aria-pressed='true'],
+  .practice-match-tile.is-selected {
+    border: var(--border-width-thick) solid Highlight;
+  }
+
+  /* Filled states stay solid Highlight so correct/paired/placed answers remain distinct from selected or wrong picks. */
+  .practice-candidate.is-correct,
+  .practice-match-tile.is-paired:not(.is-selected, .is-correct, .is-wrong),
+  .practice-match-tile.is-correct,
+  .practice-stage .learn-build-answer .learn-tile {
+    border: var(--border-width-thick) solid Highlight;
+    background: Highlight;
+    color: HighlightText;
+    forced-color-adjust: none;
+  }
+
+  .practice-candidate.is-wrong,
+  .practice-match-tile.is-wrong {
+    border: var(--border-width-thick) dashed Highlight;
+  }
+
+  .practice-stage .learn-tile.is-used {
+    border: 1px dashed GrayText;
+    background: Canvas;
+    color: GrayText;
+    forced-color-adjust: none;
   }
 }

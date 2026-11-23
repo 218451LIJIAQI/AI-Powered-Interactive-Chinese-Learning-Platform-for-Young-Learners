@@ -1,56 +1,49 @@
 <template>
-  <RouteTabs :tabs="tabs" :label="t('adminContentTabs.label')" />
+  <RouteTabs :tabs="tabs" :label="t('nav.contentSections')"
+    ><template v-if="$slots.default" #default><slot /></template
+  ></RouteTabs>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 
-import { shellApi } from '@/api/shell'
 import RouteTabs, { type RouteTab } from '@/components/common/RouteTabs.vue'
-import { useLocalMessages } from '@/composables/useLocalMessages'
-import { useResource } from '@/composables/useResource'
-import { adminContentTabsMessages } from '@/plugins/adminContentTabsMessages'
+
+import { contentCounts, ensureCurrentCountSession, reloadContentCounts } from './adminContentCounts'
 
 /**
- * The admin Content sections as underline tabs: Review queue, Teacher classes, Learning path and Practice library.
- * Only the review queue carries a count, the items waiting for a decision (a yellow badge, hidden at zero): the Review
- * queue page passes its own (null while it loads), every other Content page reads the sidebar's nav count.
+ * The admin Content sections as underline tabs with their counts: Classes (classes and lessons), Learning path (units)
+ * and Practice library (activities).
  */
-interface Props {
-  reviewQueue?: number | null
-}
+const props = defineProps<{
+  /** Skip fetching the full learning path when the host page already loads it and syncs the unit count. */
+  skipUnits?: boolean
+}>()
 
-const props = defineProps<Props>()
+const { t } = useI18n()
 
-const { t } = useLocalMessages({ adminContentTabs: adminContentTabsMessages })
-const navCounts = useResource(() => shellApi.navCounts(), props.reviewQueue === undefined)
+ensureCurrentCountSession()
+onMounted(() => void reloadContentCounts({ keepUnits: true, skipUnits: props.skipUnits }))
 
 const tabs = computed<RouteTab[]>(() => [
   {
-    label: t('adminContentTabs.reviewQueue'),
-    to: { name: 'admin-content-review' },
-    icon: 'checklist',
-    count: (props.reviewQueue ?? navCounts.data.value?.reviewQueue) || null,
-    attention: true,
-    testId: 'content-tab-review',
-  },
-  {
-    label: t('adminContentTabs.teacherClasses'),
-    to: { name: 'admin-teacher-classes' },
+    label: t('nav.classes'),
+    to: { name: 'admin-classes' },
     icon: 'classes',
-    testId: 'content-tab-classes',
+    count: contentCounts.value.classes,
   },
   {
-    label: t('adminContentTabs.learningPath'),
+    label: t('nav.learningPath'),
     to: { name: 'admin-learning-path' },
     icon: 'route',
-    testId: 'content-tab-learning-path',
+    count: contentCounts.value.units,
   },
   {
-    label: t('adminContentTabs.practiceLibrary'),
+    label: t('nav.practiceLibrary'),
     to: { name: 'admin-practice-library' },
     icon: 'practice',
-    testId: 'content-tab-practice',
+    count: contentCounts.value.practice,
   },
 ])
 </script>

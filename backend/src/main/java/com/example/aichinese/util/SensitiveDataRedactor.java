@@ -1,18 +1,10 @@
 package com.example.aichinese.util;
 
-import java.lang.reflect.Array;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.IdentityHashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Central redaction rules for log, audit, and telemetry text.
+ * Central redaction rules for log and audit text.
  *
  * <p>Keep this class conservative: leaking one token, email address, or
  * session identifier in a log stream is much worse than over-redacting a
@@ -21,172 +13,83 @@ import java.util.regex.Pattern;
 public final class SensitiveDataRedactor {
 
     public static final String REDACTED = "[REDACTED]";
-    public static final String FILTERED = "[Filtered]";
 
-    private static final int MAX_OBJECT_DEPTH = 8;
-
-    private static final Pattern UNSAFE_LOG_CHARACTERS = Pattern.compile("[\\p{Cntrl}&&[^\r\n\t]]|[\u202A-\u202E\u2066-\u2069]");
+    /**
+     * Control characters other than line breaks and tabs, and the bidirectional embedding, override and isolate
+     * controls (U+202A-U+202E, U+2066-U+2069).
+     */
+    private static final Pattern UNSAFE_LOG_CHARACTERS =
+            Pattern.compile("[\\p{Cntrl}&&[^\r\n\t]]|[\\u202A-\\u202E\\u2066-\\u2069]");
+    private static final String SENSITIVE_KEYS =
+            "(?:(?:access|refresh|id|reset|csrf|session)[-_ ]?)?(?:token|jwt)"
+                    + "|(?:(?:current|new|confirm|old)[-_ ]?)?password|passcode|credential"
+                    + "|(?:(?:client|app|jwt|signing)[-_ ]?)?secret(?:[-_ ]?(?:key|id))?"
+                    + "|(?:x[-_ ]?)?api[-_ ]?key|email";
+    private static final String JSON_SENSITIVE_KEYS =
+            SENSITIVE_KEYS + "|reset[-_ ]?link|authorization|(?:set[-_ ]?)?cookie";
     private static final Pattern AUTHORIZATION_HEADER_PATTERN = Pattern.compile(
-            "(?i)(authorization\\s*(?:[:=])\\s*)(?:bearer\\s+)?\\S+");
+            "(?i)(\\bauthorization\\s*(?:[:=])\\s*)(?:" + quotedValue(2)
+                    + "|(?:digest|aws4-hmac-sha256|tc3-hmac-sha256)\\s+[^\\r\\n]+"
+                    + "|(?:(?:bearer|basic|token|apikey|api[-_]?key|negotiate)\\s+)?\\S+)");
+    private static final Pattern COOKIE_HEADER_PATTERN = Pattern.compile(
+            "(?i)(\\b(?:set[-_ ]?)?cookie\\s*(?:[:=])\\s*)(?:" + quotedValue(2) + "[^\\r\\n]*|[^\\r\\n]+)");
     /** "Bearer &lt;token&gt;"; the words "bearer token(s)" in a sentence are not a credential. */
     private static final Pattern BEARER_TOKEN_PATTERN = Pattern.compile("(?i)\\bbearer\\s+(?!tokens?\\b)[^\\s,;]+");
-    private static final Pattern RESET_LINK_ASSIGNMENT_PATTERN = Pattern.compile(
-            "(?i)\\b(reset[-_ ]?link)\\b\\s*(?:[:=])\\s*\\S+");
-    private static final Pattern SENSITIVE_ASSIGNMENT_PATTERN = Pattern.compile(
-            "(?i)\\b((?:(?:access|refresh|id|reset|csrf|session)[-_ ]?)?(?:token|jwt)"
-                    + "|password|passcode|credential|secret|api[-_ ]?key|client[-_ ]?secret"
-                    + "|email)\\b\\s*(?:[:=])\\s*[^\\s\"',;&}]+");
+    /**
+     * Quoted JSON properties whose key names a secret or credential; backreferences the opening quote so apostrophes
+     * inside double-quoted values (e.g. {@code "don't-leak"}) cannot terminate redaction early.
+     */
     private static final Pattern JSON_SENSITIVE_VALUE_PATTERN = Pattern.compile(
-            "(?i)([\"'](?:password|passcode|credential|token|jwt|secret|api[-_ ]?key|client[-_ ]?secret|email)[\"']\\s*:\\s*[\"'])[^\"']+([\"'])");
-    private static final Pattern EMAIL_PATTERN = Pattern.compile(
-            "(?i)\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}\\b");
+            "(?i)([\"'](?:" + JSON_SENSITIVE_KEYS + ")[\"']\\s*:\\s*([\"']))" + quotedBody(2));
+    private static final Pattern JSON_SENSITIVE_NUMERIC_PATTERN = Pattern.compile(
+            "(?i)([\"'](?:" + JSON_SENSITIVE_KEYS + ")[\"']\\s*:\\s*)-?\\d+(?:\\.\\d+)?");
+    /**
+     * JSON-inside-JSON escaped properties (e.g. {@code {\"password\":\"abc\\\"def\"}}): consumes double-escaped
+     * backslashes ({@code \\\\}) and inner escaped quotes ({@code \\\"}) possessively so inner quotes never leak
+     * trailing secret characters and unclosed strings finish in O(N) time.
+     */
+    private static final Pattern ESCAPED_JSON_SENSITIVE_VALUE_PATTERN = Pattern.compile(
+            "(?i)(\\\\\"(?:" + JSON_SENSITIVE_KEYS + ")\\\\\"\\s*:\\s*\\\\\")"
+                    + "(?:\\\\\\\\\\\\\\\\|\\\\\\\\\\\\\"|\\\\(?!\")|[^\\\\])*+(?:\\\\\"|\\\\?\\z)");
+    private static final Pattern RESET_LINK_ASSIGNMENT_PATTERN = Pattern.compile(
+            "(?i)\\b(reset[-_ ]?link)\\b\\s*(?:[:=])\\s*(?:" + quotedValue(2) + "|\\S+)");
+    private static final Pattern SENSITIVE_ASSIGNMENT_PATTERN = Pattern.compile(
+            "(?i)\\b(" + SENSITIVE_KEYS + ")\\b\\s*(?:[:=])\\s*(?:" + quotedValue(2) + "|[^\\s\"',;&}]+)");
 
     private SensitiveDataRedactor() {
     }
 
-    private static boolean isSensitiveKey(String key) {
-        String lower = key == null ? "" : key.toLowerCase(Locale.ROOT);
-        return lower.contains("authorization")
-                || lower.contains("cookie")
-                || lower.contains("credential")
-                || lower.contains("csrf")
-                || lower.contains("email")
-                || lower.contains("jwt")
-                || lower.contains("password")
-                || lower.contains("passcode")
-                || lower.contains("private-key")
-                || lower.contains("private_key")
-                || lower.contains("refresh")
-                || lower.contains("session")
-                || lower.contains("token")
-                || lower.contains("secret")
-                || lower.contains("api-key")
-                || lower.contains("api_key")
-                || lower.contains("apikey");
+    /** Opening quote capture + disjoint, possessive body so unclosed quotes with backslashes cannot backtrack exponentially. */
+    private static String quotedValue(int quoteGroup) {
+        return "([\"'])" + quotedBody(quoteGroup);
+    }
+
+    private static String quotedBody(int quoteGroup) {
+        return "(?:\\\\[\\s\\S]|(?!\\" + quoteGroup + ")[^\\\\])*+(?:\\" + quoteGroup + "|\\\\?\\z)";
     }
 
     public static String redactText(String value) {
-        return redactText(value, REDACTED);
-    }
-
-    public static String redactText(String value, String replacement) {
-        if (value == null || value.isBlank()) {
+        if (value == null || value.isEmpty()) {
             return value;
         }
 
-        String marker = marker(replacement);
         String redacted = UNSAFE_LOG_CHARACTERS.matcher(value).replaceAll(" ");
-        redacted = AUTHORIZATION_HEADER_PATTERN.matcher(redacted)
-                .replaceAll(match -> match.group(1) + marker);
-        redacted = BEARER_TOKEN_PATTERN.matcher(redacted)
-                .replaceAll("Bearer " + marker);
         redacted = JSON_SENSITIVE_VALUE_PATTERN.matcher(redacted)
-                .replaceAll(match -> match.group(1) + marker + match.group(2));
+                .replaceAll(match -> Matcher.quoteReplacement(match.group(1) + REDACTED + match.group(2)));
+        redacted = JSON_SENSITIVE_NUMERIC_PATTERN.matcher(redacted)
+                .replaceAll(match -> Matcher.quoteReplacement(match.group(1) + "\"" + REDACTED + "\""));
+        redacted = ESCAPED_JSON_SENSITIVE_VALUE_PATTERN.matcher(redacted)
+                .replaceAll(match -> Matcher.quoteReplacement(match.group(1) + REDACTED + "\\\""));
+        redacted = AUTHORIZATION_HEADER_PATTERN.matcher(redacted)
+                .replaceAll(match -> Matcher.quoteReplacement(match.group(1) + REDACTED));
+        redacted = COOKIE_HEADER_PATTERN.matcher(redacted)
+                .replaceAll(match -> Matcher.quoteReplacement(match.group(1) + REDACTED));
+        redacted = BEARER_TOKEN_PATTERN.matcher(redacted)
+                .replaceAll("Bearer " + REDACTED);
         redacted = RESET_LINK_ASSIGNMENT_PATTERN.matcher(redacted)
-                .replaceAll(match -> match.group(1) + "=" + marker);
+                .replaceAll(match -> Matcher.quoteReplacement(match.group(1) + "=" + REDACTED));
         redacted = SENSITIVE_ASSIGNMENT_PATTERN.matcher(redacted)
-                .replaceAll(match -> match.group(1) + "=" + marker);
-        return EMAIL_PATTERN.matcher(redacted).replaceAll(marker);
+                .replaceAll(match -> Matcher.quoteReplacement(match.group(1) + "=" + REDACTED));
+        return PersonalDataRedactor.EMAIL_PATTERN.matcher(redacted).replaceAll(REDACTED);
     }
-
-    public static Object redactObject(Object value, String replacement) {
-        return redactObject(value, marker(replacement), 0, newSeenSet());
-    }
-
-    public static Map<String, Object> redactMap(Map<String, ?> values, String replacement) {
-        if (values == null) {
-            return null;
-        }
-
-        String marker = marker(replacement);
-        Map<String, Object> redacted = new LinkedHashMap<>(values.size());
-        Set<Object> seen = newSeenSet();
-        seen.add(values);
-        for (Map.Entry<String, ?> entry : values.entrySet()) {
-            Object value = isSensitiveKey(entry.getKey())
-                    ? marker
-                    : redactObject(entry.getValue(), marker, 0, seen);
-            redacted.put(entry.getKey(), value);
-        }
-        return redacted;
-    }
-
-    public static Map<String, String> redactStringMap(Map<String, String> values, String replacement) {
-        if (values == null) {
-            return null;
-        }
-
-        String marker = marker(replacement);
-        Map<String, String> redacted = new LinkedHashMap<>(values.size());
-        for (Map.Entry<String, String> entry : values.entrySet()) {
-            redacted.put(
-                    entry.getKey(),
-                    isSensitiveKey(entry.getKey()) ? marker : redactText(entry.getValue(), marker));
-        }
-        return redacted;
-    }
-
-    private static Object redactObject(Object value, String marker, int depth, Set<Object> seen) {
-        if (value instanceof String text) {
-            return redactText(text, marker);
-        }
-        if (value == null || isScalar(value)) {
-            return value;
-        }
-        if (depth >= MAX_OBJECT_DEPTH || seen.contains(value)) {
-            return marker;
-        }
-        seen.add(value);
-        try {
-            if (value instanceof Map<?, ?> map) {
-                Map<String, Object> redacted = new LinkedHashMap<>(map.size());
-                for (Map.Entry<?, ?> entry : map.entrySet()) {
-                    String key = String.valueOf(entry.getKey());
-                    Object nested = isSensitiveKey(key)
-                            ? marker
-                            : redactObject(entry.getValue(), marker, depth + 1, seen);
-                    redacted.put(key, nested);
-                }
-                return redacted;
-            }
-
-            if (value instanceof Iterable<?> iterable) {
-                List<Object> redacted = new ArrayList<>();
-                for (Object entry : iterable) {
-                    redacted.add(redactObject(entry, marker, depth + 1, seen));
-                }
-                return redacted;
-            }
-
-            if (value.getClass().isArray()) {
-                int length = Array.getLength(value);
-                List<Object> redacted = new ArrayList<>(length);
-                for (int index = 0; index < length; index++) {
-                    redacted.add(redactObject(Array.get(value, index), marker, depth + 1, seen));
-                }
-                return redacted;
-            }
-
-            return redactText(value.toString(), marker);
-        } finally {
-            seen.remove(value);
-        }
-    }
-
-    private static boolean isScalar(Object value) {
-        return value instanceof Number
-                || value instanceof Boolean
-                || value instanceof Character
-                || value instanceof Enum<?>;
-    }
-
-    private static String marker(String replacement) {
-        String normalized = TextUtils.trimToNull(replacement);
-        return normalized == null ? REDACTED : normalized;
-    }
-
-    private static Set<Object> newSeenSet() {
-        return Collections.newSetFromMap(new IdentityHashMap<>());
-    }
-
 }

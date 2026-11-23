@@ -1,64 +1,65 @@
 <template>
-  <LegalDocument :title="t('safety.title')" :intro="t('safety.intro')" :sections="sections">
-    <template #links>
-      <RouterLink class="btn btn-link" :to="{ name: 'responsible-ai' }">{{ t('safety.responsibleAiLink') }}</RouterLink>
-      <RouterLink class="btn btn-link" :to="{ name: 'privacy' }">{{ t('safety.privacyLink') }}</RouterLink>
-      <a class="btn btn-link" href="#report">{{ t('safety.reportLink') }}</a>
+  <LegalDocument :title="t('safety.title')" :sections="sections">
+    <template #meta>
+      <RouterLink class="btn btn-link" :to="CONTACT_FORM">
+        {{ t('safety.reportConcern') }}
+        <IconGlyph name="chevronRight" :size="16" />
+      </RouterLink>
+    </template>
+    <!-- "Use the Contact us form on the Help page…": the words that name the form are the link to it. -->
+    <template #report-form>
+      <I18nT keypath="safety.reportForm" :i18n="sentenceScope">
+        <template #link>
+          <RouterLink :to="CONTACT_FORM" data-testid="safety-help-form">{{ t('safety.reportFormLink') }}</RouterLink>
+        </template>
+      </I18nT>
     </template>
   </LegalDocument>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { I18nT, type Composer } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 
+import IconGlyph from '@/components/common/IconGlyph.vue'
 import LegalDocument, { type LegalSection } from '@/components/public/LegalDocument.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { safetyMessages } from '@/plugins/safetyMessages'
-import { useAuthStore } from '@/stores/auth'
 
-const auth = useAuthStore()
-const { t } = useLocalMessages({ safety: safetyMessages })
+/**
+ * Every concern goes through the Help page's message form (support answers by e-mail), signed in or not, which opens
+ * on the topic "Safety concern".
+ */
+const CONTACT_FORM = '/help?topic=SAFETY#contact'
 
-/** Section ids are linked from elsewhere: #teacher-expectations (teacher verification) and #report. */
+const i18n = useLocalMessages({ safety: safetyMessages })
+const { t } = i18n
+/**
+ * `I18nT` is drawn inside LegalDocument, where it would look up that component's messages: it is handed this page's
+ * scope instead (the prop takes the composer without its message types).
+ */
+const sentenceScope = i18n as unknown as Composer
+
+/** The bullet that sends people to the Help page's form: the `report-form` slot draws it, with the link. */
+const REPORT_FORM = { slot: 'report-form' } as const
+
 const SECTIONS = [
   {
     id: 'keep-safe',
     title: 'safety.keepSafeTitle',
-    bullets: ['safety.keepSafeTeachers', 'safety.keepSafeReview', 'safety.keepSafeAi', 'safety.keepSafeReports'],
-  },
-  {
-    id: 'live-sessions',
-    title: 'safety.liveTitle',
-    bullets: ['safety.liveLink', 'safety.liveCamera', 'safety.liveRespect'],
+    bullets: ['safety.keepSafeClasses', 'safety.keepSafeAi', 'safety.keepSafeReports'],
   },
   { id: 'personal-details', title: 'safety.detailsTitle', bullets: ['safety.detailsNever', 'safety.detailsFree'] },
   { id: 'who-for', title: 'safety.audienceTitle', bullets: ['safety.audienceAdults', 'safety.audienceUnder18'] },
-  {
-    id: 'teacher-expectations',
-    title: 'safety.teachersTitle',
-    bullets: ['safety.teachersPlatform', 'safety.teachersFeedback', 'safety.teachersMoney'],
-  },
-  {
-    id: 'report',
-    title: 'safety.reportTitle',
-    bullets: ['safety.reportSignedIn', 'safety.reportVisitor', 'safety.reportEmergency'],
-  },
+  { id: 'report', title: 'safety.reportConcern', bullets: [REPORT_FORM, 'safety.reportEmergency'] },
 ] as const
-
-/** Signed-in students and teachers report through Help & support; everyone else through the Help page form. */
-const reportLink = computed(() =>
-  auth.isAuthenticated && auth.activeRole !== 'ADMIN'
-    ? { label: t('safety.openSupport'), to: `/${auth.activeRole?.toLowerCase()}/support` }
-    : { label: t('safety.openHelpForm'), to: '/help#contact' },
-)
 
 const sections = computed<LegalSection[]>(() =>
   SECTIONS.map(({ id, title, bullets }) => ({
     id,
     title: t(title),
-    bullets: bullets.map((bullet) => t(bullet)),
-    links: id === 'report' ? [reportLink.value] : undefined,
+    bullets: bullets.map((bullet) => (typeof bullet === 'string' ? t(bullet) : bullet)),
   })),
 )
 </script>

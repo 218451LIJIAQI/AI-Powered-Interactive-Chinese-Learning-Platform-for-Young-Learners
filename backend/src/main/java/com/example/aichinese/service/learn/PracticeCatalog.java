@@ -1,39 +1,33 @@
 package com.example.aichinese.service.learn;
 
+import static com.example.aichinese.util.TextUtils.isBlankOrSpaces;
+import static com.example.aichinese.util.TextUtils.isSpace;
+import static com.example.aichinese.util.TextUtils.trimToNull;
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
-import static org.springframework.http.HttpStatus.NOT_FOUND;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
-import java.util.Comparator;
-import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-
-import jakarta.persistence.criteria.Join;
-import jakarta.persistence.criteria.Root;
-import jakarta.persistence.criteria.Subquery;
 
 import com.example.aichinese.dto.learn.ChoiceOption;
 import com.example.aichinese.dto.learn.PracticeItemData;
 import com.example.aichinese.dto.learn.PracticeSetRequest;
-import com.example.aichinese.dto.learn.StoryLine;
 import com.example.aichinese.entity.DragDropActivity;
 import com.example.aichinese.entity.DragDropItem;
 import com.example.aichinese.entity.Flashcard;
@@ -41,278 +35,235 @@ import com.example.aichinese.entity.FlashcardItem;
 import com.example.aichinese.entity.ListeningExercise;
 import com.example.aichinese.entity.MatchingGame;
 import com.example.aichinese.entity.MatchingGameItem;
-import com.example.aichinese.entity.PracticeQuiz;
-import com.example.aichinese.entity.PracticeQuizQuestion;
-import com.example.aichinese.entity.Role;
-import com.example.aichinese.entity.StoryActivity;
-import com.example.aichinese.entity.StoryQuestion;
 import com.example.aichinese.entity.TracingExercise;
+import com.example.aichinese.entity.TypingExercise;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.base.PracticeActivityContent;
 import com.example.aichinese.entity.enums.AnswerKind;
 import com.example.aichinese.entity.enums.ContentStatus;
 import com.example.aichinese.entity.enums.LearnQuestionType;
 import com.example.aichinese.entity.enums.PracticeType;
-import com.example.aichinese.entity.enums.RoleName;
-import com.example.aichinese.repository.DragDropActivityRepository;
 import com.example.aichinese.repository.DragDropItemRepository;
 import com.example.aichinese.repository.FlashcardItemRepository;
-import com.example.aichinese.repository.FlashcardRepository;
-import com.example.aichinese.repository.ListeningExerciseRepository;
 import com.example.aichinese.repository.MatchingGameItemRepository;
-import com.example.aichinese.repository.MatchingGameRepository;
-import com.example.aichinese.repository.PracticeActivityRepository;
-import com.example.aichinese.repository.PracticeQuizQuestionRepository;
-import com.example.aichinese.repository.PracticeQuizRepository;
-import com.example.aichinese.repository.StoryActivityRepository;
-import com.example.aichinese.repository.StoryQuestionRepository;
-import com.example.aichinese.repository.TracingExerciseRepository;
-import com.example.aichinese.util.TextUtils;
+import com.example.aichinese.service.RewardRules;
+
+import jakarta.persistence.EntityManager;
 
 /**
- * The Practice library's seven set types on top of their activity tables. A practice set is platform content: an
- * activity created by an admin (or seeded, with no author). Activities that teachers created belong to their classes
+ * The Practice library's six set types on top of their activity tables. A practice set is platform content: an
+ * activity created by an admin (or seeded, with no author). The activities of class lessons belong to their lessons
  * and are never practice sets. For each type this class reads a set's items with their answer keys, and writes an
  * admin's request back to the entity and its child rows.
  */
 @Component
 public class PracticeCatalog {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper();
-    private static final String ITEM_REQUIRED = "Add at least one item to this set.";
+    static final String ITEM_REQUIRED = "Add at least one item to this set.";
+    /** Max distractor meanings included alongside the right meaning in Mistakes review choice questions. */
+    private static final int CHOICE_DECOYS = 3;
+    private static final int MAX_TRACING_CHARACTERS = 10;
+    private static final int MAX_STROKES_PER_CHARACTER = 60;
+    private static final int MAX_TOTAL_STROKES = MAX_TRACING_CHARACTERS * MAX_STROKES_PER_CHARACTER;
 
-    private final Map<PracticeType, TypeSupport<?>> types = new EnumMap<>(PracticeType.class);
+    private final EntityManager entityManager;
+    private final Map<PracticeType, TypeSupport<?>> types;
 
     public PracticeCatalog(
-            FlashcardRepository flashcardRepository,
+            EntityManager entityManager,
             FlashcardItemRepository flashcardItemRepository,
-            PracticeQuizRepository quizRepository,
-            PracticeQuizQuestionRepository quizQuestionRepository,
-            ListeningExerciseRepository listeningRepository,
-            TracingExerciseRepository tracingRepository,
-            DragDropActivityRepository dragDropRepository,
             DragDropItemRepository dragDropItemRepository,
-            MatchingGameRepository matchingRepository,
-            MatchingGameItemRepository matchingItemRepository,
-            StoryActivityRepository storyRepository,
-            StoryQuestionRepository storyQuestionRepository) {
-        types.put(PracticeType.FLASHCARDS, new Flashcards(flashcardRepository, flashcardItemRepository));
-        types.put(PracticeType.QUIZZES, new Quizzes(quizRepository, quizQuestionRepository));
-        types.put(PracticeType.LISTENING, new Listening(listeningRepository));
-        types.put(PracticeType.TRACING, new Tracing(tracingRepository));
-        types.put(PracticeType.DRAG_DROP, new DragDrop(dragDropRepository, dragDropItemRepository));
-        types.put(PracticeType.MATCHING, new Matching(matchingRepository, matchingItemRepository));
-        types.put(PracticeType.STORY, new Story(storyRepository, storyQuestionRepository));
+            MatchingGameItemRepository matchingItemRepository) {
+        this.entityManager = entityManager;
+        types = Map.of(
+                PracticeType.FLASHCARDS, new Flashcards(flashcardItemRepository),
+                PracticeType.LISTENING, new Listening(),
+                PracticeType.TRACING, new Tracing(),
+                PracticeType.DRAG_DROP, new DragDrop(dragDropItemRepository),
+                PracticeType.MATCHING, new Matching(matchingItemRepository),
+                PracticeType.TYPING, new Typing());
     }
 
-    /** A set's content with its answer keys. {@code gradable} is null for items that are not graded. */
-    public record SetContent(List<Item> items, List<StoryLine> storyLines, Integer strokeCount) {
-    }
-
-    public record Item(String key, PracticeItemData data, GradableItem gradable) {
-    }
-
-    // ===== Reads =====
-
-    /** Practice sets of one type (all statuses when {@code status} is null), oldest first. */
-    public List<PracticeActivityContent> sets(PracticeType type, ContentStatus status) {
-        List<? extends PracticeActivityContent> found = support(type).repository().findAll(platformSets(status));
-        return found.stream()
-                .<PracticeActivityContent>map(entity -> entity)
-                .sorted(Comparator.comparing(PracticeActivityContent::getId))
-                .toList();
-    }
-
-    public Optional<PracticeActivityContent> find(PracticeType type, Long id) {
-        return support(type).repository().findById(id)
-                .filter(PracticeCatalog::isPlatformSet)
-                .map(entity -> (PracticeActivityContent) entity);
-    }
-
-    public PracticeActivityContent require(PracticeType type, Long id) {
-        return find(type, id).orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Practice set not found."));
-    }
-
-    public SetContent content(PracticeType type, PracticeActivityContent set) {
-        return support(type).contentOf(set);
-    }
-
-    public int itemCount(PracticeType type, PracticeActivityContent set) {
-        return content(type, set).items().size();
-    }
-
-    // ===== Writes =====
-
-    /** Checks the request against the type's rules; a set is always complete enough to publish. */
-    private void validate(PracticeType type, PracticeSetRequest request) {
-        String problem = support(type).problemWith(request);
-        if (problem != null) {
-            throw new ResponseStatusException(BAD_REQUEST, problem);
+    /**
+     * A set's content with its answer keys. A tracing set has its strokes, all together and, when known, per character
+     * ({@code characterStrokes}, else null).
+     */
+    public record SetContent(List<Item> items, Integer strokeCount, List<Integer> characterStrokes) {
+        List<PracticeItemData> editableItems() {
+            return items.stream().map(Item::data).toList();
         }
     }
 
+    private static boolean hasWordAndMeaning(PracticeItemData item) {
+        return !isBlankOrSpaces(item.hanzi()) && !LearnAnswers.normalize(item.meaning()).isEmpty();
+    }
+
+    /** {@code gradable} is null for items that are not graded (flashcards and tracing). */
+    public record Item(String key, PracticeItemData data, GradableItem gradable) {
+    }
+
+    // Reads
+
+    public SetContent content(PracticeType type, PracticeActivityContent set) {
+        return types.get(type).contentOf(set);
+    }
+
+    /** Older published sets can still be played if their material supports the activity. */
+    public boolean isPlayable(PracticeType type, SetContent content) {
+        return !content.items().isEmpty() && types.get(type).playable(content);
+    }
+
+    /**
+     * A flashcard as the Mistakes review asks it once the learner marked it "Still learning": what the word means,
+     * among up to 3 other meanings of its set (in a stable mixed order), with its Chinese read aloud.
+     */
+    public static GradableItem flashcardQuestion(SetContent content, Item card) {
+        String meaning = card.data().meaning();
+        List<ChoiceOption> options = meaningChoices(
+                meaning, content.items().stream().map(other -> other.data().meaning()).toList(), card.key().hashCode());
+        return new GradableItem(AnswerKind.CHOICE, LearnQuestionType.MEANING, null, card.data().hanzi(),
+                card.data().pinyin(), meaning, card.data().hanzi(), options, List.of(), meaning, null);
+    }
+
+    /** Right meaning plus up to {@link #CHOICE_DECOYS} distinct other meanings, in a stable mixed order. */
+    private static List<ChoiceOption> meaningChoices(String answer, List<String> pool, long seed) {
+        Set<String> seen = new HashSet<>(List.of(LearnAnswers.normalize(answer)));
+        List<String> others = pool.stream()
+                .filter(other -> other != null
+                        && !LearnAnswers.normalize(other).isEmpty()
+                        && seen.add(LearnAnswers.normalize(other)))
+                .limit(CHOICE_DECOYS)
+                .toList();
+        List<String> meanings = new ArrayList<>(others);
+        meanings.add(answer);
+        return shuffled(meanings, seed).stream()
+                .map(text -> new ChoiceOption(text, null))
+                .toList();
+    }
+
+    // Writes
+
     public PracticeActivityContent create(PracticeType type, PracticeSetRequest request, User author) {
-        validate(type, request);
-        return support(type).createFrom(request, author);
+        PracticeActivityContent set = types.get(type).factory.get();
+        set.setCreatedByUser(author);
+        set.setContentStatus(ContentStatus.DRAFT);
+        update(type, set, request);
+        return set;
     }
 
-    public PracticeActivityContent update(PracticeType type, PracticeActivityContent set, PracticeSetRequest request) {
-        validate(type, request);
-        return support(type).updateFrom(set, request);
+    void update(PracticeType type, PracticeActivityContent set, PracticeSetRequest request) {
+        TypeSupport<?> support = types.get(type);
+        support.validate(request);
+        set.setTitle(request.title());
+        set.setLearningStage(request.stage());
+        set.setHskLevel(request.hskLevel());
+        set.setXpReward(RewardRules.practiceSetXp(type, request.hskLevel(), request.items().size()));
+        set.setUpdatedAt(LocalDateTime.now());
+        support.write(set, request, entityManager);
     }
 
-    public PracticeActivityContent save(PracticeType type, PracticeActivityContent set) {
-        return support(type).saveRaw(set);
+    /** Publishing an existing draft checks the same editable items as saving it. */
+    void validateForPublication(PracticeType type, PracticeActivityContent set, SetContent content) {
+        if (isBlankOrSpaces(set.getTitle())) {
+            throw new ResponseStatusException(BAD_REQUEST, "Title is required.");
+        }
+        var saved = new PracticeSetRequest(set.getTitle(), set.getLearningStage(), set.getHskLevel(),
+                content.editableItems(), content.strokeCount(), content.characterStrokes());
+        types.get(type).validateForPublication(set, saved);
     }
 
-    // ===== Platform sets =====
-
-    /** A practice set: no author (seeded platform content) or an admin author. */
-    private static boolean isPlatformSet(PracticeActivityContent activity) {
-        User author = activity.getCreatedByUser();
-        return author == null || author.getRoles().stream().anyMatch(role -> role.getName() == RoleName.ADMIN);
-    }
-
-    private static <T> Specification<T> platformSets(ContentStatus status) {
-        return (root, query, cb) -> {
-            Subquery<Long> admins = query.subquery(Long.class);
-            Root<User> user = admins.from(User.class);
-            Join<User, Role> role = user.join("roles");
-            admins.select(user.get("id")).where(cb.equal(role.get("name"), RoleName.ADMIN));
-            var platform = cb.or(cb.isNull(root.get("createdByUser")), root.get("createdByUser").get("id").in(admins));
-            return status == null ? platform : cb.and(platform, cb.equal(root.get("contentStatus"), status));
-        };
-    }
-
-    private TypeSupport<?> support(PracticeType type) {
-        return types.get(type);
-    }
-
-    // ===== Shared helpers =====
-
-    private static String text(String value) {
-        return TextUtils.trimToNull(value);
-    }
-
-    private static boolean blank(String value) {
-        return text(value) == null;
+    private static String textOf(JsonNode node, String field) {
+        return node.hasNonNull(field) ? trimToNull(node.get(field).asText()) : null;
     }
 
     private static List<ChoiceOption> cleanOptions(List<ChoiceOption> options) {
         return options.stream()
-                .map(option -> new ChoiceOption(text(option.text()), text(option.pinyin())))
+                .map(option -> new ChoiceOption(trimToNull(option.text()), trimToNull(option.pinyin())))
                 .toList();
     }
 
-    /** A choice question needs 2+ answers with text and one of them ticked. */
+    /**
+     * Validates a set's choice questions: each needs 2+ answers with text and one of them ticked, and no two answers
+     * that read the same. Answers are graded by their text as {@link LearnAnswers#matches} reads it, so a second
+     * "Hello" (or "hello!") would be graded right as well, and the hint and the editor would take the first one for the
+     * ticked answer.
+     */
+    private static void validateChoices(List<PracticeItemData> questions) {
+        if (!questions.stream().allMatch(PracticeCatalog::choicesComplete)) {
+            throw new ResponseStatusException(BAD_REQUEST,
+                    "Every question needs at least 2 answers with the right one ticked.");
+        }
+        if (!questions.stream().allMatch(PracticeCatalog::answersDiffer)) {
+            throw new ResponseStatusException(BAD_REQUEST, "The answers of a question must all be different.");
+        }
+    }
+
     private static boolean choicesComplete(PracticeItemData item) {
         List<ChoiceOption> options = item.options();
         return options.size() >= 2
-                && options.stream().noneMatch(option -> blank(option.text()))
+                && options.stream().noneMatch(option -> LearnAnswers.normalize(option.text()).isEmpty())
                 && item.correctIndex() != null
+                && item.correctIndex() >= 0
                 && item.correctIndex() < options.size();
     }
 
-    private static String answerOf(List<ChoiceOption> options, Integer correctIndex) {
-        return correctIndex != null && correctIndex >= 0 && correctIndex < options.size()
-                ? options.get(correctIndex).text()
-                : null;
+    private static boolean answersDiffer(PracticeItemData item) {
+        Set<String> seen = new HashSet<>();
+        return item.options().stream().allMatch(option -> seen.add(LearnAnswers.normalize(option.text())));
     }
 
-    private static Integer indexOf(List<ChoiceOption> options, String answer) {
-        for (int index = 0; index < options.size(); index++) {
-            if (LearnAnswers.matches(options.get(index).text(), answer)) {
-                return index;
-            }
-        }
-        return null;
+    /** Space-separated words without empty or repeated entries (as {@link LearnAnswers#matches} compares them). */
+    private static List<String> distinctTiles(String spaceSeparated) {
+        Set<String> seen = new HashSet<>();
+        return LearnAnswers.tiles(spaceSeparated).stream()
+                .filter(tile -> {
+                    String normalized = LearnAnswers.normalize(tile);
+                    return !normalized.isEmpty() && seen.add(normalized);
+                })
+                .toList();
     }
 
-    private static List<String> lines(String value) {
-        if (value == null || value.isBlank()) {
-            return List.of();
-        }
-        return List.of(value.split("\\R", -1));
-    }
-
-    private static String line(List<String> lines, int index) {
-        return index < lines.size() ? text(lines.get(index)) : null;
-    }
-
-    // ===== Type support =====
+    // Type support
 
     /** One set type on top of its activity table and child rows. */
     private abstract static class TypeSupport<E extends PracticeActivityContent> {
 
-        private final PracticeActivityRepository<E> repository;
+        private final Class<E> entityClass;
         private final Supplier<E> factory;
-        /** The XP a set of this type gives when the admin sets none. */
-        private final int defaultXp;
 
-        TypeSupport(PracticeActivityRepository<E> repository, Supplier<E> factory, int defaultXp) {
-            this.repository = repository;
+        TypeSupport(Class<E> entityClass, Supplier<E> factory) {
+            this.entityClass = entityClass;
             this.factory = factory;
-            this.defaultXp = defaultXp;
         }
 
-        PracticeActivityRepository<E> repository() {
-            return repository;
-        }
+        abstract void validate(PracticeSetRequest request);
 
-        abstract String problemWith(PracticeSetRequest request);
+        abstract boolean playable(SetContent content);
+
+        void validateForPublication(PracticeActivityContent set, PracticeSetRequest saved) {
+            validate(saved);
+        }
 
         abstract List<Item> items(E entity);
 
-        List<StoryLine> storyLines(E entity) {
-            return List.of();
-        }
-
-        Integer strokeCount(E entity) {
-            return null;
-        }
-
-        /** Type fields of the entity; children are replaced in {@link #replaceChildren}. */
+        /** Type fields of the entity; its child rows are written in {@link #writeChildren}. */
         void applyFields(E entity, PracticeSetRequest request) {
         }
 
-        void replaceChildren(E saved, PracticeSetRequest request) {
+        /** The items as child rows of the saved set, by position ({@link ChildRows}). */
+        void writeChildren(E saved, PracticeSetRequest request) {
         }
 
+        /** The set's items; only a tracing set has strokes. */
         SetContent contentOf(PracticeActivityContent set) {
-            E entity = own(set);
-            return new SetContent(items(entity), storyLines(entity), strokeCount(entity));
+            return new SetContent(items(entityClass.cast(set)), null, null);
         }
 
-        E createFrom(PracticeSetRequest request, User author) {
-            E entity = factory.get();
-            entity.setCreatedByUser(author);
-            entity.setContentStatus(ContentStatus.DRAFT);
-            return write(entity, request);
-        }
-
-        E updateFrom(PracticeActivityContent set, PracticeSetRequest request) {
-            return write(own(set), request);
-        }
-
-        E saveRaw(PracticeActivityContent set) {
-            return repository.save(own(set));
-        }
-
-        /** A set of this type: the catalogue only hands a support the sets it looked up by that type. */
-        @SuppressWarnings("unchecked")
-        private E own(PracticeActivityContent set) {
-            return (E) set;
-        }
-
-        private E write(E entity, PracticeSetRequest request) {
-            entity.setTitle(request.title());
-            entity.setLearningStage(request.stage());
-            entity.setHskLevel(request.hskLevel());
-            entity.setXpReward(request.xpReward() == null ? defaultXp : request.xpReward());
+        void write(PracticeActivityContent set, PracticeSetRequest request, EntityManager entityManager) {
+            E entity = entityClass.cast(set);
             applyFields(entity, request);
-            E saved = repository.save(entity);
-            replaceChildren(saved, request);
-            return saved;
+            entityManager.persist(entity);
+            writeChildren(entity, request);
         }
     }
 
@@ -320,128 +271,54 @@ public class PracticeCatalog {
 
         private final FlashcardItemRepository itemRepository;
 
-        Flashcards(FlashcardRepository repository, FlashcardItemRepository itemRepository) {
-            super(repository, Flashcard::new, 10);
+        Flashcards(FlashcardItemRepository itemRepository) {
+            super(Flashcard.class, Flashcard::new);
             this.itemRepository = itemRepository;
         }
 
         @Override
-        String problemWith(PracticeSetRequest request) {
+        void validate(PracticeSetRequest request) {
             if (request.items().isEmpty()) {
-                return ITEM_REQUIRED;
+                throw new ResponseStatusException(BAD_REQUEST, ITEM_REQUIRED);
             }
-            if (request.items().stream().anyMatch(card -> blank(card.hanzi()) || blank(card.meaning()))) {
-                return "Every card needs Chinese and a meaning.";
+            if (!request.items().stream().allMatch(PracticeCatalog::hasWordAndMeaning)) {
+                throw new ResponseStatusException(BAD_REQUEST, "Every card needs Chinese and a meaning.");
             }
-            return null;
+            long distinctMeanings = request.items().stream()
+                    .map(card -> LearnAnswers.normalize(card.meaning()))
+                    .distinct()
+                    .count();
+            if (distinctMeanings < 2) {
+                throw new ResponseStatusException(BAD_REQUEST, "Add at least 2 cards with different meanings.");
+            }
+        }
+
+        @Override
+        boolean playable(SetContent content) {
+            return content.items().stream().allMatch(item -> hasWordAndMeaning(item.data()));
         }
 
         @Override
         List<Item> items(Flashcard entity) {
-            List<FlashcardItem> cards = itemRepository.findByFlashcardIdOrderBySortOrderAscIdAsc(entity.getId());
-            if (cards.isEmpty()) {
-                // A single-card flashcard from before sets had cards: its own front and back.
-                return List.of(new Item(String.valueOf(entity.getId()), new PracticeItemData(null, entity.getFrontText(),
-                        entity.getPinyin(), firstNonBlank(entity.getEnglishMeaning(), entity.getBackText()), null,
-                        null, null, null, List.of(), null, null, null), null));
-            }
-            return cards.stream()
-                    .map(card -> new Item(String.valueOf(card.getId()), new PracticeItemData(card.getId(), card.getHanzi(),
+            return itemRepository.findByFlashcardIdOrderBySortOrderAscIdAsc(entity.getId()).stream()
+                    .map(card -> new Item(String.valueOf(card.getId()), new PracticeItemData(card.getHanzi(),
                             card.getPinyin(), card.getMeaning(), null, null, card.getExample(),
                             card.getExampleMeaning(), List.of(), null, null, null), null))
                     .toList();
         }
 
         @Override
-        void applyFields(Flashcard entity, PracticeSetRequest request) {
-            PracticeItemData cover = request.items().get(0);
-            entity.setFrontText(text(cover.hanzi()));
-            entity.setBackText(text(cover.meaning()));
-            entity.setPinyin(text(cover.pinyin()));
-            entity.setEnglishMeaning(text(cover.meaning()));
-        }
-
-        @Override
-        void replaceChildren(Flashcard saved, PracticeSetRequest request) {
-            itemRepository.deleteByFlashcardId(saved.getId());
-            List<FlashcardItem> cards = new ArrayList<>();
-            for (int index = 0; index < request.items().size(); index++) {
-                PracticeItemData data = request.items().get(index);
-                FlashcardItem card = new FlashcardItem();
-                card.setFlashcard(saved);
-                card.setSortOrder(index);
-                card.setHanzi(text(data.hanzi()));
-                card.setPinyin(text(data.pinyin()));
-                card.setMeaning(text(data.meaning()));
-                card.setExample(text(data.example()));
-                card.setExampleMeaning(text(data.exampleMeaning()));
-                cards.add(card);
-            }
-            itemRepository.saveAll(cards);
-        }
-
-        private static String firstNonBlank(String first, String second) {
-            return blank(first) ? second : first;
-        }
-    }
-
-    private static final class Quizzes extends TypeSupport<PracticeQuiz> {
-
-        private final PracticeQuizQuestionRepository questionRepository;
-
-        Quizzes(PracticeQuizRepository repository, PracticeQuizQuestionRepository questionRepository) {
-            super(repository, PracticeQuiz::new, 15);
-            this.questionRepository = questionRepository;
-        }
-
-        @Override
-        String problemWith(PracticeSetRequest request) {
-            if (request.items().isEmpty()) {
-                return ITEM_REQUIRED;
-            }
-            if (request.items().stream().anyMatch(question -> blank(question.prompt()))) {
-                return "Every question needs the question text.";
-            }
-            if (!request.items().stream().allMatch(PracticeCatalog::choicesComplete)) {
-                return "Every question needs at least 2 answers with the right one ticked.";
-            }
-            return null;
-        }
-
-        @Override
-        List<Item> items(PracticeQuiz entity) {
-            return questionRepository.findByPracticeQuizIdOrderBySortOrderAscIdAsc(entity.getId()).stream()
-                    .map(question -> {
-                        List<ChoiceOption> options = LearnAnswers.readOptions(question.getOptions());
-                        PracticeItemData data = new PracticeItemData(question.getId(), question.getHanzi(), question.getPinyin(), null,
-                                question.getPrompt(), null, null, null, options, question.getCorrectOptionIndex(),
-                                question.getExplanation(), null);
-                        GradableItem gradable = new GradableItem(AnswerKind.CHOICE, null, question.getPrompt(),
-                                question.getHanzi(), question.getPinyin(), null, null, options, List.of(),
-                                answerOf(options, question.getCorrectOptionIndex()), question.getExplanation());
-                        return new Item(String.valueOf(question.getId()), data, gradable);
-                    })
-                    .toList();
-        }
-
-        @Override
-        void replaceChildren(PracticeQuiz saved, PracticeSetRequest request) {
-            questionRepository.deleteByPracticeQuizId(saved.getId());
-            List<PracticeQuizQuestion> questions = new ArrayList<>();
-            for (int index = 0; index < request.items().size(); index++) {
-                PracticeItemData data = request.items().get(index);
-                PracticeQuizQuestion question = new PracticeQuizQuestion();
-                question.setPracticeQuiz(saved);
-                question.setSortOrder(index);
-                question.setPrompt(text(data.prompt()));
-                question.setHanzi(text(data.hanzi()));
-                question.setPinyin(text(data.pinyin()));
-                question.setOptions(LearnAnswers.writeOptions(cleanOptions(data.options())));
-                question.setCorrectOptionIndex(data.correctIndex());
-                question.setExplanation(text(data.explanation()));
-                questions.add(question);
-            }
-            questionRepository.saveAll(questions);
+        void writeChildren(Flashcard saved, PracticeSetRequest request) {
+            ChildRows.writeByPosition(itemRepository.findByFlashcardIdOrderBySortOrderAscIdAsc(saved.getId()),
+                    request.items(), FlashcardItem::new, itemRepository, (card, position, data) -> {
+                        card.setFlashcard(saved);
+                        card.setSortOrder(position);
+                        card.setHanzi(trimToNull(data.hanzi()));
+                        card.setPinyin(trimToNull(data.pinyin()));
+                        card.setMeaning(trimToNull(data.meaning()));
+                        card.setExample(trimToNull(data.example()));
+                        card.setExampleMeaning(trimToNull(data.exampleMeaning()));
+                    });
         }
     }
 
@@ -452,42 +329,41 @@ public class PracticeCatalog {
      */
     private static final class Listening extends TypeSupport<ListeningExercise> {
 
-        Listening(ListeningExerciseRepository repository) {
-            super(repository, ListeningExercise::new, 15);
+        Listening() {
+            super(ListeningExercise.class, ListeningExercise::new);
         }
 
         @Override
-        String problemWith(PracticeSetRequest request) {
+        void validate(PracticeSetRequest request) {
             if (request.items().isEmpty()) {
-                return ITEM_REQUIRED;
+                throw new ResponseStatusException(BAD_REQUEST, ITEM_REQUIRED);
             }
-            if (request.items().stream().anyMatch(question -> blank(question.audioText()))) {
-                return "Every listening question needs the Chinese that is read aloud.";
+            if (request.items().stream().anyMatch(question -> isBlankOrSpaces(question.audioText()))) {
+                throw new ResponseStatusException(BAD_REQUEST,
+                        "Every listening question needs the Chinese that is read aloud.");
             }
-            if (!request.items().stream().allMatch(PracticeCatalog::choicesComplete)) {
-                return "Every question needs at least 2 answers with the right one ticked.";
-            }
-            return null;
+            validateChoices(request.items());
+        }
+
+        @Override
+        boolean playable(SetContent content) {
+            return content.items().stream().allMatch(item ->
+                    !isBlankOrSpaces(item.data().audioText()) && item.data().correctIndex() != null);
         }
 
         @Override
         List<Item> items(ListeningExercise entity) {
-            JsonNode root = readJson(entity.getQuestionPayload());
-            JsonNode questions = root == null ? null : root.isArray() ? root : root.get("questions");
-            if (questions == null || !questions.isArray()) {
-                return List.of();
-            }
             List<Item> items = new ArrayList<>();
             int index = 0;
-            for (JsonNode node : questions) {
-                List<ChoiceOption> options = LearnAnswers.readOptions(node.path("options").toString());
-                String answer = node.hasNonNull("answer") ? node.get("answer").asText() : null;
-                Integer correctIndex = indexOf(options, answer);
+            for (JsonNode node : LearnAnswers.read(entity.getQuestionPayload()).path("questions")) {
+                List<ChoiceOption> options = LearnAnswers.optionsOf(node.path("options"));
+                String answer = textOf(node, "answer");
+                int found = LearnAnswers.indexOf(options, answer);
                 String prompt = textOf(node, "question");
                 String audio = textOf(node, "audioText");
                 String explanation = textOf(node, "explanation");
-                PracticeItemData data = new PracticeItemData(null, null, null, null, prompt, audio, null, null, options, correctIndex,
-                        explanation, null);
+                PracticeItemData data = new PracticeItemData(null, null, null, prompt, audio, null, null, options,
+                        found < 0 ? null : found, explanation, null);
                 GradableItem gradable = new GradableItem(AnswerKind.CHOICE, null, prompt, null, null, null, audio,
                         options, List.of(), answer, explanation);
                 items.add(new Item(String.valueOf(index++), data, gradable));
@@ -497,74 +373,147 @@ public class PracticeCatalog {
 
         @Override
         void applyFields(ListeningExercise entity, PracticeSetRequest request) {
-            ObjectNode root = MAPPER.createObjectNode();
+            ObjectNode root = JsonNodeFactory.instance.objectNode();
             ArrayNode questions = root.putArray("questions");
             for (PracticeItemData data : request.items()) {
                 List<ChoiceOption> options = cleanOptions(data.options());
                 ObjectNode question = questions.addObject();
-                question.put("question", text(data.prompt()));
-                question.put("audioText", text(data.audioText()));
-                question.set("options", readJson(LearnAnswers.writeOptions(options)));
-                question.put("answer", answerOf(options, data.correctIndex()));
-                if (!blank(data.explanation())) {
-                    question.put("explanation", text(data.explanation()));
+                question.put("question", trimToNull(data.prompt()));
+                question.put("audioText", trimToNull(data.audioText()));
+                question.set("options", LearnAnswers.optionsNode(options));
+                question.put("answer", options.get(data.correctIndex()).text());
+                if (!isBlankOrSpaces(data.explanation())) {
+                    question.put("explanation", trimToNull(data.explanation()));
                 }
             }
             entity.setQuestionPayload(root.toString());
-            entity.setAudioUrl(null);
-        }
-
-        private static String textOf(JsonNode node, String field) {
-            return node.hasNonNull(field) ? text(node.get(field).asText()) : null;
-        }
-
-        private static JsonNode readJson(String json) {
-            if (json == null || json.isBlank()) {
-                return null;
-            }
-            try {
-                return MAPPER.readTree(json);
-            } catch (JsonProcessingException exception) {
-                return null;
-            }
         }
     }
 
     private static final class Tracing extends TypeSupport<TracingExercise> {
 
-        Tracing(TracingExerciseRepository repository) {
-            super(repository, TracingExercise::new, 10);
+        Tracing() {
+            super(TracingExercise.class, TracingExercise::new);
         }
 
         @Override
-        String problemWith(PracticeSetRequest request) {
-            if (request.items().isEmpty() || blank(request.items().get(0).hanzi())) {
-                return "Add the characters to write.";
+        void validate(PracticeSetRequest request) {
+            if (request.items().isEmpty() || isBlankOrSpaces(request.items().getFirst().hanzi())) {
+                throw new ResponseStatusException(BAD_REQUEST, "Add the characters to write.");
             }
-            if (request.strokeCount() == null) {
-                return "Enter how many strokes the characters have.";
+            if (request.items().size() != 1) {
+                throw new ResponseStatusException(BAD_REQUEST, "Put the characters of a tracing set in one row.");
+            }
+            int characters = characterCount(request.items().getFirst().hanzi());
+            if (characters > MAX_TRACING_CHARACTERS) {
+                throw new ResponseStatusException(BAD_REQUEST, "A tracing set has at most 10 characters.");
+            }
+            if (request.strokeCount() == null || request.strokeCount() <= 0) {
+                throw new ResponseStatusException(BAD_REQUEST, "Enter how many strokes the characters have.");
+            }
+            if (request.strokeCount() > MAX_TOTAL_STROKES) {
+                throw new ResponseStatusException(BAD_REQUEST, "Total strokes must be between 1 and 600.");
+            }
+            if (characters == 1 && request.strokeCount() > MAX_STROKES_PER_CHARACTER) {
+                throw new ResponseStatusException(BAD_REQUEST, "Strokes must be between 1 and 60.");
+            }
+            if (characters > 1
+                    && (request.strokeCount() < characters || request.strokeCount() > characters * MAX_STROKES_PER_CHARACTER)) {
+                throw new ResponseStatusException(BAD_REQUEST, "Each character needs 1 to 60 strokes.");
+            }
+            List<Integer> perCharacter = request.characterStrokes();
+            if (!perCharacter.isEmpty()) {
+                if (perCharacter.stream().anyMatch(strokes -> strokes != null && strokes > MAX_STROKES_PER_CHARACTER)) {
+                    throw new ResponseStatusException(BAD_REQUEST, "Strokes must be between 1 and 60.");
+                }
+                if (perCharacter.size() != characters
+                        || perCharacter.stream().anyMatch(strokes -> strokes == null || strokes <= 0)
+                        || perCharacter.stream().mapToInt(Integer::intValue).sum() != request.strokeCount()) {
+                    throw new ResponseStatusException(BAD_REQUEST,
+                            "Give the strokes of each character, adding up to the total.");
+                }
+            }
+        }
+
+        @Override
+        boolean playable(SetContent content) {
+            return !isBlankOrSpaces(content.items().getFirst().data().hanzi())
+                    && content.strokeCount() != null && content.strokeCount() > 0;
+        }
+
+        @Override
+        List<Item> items(TracingExercise entity) {
+            return List.of(new Item("0", new PracticeItemData(entity.getTargetCharacter(), entity.getPinyin(),
+                    entity.getMeaning(), null, null, null, null, List.of(), null, null, null), null));
+        }
+
+        @Override
+        SetContent contentOf(PracticeActivityContent set) {
+            TracingExercise entity = (TracingExercise) set;
+            return new SetContent(items(entity), entity.getStrokeCount(), characterStrokes(entity));
+        }
+
+        @Override
+        void validateForPublication(PracticeActivityContent set, PracticeSetRequest saved) {
+            validate(saved);
+            TracingExercise entity = (TracingExercise) set;
+            if (!isBlankOrSpaces(entity.getCharacterStrokes()) && parseCharacterStrokes(entity) == null) {
+                throw new ResponseStatusException(BAD_REQUEST,
+                        "Give the strokes of each character, adding up to the total.");
+            }
+        }
+
+        /** As stored, or a single character's {@code strokeCount}; null when a word's set does not say or is malformed. */
+        private static List<Integer> characterStrokes(TracingExercise entity) {
+            List<Integer> parsed = parseCharacterStrokes(entity);
+            if (parsed != null) {
+                return parsed;
+            }
+            boolean single = entity.getTargetCharacter() != null && characterCount(entity.getTargetCharacter()) == 1;
+            return single && entity.getStrokeCount() != null
+                    && entity.getStrokeCount() > 0 && entity.getStrokeCount() <= MAX_STROKES_PER_CHARACTER
+                    ? List.of(entity.getStrokeCount()) : null;
+        }
+
+        private static List<Integer> parseCharacterStrokes(TracingExercise entity) {
+            String stored = trimToNull(entity.getCharacterStrokes());
+            if (stored == null || entity.getTargetCharacter() == null
+                    || entity.getStrokeCount() == null || entity.getStrokeCount() <= 0
+                    || entity.getStrokeCount() > MAX_TOTAL_STROKES) {
+                return null;
+            }
+            int expectedChars = characterCount(entity.getTargetCharacter());
+            try {
+                List<Integer> parsed = Arrays.stream(stored.split(",", -1))
+                        .map(String::strip)
+                        .map(Integer::valueOf)
+                        .toList();
+                if (parsed.size() == expectedChars
+                        && parsed.stream().allMatch(strokes -> strokes > 0 && strokes <= MAX_STROKES_PER_CHARACTER)
+                        && parsed.stream().mapToInt(Integer::intValue).sum() == entity.getStrokeCount()) {
+                    return parsed;
+                }
+            } catch (NumberFormatException ignored) {
+                // Corrupted legacy CSV falls back to the single-character rule or null on reads and is blocked on publish.
             }
             return null;
         }
 
         @Override
-        List<Item> items(TracingExercise entity) {
-            return List.of(new Item("0", new PracticeItemData(null, entity.getTargetCharacter(), entity.getPinyin(),
-                    entity.getMeaning(), null, null, null, null, List.of(), null, null, null), null));
-        }
-
-        @Override
-        Integer strokeCount(TracingExercise entity) {
-            return entity.getStrokeCount();
-        }
-
-        @Override
         void applyFields(TracingExercise entity, PracticeSetRequest request) {
-            PracticeItemData data = request.items().get(0);
-            entity.setTargetCharacter(text(data.hanzi()));
-            entity.setPinyin(text(data.pinyin()));
-            entity.setMeaning(text(data.meaning()));
+            PracticeItemData data = request.items().getFirst();
+            entity.setTargetCharacter(trimToNull(data.hanzi()));
+            entity.setPinyin(trimToNull(data.pinyin()));
+            entity.setMeaning(trimToNull(data.meaning()));
             entity.setStrokeCount(request.strokeCount());
+            entity.setCharacterStrokes(request.characterStrokes().isEmpty()
+                    ? null
+                    : String.join(",", request.characterStrokes().stream().map(String::valueOf).toList()));
+        }
+
+        /** The characters to write (spaces between them are not ones). */
+        private static int characterCount(String text) {
+            return (int) text.codePoints().filter(codePoint -> !isSpace(codePoint)).count();
         }
     }
 
@@ -572,28 +521,39 @@ public class PracticeCatalog {
 
         private final DragDropItemRepository itemRepository;
 
-        DragDrop(DragDropActivityRepository repository, DragDropItemRepository itemRepository) {
-            super(repository, DragDropActivity::new, 15);
+        DragDrop(DragDropItemRepository itemRepository) {
+            super(DragDropActivity.class, DragDropActivity::new);
             this.itemRepository = itemRepository;
         }
 
         @Override
-        String problemWith(PracticeSetRequest request) {
+        void validate(PracticeSetRequest request) {
             if (request.items().isEmpty()) {
-                return ITEM_REQUIRED;
+                throw new ResponseStatusException(BAD_REQUEST, ITEM_REQUIRED);
             }
             boolean complete = request.items().stream()
-                    .allMatch(sentence -> LearnAnswers.tiles(sentence.hanzi()).size() >= 2 && !blank(sentence.meaning()));
-            return complete ? null : "Every sentence needs at least 2 tiles and a meaning.";
+                    .allMatch(sentence -> hasSentenceAndMeaning(sentence) && LearnAnswers.tiles(sentence.hanzi()).size() >= 2);
+            if (!complete) {
+                throw new ResponseStatusException(BAD_REQUEST, "Every sentence needs at least 2 tiles and a meaning.");
+            }
+        }
+
+        @Override
+        boolean playable(SetContent content) {
+            return content.items().stream().allMatch(item -> hasSentenceAndMeaning(item.data()));
+        }
+
+        private static boolean hasSentenceAndMeaning(PracticeItemData sentence) {
+            return !LearnAnswers.normalize(sentence.hanzi()).isEmpty() && !isBlankOrSpaces(sentence.meaning());
         }
 
         @Override
         List<Item> items(DragDropActivity entity) {
-            return itemRepository.findByDragDropActivityIdOrderBySortOrderAscCreatedAtAsc(entity.getId()).stream()
+            return itemRepository.findInDisplayOrder(entity.getId()).stream()
                     .map(sentence -> {
                         List<String> tiles = new ArrayList<>(LearnAnswers.tiles(sentence.getDragText()));
                         tiles.addAll(LearnAnswers.tiles(sentence.getDistractors()));
-                        PracticeItemData data = new PracticeItemData(sentence.getId(), sentence.getDragText(), sentence.getPinyin(),
+                        PracticeItemData data = new PracticeItemData(sentence.getDragText(), sentence.getPinyin(),
                                 sentence.getTargetZone(), null, null, null, null, List.of(), null, null,
                                 sentence.getDistractors());
                         GradableItem gradable = new GradableItem(AnswerKind.BUILD, LearnQuestionType.TRANSLATE_BUILD,
@@ -606,22 +566,17 @@ public class PracticeCatalog {
         }
 
         @Override
-        void replaceChildren(DragDropActivity saved, PracticeSetRequest request) {
-            itemRepository.deleteByDragDropActivityId(saved.getId());
-            List<DragDropItem> sentences = new ArrayList<>();
-            for (int index = 0; index < request.items().size(); index++) {
-                PracticeItemData data = request.items().get(index);
-                DragDropItem sentence = new DragDropItem();
-                sentence.setDragDropActivity(saved);
-                sentence.setSortOrder(index);
-                sentence.setDragText(String.join(" ", LearnAnswers.tiles(data.hanzi())));
-                sentence.setTargetZone(text(data.meaning()));
-                sentence.setPinyin(text(data.pinyin()));
-                List<String> distractors = LearnAnswers.tiles(data.distractors());
-                sentence.setDistractors(distractors.isEmpty() ? null : String.join(" ", distractors));
-                sentences.add(sentence);
-            }
-            itemRepository.saveAll(sentences);
+        void writeChildren(DragDropActivity saved, PracticeSetRequest request) {
+            ChildRows.writeByPosition(itemRepository.findInDisplayOrder(saved.getId()),
+                    request.items(), DragDropItem::new, itemRepository, (sentence, position, data) -> {
+                        sentence.setDragDropActivity(saved);
+                        sentence.setSortOrder(position);
+                        sentence.setDragText(String.join(" ", LearnAnswers.tiles(data.hanzi())));
+                        sentence.setTargetZone(trimToNull(data.meaning()));
+                        sentence.setPinyin(trimToNull(data.pinyin()));
+                        List<String> distractors = LearnAnswers.tiles(data.distractors());
+                        sentence.setDistractors(distractors.isEmpty() ? null : String.join(" ", distractors));
+                    });
         }
     }
 
@@ -629,34 +584,59 @@ public class PracticeCatalog {
 
         private final MatchingGameItemRepository itemRepository;
 
-        Matching(MatchingGameRepository repository, MatchingGameItemRepository itemRepository) {
-            super(repository, MatchingGame::new, 15);
+        Matching(MatchingGameItemRepository itemRepository) {
+            super(MatchingGame.class, MatchingGame::new);
             this.itemRepository = itemRepository;
         }
 
         @Override
-        String problemWith(PracticeSetRequest request) {
-            if (request.items().size() < 2) {
-                return "Add at least 2 pairs.";
+        void validate(PracticeSetRequest request) {
+            List<PracticeItemData> pairs = request.items();
+            if (pairs.size() < 2) {
+                throw new ResponseStatusException(BAD_REQUEST, "Add at least 2 pairs.");
             }
-            if (request.items().stream().anyMatch(pair -> blank(pair.hanzi()) || blank(pair.meaning()))) {
-                return "Every pair needs Chinese and a meaning.";
+            if (!allPairsComplete(pairs)) {
+                throw new ResponseStatusException(BAD_REQUEST, "Every pair needs Chinese and a meaning.");
             }
-            Set<String> meanings = new HashSet<>();
-            boolean distinct = request.items().stream().allMatch(pair -> meanings.add(LearnAnswers.normalize(pair.meaning())));
-            return distinct ? null : "Each pair needs a different meaning.";
+            if (!distinctNormalized(pairs, PracticeItemData::hanzi)) {
+                throw new ResponseStatusException(BAD_REQUEST, "Each pair needs different Chinese.");
+            }
+            if (!distinctNormalized(pairs, PracticeItemData::meaning)) {
+                throw new ResponseStatusException(BAD_REQUEST, "Each pair needs a different meaning.");
+            }
+        }
+
+        @Override
+        boolean playable(SetContent content) {
+            List<PracticeItemData> pairs = content.editableItems();
+            return pairs.size() >= 2
+                    && allPairsComplete(pairs)
+                    && distinctNormalized(pairs, PracticeItemData::hanzi)
+                    && distinctNormalized(pairs, PracticeItemData::meaning);
+        }
+
+        private static boolean allPairsComplete(List<PracticeItemData> pairs) {
+            return pairs.stream().noneMatch(pair -> LearnAnswers.normalize(pair.hanzi()).isEmpty()
+                    || LearnAnswers.normalize(pair.meaning()).isEmpty());
+        }
+
+        private static boolean distinctNormalized(
+                List<PracticeItemData> pairs, Function<PracticeItemData, String> field) {
+            Set<String> seen = new HashSet<>();
+            return pairs.stream().allMatch(pair -> seen.add(LearnAnswers.normalize(field.apply(pair))));
         }
 
         @Override
         List<Item> items(MatchingGame entity) {
-            List<MatchingGameItem> pairs = itemRepository.findByMatchingGameIdOrderBySortOrderAscCreatedAtAsc(entity.getId());
-            List<ChoiceOption> meanings = pairs.stream().map(pair -> new ChoiceOption(pair.getRightText(), null)).toList();
+            List<MatchingGameItem> pairs = itemRepository.findInDisplayOrder(entity.getId());
+            List<String> allMeanings = pairs.stream().map(MatchingGameItem::getRightText).toList();
             return pairs.stream()
                     .map(pair -> {
-                        PracticeItemData data = new PracticeItemData(pair.getId(), pair.getLeftText(), pair.getPinyin(),
+                        PracticeItemData data = new PracticeItemData(pair.getLeftText(), pair.getPinyin(),
                                 pair.getRightText(), null, null, null, null, List.of(), null, null, null);
+                        List<ChoiceOption> choices = meaningChoices(pair.getRightText(), allMeanings, pair.getId());
                         GradableItem gradable = new GradableItem(AnswerKind.CHOICE, LearnQuestionType.MEANING, null,
-                                pair.getLeftText(), pair.getPinyin(), pair.getRightText(), null, meanings, List.of(),
+                                pair.getLeftText(), pair.getPinyin(), pair.getRightText(), null, choices, List.of(),
                                 pair.getRightText(), null);
                         return new Item(String.valueOf(pair.getId()), data, gradable);
                     })
@@ -664,113 +644,111 @@ public class PracticeCatalog {
         }
 
         @Override
-        void replaceChildren(MatchingGame saved, PracticeSetRequest request) {
-            itemRepository.deleteByMatchingGameId(saved.getId());
-            List<MatchingGameItem> pairs = new ArrayList<>();
-            for (int index = 0; index < request.items().size(); index++) {
-                PracticeItemData data = request.items().get(index);
-                MatchingGameItem pair = new MatchingGameItem();
-                pair.setMatchingGame(saved);
-                pair.setSortOrder(index);
-                pair.setLeftText(text(data.hanzi()));
-                pair.setRightText(text(data.meaning()));
-                pair.setPinyin(text(data.pinyin()));
-                pairs.add(pair);
-            }
-            itemRepository.saveAll(pairs);
+        void writeChildren(MatchingGame saved, PracticeSetRequest request) {
+            ChildRows.writeByPosition(itemRepository.findInDisplayOrder(saved.getId()),
+                    request.items(), MatchingGameItem::new, itemRepository, (pair, position, data) -> {
+                        pair.setMatchingGame(saved);
+                        pair.setSortOrder(position);
+                        pair.setLeftText(trimToNull(data.hanzi()));
+                        pair.setRightText(trimToNull(data.meaning()));
+                        pair.setPinyin(trimToNull(data.pinyin()));
+                    });
         }
     }
 
-    /** Story lines are kept one per line in the story text, its pinyin and its translation. */
-    private static final class Story extends TypeSupport<StoryActivity> {
+    /**
+     * Pinyin typing. A word is the meaning to read, the characters and pinyin of the answer, and decoys: other words
+     * spelt with the same letters, which are offered next to the answer once the pinyin is typed. Graded as a choice
+     * among those candidates, so a waiting mistake can be reviewed as "Which one is “thank you”?".
+     */
+    private static final class Typing extends TypeSupport<TypingExercise> {
 
-        private final StoryQuestionRepository questionRepository;
-
-        Story(StoryActivityRepository repository, StoryQuestionRepository questionRepository) {
-            super(repository, StoryActivity::new, 20);
-            this.questionRepository = questionRepository;
+        Typing() {
+            super(TypingExercise.class, TypingExercise::new);
         }
 
         @Override
-        String problemWith(PracticeSetRequest request) {
-            if (request.storyLines().isEmpty()) {
-                return "Add the story text.";
-            }
+        void validate(PracticeSetRequest request) {
             if (request.items().isEmpty()) {
-                return "Add at least one question about the story.";
+                throw new ResponseStatusException(BAD_REQUEST, ITEM_REQUIRED);
             }
-            if (request.items().stream().anyMatch(question -> blank(question.prompt()))) {
-                return "Every question needs the question text.";
+            if (request.items().stream().anyMatch(Typing::missingWord)) {
+                throw new ResponseStatusException(BAD_REQUEST, "Every word needs Chinese, pinyin and a meaning.");
             }
-            if (!request.items().stream().allMatch(PracticeCatalog::choicesComplete)) {
-                return "Every question needs at least 2 answers with the right one ticked.";
+            if (request.items().stream().anyMatch(word -> Pinyin.typed(word.pinyin()).isEmpty())) {
+                throw new ResponseStatusException(BAD_REQUEST, "Write the pinyin in letters, for example xièxie.");
             }
-            return null;
+            // A repeated look-alike is one word offered twice, not a second one to choose from.
+            boolean decoysOk = request.items().stream().allMatch(word -> {
+                List<String> decoys = distinctTiles(word.distractors());
+                return decoys.size() >= 2 && decoys.stream().noneMatch(decoy -> LearnAnswers.matches(decoy, word.hanzi()));
+            });
+            if (!decoysOk) {
+                throw new ResponseStatusException(BAD_REQUEST,
+                        "Every word needs at least 2 look-alike words that are not the answer.");
+            }
         }
 
         @Override
-        List<Item> items(StoryActivity entity) {
-            return questionRepository.findByStoryActivityIdOrderBySortOrderAscCreatedAtAsc(entity.getId()).stream()
-                    .map(question -> {
-                        List<ChoiceOption> options = LearnAnswers.readOptions(question.getOptionsPayload());
-                        Integer correct = question.getCorrectOptionIndex();
-                        PracticeItemData data = new PracticeItemData(question.getId(), null, null, null, question.getQuestionText(),
-                                null, null, null, options, correct, question.getExplanation(), null);
-                        GradableItem gradable = new GradableItem(AnswerKind.CHOICE, null, question.getQuestionText(),
-                                null, null, null, null, options, List.of(), answerOf(options, correct),
-                                question.getExplanation());
-                        return new Item(String.valueOf(question.getId()), data, gradable);
-                    })
-                    .toList();
+        boolean playable(SetContent content) {
+            return content.items().stream().allMatch(item ->
+                    !missingWord(item.data()) && !Pinyin.typed(item.data().pinyin()).isEmpty());
+        }
+
+        private static boolean missingWord(PracticeItemData word) {
+            return LearnAnswers.normalize(word.hanzi()).isEmpty()
+                    || isBlankOrSpaces(word.pinyin()) || isBlankOrSpaces(word.meaning());
         }
 
         @Override
-        List<StoryLine> storyLines(StoryActivity entity) {
-            List<String> hanzi = lines(entity.getStoryText());
-            List<String> pinyin = lines(entity.getPinyin());
-            List<String> translation = lines(entity.getTranslation());
-            List<StoryLine> result = new ArrayList<>();
-            for (int index = 0; index < hanzi.size(); index++) {
-                String line = text(hanzi.get(index));
-                if (line != null) {
-                    result.add(new StoryLine(line, line(pinyin, index), line(translation, index)));
+        List<Item> items(TypingExercise entity) {
+            List<Item> items = new ArrayList<>();
+            int index = 0;
+            for (JsonNode node : LearnAnswers.read(entity.getWordPayload()).path("words")) {
+                String meaning = textOf(node, "meaning");
+                String hanzi = textOf(node, "hanzi");
+                String pinyin = textOf(node, "pinyin");
+                String decoys = textOf(node, "decoys");
+                List<String> words = new ArrayList<>();
+                if (hanzi != null) {
+                    words.add(hanzi);
                 }
+                distinctTiles(decoys).stream().filter(decoy -> !LearnAnswers.matches(decoy, hanzi)).forEach(words::add);
+                // Candidates in a stable mixed order: the answer is not always the first word offered. They carry no
+                // pinyin: the decoys are spelt alike but have none, so the answer's own would mark it in the Mistakes
+                // review (the verdict takes the item's pinyin).
+                long seed = entity.getId() * 31 + index;
+                List<ChoiceOption> candidates = shuffled(words, seed).stream()
+                        .map(word -> new ChoiceOption(word, null))
+                        .toList();
+                PracticeItemData data = new PracticeItemData(hanzi, pinyin, meaning, null, null, null, null,
+                        List.of(), null, null, decoys);
+                GradableItem gradable = new GradableItem(AnswerKind.CHOICE, LearnQuestionType.HANZI, null, hanzi,
+                        pinyin, meaning, null, candidates, List.of(), hanzi, null);
+                items.add(new Item(String.valueOf(index++), data, gradable));
             }
-            return List.copyOf(result);
+            return List.copyOf(items);
         }
 
         @Override
-        void applyFields(StoryActivity entity, PracticeSetRequest request) {
-            List<StoryLine> lines = request.storyLines();
-            entity.setStoryText(String.join("\n", lines.stream().map(line -> Objects.toString(text(line.hanzi()), "")).toList()));
-            entity.setPinyin(String.join("\n", lines.stream().map(line -> Objects.toString(text(line.pinyin()), "")).toList()));
-            entity.setTranslation(String.join("\n",
-                    lines.stream().map(line -> Objects.toString(text(line.translation()), "")).toList()));
-        }
-
-        @Override
-        void replaceChildren(StoryActivity saved, PracticeSetRequest request) {
-            questionRepository.deleteByStoryActivityId(saved.getId());
-            List<StoryQuestion> questions = new ArrayList<>();
-            for (int index = 0; index < request.items().size(); index++) {
-                PracticeItemData data = request.items().get(index);
-                StoryQuestion question = new StoryQuestion();
-                question.setStoryActivity(saved);
-                question.setSortOrder(index);
-                question.setQuestionText(text(data.prompt()));
-                question.setOptionsPayload(LearnAnswers.writeOptions(cleanOptions(data.options())));
-                question.setCorrectOptionIndex(data.correctIndex());
-                question.setExplanation(text(data.explanation()));
-                questions.add(question);
+        void applyFields(TypingExercise entity, PracticeSetRequest request) {
+            ObjectNode root = JsonNodeFactory.instance.objectNode();
+            ArrayNode words = root.putArray("words");
+            for (PracticeItemData data : request.items()) {
+                ObjectNode word = words.addObject();
+                word.put("meaning", trimToNull(data.meaning()));
+                word.put("hanzi", trimToNull(data.hanzi()));
+                word.put("pinyin", trimToNull(data.pinyin()));
+                word.put("decoys", String.join(" ", distinctTiles(data.distractors())));
             }
-            questionRepository.saveAll(questions);
+            entity.setWordPayload(root.toString());
         }
     }
 
     /** The tiles in a stable mixed order (the same each time, so a reload does not reshuffle a sentence). */
-    static List<String> shuffled(List<String> tiles, Long seed) {
+    static List<String> shuffled(List<String> tiles, long seed) {
         List<String> mixed = new ArrayList<>(tiles);
-        Collections.shuffle(mixed, new Random(seed == null ? 0 : seed));
+        Collections.shuffle(mixed, new Random(seed));
         if (mixed.size() > 1 && mixed.equals(tiles)) {
             Collections.rotate(mixed, 1);
         }

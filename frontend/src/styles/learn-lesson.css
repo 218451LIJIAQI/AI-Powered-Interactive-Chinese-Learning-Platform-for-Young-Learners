@@ -1,0 +1,178 @@
+/* Lesson player (StudentLessonPlayerPage, SayStep, LessonDone). Shared question, tile, check-bar and stat primitives
+   live in learn-shared.css. */
+
+/* Saying a phrase: a recorder and a note under the word. */
+.learn-say-record {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+}
+
+.learn-say-note {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--type-body-size);
+  line-height: var(--line-height-normal);
+}
+
+/* The microphone question: where the recording stays. */
+.learn-mic-note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--type-body-size);
+  line-height: var(--line-height-normal);
+}
+
+.learn-mic-note .icon-glyph {
+  margin-top: var(--space-0-5);
+  color: var(--text-brand);
+}
+
+/* Lesson player (focus mode): the stage starts at one height for every question, a little higher for the result. */
+.learn-lesson-page {
+  /* The bar's fixed label column: the part of a lesson's title before " · ". */
+  --focus-label-width: 144px;
+  /* 239 from the top of a 900 window, less on a shorter one so the question stays above the footer. */
+  --focus-stage-top: clamp(var(--space-6), 16.8vh, 151px);
+}
+
+.learn-done-stage {
+  --focus-stage-top: clamp(var(--space-4), 9vh, 82px);
+}
+
+.learn-done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  width: 100%;
+  text-align: center;
+}
+
+.learn-done .learn-done-stats {
+  padding: var(--space-4) 0 var(--space-3);
+}
+
+/* Stamp seal of a finished lesson, pressed down as it appears. */
+.learn-stamp {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0;
+  padding-bottom: var(--space-2);
+}
+
+.learn-stamp-seal {
+  --seal-size: 128px;
+  font-size: calc(var(--seal-size) * 0.56);
+  transform: rotate(-6deg);
+  animation: learn-stamp var(--duration-slow) var(--ease-spring) both;
+}
+
+.learn-stamp-caption {
+  color: var(--text-secondary);
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-strong);
+  line-height: var(--line-height-normal);
+}
+
+@keyframes learn-stamp {
+  from {
+    opacity: 0;
+    transform: scale(1.5) rotate(-14deg);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(-6deg);
+  }
+}
+
+.learn-done-note {
+  max-width: 46ch;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--type-body-size);
+}
+
+/* The streak: the last seven days as squares, then the line. */
+.learn-done-streak {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  max-width: 100%;
+  margin: 0;
+  padding: var(--space-2) var(--space-4) var(--space-2) var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-strong);
+  line-height: var(--line-height-normal);
+}
+
+.learn-done-week {
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--space-1);
+}
+
+.learn-done-week > span {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-xs);
+  background: var(--border-strong);
+}
+
+.learn-done-week > .is-reached {
+  background: var(--color-primary-500);
+}
+
+.learn-done-next {
+  display: grid;
+  margin: 0;
+  padding-top: var(--space-3);
+}
+
+.learn-done-next-title {
+  font-size: var(--type-card-title-size);
+  font-weight: var(--font-weight-heading);
+  line-height: var(--line-height-normal);
+}
+
+.learn-done-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.learn-done-badges li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-strong);
+}
+
+.learn-done-badges svg {
+  color: var(--text-brand);
+}
+
+@media (forced-colors: active) {
+  .learn-done-week > span {
+    border: 1px solid ButtonText;
+  }
+
+  .learn-done-week > .is-reached {
+    border-color: Highlight;
+    background: Highlight;
+    forced-color-adjust: none;
+  }
+}

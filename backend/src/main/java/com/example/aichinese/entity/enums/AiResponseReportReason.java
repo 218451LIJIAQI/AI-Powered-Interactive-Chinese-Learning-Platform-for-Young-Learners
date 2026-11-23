@@ -14,6 +14,9 @@ public enum AiResponseReportReason {
     /** A pronunciation or handwriting practice score the student disagrees with. */
     SCORE_SEEMS_WRONG,
 
+    /** An AI-written plan text that does not match what the learner wrote in the setup (X2.23). */
+    DOES_NOT_MATCH_INPUT,
+
     OTHER;
 
     public static Optional<AiResponseReportReason> tryFrom(String value) {

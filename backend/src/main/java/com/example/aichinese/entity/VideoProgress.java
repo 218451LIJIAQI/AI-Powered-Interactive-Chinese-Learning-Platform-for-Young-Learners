@@ -7,7 +7,6 @@ import com.example.aichinese.entity.base.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
-import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -19,11 +18,7 @@ import lombok.Setter;
 @Getter
 @Setter
 @Entity
-@Table(name = "video_progress", indexes = {
-        @Index(name = "idx_video_progress_student_id", columnList = "student_id"),
-        @Index(name = "idx_video_progress_lesson_id", columnList = "lesson_id"),
-        @Index(name = "idx_video_progress_recorded_video_id", columnList = "recorded_video_id")
-}, uniqueConstraints = {
+@Table(name = "video_progress", uniqueConstraints = {
         @UniqueConstraint(name = "uk_video_progress_student_video", columnNames = { "student_id", "recorded_video_id" })
 })
 public class VideoProgress extends BaseEntity {
@@ -42,10 +37,7 @@ public class VideoProgress extends BaseEntity {
 
     @Version
     @Column(name = "version", nullable = false)
-    private Long version = 0L;
-
-    @Column(name = "progress_percentage")
-    private Integer progressPercentage;
+    private Long version;
 
     @Column(name = "completed", nullable = false)
     private boolean completed;

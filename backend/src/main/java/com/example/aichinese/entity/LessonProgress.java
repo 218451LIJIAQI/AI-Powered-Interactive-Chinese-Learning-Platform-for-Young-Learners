@@ -20,8 +20,9 @@ import lombok.Setter;
 @Setter
 @Entity
 @Table(name = "lesson_progress", indexes = {
-        @Index(name = "idx_lesson_progress_student_id", columnList = "student_id"),
-        @Index(name = "idx_lesson_progress_lesson_id", columnList = "lesson_id")
+        @Index(name = "idx_lesson_progress_student_updated", columnList = "student_id,updated_at"),
+        @Index(name = "idx_lesson_progress_completed_at", columnList = "completed,completed_at"),
+        @Index(name = "idx_lesson_progress_last_accessed", columnList = "last_accessed_at")
 }, uniqueConstraints = {
         @UniqueConstraint(name = "uk_lesson_progress_student_lesson", columnNames = { "student_id", "lesson_id" })
 })
@@ -37,11 +38,15 @@ public class LessonProgress extends BaseEntity {
 
     @Version
     @Column(name = "version", nullable = false)
-    private Long version = 0L;
+    private Long version;
 
     @Column(name = "completed", nullable = false)
     private boolean completed;
 
     @Column(name = "last_accessed_at")
     private LocalDateTime lastAccessedAt;
+
+    /** When the lesson became complete (null while it is not); admin analytics count completions by it. */
+    @Column(name = "completed_at")
+    private LocalDateTime completedAt;
 }

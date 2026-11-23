@@ -2,20 +2,23 @@ import { describe, expect, it } from 'vitest'
 
 import {
   clampPercent,
+  daysBetween,
   formatClock,
   formatDate,
   formatDateTime,
   formatFileSize,
   formatFullDateTime,
+  formatList,
   formatNumber,
   formatPercent,
   formatRelativeTime,
   formatShortDate,
-  formatTime,
   formatWeekdayDate,
+  formatWeekdayLongDate,
+  isoDay,
   parseDate,
   ratioPercent,
-  shareOfMax,
+  shiftDay,
   stepProgress,
 } from './format'
 
@@ -53,19 +56,26 @@ describe('format numeric helpers', () => {
     expect(ratioPercent(2, 3, { digits: 2 })).toBe(66.67)
   })
 
-  it('scales a value against the largest one, and an empty or all-zero list to 0', () => {
-    expect(shareOfMax(5, [5, 10, 2])).toBe(50)
-    expect(shareOfMax(10, [5, 10, 2])).toBe(100)
-    expect(shareOfMax(0, [0, 0])).toBe(0)
-    expect(shareOfMax(0, [])).toBe(0)
-  })
-
   it('counts the current step once its answer is checked', () => {
     expect(stepProgress(0, 4, false)).toBe(0)
     expect(stepProgress(0, 4, true)).toBe(25)
     expect(stepProgress(3, 4, true)).toBe(100)
     expect(stepProgress(1, 3, false)).toBe(33)
     expect(stepProgress(0, 0, true)).toBe(0)
+  })
+})
+
+describe('formatList', () => {
+  it.each([
+    ['en', 'a video, key phrases, all 3 activities and a 5-question quiz'],
+    ['ms', 'a video, key phrases, all 3 activities dan a 5-question quiz'],
+    ['zh-CN', 'a video、key phrases、all 3 activities和a 5-question quiz'],
+  ])('joins what is missing the way %s writes a list', (locale, list) => {
+    expect(formatList(['a video', 'key phrases', 'all 3 activities', 'a 5-question quiz'], locale)).toBe(list)
+  })
+
+  it('writes one item as it is', () => {
+    expect(formatList(['a video'], 'en')).toBe('a video')
   })
 })
 
@@ -98,6 +108,8 @@ describe('formatFileSize', () => {
     expect(formatFileSize(14.2 * 1024 * 1024)).toBe('14 MB')
     expect(formatFileSize(3 * 1024 ** 3)).toBe('3 GB')
     expect(formatFileSize(5 * 1024 ** 4)).toBe('5,120 GB')
+    expect(formatFileSize(1024 * 1024 - 1)).toBe('1 MB')
+    expect(formatFileSize(1024 ** 3 - 1)).toBe('1 GB')
   })
 
   it('treats a negative, missing or non-numeric size as empty', () => {
@@ -135,7 +147,7 @@ describe('parseDate', () => {
 })
 
 describe('format date helpers', () => {
-  const NOON_UTC = '2026-05-20T12:00:00.000Z'
+  const localNoonAsUtc = new Date(2026, 4, 20, 12).toISOString()
 
   it('returns placeholders for missing or invalid dates', () => {
     expect(formatDate(null)).toBe('--')
@@ -143,38 +155,38 @@ describe('format date helpers', () => {
     expect(formatDate('not-a-date')).toBe('--')
     expect(formatDateTime(undefined)).toBe('--')
     expect(formatShortDate(null)).toBe('--')
-    expect(formatTime('nope')).toBe('--')
   })
 
   it('formats valid date strings with default and custom options', () => {
-    expect(formatDate(NOON_UTC)).toBe('May 20, 2026')
-    expect(formatDate(NOON_UTC, { month: 'long', year: 'numeric' })).toBe('May 2026')
-    expect(formatDateTime(NOON_UTC)).toMatch(/^May 20, \d{1,2}:00 (AM|PM)$/)
+    expect(formatDate(localNoonAsUtc)).toBe('20 May 2026')
+    expect(formatDate(localNoonAsUtc, { month: 'long', year: 'numeric' })).toBe('May 2026')
+    expect(formatDateTime(localNoonAsUtc)).toBe('20 May, 12:00 PM')
   })
 
-  it('has a preset for each shape the pages repeat', () => {
+  it('writes English dates in the house style: day before month, no comma inside the date, AM / PM', () => {
     const local = new Date(2026, 4, 18, 15, 5)
-    expect(formatShortDate(local)).toBe('May 18')
-    expect(formatTime(local)).toBe('3:05 PM')
-    expect(formatWeekdayDate(local)).toBe('Mon, May 18')
-    expect(formatDate(local)).toBe('May 18, 2026')
-    expect(formatDateTime(local)).toBe('May 18, 3:05 PM')
-    expect(formatFullDateTime(local)).toBe('May 18, 2026, 3:05 PM')
+    expect(formatShortDate(local)).toBe('18 May')
+    expect(formatWeekdayDate(local)).toBe('Mon 18 May')
+    expect(formatWeekdayLongDate(local)).toBe('Mon 18 May 2026')
+    expect(formatDate(local)).toBe('18 May 2026')
+    expect(formatDateTime(local)).toBe('18 May, 3:05 PM')
+    expect(formatDateTime(new Date(2026, 4, 18, 9, 30))).toBe('18 May, 9:30 AM')
+    expect(formatFullDateTime(local)).toBe('18 May 2026, 3:05 PM')
   })
 
   it('formats a calendar date (yyyy-MM-dd) as that day in every time zone and rejects impossible dates', () => {
-    expect(formatDate('2026-05-18')).toBe('May 18, 2026')
-    expect(formatWeekdayDate('2026-05-18')).toBe('Mon, May 18')
+    expect(formatDate('2026-05-18')).toBe('18 May 2026')
+    expect(formatWeekdayDate('2026-05-18')).toBe('Mon 18 May')
     expect(formatDate('2026-02-30')).toBe('--')
   })
 
   it('uses the active interface locale for dates and numbers', () => {
     document.documentElement.lang = 'zh-CN'
     expect(formatNumber(1234)).toBe('1,234')
-    expect(formatDate(NOON_UTC)).toBe('2026年5月20日')
+    expect(formatDate(localNoonAsUtc)).toBe('2026年5月20日')
 
     document.documentElement.lang = 'ms'
-    expect(formatDate(NOON_UTC)).toBe('20 Mei 2026')
+    expect(formatDate(localNoonAsUtc)).toBe('20 Mei 2026')
   })
 
   it('uses the locale passed in over the page language', () => {
@@ -189,11 +201,11 @@ describe('formatRelativeTime', () => {
 
   it('says how long ago in the largest whole unit up to days', () => {
     expect(formatRelativeTime('2026-05-20T11:59:30.000Z', now)).toBe('now')
-    expect(formatRelativeTime('2026-05-20T11:50:00.000Z', now)).toBe('10 min. ago')
-    expect(formatRelativeTime('2026-05-20T09:00:00.000Z', now)).toBe('3 hr. ago')
+    expect(formatRelativeTime('2026-05-20T11:50:00.000Z', now)).toBe('10 min ago')
+    expect(formatRelativeTime('2026-05-20T09:00:00.000Z', now)).toBe('3 hr ago')
     expect(formatRelativeTime('2026-05-19T12:00:00.000Z', now)).toBe('yesterday')
     expect(formatRelativeTime('2026-05-15T12:00:00.000Z', now)).toBe('5 days ago')
-    expect(formatRelativeTime('2026-05-20T14:00:00.000Z', now)).toBe('in 2 hr.')
+    expect(formatRelativeTime('2026-05-20T14:00:00.000Z', now)).toBe('in 2 hr')
   })
 
   it('returns a placeholder for a missing or invalid time', () => {
@@ -204,5 +216,24 @@ describe('formatRelativeTime', () => {
   it('uses the interface language', () => {
     document.documentElement.lang = 'zh-CN'
     expect(formatRelativeTime('2026-05-19T12:00:00.000Z', now)).toBe('昨天')
+  })
+})
+
+describe('calendar days', () => {
+  it('writes the local calendar date of a time as yyyy-MM-dd', () => {
+    expect(isoDay(new Date(2026, 4, 8, 23, 30))).toBe('2026-05-08')
+  })
+
+  it('counts the days between two calendar days', () => {
+    expect(daysBetween('2026-05-18', '2026-07-18')).toBe(61)
+    expect(daysBetween('2026-05-18', '2026-06-01')).toBe(14)
+    expect(daysBetween('2026-05-18', '2026-11-18')).toBe(184)
+    expect(daysBetween('2026-07-18', '2026-05-18')).toBe(-61)
+  })
+
+  it('moves a calendar day across months', () => {
+    expect(shiftDay('2026-07-18', 7)).toBe('2026-07-25')
+    expect(shiftDay('2026-05-31', 1)).toBe('2026-06-01')
+    expect(shiftDay('0024-02-28', 1)).toBe('0024-02-29')
   })
 })

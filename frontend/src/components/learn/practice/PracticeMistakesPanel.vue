@@ -1,172 +1,145 @@
 <template>
-  <div class="practice-mistakes-page">
-    <PracticeHead :title="t('practice.mistakesTitle')" :lede="t('practice.mistakesLede')">
-      <template #mark>
-        <span
-          class="seal practice-mistakes-seal"
-          :class="{ 'is-outline': counts.all > 0 }"
-          lang="zh-CN"
-          aria-hidden="true"
-          >改</span
-        >
-      </template>
-    </PracticeHead>
+  <section
+    class="practice-stage"
+    :aria-labelledby="!mistakes.loading.value && Boolean(mistakes.data.value) && counts.all > 0 ? titleId : undefined"
+  >
+    <StatePanel
+      v-if="mistakes.loading.value && !mistakes.data.value"
+      class="practice-stage-state"
+      heading-tag="h2"
+      tone="loading"
+      :title="t('practice.mistakesLoading')"
+      :message="t('practice.mistakesLoadingHint')"
+    />
+    <StatePanel
+      v-else-if="mistakes.error.value && !mistakes.data.value"
+      class="practice-stage-state"
+      heading-tag="h2"
+      tone="error"
+      icon="alert"
+      :title="t('practice.mistakesError')"
+      :message="mistakes.error.value"
+      @retry="mistakes.reload"
+    />
 
-    <section
-      class="practice-mistakes"
-      :class="{ 'is-clear': counts.all === 0 }"
-      aria-labelledby="practice-mistakes-title"
-    >
-      <div class="practice-mistakes-summary">
-        <div class="practice-mistakes-count">
-          <h2 id="practice-mistakes-title" class="practice-mistakes-title" :class="{ 'sr-only': counts.all === 0 }">
-            <template v-if="counts.all > 0">
-              <strong class="stat-figure">{{ counts.all }}</strong>
-              {{ t('practice.mistakesNoun', {}, counts.all) }}
-            </template>
-            <template v-else>{{ t('practice.noMistakesYet') }}</template>
-          </h2>
-          <p v-if="counts.all > 0" class="practice-mistakes-text">{{ t('practice.reviewCallText') }}</p>
-        </div>
-        <div v-if="counts.all > 0" class="practice-mistakes-actions">
-          <RouterLink
-            class="btn btn-accent btn-lg btn-block"
-            :to="{ name: 'student-practice-review' }"
-            data-testid="start-review"
-          >
-            <IconGlyph name="retry" :size="18" />{{ t('practice.startReview') }}
-          </RouterLink>
-          <RouterLink
-            class="btn btn-link"
-            :to="rows.length ? askLink(rows[0]!) : { name: 'student-ai', params: { tab: 'ask' } }"
-          >
-            <IconGlyph name="ai" :size="16" />{{ t('practice.askSparkBot') }}
+    <template v-else-if="counts.all === 0">
+      <StatePanel
+        class="practice-stage-state"
+        heading-tag="h2"
+        tone="empty"
+        icon="correct"
+        :title="t('practice.noMistakesYet')"
+        :message="t('practice.noMistakesHint')"
+      />
+      <div class="practice-footer">
+        <div class="practice-footer-end">
+          <RouterLink class="btn btn-primary" :to="{ name: 'student-practice', params: { type: 'flashcards' } }">
+            {{ t('practice.startWithFlashcards') }}
           </RouterLink>
         </div>
       </div>
+    </template>
 
-      <SegmentedControl
-        v-if="counts.all > 0"
-        class="practice-mistakes-filter"
+    <template v-else>
+      <!-- The chips carry the counts; the heading names the stage for assistive technology. -->
+      <h2 :id="titleId" class="sr-only">{{ t('practice.mistakesToFix', { count: counts.all }, counts.all) }}</h2>
+      <FilterChips
         :model-value="source"
         :label="t('practice.mistakeFilter')"
-        :options="
-          filters.map((filter) => ({
-            value: filter.value,
-            label: filter.label,
-            testId: `filter-${(filter.value ?? 'all').toLowerCase()}`,
-          }))
-        "
+        :options="filters"
         @update:model-value="setSource"
       />
 
-      <div class="practice-mistakes-body">
-        <StatePanel
-          v-if="mistakes.loading.value"
-          tone="loading"
-          :title="t('practice.mistakesLoading')"
-          :message="t('practice.mistakesLoadingHint')"
-        />
-        <StatePanel
-          v-else-if="mistakes.error.value && !rows.length"
-          tone="error"
-          icon="alert"
-          :title="t('practice.mistakesError')"
-          :message="mistakes.error.value"
-        >
-          <template #actions>
-            <button class="btn btn-primary" type="button" @click="mistakes.reload">{{ t('practice.retry') }}</button>
-          </template>
-        </StatePanel>
-        <StatePanel
-          v-else-if="!rows.length"
-          tone="empty"
-          icon="check"
-          :title="t('practice.nothingToFix')"
-          :message="t('practice.nothingToFixHint')"
-          spacious
-        >
-          <template #actions>
-            <RouterLink class="btn btn-secondary" :to="{ name: 'student-practice', params: { type: 'flashcards' } }">
-              {{ t('practice.startWithFlashcards') }}
-            </RouterLink>
-          </template>
-        </StatePanel>
-        <template v-else>
-          <ul class="practice-mistake-list">
-            <li v-for="row in rows" :key="row.id" class="practice-mistake" data-testid="mistake-row">
-              <div class="practice-mistake-copy">
-                <p class="practice-mistake-question">{{ questionOf(row) }}</p>
-                <p class="practice-mistake-answers">
-                  <span class="practice-mistake-yours"
-                    ><IconGlyph name="incorrect" :size="14" />{{
-                      row.yourAnswer ? t('practice.youAnswered', { answer: row.yourAnswer }) : t('practice.youSkipped')
-                    }}</span
-                  >
-                  ·
-                  <span class="practice-mistake-right"
-                    ><IconGlyph name="correct" :size="14" />{{
-                      t('practice.correctWas', { answer: row.correctAnswer })
-                    }}</span
-                  >
-                </p>
-              </div>
-              <p class="practice-mistake-source">
-                {{ row.source === 'LEARN' ? t('practice.sourceLearn') : t('practice.sourcePractice') }} ·
-                {{ formatShortDate(row.lastWrongAt) }}
-              </p>
-              <RouterLink
-                class="btn btn-ghost btn-icon btn-sm"
-                :to="askLink(row)"
-                :aria-label="t('practice.askAboutThis', { question: questionOf(row) })"
-              >
-                <IconGlyph name="ai" :size="16" />
-              </RouterLink>
-            </li>
-          </ul>
-          <PaginationBar
-            v-if="totalPages > 1"
-            :current-page="page + 1"
-            :total-pages="totalPages"
-            :label="t('practice.mistakePages')"
-            @update:current-page="goToPage($event - 1)"
-          />
-        </template>
+      <StatePanel
+        v-if="mistakes.error.value"
+        class="practice-stage-state"
+        tone="error"
+        icon="alert"
+        :title="t('practice.mistakesError')"
+        :message="mistakes.error.value"
+        @retry="mistakes.reload"
+      />
+      <p v-else-if="mistakes.loading.value || changingSource" class="type-caption" role="status">
+        {{ t('practice.mistakesLoading') }}
+      </p>
+      <ul v-else-if="rows.length" class="practice-mistake-list">
+        <li v-for="row in rows" :key="row.id" class="practice-mistake" data-testid="mistake-row">
+          <div class="practice-mistake-copy">
+            <p class="practice-mistake-question"><CjkText :text="questionOf(row)" /></p>
+            <p class="practice-mistake-answers"><CjkText :text="detailOf(row)" /></p>
+          </div>
+          <span class="practice-mistake-tags">
+            <span v-if="row.sureWrong" class="tag is-strong">{{ t('practice.youWereSure') }}</span>
+            <span class="tag is-outline">
+              {{ row.source === 'LEARN' ? t('nav.learn') : t('nav.practice') }}
+            </span>
+          </span>
+        </li>
+      </ul>
+      <StatePanel
+        v-else
+        class="practice-stage-state"
+        tone="empty"
+        icon="correct"
+        :title="t('practice.noneFromSource')"
+        :message="t('practice.noneFromSourceHint')"
+      />
+      <p
+        v-if="!mistakes.loading.value && !mistakes.error.value && !changingSource && moreCount > 0"
+        class="practice-mistakes-more"
+      >
+        {{ t('practice.moreMistakes', { more: moreCount }) }}
+      </p>
+
+      <div class="practice-footer">
+        <p class="practice-mistakes-call">{{ reviewLine }}</p>
+        <div class="practice-footer-end">
+          <RouterLink class="btn btn-primary" :to="{ name: 'student-practice-review' }" data-testid="start-review">
+            <IconGlyph name="retry" :size="16" />{{ t('practice.startReview') }}
+          </RouterLink>
+        </div>
       </div>
-    </section>
-  </div>
+    </template>
+  </section>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { RouterLink, type RouteLocationRaw } from 'vue-router'
+import { computed, ref, useId } from 'vue'
+import { RouterLink } from 'vue-router'
 
 import { mistakesApi } from '@/api/learn'
+import FilterChips from '@/components/common/FilterChips.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
-import PaginationBar from '@/components/common/PaginationBar.vue'
-import SegmentedControl from '@/components/common/SegmentedControl.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
+import CjkText from '@/components/learning/CjkText.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
-import { useResource, useServerPage } from '@/composables/useResource'
-import { learnMessages } from '@/plugins/learnMessages'
+import { useResource } from '@/composables/useResource'
 import { practiceMessages } from '@/plugins/practiceMessages'
 import type { MistakeRow, MistakeSource } from '@/types/learn'
-import { formatShortDate } from '@/utils/format'
 
-import PracticeHead from './PracticeHead.vue'
+import { MISTAKES_REVIEW_SIZE, mistakesReview } from './practiceTypes'
 
 /**
- * The Mistakes room: how many wait (one review clears them), filtered by where they came from, each with what was
- * answered and the right answer. SparkBot can explain one.
+ * The Mistakes tab: the waiting mistakes filtered by where they came from (All · Learn · Practice, each with its
+ * count), each with what was asked and either what was answered and the right answer, or the flashcard marked "Still
+ * learning" (reviewed as a multiple-choice question). The footer says what the review takes ("Review all 6 · about
+ * 3 min · +10 XP"): one review works through up to MISTAKES_REVIEW_SIZE at a time, whatever the filter, and clears the
+ * mistakes answered right.
  */
-const PAGE_SIZE = 8
+const VISIBLE_ROWS = 6
 
-const { t } = useLocalMessages({ practice: practiceMessages, learn: learnMessages })
+const { t } = useLocalMessages({ practice: practiceMessages })
+const titleId = useId()
 
 const source = ref<MistakeSource | null>(null)
-const page = ref(0)
-const mistakes = useResource(() => mistakesApi.list(source.value, page.value, PAGE_SIZE))
-const { items: rows, totalPages, goToPage } = useServerPage(mistakes, page, { select: (data) => data.page })
+const mistakes = useResource(async () => {
+  const requestedSource = source.value
+  return { ...(await mistakesApi.list(requestedSource, VISIBLE_ROWS)), source: requestedSource }
+})
+
+const changingSource = computed(() => mistakes.data.value?.source !== source.value)
+const rows = computed(() => mistakes.data.value?.page.items ?? [])
+const moreCount = computed(() => Math.max(0, (mistakes.data.value?.page.totalItems ?? 0) - rows.value.length))
 
 const counts = computed(() => ({
   all: mistakes.data.value?.all ?? 0,
@@ -174,15 +147,30 @@ const counts = computed(() => ({
   practice: mistakes.data.value?.practice ?? 0,
 }))
 
+/** "Review all 6 · about 3 min · +10 XP", or "Review 20 of 25 · …" for a list longer than one review. */
+const reviewLine = computed(() => {
+  const total = counts.value.all
+  const review = mistakesReview(total)
+  const values = { ...review, total }
+  return total <= MISTAKES_REVIEW_SIZE
+    ? t('practice.reviewAll', values, review.count)
+    : t('practice.reviewSome', values)
+})
+
 const filters = computed(() => [
-  { value: null, label: t('practice.filterAll', { count: counts.value.all }) },
-  { value: 'LEARN' as const, label: t('practice.filterLearn', { count: counts.value.learn }) },
-  { value: 'PRACTICE' as const, label: t('practice.filterPractice', { count: counts.value.practice }) },
+  { value: null, label: t('practice.filterAll'), count: counts.value.all },
+  { value: 'LEARN' as const, label: t('nav.learn'), count: counts.value.learn, testId: 'filter-learn' },
+  {
+    value: 'PRACTICE' as const,
+    label: t('nav.practice'),
+    count: counts.value.practice,
+    testId: 'filter-practice',
+  },
 ])
 
 function setSource(value: MistakeSource | null): void {
+  if (value === source.value) return
   source.value = value
-  page.value = 0
   void mistakes.reload()
 }
 
@@ -193,7 +181,7 @@ function questionOf(row: MistakeRow): string {
     case 'PINYIN':
       return t('practice.askPinyin', { hanzi: row.hanzi ?? '' })
     case 'HANZI':
-      return t('learn.instructionHanzi', { meaning: row.meaning ?? '' })
+      return t('practice.askHanzi', { meaning: row.meaning ?? '' })
     case 'LISTEN_CHOOSE':
       return t('practice.askListenChoose')
     case 'LISTEN_BUILD':
@@ -201,16 +189,16 @@ function questionOf(row: MistakeRow): string {
     case 'TRANSLATE_BUILD':
       return t('practice.askTranslate', { meaning: row.meaning ?? '' })
     default:
-      return row.prompt ?? ''
+      return row.prompt || t('practice.askListenChoose')
   }
 }
 
-function askLink(row: MistakeRow): RouteLocationRaw {
-  const q = t('practice.askPrefill', {
-    question: questionOf(row),
-    yours: row.yourAnswer ?? t('practice.nothing'),
-    correct: row.correctAnswer,
-  })
-  return { name: 'student-ai', params: { tab: 'ask' }, query: { q } }
+/** "You answered 晚上好 · correct: 早上好", or for a flashcard: "Flashcards · marked “Still learning” · 你好 = Hello". */
+function detailOf(row: MistakeRow): string {
+  if (row.stillLearning) {
+    return t('practice.stillLearningRow', { hanzi: row.hanzi ?? '', meaning: row.correctAnswer })
+  }
+  const answered = row.yourAnswer ? t('practice.youAnswered', { answer: row.yourAnswer }) : t('practice.youSkipped')
+  return `${answered} · ${t('practice.correctWas', { answer: row.correctAnswer })}`
 }
 </script>

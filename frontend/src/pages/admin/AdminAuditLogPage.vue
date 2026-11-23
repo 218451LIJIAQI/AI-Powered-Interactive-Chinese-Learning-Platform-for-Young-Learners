@@ -1,6 +1,6 @@
 <template>
-  <div class="admin-audit page-stack">
-    <PageHeaderBlock :title="t('adminAudit.pageTitle')" :description="t('adminAudit.lede')">
+  <div class="page-stack">
+    <PageHeaderBlock :title="t('nav.auditLog')" hide-title>
       <template #actions>
         <button
           class="btn btn-secondary"
@@ -11,18 +11,18 @@
           @click="exportCsv"
         >
           <IconGlyph name="download" :size="16" />
-          {{ t('adminAudit.exportCsv') }}
+          <span>{{ t('common.exportCsv') }}</span>
         </button>
       </template>
     </PageHeaderBlock>
 
-    <DataNotice :error="actionError" />
+    <DataNotice :error="exportError" />
 
-    <section class="admin-sheet" aria-labelledby="admin-audit-table-title">
+    <section class="panel admin-table-card">
       <h2 id="admin-audit-table-title" class="sr-only">{{ t('adminAudit.tableLabel') }}</h2>
-      <form class="admin-toolbar" role="search" :aria-label="t('adminAudit.filtersLabel')" @submit.prevent>
-        <div class="field admin-toolbar-search">
-          <label class="field-label" for="admin-audit-search">{{ t('adminAudit.searchLabel') }}</label>
+      <form class="admin-filters" role="search" :aria-label="t('adminAudit.filtersLabel')" @submit.prevent>
+        <div class="field is-search">
+          <label class="field-label" for="admin-audit-search">{{ t('common.search') }}</label>
           <span class="input-with-icon">
             <IconGlyph class="input-icon" name="search" :size="16" />
             <input
@@ -30,6 +30,7 @@
               v-model="searchTerm"
               class="input"
               type="search"
+              maxlength="200"
               autocomplete="off"
               :placeholder="t('adminAudit.searchPlaceholder')"
               data-testid="admin-audit-search"
@@ -71,43 +72,72 @@
             </option>
           </select>
         </div>
-        <div class="field admin-audit-actor">
+        <div class="field">
           <label class="field-label" for="admin-audit-actor">{{ t('adminAudit.actorLabel') }}</label>
           <input
             id="admin-audit-actor"
             v-model="actorTerm"
             class="input"
             type="search"
+            maxlength="200"
             autocomplete="off"
             placeholder="name@example.com"
             data-testid="admin-audit-actor"
           />
         </div>
-        <p v-if="rangeError" id="admin-audit-range-error" class="field-error admin-audit-range-error" role="alert">
+        <p v-if="rangeError" id="admin-audit-range-error" class="field-error" role="alert">
           {{ rangeError }}
         </p>
       </form>
+      <DataNotice :error="actions.error.value" :error-title="t('adminAudit.actionsLoadFailed')">
+        <template #actions>
+          <button type="button" class="btn btn-secondary btn-sm" @click="actions.reload">
+            {{ t('common.retry') }}
+          </button>
+        </template>
+      </DataNotice>
+      <div v-if="userId !== null" class="filter-chips" role="group" :aria-label="t('adminAudit.userFilterLabel')">
+        <button
+          class="filter-chip is-removable"
+          type="button"
+          :aria-label="t('adminAudit.userChipRemove', { name: userLabel })"
+          data-testid="admin-audit-user-chip"
+          @click="userId = null"
+        >
+          <span>{{ t('adminAudit.userChip', { name: userLabel }) }}</span>
+          <IconGlyph name="close" :size="14" />
+        </button>
+      </div>
 
-      <div v-if="log.loading.value" class="admin-sheet-body">
-        <StatePanel tone="loading" :title="t('adminAudit.loading')" :message="t('adminAudit.loadingHint')" />
-      </div>
-      <div v-else-if="log.error.value && !entries.length" class="admin-sheet-body">
-        <StatePanel tone="error" icon="alert" :title="t('adminAudit.loadError')" :message="log.error.value">
-          <template #actions>
-            <button class="btn btn-primary" type="button" @click="log.reload">{{ t('adminAudit.retry') }}</button>
-          </template>
-        </StatePanel>
-      </div>
+      <StatePanel
+        v-if="log.loading.value"
+        tone="loading"
+        :title="t('adminAudit.loading')"
+        :message="t('adminAudit.loadingHint')"
+      />
+      <StatePanel
+        v-else-if="log.error.value"
+        tone="error"
+        icon="alert"
+        :title="t('adminAudit.loadError')"
+        :message="log.error.value"
+        @retry="log.reload"
+      />
       <template v-else-if="entries.length">
-        <div class="data-table-wrap" role="region" :aria-label="t('adminAudit.tableLabel')" tabindex="0">
-          <table class="data-table admin-table">
+        <div
+          class="data-table-wrap admin-table-wrap"
+          role="region"
+          aria-labelledby="admin-audit-table-title"
+          tabindex="0"
+        >
+          <table class="data-table admin-table admin-table-fixed admin-audit-table">
             <thead>
               <tr>
                 <th scope="col">{{ t('adminAudit.colEvent') }}</th>
-                <th scope="col">{{ t('adminAudit.colCategory') }}</th>
-                <th scope="col">{{ t('adminAudit.colActor') }}</th>
-                <th scope="col" class="col-numeric">{{ t('adminAudit.colTime') }}</th>
-                <th scope="col" class="col-actions">
+                <th scope="col" class="admin-audit-col-category">{{ t('adminAudit.category') }}</th>
+                <th scope="col" class="admin-audit-col-actor">{{ t('adminAudit.actor') }}</th>
+                <th scope="col" class="admin-audit-col-time">{{ t('adminAudit.time') }}</th>
+                <th scope="col" class="col-actions admin-col-chevron">
                   <span class="sr-only">{{ t('adminAudit.whatHappened') }}</span>
                 </th>
               </tr>
@@ -118,21 +148,16 @@
                 :key="entry.id"
                 :class="{ 'is-selected': entry.id === selectedEntryId }"
                 data-testid="admin-audit-row"
-                @click="openEntry(entry.id)"
+                @click="selectEntry(entry.id)"
               >
                 <td>
-                  <span class="admin-cell-person">
-                    <span class="admin-kind-mark" aria-hidden="true">
-                      <IconGlyph :name="auditActionIcon(entry.actionType, entry.category)" :size="16" />
-                    </span>
-                    <span class="admin-cell-title">
-                      <strong>{{ actionLabel(entry.actionType) }}</strong>
-                      <span v-if="entry.targetLabel">{{ entry.targetLabel }}</span>
-                    </span>
+                  <span class="admin-cell-title">
+                    <strong>{{ auditActionLabel(t, entry.actionType) }}</strong>
+                    <span v-if="entry.targetLabel">{{ entry.targetLabel }}</span>
                   </span>
                 </td>
                 <td>
-                  <span class="tag">{{ categoryLabel(entry.category) }}</span>
+                  <span class="tag is-outline">{{ auditCategoryLabel(t, entry.category) }}</span>
                 </td>
                 <td>
                   <span class="admin-cell-title">
@@ -140,15 +165,13 @@
                     <span v-if="entry.actorName && entry.actorEmail">{{ entry.actorEmail }}</span>
                   </span>
                 </td>
-                <td class="col-numeric admin-cell-date">
-                  {{ formatDateTime(entry.createdAt) }}
-                </td>
+                <td class="admin-cell-date">{{ formatDateTime(entry.createdAt) }}</td>
                 <td class="col-actions">
                   <button
                     class="btn btn-ghost btn-icon btn-sm"
                     type="button"
-                    :aria-label="t('adminAudit.openEntry', { event: actionLabel(entry.actionType) })"
-                    @click.stop="openEntry(entry.id)"
+                    :aria-label="t('adminAudit.openEntry', { event: auditActionLabel(t, entry.actionType) })"
+                    @click.stop="selectEntry(entry.id)"
                   >
                     <IconGlyph name="chevronRight" :size="16" />
                   </button>
@@ -157,87 +180,38 @@
             </tbody>
           </table>
         </div>
-        <div class="admin-sheet-foot">
-          <PaginationBar
-            :current-page="page + 1"
-            :total-pages="totalPages"
-            :info="t('adminAudit.showing', showingRange)"
-            :label="t('adminAudit.pagination')"
-            icon-only
-            test-id-prefix="admin-audit"
-            @update:current-page="goToPage($event - 1)"
-          />
-        </div>
+        <PaginationBar
+          :page="displayedPage"
+          :total-pages="totalPages"
+          :summary="t('adminAudit.eventCount', { count: formatNumber(totalItems, locale) }, totalItems)"
+          :label="t('adminAudit.pagination')"
+          icon-only
+          @update:page="goToPage"
+        />
       </template>
-      <div v-else-if="!rangeError" class="admin-sheet-body">
-        <StatePanel tone="empty" icon="search" :title="t('adminAudit.emptyTitle')" :message="t('adminAudit.emptyHint')">
-          <template #actions>
-            <button class="btn btn-secondary" type="button" @click="clearFilters">
-              {{ t('adminAudit.clearFilters') }}
-            </button>
-          </template>
-        </StatePanel>
-      </div>
+      <StatePanel
+        v-else-if="!rangeError"
+        tone="empty"
+        icon="search"
+        spacious
+        :title="keyword ? t('adminAudit.emptyTitleSearch', { term: keyword }) : t('adminAudit.emptyTitle')"
+        :message="searchOnly ? t('adminAudit.emptyHintSearch') : t('adminAudit.emptyHint')"
+      >
+        <template v-if="hasFilters" #actions>
+          <button class="btn btn-secondary" type="button" data-testid="admin-audit-clear" @click="clearFilters">
+            {{ searchOnly ? t('common.clearSearch') : t('common.clearFilters') }}
+          </button>
+        </template>
+      </StatePanel>
     </section>
 
-    <AppOverlay
+    <AdminAuditEntryDrawer
       :open="selectedEntryId !== null"
-      variant="drawer"
-      :title="selectedEntry ? actionLabel(selectedEntry.actionType) : t('adminAudit.entryLoading')"
-      :subtitle="
-        selectedEntry
-          ? t('adminAudit.entryMeta', {
-              category: categoryLabel(selectedEntry.category),
-              date: formatDateTime(selectedEntry.createdAt),
-            })
-          : ''
-      "
-      test-id="admin-audit-drawer"
-      @close="closeEntry"
-    >
-      <p v-if="entryError" class="alert alert-danger" role="alert">{{ entryError }}</p>
-      <template v-else-if="selectedEntry">
-        <section class="admin-audit-what" aria-labelledby="admin-audit-what-title">
-          <h3 id="admin-audit-what-title" class="admin-reader-label">{{ t('adminAudit.whatHappened') }}</h3>
-          <p>{{ whatHappened }}</p>
-        </section>
-        <dl class="kv-list admin-audit-facts">
-          <dt>{{ t('adminAudit.kvActor') }}</dt>
-          <dd>
-            <span class="admin-cell-title">
-              <strong>{{ selectedEntry.actorName ?? selectedEntry.actorEmail ?? t('adminAudit.systemActor') }}</strong>
-              <span v-if="selectedEntry.actorName && selectedEntry.actorEmail">{{ selectedEntry.actorEmail }}</span>
-            </span>
-          </dd>
-          <template v-if="selectedEntry.targetLabel">
-            <dt>{{ t('adminAudit.kvTarget') }}</dt>
-            <dd>{{ selectedEntry.targetLabel }}</dd>
-          </template>
-          <template v-if="selectedEntry.reason">
-            <dt>{{ t('adminAudit.kvReason') }}</dt>
-            <dd data-testid="admin-audit-reason">{{ selectedEntry.reason }}</dd>
-          </template>
-          <dt>{{ t('adminAudit.kvTime') }}</dt>
-          <dd>{{ formatFullDateTime(selectedEntry.createdAt) }}</dd>
-          <dt>{{ t('adminAudit.kvCategory') }}</dt>
-          <dd>{{ categoryLabel(selectedEntry.category) }}</dd>
-        </dl>
-        <p class="callout">
-          <IconGlyph name="lock" :size="18" />
-          <span>{{ t('adminAudit.immutable') }}</span>
-        </p>
-      </template>
-      <template v-if="selectedEntry?.targetUserId" #footer>
-        <RouterLink
-          class="btn btn-secondary"
-          :to="{ name: 'admin-users', query: { user: selectedEntry.targetUserId } }"
-          data-testid="admin-audit-open-target"
-        >
-          {{ t('adminAudit.openTarget', { target: selectedEntry.targetLabel ?? selectedEntry.targetType ?? '' }) }}
-          <IconGlyph name="chevronRight" :size="16" />
-        </RouterLink>
-      </template>
-    </AppOverlay>
+      :entry="selectedEntry"
+      :error="entryDetail.error.value"
+      @close="selectEntry(null)"
+      @retry="entryDetail.reload"
+    />
 
     <AppToast :message="toast" />
   </div>
@@ -245,30 +219,30 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { RouterLink, useRoute, useRouter, type LocationQuery } from 'vue-router'
+import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
 
-import { adminOverviewApi } from '@/api/ops'
+import { adminOverviewApi, adminUsersApi } from '@/api/ops'
+import AdminAuditEntryDrawer from '@/components/admin/AdminAuditEntryDrawer.vue'
+import { useCsvExport } from '@/components/admin/useCsvExport'
+import AppToast from '@/components/common/AppToast.vue'
 import DataNotice from '@/components/common/DataNotice.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import PaginationBar from '@/components/common/PaginationBar.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
-import AppOverlay from '@/components/common/AppOverlay.vue'
-import AppToast from '@/components/common/AppToast.vue'
 import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
-import { useActionFeedback } from '@/composables/useActionFeedback'
-import { useAuditLabels } from '@/composables/useAuditLabels'
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
 import { useLocalMessages } from '@/composables/useLocalMessages'
-import { useResource, useServerPage } from '@/composables/useResource'
-import { useToast } from '@/composables/useToast'
+import { usePageFilters, useRecordById, useResource, useServerPage } from '@/composables/useResource'
 import { adminAuditMessages } from '@/plugins/adminAuditMessages'
 import { auditActionMessages } from '@/plugins/auditActionMessages'
 import type { PageResponse } from '@/types/api'
-import type { AuditEntry, AuditQuery } from '@/types/ops'
-import { resolveApiError } from '@/utils/apiError'
-import { auditActionIcon } from '@/utils/auditActions'
-import { saveBlobDownload } from '@/utils/download'
-import { formatDateTime, formatFullDateTime } from '@/utils/format'
+import type { AuditEntry } from '@/types/ops'
+import { auditActionLabel, auditCategoryLabel } from '@/utils/auditActions'
+import { formatDateTime, formatNumber, isoDay, parseDate } from '@/utils/format'
+import { pageFromQuery, pageQuery } from '@/utils/pageQuery'
+import { firstQueryText } from '@/utils/queryText'
+import { parseRecordId } from '@/utils/recordId'
+import '@/styles/admin-shared.css'
 import '@/styles/ops-admin.css'
 
 const PAGE_SIZE = 10
@@ -276,44 +250,58 @@ const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 
 const route = useRoute()
 const router = useRouter()
-const { t } = useLocalMessages({ adminAudit: adminAuditMessages, auditActions: auditActionMessages })
-const { actionLabel, categoryLabel } = useAuditLabels(t)
-const { actionError, clearFeedback, showError } = useActionFeedback()
-const { toast, showToast } = useToast()
-
-function queryText(name: string): string {
-  const value = route.query[name]
-  return typeof value === 'string' ? value.trim() : ''
-}
+const { t, locale } = useLocalMessages({ adminAudit: adminAuditMessages, auditActions: auditActionMessages })
 
 function queryDate(name: string): string {
-  const value = queryText(name)
-  return DATE_PATTERN.test(value) ? value : ''
+  const value = firstQueryText(route.query[name])
+  return DATE_PATTERN.test(value) && parseDate(value) ? value : ''
 }
 
-// ----- filters (kept in the URL: q, from, to, action, actor) -----
+// Filters and page, kept in the address: q, from, to, action, actor, user and page.
 
-const { searchTerm, keyword } = useDebouncedSearch()
-const { searchTerm: actorTerm, keyword: actor } = useDebouncedSearch()
-searchTerm.value = keyword.value = queryText('q')
-actorTerm.value = actor.value = queryText('actor')
+const {
+  searchTerm,
+  keyword,
+  restore: restoreSearch,
+  clear: clearSearch,
+} = useDebouncedSearch(firstQueryText(route.query.q))
+const {
+  searchTerm: actorTerm,
+  keyword: actor,
+  restore: restoreActor,
+  clear: clearActor,
+} = useDebouncedSearch(firstQueryText(route.query.actor))
 const from = ref(queryDate('from'))
 const to = ref(queryDate('to'))
-const action = ref(queryText('action'))
-const page = ref(0)
+const action = ref(firstQueryText(route.query.action))
+const userId = ref<number | null>(parseRecordId(route.query.user))
+const page = ref(pageFromQuery(route.query.page))
+
+function listQuery(): LocationQueryRaw {
+  return {
+    q: keyword.value || undefined,
+    actor: actor.value || undefined,
+    from: from.value || undefined,
+    to: to.value || undefined,
+    action: action.value || undefined,
+    user: userId.value === null ? undefined : String(userId.value),
+    page: pageQuery(page.value),
+  }
+}
 
 const rangeError = computed(() =>
   from.value && to.value && from.value > to.value ? t('adminAudit.invalidRange') : null,
 )
 
-function filters(): Omit<AuditQuery, 'page' | 'size'> {
-  const query: Omit<AuditQuery, 'page' | 'size'> = {}
-  if (keyword.value) query.keyword = keyword.value
-  if (action.value) query.actionType = action.value
-  if (actor.value) query.actor = actor.value
-  if (from.value) query.from = from.value
-  if (to.value) query.to = to.value
-  return query
+function filters() {
+  return {
+    keyword: keyword.value || undefined,
+    actionType: action.value || undefined,
+    actor: actor.value || undefined,
+    from: from.value || undefined,
+    to: to.value || undefined,
+    userId: userId.value ?? undefined,
+  }
 }
 
 const log = useResource<PageResponse<AuditEntry> | null>(() =>
@@ -321,106 +309,98 @@ const log = useResource<PageResponse<AuditEntry> | null>(() =>
     ? Promise.resolve(null)
     : adminOverviewApi.auditLog({ ...filters(), page: page.value, size: PAGE_SIZE }),
 )
-const { items: entries, totalPages, range: showingRange, goToPage } = useServerPage(log, page)
 
-watch([keyword, actor, from, to, action], () => {
-  page.value = 0
-  const query: LocationQuery = { ...route.query }
-  const values: Record<string, string> = {
-    q: keyword.value,
-    actor: actor.value,
-    from: from.value,
-    to: to.value,
-    action: action.value,
-  }
-  for (const [name, value] of Object.entries(values)) {
-    if (value) query[name] = value
-    else delete query[name]
-  }
-  void router.replace({ query })
-  if (rangeError.value) {
-    log.data.value = null
-    return
-  }
-  void log.reload()
+const {
+  items: entries,
+  displayedPage,
+  totalItems,
+  totalPages,
+  goToPage,
+} = useServerPage(log, page, {
+  stepBackFromEmpty: true,
+  onPageChange: writeAddress,
 })
 
-function clearFilters(): void {
-  searchTerm.value = actorTerm.value = ''
-  keyword.value = actor.value = ''
-  from.value = to.value = action.value = ''
+function writeAddress(): void {
+  void router.replace({ query: { ...route.query, ...listQuery() } })
 }
 
-const actions = useResource(() => adminOverviewApi.auditActions())
-const actionOptions = computed(() =>
-  (actions.data.value ?? [])
-    .map((value) => ({ value, label: actionLabel(value) }))
-    .sort((left, right) => left.label.localeCompare(right.label)),
-)
-
-// ----- one entry (`?entry=<id>`) -----
-
-const selectedEntryId = computed<number | null>(() => {
-  const id = Number(route.query.entry)
-  return Number.isInteger(id) && id > 0 ? id : null
-})
-const fetchedEntry = ref<AuditEntry | null>(null)
-const entryError = ref<string | null>(null)
-
-const selectedEntry = computed<AuditEntry | null>(() => {
-  const id = selectedEntryId.value
-  if (id === null) return null
-  return entries.value.find((entry) => entry.id === id) ?? (fetchedEntry.value?.id === id ? fetchedEntry.value : null)
-})
+const followAddress = usePageFilters([keyword, actor, from, to, action, userId], page, log, writeAddress)
 
 watch(
-  [selectedEntryId, log.data],
-  async ([id]) => {
-    entryError.value = null
-    if (id === null || selectedEntry.value || log.loading.value) return
-    try {
-      fetchedEntry.value = await adminOverviewApi.auditEntry(id)
-    } catch (failure) {
-      entryError.value = resolveApiError(failure, t('adminAudit.entryError'))
-    }
+  [
+    () => route.query.q,
+    () => route.query.actor,
+    () => route.query.from,
+    () => route.query.to,
+    () => route.query.action,
+    () => route.query.user,
+    () => route.query.page,
+  ],
+  () => {
+    if (route.name !== 'admin-audit-log') return
+    followAddress(pageFromQuery(route.query.page), () => {
+      restoreSearch(firstQueryText(route.query.q))
+      restoreActor(firstQueryText(route.query.actor))
+      from.value = queryDate('from')
+      to.value = queryDate('to')
+      action.value = firstQueryText(route.query.action)
+      userId.value = parseRecordId(route.query.user)
+    })
   },
-  { immediate: true },
 )
 
-function openEntry(id: number): void {
-  void router.replace({ query: { ...route.query, entry: String(id) } })
+function clearFilters(): void {
+  clearSearch()
+  clearActor()
+  from.value = to.value = action.value = ''
+  userId.value = null
 }
 
-function closeEntry(): void {
-  const query = { ...route.query }
-  delete query.entry
-  void router.replace({ query })
-}
+const hasFilters = computed(() =>
+  Boolean(keyword.value || actor.value || from.value || to.value || action.value || userId.value !== null),
+)
 
-const whatHappened = computed(() => {
-  const entry = selectedEntry.value
-  if (!entry) return ''
-  const description = entry.description?.trim() || actionLabel(entry.actionType)
-  const actorName = entry.actorName ?? entry.actorEmail
-  return actorName ? t('adminAudit.happenedBy', { actor: actorName, description }) : description
+const searchOnly = computed(
+  () => Boolean(keyword.value) && !actor.value && !from.value && !to.value && !action.value && userId.value === null,
+)
+
+const accountName = useRecordById(userId, async (id) => (await adminUsersApi.get(id)).fullName)
+const userLabel = computed(() => accountName.data.value ?? t('adminAudit.userUnknown', { id: userId.value ?? '' }))
+
+const actions = useResource(adminOverviewApi.auditActions)
+const actionOptions = computed(() => {
+  const available = new Set(actions.data.value ?? [])
+  if (action.value) available.add(action.value)
+  return [...available]
+    .map((value) => ({ value, label: auditActionLabel(t, value) }))
+    .sort((left, right) => left.label.localeCompare(right.label, locale.value))
 })
 
-// ----- export -----
+// One entry (`?entry=<id>`), in a drawer: taken from the page on screen, or loaded on its own once that page is in.
 
-const exporting = ref(false)
+const selectedEntryId = computed(() => parseRecordId(route.query.entry))
+const listedEntry = computed(() => entries.value.find((entry) => entry.id === selectedEntryId.value))
+const loadedOffPageId = ref<number | null>(null)
+const offPageId = computed<number | null>(() => {
+  if (listedEntry.value || selectedEntryId.value === null) return null
+  if (log.loading.value && loadedOffPageId.value !== selectedEntryId.value) return null
+  return selectedEntryId.value
+})
+const entryDetail = useRecordById(offPageId, adminOverviewApi.auditEntry)
+watch(entryDetail.data, (entry) => {
+  loadedOffPageId.value = entry?.id ?? null
+})
+const selectedEntry = computed(() => listedEntry.value ?? entryDetail.data.value)
 
-async function exportCsv(): Promise<void> {
-  if (rangeError.value) return
-  exporting.value = true
-  clearFeedback()
-  try {
-    const download = await adminOverviewApi.exportAuditLog(filters())
-    saveBlobDownload(download, `audit-log-${new Date().toISOString().slice(0, 10)}.csv`)
-    showToast(t('adminAudit.csvDownloaded'))
-  } catch (failure) {
-    showError(resolveApiError(failure, t('adminAudit.exportFailed')))
-  } finally {
-    exporting.value = false
-  }
+function selectEntry(id: number | null): void {
+  void router.replace({ query: { ...route.query, ...listQuery(), entry: id === null ? undefined : String(id) } })
 }
+
+const { exporting, exportError, toast, exportCsv } = useCsvExport({
+  load: () => adminOverviewApi.exportAuditLog(filters()),
+  fileName: () => `audit-log-${isoDay(new Date())}.csv`,
+  successMessage: () => t('adminAudit.csvDownloaded'),
+  failureMessage: () => t('adminAudit.exportFailed'),
+})
 </script>

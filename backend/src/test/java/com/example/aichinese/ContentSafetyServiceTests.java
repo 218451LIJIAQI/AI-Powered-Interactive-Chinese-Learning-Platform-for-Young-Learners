@@ -9,12 +9,12 @@ import static org.mockito.Mockito.when;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.example.aichinese.entity.SystemSetting;
 import com.example.aichinese.repository.SystemSettingRepository;
 import com.example.aichinese.service.ContentSafetyService;
-import com.example.aichinese.service.ContentSafetySettingsReader;
 import com.example.aichinese.service.PlatformSettingsService;
 import com.example.aichinese.service.ai.AiSafetyGuard;
 
@@ -47,7 +47,30 @@ class ContentSafetyServiceTests {
         assertThat(service.containsSensitiveContent("self harm")).isTrue();
         assertThat(service.containsSensitiveContent("self-harm")).isTrue();
         assertThat(service.containsSensitiveContent("self_harm")).isTrue();
+        assertThat(service.containsSensitiveContent("self\nharm")).isTrue();
+        assertThat(service.containsSensitiveContent("self\r\nharm")).isTrue();
+        assertThat(service.containsSensitiveContent("self\tharm")).isTrue();
+        assertThat(service.containsSensitiveContent("p\no\nr\nn")).isTrue();
+        assertThat(service.containsSensitiveContent("f\tu\tc\tk")).isTrue();
+        assertThat(service.containsSensitiveContent("色\n情")).isTrue();
         assertThat(service.containsSensitiveContent("selfharm")).isFalse();
+    }
+
+    /** Unicode separators that NFKC keeps (and the next-line control) split a word no more than a space does. */
+    @Test
+    void unicodeLineAndParagraphSeparatorsCannotHideAWord() {
+        ContentSafetyService service = defaultService();
+
+        assertThat(service.containsSensitiveContent("self\u2028harm")).isTrue();
+        assertThat(service.containsSensitiveContent("self\u2029harm")).isTrue();
+        assertThat(service.containsSensitiveContent("self\u1680harm")).isTrue();
+        assertThat(service.containsSensitiveContent("self\u0085harm")).isTrue();
+        assertThat(service.containsSensitiveContent("p\u2029o\u2029r\u2029n")).isTrue();
+        assertThat(service.containsSensitiveContent("自\u2028杀")).isTrue();
+        assertThat(service.containsSensitiveContent("色\u2029情")).isTrue();
+        // Spaces NFKC folds to U+0020 keep matching as before.
+        assertThat(service.containsSensitiveContent("self\u3000harm")).isTrue();
+        assertThat(service.containsSensitiveContent("self\u00a0harm")).isTrue();
     }
 
     @Test
@@ -59,6 +82,12 @@ class ContentSafetyServiceTests {
         // Latin letters on either side still mark a different, harmless word.
         assertThat(service.containsSensitiveContent("葡萄 grape")).isFalse();
         assertThat(service.containsSensitiveContent("学习 method")).isFalse();
+        // English contractions/possessives ending in "'s" followed by "hit" must not match "shit".
+        assertThat(service.containsSensitiveContent("Let's hit the road.")).isFalse();
+        assertThat(service.containsSensitiveContent("He's hit his daily goal.")).isFalse();
+        assertThat(service.containsSensitiveContent("She’s hit 50 XP today!")).isFalse();
+        assertThat(service.containsSensitiveContent("It's s.h.i.t")).isTrue();
+        assertThat(service.containsSensitiveContent("s h i t")).isTrue();
     }
 
     @Test
@@ -92,24 +121,29 @@ class ContentSafetyServiceTests {
 
     @Test
     void aiSafetyGuardBlocksUnsafeLearnerTextAndRepliesWhenEnabledByDefault() {
-        SystemSettingRepository repository = mock(SystemSettingRepository.class);
-        ContentSafetySettingsReader reader = new ContentSafetySettingsReader(repository);
-        AiSafetyGuard guard = new AiSafetyGuard(reader, new ContentSafetyService(reader));
+        PlatformSettingsService settings = settings(mock(SystemSettingRepository.class));
+        AiSafetyGuard guard = new AiSafetyGuard(settings, new ContentSafetyService(settings));
 
-        assertThat(guard.blocks("How do I say 自杀 in English?")).isTrue();
-        assertThat(guard.blocks("This reply mentions porn.")).isTrue();
-        assertThat(guard.blocks("How do I order 米饭 at a hawker stall?")).isFalse();
-        assertThat(guard.blocks("What is the method for tones?")).isFalse();
+        assertThat(guard.blocksRequest("How do I say 自杀 in English?")).isTrue();
+        assertThat(guard.blocksReply("This reply mentions porn.")).isTrue();
+        assertThat(guard.blocksRequest("How do I order 米饭 at a hawker stall?")).isFalse();
+        assertThat(guard.blocksReply("What is the method for tones?")).isFalse();
     }
 
-    @Test
-    void aiSafetyGuardIsInactiveWhenTheAdminToggleIsOff() {
+    /** An absent setting row uses the default (enabled). */
+    @ParameterizedTest(name = "word filter={0}, AI safety check={1}")
+    @CsvSource({", false, true, false", "false, false, false, false", "false, , true, true"})
+    void adminTogglesControlAiScreening(String wordFilter, String safetyCheck, boolean requestBlocked, boolean replyBlocked) {
         SystemSettingRepository repository = mock(SystemSettingRepository.class);
-        when(repository.findBySettingKey(PlatformSettingsService.AI_SAFETY_CHECK_KEY)).thenReturn(setting("false"));
-        ContentSafetySettingsReader reader = new ContentSafetySettingsReader(repository);
-        AiSafetyGuard guard = new AiSafetyGuard(reader, new ContentSafetyService(reader));
+        when(repository.findValueByKey(PlatformSettingsService.SENSITIVE_WORD_FILTER_KEY))
+                .thenReturn(Optional.ofNullable(wordFilter));
+        when(repository.findValueByKey(PlatformSettingsService.AI_SAFETY_CHECK_KEY))
+                .thenReturn(Optional.ofNullable(safetyCheck));
+        PlatformSettingsService settings = settings(repository);
+        AiSafetyGuard guard = new AiSafetyGuard(settings, new ContentSafetyService(settings));
 
-        assertThat(guard.blocks("This mentions porn.")).isFalse();
+        assertThat(guard.blocksRequest("This mentions porn.")).as("screens the request").isEqualTo(requestBlocked);
+        assertThat(guard.blocksReply("This mentions porn.")).as("screens the reply").isEqualTo(replyBlocked);
     }
 
     private static ContentSafetyService defaultService() {
@@ -118,21 +152,17 @@ class ContentSafetyServiceTests {
 
     private static ContentSafetyService serviceWithSetting(String settingValue) {
         SystemSettingRepository repository = mock(SystemSettingRepository.class);
-        when(repository.findBySettingKey(PlatformSettingsService.SENSITIVE_WORD_FILTER_KEY))
-                .thenReturn(setting(settingValue));
-        return new ContentSafetyService(new ContentSafetySettingsReader(repository));
+        when(repository.findValueByKey(PlatformSettingsService.SENSITIVE_WORD_FILTER_KEY))
+                .thenReturn(Optional.ofNullable(settingValue));
+        return new ContentSafetyService(settings(repository));
+    }
+
+    /** The settings service over the given rows; the two toggles read nothing else. */
+    private static PlatformSettingsService settings(SystemSettingRepository repository) {
+        return new PlatformSettingsService(repository, null, null, null, null, null);
     }
 
     private static String requireSafeText(ContentSafetyService service, String text) {
         return service.requireSafeText(text, MAX_TEXT_LENGTH, REQUIRED_MESSAGE);
-    }
-
-    private static Optional<SystemSetting> setting(String value) {
-        if (value == null) {
-            return Optional.empty();
-        }
-        SystemSetting setting = new SystemSetting();
-        setting.setSettingValue(value);
-        return Optional.of(setting);
     }
 }

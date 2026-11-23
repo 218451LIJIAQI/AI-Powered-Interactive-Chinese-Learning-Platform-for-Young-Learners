@@ -1,7 +1,6 @@
-import { computed, getCurrentScope, onScopeDispose, ref, shallowRef } from 'vue'
+import { computed, onScopeDispose, readonly, ref, shallowRef } from 'vue'
 
 import {
-  detectRecorderSupport,
   MAX_RECORDING_SECONDS,
   RECORDER_MIME_TYPE,
   RECORDING_FILE_TYPE,
@@ -10,25 +9,10 @@ import {
 
 type AudioRecorderStatus = 'idle' | 'requesting' | 'recording' | 'recorded' | 'denied' | 'error'
 
-interface MediaRecorderLike {
-  readonly state: string
-  ondataavailable: ((event: { data: Blob }) => void) | null
-  onstop: (() => void) | null
-  start(timeslice?: number): void
-  stop(): void
-}
-
-interface MediaRecorderConstructor {
-  new (stream: MediaStream, options?: { mimeType?: string }): MediaRecorderLike
-  isTypeSupported?: (type: string) => boolean
-}
-
-const DENIED_ERRORS = new Set(['NotAllowedError', 'SecurityError', 'PermissionDeniedError'])
-
 /** True when getUserMedia was refused the microphone (rather than finding none or failing). */
 function isPermissionDenied(reason: unknown): boolean {
   const name = (reason as { name?: unknown } | null)?.name
-  return typeof name === 'string' && DENIED_ERRORS.has(name)
+  return name === 'NotAllowedError' || name === 'SecurityError'
 }
 
 /**
@@ -39,8 +23,8 @@ function isPermissionDenied(reason: unknown): boolean {
 export function useAudioRecorder() {
   // Both are missing in some browsers (and getUserMedia outside a secure context).
   const mediaDevices = navigator.mediaDevices as MediaDevices | undefined
-  const Recorder = (window as { MediaRecorder?: MediaRecorderConstructor }).MediaRecorder
-  const supported = detectRecorderSupport({ mediaDevices, MediaRecorder: Recorder })
+  const Recorder = window.MediaRecorder as typeof MediaRecorder | undefined
+  const supported = Boolean(mediaDevices?.getUserMedia && Recorder?.isTypeSupported?.(RECORDER_MIME_TYPE))
 
   const status = ref<AudioRecorderStatus>('idle')
   const elapsedSeconds = ref(0)
@@ -48,11 +32,10 @@ export function useAudioRecorder() {
   const previewUrl = ref<string | null>(null)
 
   let stream: MediaStream | null = null
-  let recorder: MediaRecorderLike | null = null
-  let chunks: Blob[] = []
-  let timer: ReturnType<typeof setInterval> | null = null
+  let recorder: MediaRecorder | null = null
+  let timer: ReturnType<typeof setInterval> | undefined
   let startedAt = 0
-  /** Incremented by every start() and abort, so a getUserMedia result that arrives late can be discarded. */
+  /** Incremented by every start() and reset(), so a getUserMedia result that arrives late can be discarded. */
   let startAttempt = 0
 
   function stopTracks(): void {
@@ -60,18 +43,9 @@ export function useAudioRecorder() {
     stream = null
   }
 
-  function clearTimer(): void {
-    if (timer !== null) clearInterval(timer)
-    timer = null
-  }
-
-  function revokePreview(): void {
+  function clearRecording(): void {
     if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
     previewUrl.value = null
-  }
-
-  function clearRecording(): void {
-    revokePreview()
     recording.value = null
     elapsedSeconds.value = 0
   }
@@ -85,113 +59,133 @@ export function useAudioRecorder() {
     if (elapsedSeconds.value >= MAX_RECORDING_SECONDS) stop()
   }
 
-  function finish(): void {
-    clearTimer()
+  function finish(chunks: Blob[]): void {
+    clearInterval(timer)
     stopTracks()
     recorder = null
-    const parts = chunks
-    chunks = []
-    if (!parts.length) {
+    if (!chunks.length) {
       status.value = 'error'
       return
     }
-    const file = new File(parts, recordingFileName(), { type: RECORDING_FILE_TYPE })
+    const file = new File(chunks, recordingFileName(), { type: RECORDING_FILE_TYPE })
     recording.value = file
     previewUrl.value = URL.createObjectURL(file)
     status.value = 'recorded'
   }
 
-  async function start(): Promise<boolean> {
-    if (!supported) return false
-    if (status.value === 'recording' || status.value === 'requesting') return false
+  async function start(): Promise<void> {
+    if (status.value === 'recording' || status.value === 'requesting') return
 
     clearRecording()
+    if (!supported || !mediaDevices || !Recorder) {
+      status.value = 'error'
+      return
+    }
     status.value = 'requesting'
     const attempt = ++startAttempt
 
     try {
-      const acquired = await mediaDevices!.getUserMedia({ audio: true })
+      const acquired = await mediaDevices.getUserMedia({ audio: true })
       if (attempt !== startAttempt) {
-        // reset() or dispose() ran while the permission prompt was open: release the late stream at once.
+        // reset() ran while the permission prompt was open: release the late stream at once.
         acquired.getTracks().forEach((track) => track.stop())
-        return false
+        return
       }
       stream = acquired
     } catch (reason) {
-      if (attempt !== startAttempt) return false
-      stopTracks()
-      status.value = isPermissionDenied(reason) ? 'denied' : 'error'
-      return false
+      if (attempt === startAttempt) status.value = isPermissionDenied(reason) ? 'denied' : 'error'
+      return
     }
 
+    let created: MediaRecorder | null = null
     try {
-      const created = new Recorder!(stream, { mimeType: RECORDER_MIME_TYPE })
-      chunks = []
+      created = new Recorder(stream, { mimeType: RECORDER_MIME_TYPE })
+      const chunks: Blob[] = []
       created.ondataavailable = (event) => {
-        if (event.data && event.data.size > 0) chunks.push(event.data)
+        if (event.data.size > 0) chunks.push(event.data)
       }
-      created.onstop = finish
-      // start() can also throw (e.g. the stream became inactive): the microphone must then be released too.
-      created.start()
+      created.onstop = () => finish(chunks)
+      created.onerror = () => {
+        if (recorder !== created) return
+        // A failed recorder can still deliver a final chunk and a stop event.
+        reset()
+        status.value = 'error'
+      }
+      // Assign before start() so synchronous onerror callbacks observe this active recorder.
       recorder = created
+      created.start()
+      // A synchronous onerror handler clears recorder via reset(); do not overwrite the failed state.
+      if (recorder !== created) return
     } catch {
+      if (created) {
+        created.ondataavailable = null
+        created.onstop = null
+        created.onerror = null
+        if (recorder === created) recorder = null
+      }
       stopTracks()
-      recorder = null
       status.value = 'error'
-      return false
+      return
     }
 
     startedAt = Date.now()
-    elapsedSeconds.value = 0
     status.value = 'recording'
     timer = setInterval(tick, 250)
-    return true
   }
 
-  /** Stops the recording; the File and preview URL are set once the recorder has flushed its data. */
+  /**
+   * Stops the recording; the File and preview URL are set once the recorder has flushed its data (its `stop` event). A
+   * start still waiting for the microphone is called off, so the microphone does not come on after the student stopped
+   * or left.
+   */
   function stop(): void {
-    if (!recorder) return
+    if (status.value === 'requesting') {
+      reset()
+      return
+    }
+    // An inactive recorder is already stopping (Stop pressed twice, or at the time limit): its `stop` event finishes.
+    if (!recorder || recorder.state === 'inactive') return
     updateElapsed()
-    clearTimer()
-    if (recorder.state !== 'inactive') recorder.stop()
-    else finish()
+    clearInterval(timer)
+    try {
+      recorder.stop()
+    } catch {
+      reset()
+      status.value = 'error'
+    }
   }
 
-  function abortActive(): void {
+  /** Discards the current recording (re-record) and releases the microphone. */
+  function reset(): void {
     startAttempt += 1
-    clearTimer()
+    clearInterval(timer)
     const active = recorder
     recorder = null
-    if (active) {
-      // Detach first so a late `stop` event cannot overwrite a newer recording.
-      active.ondataavailable = null
-      active.onstop = null
-      if (active.state !== 'inactive') active.stop()
+    try {
+      if (active) {
+        // Detach first so a late `stop` event cannot overwrite a newer recording.
+        active.ondataavailable = null
+        active.onstop = null
+        active.onerror = null
+        if (active.state !== 'inactive') active.stop()
+      }
+    } catch {
+      // The underlying media track or device may already have ended.
+    } finally {
+      stopTracks()
+      clearRecording()
+      status.value = 'idle'
     }
-    chunks = []
-    stopTracks()
   }
 
-  /** Discards the current recording (re-record). */
-  function reset(): void {
-    abortActive()
-    clearRecording()
-    status.value = 'idle'
-  }
-
-  function dispose(): void {
-    abortActive()
-    revokePreview()
-  }
-
-  if (getCurrentScope()) onScopeDispose(dispose)
+  onScopeDispose(reset)
 
   return {
     supported,
-    status,
-    elapsedSeconds,
-    recording,
-    previewUrl,
+    status: readonly(status),
+    elapsedSeconds: readonly(elapsedSeconds),
+    recording: readonly(recording),
+    previewUrl: readonly(previewUrl),
     isRecording: computed(() => status.value === 'recording'),
     isBusy: computed(() => status.value === 'recording' || status.value === 'requesting'),
     start,

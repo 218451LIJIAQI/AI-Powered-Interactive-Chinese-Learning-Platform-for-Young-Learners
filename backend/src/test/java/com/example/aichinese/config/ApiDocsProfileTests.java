@@ -11,6 +11,8 @@ import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
+import org.springframework.core.env.MutablePropertySources;
+import org.springframework.core.env.StandardEnvironment;
 
 /**
  * Pins that Swagger UI and the OpenAPI JSON are switched off under the prod and production
@@ -33,9 +35,17 @@ class ApiDocsProfileTests {
         assertThat(apiDocsSettings("demo")).isEqualTo(ENABLED);
     }
 
-    /** Loads only the application configuration files for the given profiles; no beans are created. */
+    /** Loads only the application configuration files for the given profiles, isolated from host env/sysprops. */
     private static List<String> apiDocsSettings(String... profiles) {
+        StandardEnvironment isolated = new StandardEnvironment() {
+            @Override
+            protected void customizePropertySources(MutablePropertySources propertySources) {
+                // Intentionally omit systemEnvironment and systemProperties so host SPRING_PROFILES_ACTIVE
+                // or SPRINGDOC_* variables cannot leak into profile contract assertions.
+            }
+        };
         try (ConfigurableApplicationContext context = new SpringApplicationBuilder(EmptyConfiguration.class)
+                .environment(isolated)
                 .web(WebApplicationType.NONE)
                 .bannerMode(Banner.Mode.OFF)
                 .logStartupInfo(false)

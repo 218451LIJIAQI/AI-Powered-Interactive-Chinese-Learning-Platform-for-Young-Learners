@@ -13,76 +13,58 @@ public final class FriendlyErrorMessageResolver {
     private static final int MAX_VERBATIM_LENGTH = 400;
 
     /**
-     * Specific, user-actionable messages that must reach the user verbatim, whatever their status: role mismatches,
-     * account state, hints, the daily AI quota and live-class access.
+     * Specific, user-actionable messages that must reach the user verbatim, whatever their status: account state, the
+     * learner's own hints-off setting, the daily AI quota and the two limits of "Send the link again" (wait a minute,
+     * or until tomorrow).
      */
     private static final List<String> EXPLICIT_PASSTHROUGH_HINTS = List.of(
-            "only approved teachers can create or submit learning content",
-            "only approved teachers can use this teaching feature",
             "account is currently unavailable",
-            "hints are not available for independent practice",
+            "hints are off in your settings",
             "daily ai request limit reached",
-            "this live class is not available",
-            "join window is not open yet");
+            "we just sent a link. please wait a minute before asking for another one",
+            "you asked for several links today");
 
-    private static final List<String> RATE_LIMIT_HINTS = List.of(
-            "too many requests",
-            "too many failed login attempts",
-            "rate limit");
-
-    private static final List<String> BAD_CREDENTIALS_HINTS = List.of(
-            "invalid email or password");
-
-    private static final List<String> NOT_FOUND_HINTS = List.of(
-            "not found",
-            "could not be found",
-            "was not found");
+    private static final String BAD_CREDENTIALS_HINT = "invalid email or password";
 
     private FriendlyErrorMessageResolver() {
     }
 
     public static String resolve(HttpStatusCode statusCode, String rawMessage) {
         int status = statusCode.value();
-        String normalized = normalize(rawMessage);
-
-        if (normalized.isBlank()) {
-            return status >= 500 ? serverUnavailableMessage() : operationFailedMessage();
+        if (status >= 500) {
+            return serverUnavailableMessage();
         }
 
-        if (containsAny(normalized, EXPLICIT_PASSTHROUGH_HINTS)) {
-            return passthrough(rawMessage);
+        String message = TextUtils.collapseWhitespaceToNull(rawMessage);
+        if (message == null) {
+            return switch (status) {
+                case 401 -> sessionExpiredMessage();
+                case 403 -> permissionDeniedMessage();
+                case 404 -> notFoundMessage();
+                case 429 -> tooManyRequestsMessage();
+                default -> operationFailedMessage();
+            };
         }
-        if (containsAny(normalized, RATE_LIMIT_HINTS)) {
-            return tooManyRequestsMessage();
+
+        String normalized = message.toLowerCase(Locale.ROOT);
+        if (EXPLICIT_PASSTHROUGH_HINTS.stream().anyMatch(normalized::contains)) {
+            return passthrough(message);
         }
 
         if (status == HttpStatus.UNAUTHORIZED.value()) {
-            return containsAny(normalized, BAD_CREDENTIALS_HINTS)
-                    ? passthrough(rawMessage)
-                    : sessionExpiredMessage();
+            return normalized.contains(BAD_CREDENTIALS_HINT) ? passthrough(message) : sessionExpiredMessage();
         }
 
         if (status == HttpStatus.FORBIDDEN.value()) {
             return permissionDeniedMessage();
         }
 
-        if (status == HttpStatus.NOT_FOUND.value() || containsAny(normalized, NOT_FOUND_HINTS)) {
-            return passthrough(rawMessage);
-        }
-
-        if (status >= 500) {
-            return serverUnavailableMessage();
-        }
-
-        if (status == HttpStatus.PAYLOAD_TOO_LARGE.value()) {
-            return uploadTooLargeMessage();
-        }
         if (status == HttpStatus.TOO_MANY_REQUESTS.value()) {
             return tooManyRequestsMessage();
         }
 
-        // Other 4xx messages (validation, uploads, conflicts) are written for users and shown as they are.
-        return passthrough(rawMessage);
+        // Other 4xx messages (validation, uploads, conflicts, not found) are written for users and shown as they are.
+        return passthrough(message);
     }
 
     public static String sessionExpiredMessage() {
@@ -134,28 +116,7 @@ public final class FriendlyErrorMessageResolver {
         return "We could not complete that action. Please try again shortly.";
     }
 
-    private static boolean containsAny(String normalizedMessage, List<String> hints) {
-        for (String hint : hints) {
-            if (normalizedMessage.contains(hint)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static String normalize(String rawMessage) {
-        String collapsed = TextUtils.collapseWhitespaceToNull(rawMessage);
-        if (collapsed == null) {
-            return "";
-        }
-        return collapsed.toLowerCase(Locale.ROOT);
-    }
-
-    private static String passthrough(String rawMessage) {
-        String collapsed = TextUtils.collapseWhitespaceToNull(rawMessage);
-        if (collapsed.length() <= MAX_VERBATIM_LENGTH) {
-            return collapsed;
-        }
-        return TextUtils.safeTruncate(collapsed, MAX_VERBATIM_LENGTH).stripTrailing();
+    private static String passthrough(String collapsedMessage) {
+        return TextUtils.safeTruncate(collapsedMessage, MAX_VERBATIM_LENGTH).stripTrailing();
     }
 }

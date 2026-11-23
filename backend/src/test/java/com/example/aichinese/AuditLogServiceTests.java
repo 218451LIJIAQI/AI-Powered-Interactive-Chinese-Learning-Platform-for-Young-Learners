@@ -38,14 +38,16 @@ class AuditLogServiceTests {
     private static final String ACTION_TYPE = "SECURITY_EVENT";
     private static final String TARGET_TYPE = "USER";
 
+    private final AuditLogRepository auditLogRepository = mock(AuditLogRepository.class);
+    private final UserRepository userRepository = mock(UserRepository.class);
+    private final AuditLogService service = new AuditLogService(
+            auditLogRepository, userRepository, mock(PlatformTransactionManager.class));
+
     @Test
     void recordRedactsSecretsAndBoundsDescriptionLength() {
-        AuditLogRepository auditLogRepository = savingRepository();
-        AuditLogService service = service(auditLogRepository);
+        service.record(actor(), ACTION_TYPE, TARGET_TYPE, TARGET_ID, sensitiveLongDescription());
 
-        service.record(actor(ACTOR_ID, ACTOR_EMAIL), ACTION_TYPE, TARGET_TYPE, TARGET_ID, sensitiveLongDescription());
-
-        String description = savedAuditLog(auditLogRepository).getDescription();
+        String description = savedAuditLog().getDescription();
         assertThat(description)
                 .contains("password=[REDACTED]")
                 .contains("token=[REDACTED]")
@@ -57,31 +59,26 @@ class AuditLogServiceTests {
 
     @Test
     void recordUsesPrincipalSnapshotAndManagedUserReference() {
-        AuditLogRepository auditLogRepository = savingRepository();
-        UserRepository userRepository = mock(UserRepository.class);
-        User actorReference = actor(ACTOR_ID, ACTOR_EMAIL);
+        User actorReference = actor();
         when(userRepository.getReferenceById(ACTOR_ID)).thenReturn(actorReference);
-        AuditLogService service = service(auditLogRepository, userRepository);
 
         service.record(
-                new SecurityUserDetails(actor(ACTOR_ID, ACTOR_EMAIL)),
+                new SecurityUserDetails(actor()),
                 ACTION_TYPE,
                 TARGET_TYPE,
                 TARGET_ID,
                 "Principal-backed audit");
 
         verify(userRepository).getReferenceById(ACTOR_ID);
-        AuditLog saved = savedAuditLog(auditLogRepository);
+        AuditLog saved = savedAuditLog();
         assertThat(saved.getActorUser()).isSameAs(actorReference);
         assertThat(saved.getActorEmail()).isEqualTo(ACTOR_EMAIL);
     }
 
     @Test
     void safeRecordLogsConciseFailureSummaryWithoutWarnStackTrace(CapturedOutput output) {
-        AuditLogRepository auditLogRepository = mock(AuditLogRepository.class);
         when(auditLogRepository.save(any(AuditLog.class)))
                 .thenThrow(new RuntimeException("audit store failed Authorization: Bearer secret-token"));
-        AuditLogService service = service(auditLogRepository);
 
         assertThatCode(() -> service.safeRecord(
                 null,
@@ -97,31 +94,16 @@ class AuditLogServiceTests {
                 .doesNotContain("secret-token", "at com.example.aichinese");
     }
 
-    private static AuditLogRepository savingRepository() {
-        AuditLogRepository auditLogRepository = mock(AuditLogRepository.class);
-        when(auditLogRepository.save(any(AuditLog.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        return auditLogRepository;
-    }
-
-    private static AuditLogService service(AuditLogRepository auditLogRepository) {
-        return service(auditLogRepository, mock(UserRepository.class));
-    }
-
-    private static AuditLogService service(AuditLogRepository auditLogRepository, UserRepository userRepository) {
-        return new AuditLogService(
-                auditLogRepository, userRepository, mock(PlatformTransactionManager.class));
-    }
-
-    private static AuditLog savedAuditLog(AuditLogRepository auditLogRepository) {
+    private AuditLog savedAuditLog() {
         ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
         verify(auditLogRepository).save(captor.capture());
         return captor.getValue();
     }
 
-    private static User actor(Long id, String email) {
+    private static User actor() {
         User user = new User();
-        user.setId(id);
-        user.setEmail(email);
+        user.setId(ACTOR_ID);
+        user.setEmail(ACTOR_EMAIL);
         return user;
     }
 

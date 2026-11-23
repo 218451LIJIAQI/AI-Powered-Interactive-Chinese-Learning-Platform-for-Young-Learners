@@ -5,7 +5,9 @@ import java.time.ZoneId;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-/** The platform time zone: the day boundary of streaks, daily goals and AI quotas. */
+/**
+ * The platform time zone used for streaks, daily goals and scheduled reminders.
+ */
 @ConfigurationProperties(prefix = "app.platform")
 public record PlatformProperties(String defaultTimeZone) {
 

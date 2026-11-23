@@ -1,9 +1,13 @@
 package com.example.aichinese.dto.learn;
 
+import static com.example.aichinese.dto.DtoNormalization.immutableListOrEmpty;
+import static com.example.aichinese.dto.DtoNormalization.stripToNull;
+
 import java.util.List;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
@@ -11,17 +15,14 @@ import jakarta.validation.constraints.Size;
  * One item of a Practice set as admins edit it. Which fields an item uses depends on the set's type:
  * <ul>
  *   <li>Flashcards: hanzi, pinyin, meaning, optional example and its meaning;</li>
- *   <li>Quizzes: prompt, optional hanzi and pinyin, options, the right option, explanation;</li>
  *   <li>Listening: prompt, the Chinese read aloud ({@code audioText}), options, the right option, explanation;</li>
  *   <li>Tracing: the characters to write (hanzi), pinyin, meaning;</li>
  *   <li>Drag &amp; Drop: the sentence as tiles separated by spaces (hanzi), pinyin, meaning, extra tiles;</li>
  *   <li>Matching: hanzi, pinyin, meaning (the pair);</li>
- *   <li>Story: a question about the story (prompt), options, the right option, explanation.</li>
+ *   <li>Typing: the word (hanzi), pinyin, meaning, and look-alike words separated by spaces (distractors).</li>
  * </ul>
  */
 public record PracticeItemData(
-        Long id,
-
         @Size(max = 100, message = "Chinese text must not exceed 100 characters.")
         String hanzi,
 
@@ -44,7 +45,7 @@ public record PracticeItemData(
         String exampleMeaning,
 
         @Size(max = 6, message = "A question has at most 6 answers.")
-        List<@Valid ChoiceOption> options,
+        List<@NotNull(message = "Every answer needs text.") @Valid ChoiceOption> options,
 
         @PositiveOrZero(message = "Tick the right answer.")
         @Max(value = 5, message = "Tick the right answer.")
@@ -57,6 +58,15 @@ public record PracticeItemData(
         String distractors) {
 
     public PracticeItemData {
-        options = options == null ? List.of() : List.copyOf(options);
+        hanzi = stripToNull(hanzi);
+        pinyin = stripToNull(pinyin);
+        meaning = stripToNull(meaning);
+        prompt = stripToNull(prompt);
+        audioText = stripToNull(audioText);
+        example = stripToNull(example);
+        exampleMeaning = stripToNull(exampleMeaning);
+        explanation = stripToNull(explanation);
+        distractors = stripToNull(distractors);
+        options = immutableListOrEmpty(options);
     }
 }

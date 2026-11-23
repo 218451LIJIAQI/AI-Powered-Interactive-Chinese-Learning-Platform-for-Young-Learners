@@ -1,7 +1,6 @@
 package com.example.aichinese.entity.base;
 
 import com.example.aichinese.entity.User;
-import com.example.aichinese.entity.enums.ActivityDifficulty;
 import com.example.aichinese.entity.enums.LearningStage;
 
 import jakarta.persistence.Column;
@@ -15,14 +14,13 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * Columns shared by the six practice-activity entities (flashcards, matching games, listening,
- * tracing, drag-and-drop and story activities). Each entity keeps its own {@code xp_reward}
- * column because the default reward differs per type.
+ * Columns shared by the six practice-activity entities (flashcards, listening, tracing, drag-and-drop,
+ * matching and typing).
  */
 @Getter
 @Setter
 @MappedSuperclass
-public abstract class PracticeActivityContent extends ReviewableContent {
+public abstract class PracticeActivityContent extends PublishableContent {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by_user_id", updatable = false)
@@ -35,20 +33,7 @@ public abstract class PracticeActivityContent extends ReviewableContent {
     @Column(name = "hsk_level")
     private Integer hskLevel;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "difficulty", length = 20)
-    private ActivityDifficulty difficulty;
-
-    @Column(name = "topic", length = 100)
-    private String topic;
-
-    @Column(name = "tags", length = 500)
-    private String tags;
-
-    @Column(name = "estimated_seconds")
-    private Integer estimatedSeconds;
-
-    public abstract Integer getXpReward();
-
-    public abstract void setXpReward(Integer xpReward);
+    /** What finishing a Practice set pays (PracticeCatalog fills it). A class lesson's activity pays nothing. */
+    @Column(name = "xp_reward", nullable = false)
+    private Integer xpReward = 0;
 }

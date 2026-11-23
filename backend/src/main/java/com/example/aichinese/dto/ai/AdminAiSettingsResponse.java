@@ -1,5 +1,7 @@
 package com.example.aichinese.dto.ai;
 
+import static com.example.aichinese.dto.DtoNormalization.redactValue;
+
 import java.time.LocalDateTime;
 
 /**
@@ -14,4 +16,14 @@ public record AdminAiSettingsResponse(
         int requestsPerDay,
         LocalDateTime lastChangedAt,
         String lastChangedBy) {
+
+    @Override
+    public String toString() {
+        return "AdminAiSettingsResponse[sensitiveWordFilter=" + sensitiveWordFilter
+                + ", aiSafetyCheck=" + aiSafetyCheck
+                + ", requestsPerMinute=" + requestsPerMinute
+                + ", requestsPerDay=" + requestsPerDay
+                + ", lastChangedAt=" + lastChangedAt
+                + ", lastChangedBy=" + redactValue(lastChangedBy) + "]";
+    }
 }

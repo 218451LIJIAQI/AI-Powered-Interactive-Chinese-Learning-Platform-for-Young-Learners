@@ -1,7 +1,13 @@
 package com.example.aichinese.entity;
 
+import java.time.LocalDateTime;
+
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import com.example.aichinese.entity.base.BaseEntity;
 import com.example.aichinese.entity.enums.PracticeCheckType;
+import com.example.aichinese.entity.value.PronunciationFeedback;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -19,14 +25,17 @@ import lombok.Setter;
 /**
  * A pronunciation or handwriting practice score that SparkBot gave a student. Only the student sees it, and only the
  * result is kept: the recording or photo is never stored (it is held in memory while it is scored).
- * {@code tones/clarity/pace} are filled for recordings only; {@code tips} holds one "what to work on" point per line.
+ * The old score columns hold historical transcript estimates. New recordings have structured acoustic feedback.
+ * {@code tips} holds one "what to work on" point per line. The unused columns {@code shape_score}
+ * and {@code tone_detail} of V1 are dropped by V2 where empty (kept unmapped where an older version stored values).
+ * {@code deletedAt} is set while a deleted check can still be brought back (the Undo of Delete): it is out of the
+ * student's list then, and deleted for good once the Undo window has passed.
  */
 @Getter
 @Setter
 @Entity
 @Table(name = "ai_practice_checks", indexes = {
-        @Index(name = "idx_ai_practice_checks_student_created", columnList = "student_user_id,created_at"),
-        @Index(name = "idx_ai_practice_checks_lesson_id", columnList = "lesson_id")
+        @Index(name = "idx_ai_practice_checks_student_deleted_created", columnList = "student_user_id,deleted_at,created_at,id")
 })
 public class AiPracticeCheck extends BaseEntity {
 
@@ -59,6 +68,10 @@ public class AiPracticeCheck extends BaseEntity {
     @Column(name = "pace_score", updatable = false)
     private Integer paceScore;
 
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "pronunciation", updatable = false)
+    private PronunciationFeedback pronunciation;
+
     @Column(name = "headline", nullable = false, updatable = false, length = 200)
     private String headline;
 
@@ -67,4 +80,7 @@ public class AiPracticeCheck extends BaseEntity {
 
     @Column(name = "tips", updatable = false, length = 2000)
     private String tips;
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
 }

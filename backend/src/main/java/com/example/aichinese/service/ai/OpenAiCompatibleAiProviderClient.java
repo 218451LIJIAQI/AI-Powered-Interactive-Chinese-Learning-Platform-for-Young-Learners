@@ -6,28 +6,26 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.stereotype.Component;
 
 import com.example.aichinese.config.AiProperties;
 
-@Component
+/**
+ * The Chat Completions client ({@code POST /chat/completions}) of the alternative providers ({@code deepseek},
+ * {@code openai-compatible}): text only, the instructions sent as the first, {@code system} message.
+ */
 public class OpenAiCompatibleAiProviderClient extends HttpAiProviderClient {
-
-    private static final String ROLE_SYSTEM = "system";
-    private static final String ROLE_USER = "user";
-    private static final double DEFAULT_TEMPERATURE = 0.7;
 
     public OpenAiCompatibleAiProviderClient(AiProperties aiProperties, RestTemplateBuilder restTemplateBuilder) {
         super(aiProperties, restTemplateBuilder, "/chat/completions");
     }
 
     @Override
-    Map<String, Object> buildRequestBody(String modelName, AiProviderPrompt prompt) {
+    Map<String, Object> buildRequestBody(String modelName, int maxOutputTokens, AiProviderPrompt prompt) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("model", modelName);
         body.put("messages", buildMessages(prompt));
-        body.put("max_tokens", prompt.maxOutputTokens());
-        body.put("temperature", DEFAULT_TEMPERATURE);
+        body.put("max_tokens", maxOutputTokens);
+        body.put("temperature", 0.7);
         if (prompt.expectJson()) {
             body.put("response_format", Map.of("type", "json_object"));
         }
@@ -36,11 +34,11 @@ public class OpenAiCompatibleAiProviderClient extends HttpAiProviderClient {
 
     private static List<Map<String, Object>> buildMessages(AiProviderPrompt prompt) {
         List<Map<String, Object>> messages = new ArrayList<>(prompt.messageHistory().size() + 2);
-        messages.add(message(ROLE_SYSTEM, prompt.systemInstruction()));
+        messages.add(message("system", prompt.systemInstruction()));
         for (AiProviderPrompt.AiMessage message : prompt.messageHistory()) {
             messages.add(message(message.role(), message.content()));
         }
-        messages.add(message(ROLE_USER, prompt.userPrompt()));
+        messages.add(message("user", prompt.userPrompt()));
         return messages;
     }
 
@@ -50,27 +48,23 @@ public class OpenAiCompatibleAiProviderClient extends HttpAiProviderClient {
 
     @Override
     AiProviderResult parseResponse(Map<String, Object> responseBody, AiProviderPrompt prompt) {
-        Object choicesObject = responseBody.get("choices");
-        if (!(choicesObject instanceof List<?> choices) || choices.isEmpty()) {
-            return AiProviderResult.failure("Provider response did not contain any choices.");
+        Integer tokens = extractTokenCount(responseBody.get("usage"));
+        if (!(responseBody.get("choices") instanceof List<?> choices) || choices.isEmpty()) {
+            return AiProviderResult.failure("Provider response did not contain any choices.", tokens);
         }
-
-        Object firstChoice = choices.get(0);
-        if (!(firstChoice instanceof Map<?, ?> choiceMap)) {
-            return AiProviderResult.failure("Provider response choice format was invalid.");
+        if (!(choices.get(0) instanceof Map<?, ?> choiceMap)) {
+            return AiProviderResult.failure("Provider response choice format was invalid.", tokens);
         }
-
-        Object messageObject = choiceMap.get("message");
-        if (!(messageObject instanceof Map<?, ?> messageMap)) {
-            return AiProviderResult.failure("Provider response message format was invalid.");
+        Object finishReason = choiceMap.get("finish_reason");
+        if ("content_filter".equals(finishReason)) {
+            return AiProviderResult.failure("Provider response was filtered.", tokens);
         }
-
-        Object content = messageMap.get("content");
-        if (!(content instanceof String text) || text.isBlank()) {
-            return AiProviderResult.failure("Provider response text was empty.");
+        if ("length".equals(finishReason) && prompt.expectJson()) {
+            return AiProviderResult.failure("Provider response was incomplete.", tokens);
         }
-
-        Integer tokenCount = AiProviderSupport.extractTokenCount(responseBody.get("usage"));
-        return AiProviderResult.success(text.trim(), tokenCount);
+        if (!(choiceMap.get("message") instanceof Map<?, ?> messageMap)) {
+            return AiProviderResult.failure("Provider response message format was invalid.", tokens);
+        }
+        return textResult(messageMap.get("content") instanceof String text ? text : null, responseBody);
     }
 }

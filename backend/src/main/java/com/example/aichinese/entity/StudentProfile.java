@@ -1,6 +1,9 @@
 package com.example.aichinese.entity;
 
+import org.hibernate.annotations.DynamicUpdate;
+
 import com.example.aichinese.entity.base.BaseEntity;
+import com.example.aichinese.entity.enums.HintMode;
 import com.example.aichinese.entity.enums.PlanSetupState;
 
 import jakarta.persistence.Column;
@@ -18,6 +21,7 @@ import lombok.Setter;
 @Getter
 @Setter
 @Entity
+@DynamicUpdate
 @Table(
         name = "student_profiles",
         uniqueConstraints = {
@@ -41,4 +45,9 @@ public class StudentProfile extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "plan_setup_state", nullable = false, length = 20)
     private PlanSetupState planSetupState = PlanSetupState.NOT_STARTED;
+
+    /** When hints are offered in Learn lessons, Practice sets, the Mistakes review and Class lessons (Account page). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "hint_mode", nullable = false, length = 20)
+    private HintMode hintMode = HintMode.AUTOMATIC;
 }

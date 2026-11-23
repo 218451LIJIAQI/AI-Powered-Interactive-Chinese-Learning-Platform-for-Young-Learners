@@ -2,20 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { saveBlobDownload } from './download'
 
-function installObjectUrlMocks(): {
-  createObjectURL: ReturnType<typeof vi.fn>
-  revokeObjectURL: ReturnType<typeof vi.fn>
-} {
+function installObjectUrlMocks() {
   const createObjectURL = vi.fn(() => 'blob:test-download-url')
   const revokeObjectURL = vi.fn()
-  Object.defineProperty(URL, 'createObjectURL', {
-    configurable: true,
-    value: createObjectURL,
-  })
-  Object.defineProperty(URL, 'revokeObjectURL', {
-    configurable: true,
-    value: revokeObjectURL,
-  })
+  vi.stubGlobal('URL', { createObjectURL, revokeObjectURL })
   return { createObjectURL, revokeObjectURL }
 }
 
@@ -45,16 +35,21 @@ describe('download file name', () => {
     expect(savedName('../notes\u0000\u202ereport:1?.pdf', 'fallback.pdf')).toBe('_notes_report_1_.pdf')
   })
 
-  it('strips leading dots and falls back for empty or traversal-only names', () => {
+  it('strips leading dots (even separated by spaces or invisible characters) and C1 controls', () => {
     expect(savedName('.env', 'fallback.txt')).toBe('env')
-    expect(savedName('..', 'fallback.txt')).toBe('download')
+    expect(savedName('. .env', 'fallback.txt')).toBe('env')
+    expect(savedName('\u200b .env', 'fallback.txt')).toBe('env')
+    expect(savedName('note\u0085.txt', 'fallback.txt')).toBe('note_.txt')
+    expect(savedName('..', 'fallback.txt')).toBe('fallback.txt')
+    expect(savedName('..', '..')).toBe('download')
     expect(savedName('', ' .hidden-fallback ')).toBe('hidden-fallback')
   })
 
   it('removes trailing dots/spaces and rejects Windows reserved device names', () => {
     expect(savedName('lesson-notes. ', 'fallback.txt')).toBe('lesson-notes')
-    expect(savedName('CON.txt', 'fallback.txt')).toBe('download')
-    expect(savedName('lpt1', 'fallback.txt')).toBe('download')
+    expect(savedName('CON.txt', 'fallback.txt')).toBe('fallback.txt')
+    expect(savedName('lpt1', 'fallback.txt')).toBe('fallback.txt')
+    expect(savedName('CON.txt', 'lpt1')).toBe('download')
   })
 
   it('limits very long names while preserving a short extension', () => {

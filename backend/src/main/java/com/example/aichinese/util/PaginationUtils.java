@@ -1,56 +1,43 @@
 package com.example.aichinese.util;
 
+import java.util.List;
+import java.util.function.Function;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 
 /**
- * Page and size clamping shared by every paged service (at most {@value #DEFAULT_MAX_PAGE_SIZE} items per page, so
- * one request cannot make the server load a whole table), plus index helpers for the few services that page a list
- * in memory. Index arithmetic is done in {@code long}, so a huge page number cannot overflow.
+ * Shared page and size bounds for paged services, with at most {@value #DEFAULT_MAX_PAGE_SIZE} items in a response.
  */
 public final class PaginationUtils {
 
     public static final int DEFAULT_MAX_PAGE_SIZE = 100;
 
+    /** Newest first; the id keeps rows of the same time in one order, so no row moves between pages. */
+    public static final Sort NEWEST_FIRST = Sort.by(Sort.Direction.DESC, "createdAt", "id");
+
     private PaginationUtils() {
     }
 
-    /** A negative page is the first page. */
-    public static int sanitizePage(int page) {
-        return Math.max(page, 0);
-    }
-
-    /** The size clamped to {@code [1, DEFAULT_MAX_PAGE_SIZE]}. */
-    public static int sanitizeSize(int size) {
-        return Math.min(Math.max(size, 1), DEFAULT_MAX_PAGE_SIZE);
-    }
-
-    /** The requested page, with the page and size sanitized. */
+    /** The requested page: a negative page is the first page, and the size is clamped to [1, DEFAULT_MAX_PAGE_SIZE]. */
     public static PageRequest pageRequest(int page, int size) {
-        return PageRequest.of(sanitizePage(page), sanitizeSize(size));
+        return PageRequest.of(Math.max(page, 0), Math.clamp(size, 1, DEFAULT_MAX_PAGE_SIZE));
     }
 
-    /** {@link #pageRequest}, newest {@code createdAt} first. */
-    public static Pageable newestPageable(int page, int size) {
-        return pageRequest(page, size).withSort(Sort.by(Sort.Direction.DESC, "createdAt"));
+    /** {@link #pageRequest}, sorted {@link #NEWEST_FIRST}. */
+    public static PageRequest newestFirst(int page, int size) {
+        return pageRequest(page, size).withSort(NEWEST_FIRST);
     }
 
-    /** The first index of the page in a list of {@code totalItems}, at most {@code totalItems}. */
-    public static int startIndex(int page, int size, int totalItems) {
-        if (totalItems <= 0) {
-            return 0;
+    /** JPA accepts a signed int offset. Out-of-range pages still report their requested number and filtered total. */
+    public static <T> Page<T> readPage(Pageable requested, Function<Pageable, Page<T>> query) {
+        if (requested.getOffset() <= Integer.MAX_VALUE) {
+            return query.apply(requested);
         }
-        long offset = (long) sanitizePage(page) * sanitizeSize(size);
-        return (int) Math.min(offset, totalItems);
-    }
-
-    /** The end index (exclusive, for {@link java.util.List#subList}) of the page that starts at {@code startIndex}. */
-    public static int endIndex(int startIndex, int size, int totalItems) {
-        if (totalItems <= 0) {
-            return 0;
-        }
-        long end = (long) Math.max(startIndex, 0) + sanitizeSize(size);
-        return (int) Math.min(end, totalItems);
+        long total = query.apply(PageRequest.of(0, 1)).getTotalElements();
+        return new PageImpl<>(List.of(), requested, total);
     }
 }

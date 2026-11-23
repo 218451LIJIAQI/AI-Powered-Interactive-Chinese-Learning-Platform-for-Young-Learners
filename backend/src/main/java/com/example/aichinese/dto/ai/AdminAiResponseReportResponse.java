@@ -5,17 +5,21 @@ import static com.example.aichinese.dto.DtoNormalization.redactValue;
 
 import java.time.LocalDateTime;
 
+import com.example.aichinese.entity.enums.AiFeatureKey;
+import com.example.aichinese.entity.enums.AiResponseReportReason;
+import com.example.aichinese.entity.enums.AiResponseReportStatus;
+
 /** A report in the admin queue: who reported which feature and why, what was reported, and the decision. */
 public record AdminAiResponseReportResponse(
         Long id,
         String studentName,
         String studentEmail,
-        String featureKey,
-        String reasonCategory,
+        AiFeatureKey featureKey,
+        AiResponseReportReason reasonCategory,
         String description,
         String promptSnapshot,
         String aiResponseSnapshot,
-        String status,
+        AiResponseReportStatus status,
         String reviewerName,
         String reviewerNote,
         LocalDateTime reviewedAt,

@@ -1,5 +1,6 @@
 package com.example.aichinese.dto.support;
 
+import static com.example.aichinese.dto.DtoNormalization.redactLength;
 import static com.example.aichinese.dto.DtoNormalization.strip;
 
 import com.example.aichinese.entity.enums.SupportTopic;
@@ -8,7 +9,10 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
-/** The New request form of a signed-in student or teacher (sent as multipart, with an optional screenshot). */
+/**
+ * A signed-in learner's "Report a problem" form (sent as multipart, with an optional screenshot); support answers by
+ * e-mail.
+ */
 public record CreateSupportRequest(
         @NotNull(message = "Choose a topic.")
         SupportTopic topic,
@@ -24,5 +28,12 @@ public record CreateSupportRequest(
     public CreateSupportRequest {
         subject = strip(subject);
         message = strip(message);
+    }
+
+    @Override
+    public String toString() {
+        return "CreateSupportRequest[topic=" + topic
+                + ", subject=" + redactLength(subject)
+                + ", message=" + redactLength(message) + "]";
     }
 }

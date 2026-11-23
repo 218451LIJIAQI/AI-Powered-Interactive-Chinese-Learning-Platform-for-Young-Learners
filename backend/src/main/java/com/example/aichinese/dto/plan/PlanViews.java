@@ -1,19 +1,24 @@
 package com.example.aichinese.dto.plan;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+import com.example.aichinese.dto.DtoNormalization;
+import com.example.aichinese.entity.enums.LearnLessonKind;
 import com.example.aichinese.entity.enums.LevelCheckSkill;
 import com.example.aichinese.entity.enums.MandarinLevel;
 import com.example.aichinese.entity.enums.PlanFocus;
 import com.example.aichinese.entity.enums.PlanGoal;
 import com.example.aichinese.entity.enums.PlanPace;
 import com.example.aichinese.entity.enums.PlanReason;
-import com.example.aichinese.entity.enums.PlanSetupState;
+import com.example.aichinese.entity.enums.PlanSelfLevel;
 import com.example.aichinese.entity.enums.PlanStepKind;
 import com.example.aichinese.entity.enums.PracticeType;
+
+import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
  * What the learning plan pages show. Texts SparkBot wrote are null in a plan built from rules: the pages then write
@@ -24,46 +29,79 @@ public final class PlanViews {
     private PlanViews() {
     }
 
-    /** STARTS_TODAY: nothing done this first week yet; BEHIND: progress is well under the time that has passed. */
+    /**
+     * STARTS_TODAY: the plan's first day, nothing done yet; BEHIND: a day of this plan week before today went without
+     * the daily goal, or progress is well under the time that has passed.
+     */
     public enum PlanStatus { STARTS_TODAY, ON_TRACK, BEHIND, COMPLETE }
 
-    /** UNAVAILABLE: a class that left the catalogue since the plan was built. */
+    /** UNAVAILABLE: a unit or class that left the catalogue since the plan was built. */
     public enum StepStatus { DONE, IN_PROGRESS, NEXT, LATER, IN_MY_CLASSES, OPTIONAL, UNAVAILABLE }
 
     /** This week's to-dos: Learn lessons done this plan week, the next lesson, a practice set and Xiaomei. */
     public enum TaskKind { LEARN_DONE, LEARN_NEXT, PRACTICE, XIAOMEI }
 
-    // ===== Setup options =====
+    // Setup options
 
+    /**
+     * {@code today} is the platform's day (LearnClock), the one a goal date is checked against: the goal form counts its
+     * spans ("in 2 weeks") and its earliest and latest dates from it, not from the browser's day. {@code checkStarts}
+     * maps each self-reported level to the adaptive check's starting level as a single source of truth.
+     */
     public record Options(
             List<ReasonOption> reasons,
-            List<PaceOption> paces,
-            List<PlanFocus> focuses,
-            int goalTextMax) {
+            List<PaceBand> paces,
+            Map<PlanSelfLevel, MandarinLevel> checkStarts,
+            int goalTextMax,
+            LocalDate today) {
     }
 
     /** A reason and the goals the setup suggests for it. */
     public record ReasonOption(PlanReason key, List<PlanGoal> goals) {
     }
 
-    public record PaceOption(PlanPace key, int minutesPerDay, int daysPerWeek, int dailyGoalXp) {
+    /**
+     * A band of "Time I can give each day" in minutes a day ("1–2 hours a day"); {@code maxMinutesPerDay} is null for
+     * the open-ended "2+ hours". The setup offers these, and a plan carries the one it was built for.
+     */
+    public record PaceBand(PlanPace key, int minMinutesPerDay, Integer maxMinutesPerDay) {
+
+        public static PaceBand of(PlanPace pace) {
+            return new PaceBand(pace, pace.minMinutesPerDay(), pace.maxMinutesPerDay());
+        }
     }
 
-    // ===== The plan =====
+    // The plan
 
+    /**
+     * {@code today} is the platform's day the plan was read on (LearnClock): the page tells a goal date that has passed
+     * by it, as the server does, not by the browser's day. {@code pickedClassId} is the optional class the learner
+     * picked to take first, null when they have not picked one or the pick no longer applies (the class was joined or
+     * left the catalogue, or it is the only one left).
+     */
     public record Plan(
             boolean aiAssisted,
             Goal goal,
             Level level,
             Weeks weeks,
             Progress progress,
-            Pace pace,
+            PaceBand pace,
             List<Step> steps,
             List<String> outcomes,
-            List<CoverageItem> coverage,
             Milestone milestone,
             List<WeekTask> thisWeek,
-            Kept kept) {
+            Kept kept,
+            LocalDate today,
+            Long pickedClassId) {
+
+        @Override
+        public String toString() {
+            return "Plan[aiAssisted=" + aiAssisted + ", goal=" + goal + ", level=" + level + ", weeks=" + weeks
+                    + ", progress=" + progress + ", pace=" + pace + ", steps=" + (steps == null ? 0 : steps.size())
+                    + ", outcomes=" + (outcomes == null ? 0 : outcomes.size()) + ", milestone=" + milestone
+                    + ", thisWeek=" + (thisWeek == null ? 0 : thisWeek.size()) + ", kept=" + kept + ", today=" + today
+                    + ", pickedClassId=" + pickedClassId + "]";
+        }
     }
 
     /**
@@ -81,37 +119,50 @@ public final class PlanViews {
             LocalDate deadline,
             List<PlanFocus> focus,
             List<String> workOn) {
+
+        @Override
+        public String toString() {
+            return "Goal[title=" + DtoNormalization.redactLength(title)
+                    + ", summary=" + DtoNormalization.redactLength(summary)
+                    + ", reason=" + reason
+                    + ", reasonText=" + DtoNormalization.redactLength(reasonText)
+                    + ", picks=" + picks
+                    + ", goals=" + goals
+                    + ", ownWords=" + DtoNormalization.redactLength(ownWords)
+                    + ", deadline=" + deadline
+                    + ", focus=" + focus
+                    + ", workOn=" + (workOn == null ? 0 : workOn.size()) + "]";
+        }
     }
 
-    /** {@code checkedAt} is null when a brand-new student skipped the check. */
     public record Level(
             MandarinLevel placed,
             MandarinLevel target,
-            boolean headStart,
             List<LevelCheckSkill> knownSkills,
-            List<LevelCheckSkill> newSkills,
-            LocalDateTime checkedAt) {
+            List<LevelCheckSkill> newSkills) {
     }
 
-    /** {@code content}: the week the last Learn step should end; the weeks after it are review and practice. */
+    /**
+     * Calendar weeks counted from the plan's first day: {@code total} is the days to the goal date divided by 7, rounded
+     * up (from the daily time without a date); {@code current} counts the 7-day blocks from the first day (and stays at
+     * the last week once the plan has ended); {@code content} is the week the last Learn step should end, the weeks
+     * after it are review and practice.
+     */
     public record Weeks(int current, int total, int content) {
     }
 
     /**
      * {@code percent}: lessons done in the plan's Learn units and joined classes; {@code daysThisWeek}: days of this plan
-     * week with the daily goal reached.
+     * week with the daily goal reached; {@code daysBehind}: days of this plan week before today without it.
      */
-    public record Progress(int percent, PlanStatus status, int daysThisWeek, int paceDays) {
-    }
-
-    /** {@code dailyGoalXp} is the student's current daily goal (changeable in Account). */
-    public record Pace(PlanPace key, int minutesPerDay, int daysPerWeek, int dailyGoalXp) {
+    public record Progress(int percent, PlanStatus status, int daysThisWeek, int daysBehind) {
     }
 
     /**
-     * One step with its live progress. A Learn unit has its number, Chinese title, icon and next lesson; a class has
-     * its teacher, whether the student joined it and its next live session. {@code reason} is SparkBot's "Why"; a
-     * rule-based plan explains the step with {@code goals}.
+     * One step with its live progress. A Learn unit has its number, Chinese title and next lesson; a class has whether
+     * the learner joined it, its next lesson once joined, and {@code bestAfterUnit}, the Learn unit the class is best
+     * taken after (the class's own setting, null when it has none). {@code reason} is SparkBot's "Why"; a rule-based
+     * plan explains the step with {@code goals}.
      */
     public record Step(
             int position,
@@ -120,8 +171,6 @@ public final class PlanViews {
             String title,
             String titleZh,
             Integer unitNumber,
-            Integer hskLevel,
-            String iconKey,
             int lessonCount,
             int completedCount,
             int percent,
@@ -130,18 +179,28 @@ public final class PlanViews {
             boolean quickReview,
             int weekFrom,
             int weekTo,
+            Integer bestAfterUnit,
             String reason,
             List<PlanGoal> goals,
-            String teacherName,
-            NextLesson nextLesson,
-            OffsetDateTime nextSessionAt) {
+            NextLesson nextLesson) {
+
+        @Override
+        public String toString() {
+            return "Step[position=" + position + ", kind=" + kind + ", refId=" + refId + ", title=" + title
+                    + ", titleZh=" + titleZh + ", unitNumber=" + unitNumber + ", lessonCount=" + lessonCount
+                    + ", completedCount=" + completedCount + ", percent=" + percent + ", status=" + status
+                    + ", joined=" + joined + ", quickReview=" + quickReview + ", weekFrom=" + weekFrom
+                    + ", weekTo=" + weekTo + ", bestAfterUnit=" + bestAfterUnit
+                    + ", reason=" + DtoNormalization.redactLength(reason)
+                    + ", goals=" + goals + ", nextLesson=" + nextLesson + "]";
+        }
     }
 
-    public record NextLesson(Long id, String title) {
-    }
-
-    /** A goal and what covers it: a Learn unit, a class in the plan (its title), or nothing yet. */
-    public record CoverageItem(PlanGoal goal, boolean learn, Long classId, String classTitle) {
+    /**
+     * What to play next in a step: a lesson of the Learn unit, or, for the unit behind an open level checkpoint, that
+     * checkpoint ({@code kind} CHECKPOINT); for a joined class, its next lesson ({@code kind} LESSON).
+     */
+    public record NextLesson(Long id, String title, LearnLessonKind kind) {
     }
 
     /**
@@ -149,99 +208,107 @@ public final class PlanViews {
      * by then.
      */
     public record Milestone(LocalDate date, String text, List<Integer> stepPositions) {
+
+        @Override
+        public String toString() {
+            return "Milestone[date=" + date + ", text=" + DtoNormalization.redactLength(text)
+                    + ", stepPositions=" + stepPositions + "]";
+        }
     }
 
-    /** {@code doneOn} for a lesson finished this week; {@code done} for Xiaomei when a talk happened this week. */
-    public record WeekTask(
-            TaskKind kind,
-            String title,
-            boolean done,
-            LocalDate doneOn,
-            Integer minutes,
-            Long lessonId,
-            PracticeType practiceType,
-            Long practiceSetId) {
+    /** Discriminated this-week to-dos matching the frontend union without nullable placeholder fields. */
+    public sealed interface WeekTask
+            permits WeekTask.LearnDone, WeekTask.LearnNext, WeekTask.Practice, WeekTask.Xiaomei {
+
+        @JsonProperty("kind")
+        TaskKind kind();
+
+        record LearnDone(String title, LocalDate doneOn) implements WeekTask {
+            @Override
+            public TaskKind kind() {
+                return TaskKind.LEARN_DONE;
+            }
+        }
+
+        record LearnNext(String title, Integer minutes, Long lessonId) implements WeekTask {
+            @Override
+            public TaskKind kind() {
+                return TaskKind.LEARN_NEXT;
+            }
+        }
+
+        record Practice(String title, PracticeType practiceType, Long practiceSetId) implements WeekTask {
+            @Override
+            public TaskKind kind() {
+                return TaskKind.PRACTICE;
+            }
+        }
+
+        record Xiaomei(boolean done) implements WeekTask {
+            @Override
+            public TaskKind kind() {
+                return TaskKind.XIAOMEI;
+            }
+        }
     }
 
-    /** What the student has done overall (shown when the goal changes: progress is never lost). */
-    public record Kept(int lessons, int practiceSets, int classes) {
+    /** What the student has done overall (the road map's "so far"; progress is never lost when the goal changes). */
+    public record Kept(int lessons, int practiceSets) {
     }
 
-    // ===== Touchpoints =====
+    // Touchpoints
+
+    /** The plan at a glance for Progress and a retaken level check; {@code plan} is null without a plan. */
+    public record Overview(Summary plan) {
+    }
 
     /**
-     * The plan at a glance for Home, Progress, the Learn rail, Find classes and the setup state. {@code plan} is null
-     * without a plan.
+     * {@code milestoneDate}: the first milestone of an ambitious plan (null without one); {@code daysBehind}: days of
+     * this plan week before today without the daily goal ("You're 2 study days behind"); {@code today}: the platform's
+     * day the summary was read on (LearnClock), so Progress and Home judge expired plans the same way as the server.
      */
-    public record Overview(PlanSetupState setupState, Summary plan) {
-    }
-
+    @Schema(name = "LearningPlanSummary")
     public record Summary(
             String goalTitle,
             PlanReason reason,
             LocalDate deadline,
+            LocalDate milestoneDate,
             int week,
             int totalWeeks,
             int percent,
             PlanStatus status,
+            int daysBehind,
             MandarinLevel level,
             MandarinLevel targetLevel,
-            GoalUnit goalUnit,
-            List<ClassStep> classSteps,
             OptionalClass optionalClass,
-            FirstStep firstStep,
-            PracticeSuggestion practice) {
+            PracticeSuggestion practice,
+            LocalDate today) {
+
+        @Override
+        public String toString() {
+            return "Summary[goalTitle=" + DtoNormalization.redactLength(goalTitle) + ", reason=" + reason
+                    + ", deadline=" + deadline + ", milestoneDate=" + milestoneDate + ", week=" + week
+                    + ", totalWeeks=" + totalWeeks + ", percent=" + percent + ", status=" + status
+                    + ", daysBehind=" + daysBehind + ", level=" + level + ", targetLevel=" + targetLevel
+                    + ", optionalClass=" + optionalClass + ", practice=" + practice + ", today=" + today + "]";
+        }
     }
 
-    /** The furthest Learn unit the plan reaches ("Your goal is at Unit 3 · Getting around"). */
-    public record GoalUnit(int number, String title, String titleZh) {
-    }
-
-    /** A class in the plan and its step number ("In your plan · step 4"). */
-    public record ClassStep(Long classId, int position) {
-    }
-
-    /** The first optional class not joined yet, for "Optional · Everyday Conversations". */
-    public record OptionalClass(Long classId, String title, int weekFrom) {
-    }
-
-    /** The plan's current Learn step, for "First · Review Say hello · 3 lessons · about 12 min". */
-    public record FirstStep(String title, int lessonsLeft, int minutesLeft, boolean quickReview) {
+    /**
+     * The optional class not joined yet that comes first (the one the learner picked, else the plan's first), for
+     * "Optional · Everyday Conversations"; {@code bestAfterUnit} is the class's own "Best after Unit N" (null when it has
+     * none).
+     */
+    public record OptionalClass(String title, int weekFrom, Integer bestAfterUnit) {
     }
 
     /** A Practice set from the student's focus that is not done yet. */
     public record PracticeSuggestion(PracticeType type, Long setId, String title) {
     }
 
-    // ===== Level check retake =====
+    // Level check retake
 
-    /** The new placement; {@code changed} when the level (or head start) changed and the plan was rebuilt. */
-    public record RetakeResult(
-            MandarinLevel level,
-            boolean headStart,
-            List<LevelCheckSkill> knownSkills,
-            List<LevelCheckSkill> newSkills,
-            int answered,
-            boolean changed) {
-    }
-
-    // ===== Teacher =====
-
-    /**
-     * The read-only learning goal a teacher sees for a student in one of their classes (no own words, no AI summary).
-     */
-    public record TeacherGoal(
-            String goalTitle,
-            PlanReason reason,
-            LocalDate deadline,
-            List<PlanFocus> focus,
-            MandarinLevel level,
-            MandarinLevel targetLevel,
-            LocalDateTime updatedAt,
-            List<TeacherClassStep> yourClasses,
-            int stepCount) {
-    }
-
-    public record TeacherClassStep(Long classId, String title, int position) {
+    /** The new level; {@code changed} when the level (or head start) changed and the plan was rebuilt. */
+    public record RetakeResult(MandarinLevel level, boolean changed) {
     }
 }

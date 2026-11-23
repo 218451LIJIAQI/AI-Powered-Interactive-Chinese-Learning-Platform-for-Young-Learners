@@ -1,42 +1,44 @@
 <template>
   <header class="public-nav">
-    <AppBrand to="/" />
+    <div class="public-nav-inner">
+      <AppBrand to="/" class="public-brand" />
 
-    <nav class="public-nav-links" :aria-label="t('chrome.primaryNavigation')">
-      <RouterLink v-for="item in items" :key="item.to" :to="item.to" custom v-slot="{ href, navigate }">
-        <a
-          :href="href"
+      <nav class="public-nav-links" :aria-label="t('chrome.primaryNavigation')">
+        <RouterLink
+          v-for="item in items"
+          :key="item.to"
+          :to="item.to"
           class="public-nav-link"
-          :class="{ 'router-link-active': isNavItemActive(item.to, route) }"
-          :aria-current="isNavItemActive(item.to, route) ? 'page' : undefined"
-          @click="navigate"
+          :aria-current="item.active ? 'page' : undefined"
         >
           {{ item.label }}
-        </a>
-      </RouterLink>
-    </nav>
+        </RouterLink>
+      </nav>
 
-    <div class="public-nav-actions">
-      <LanguageSwitcher />
-      <RouterLink v-if="auth.isAuthenticated" class="btn btn-primary" :to="homePath">
-        {{ t('shell.openMyHome') }}
-      </RouterLink>
-      <template v-else>
-        <RouterLink class="btn btn-ghost" :to="SIGN_IN_ROUTE">
-          {{ t('shell.signIn') }}
-        </RouterLink>
-        <RouterLink class="btn btn-primary" :to="SIGN_UP_ROUTE">
-          {{ t('shell.createAccount') }}
-        </RouterLink>
-      </template>
+      <div class="public-nav-actions">
+        <LanguageSwitcher class="public-languages" />
+        <div class="public-nav-account">
+          <RouterLink v-if="!auth.isAuthenticated" class="public-sign-in" to="/auth">
+            {{ t('common.signIn') }}
+          </RouterLink>
+          <RouterLink
+            class="btn public-nav-cta"
+            :to="auth.isAuthenticated ? homePath : { path: '/auth', query: { tab: 'register' } }"
+          >
+            {{ auth.isAuthenticated ? t('shell.openMyHome') : t('shell.createAccount') }}
+            <IconGlyph name="chevronRight" :size="16" />
+          </RouterLink>
+        </div>
+      </div>
     </div>
   </header>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { RouterLink, useRoute, type RouteLocationRaw } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 
+import IconGlyph from '@/components/common/IconGlyph.vue'
 import LanguageSwitcher from '@/components/common/LanguageSwitcher.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { isNavItemActive, publicNav } from '@/config/navigation'
@@ -46,14 +48,13 @@ import { defaultRouteForRole } from '@/utils/role'
 
 import AppBrand from './AppBrand.vue'
 
-const SIGN_IN_ROUTE = { path: '/auth' } satisfies RouteLocationRaw
-const SIGN_UP_ROUTE = { path: '/auth', query: { tab: 'register', role: 'student' } } satisfies RouteLocationRaw
-
 const route = useRoute()
 const auth = useAuthStore()
 const { t } = useLocalMessages({ shell: publicShellMessages })
 
 const homePath = computed(() => defaultRouteForRole(auth.activeRole))
 
-const items = computed(() => publicNav.map((item) => ({ label: t(item.labelKey), to: item.to })))
+const items = computed(() =>
+  publicNav.map((item) => ({ label: t(item.labelKey), to: item.to, active: isNavItemActive(item.to, route) })),
+)
 </script>

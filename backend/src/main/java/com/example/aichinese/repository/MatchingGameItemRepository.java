@@ -1,21 +1,25 @@
 package com.example.aichinese.repository;
 
+import java.util.Collection;
 import java.util.List;
 
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.transaction.annotation.Transactional;
 
 import com.example.aichinese.entity.MatchingGameItem;
 
 public interface MatchingGameItemRepository extends JpaRepository<MatchingGameItem, Long> {
 
-    List<MatchingGameItem> findByMatchingGameIdOrderBySortOrderAscCreatedAtAsc(Long matchingGameId);
+    @Query("""
+            select i from MatchingGameItem i where i.matchingGame.id = :gameId
+            order by i.sortOrder, i.createdAt, i.id
+            """)
+    List<MatchingGameItem> findInDisplayOrder(@Param("gameId") Long gameId);
 
-    @Modifying
-    @Transactional
-    @Query("delete from MatchingGameItem i where i.matchingGame.id = :gameId")
-    int deleteByMatchingGameId(@Param("gameId") Long matchingGameId);
+    @Query("""
+            select i from MatchingGameItem i where i.matchingGame.id in :gameIds
+            order by i.sortOrder, i.createdAt, i.id
+            """)
+    List<MatchingGameItem> findInDisplayOrder(@Param("gameIds") Collection<Long> gameIds);
 }

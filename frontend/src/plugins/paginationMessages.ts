@@ -1,4 +1,4 @@
-/** Default texts of PaginationBar (a page may pass its own summary as `info`). */
+/** Texts of PaginationBar: its buttons and page position. */
 export const paginationMessages = {
   en: {
     previous: 'Previous',

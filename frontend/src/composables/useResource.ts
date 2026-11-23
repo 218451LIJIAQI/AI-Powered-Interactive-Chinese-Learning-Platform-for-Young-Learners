@@ -1,15 +1,17 @@
-import { computed, onMounted, ref, shallowRef } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import type { ComputedRef, Ref } from 'vue'
 
+import { pauseDuringNavigation } from '@/composables/usePageNavigation'
 import type { PageResponse } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
-import { formatNumber } from '@/utils/format'
 
 interface ResourceState<T> {
   readonly data: Ref<T | null>
   readonly error: Ref<string | null>
   readonly loading: Ref<boolean>
   readonly reload: () => Promise<void>
+  readonly clear: () => void
+  readonly replace: (value: T | null) => void
 }
 
 /**
@@ -21,88 +23,154 @@ export function useResource<T>(loader: () => Promise<T>, immediate = true): Reso
   const data = shallowRef<T | null>(null)
   const error = ref<string | null>(null)
   const loading = ref(immediate)
-  let executionSequence = 0
+  let executionSequence: number | null = 0
 
   async function execute(): Promise<void> {
+    if (executionSequence === null) return
     const sequence = ++executionSequence
     loading.value = data.value === null
     error.value = null
 
     try {
       const result = await loader()
-      if (sequence !== executionSequence) return
-      data.value = result
+      if (sequence === executionSequence) data.value = result
     } catch (reason) {
-      if (sequence !== executionSequence) return
-      error.value = resolveApiError(reason)
-    } finally {
-      if (sequence === executionSequence) {
-        loading.value = false
-      }
+      if (sequence === executionSequence) error.value = resolveApiError(reason)
     }
+    if (sequence === executionSequence) loading.value = false
+  }
+
+  function clear(): void {
+    if (executionSequence !== null) executionSequence += 1
+    data.value = null
+    error.value = null
+    loading.value = false
+  }
+
+  /** Commits authoritative data (e.g. a mutation response), dropping any older in-flight load. */
+  function replace(value: T | null): void {
+    if (executionSequence === null) return
+    executionSequence += 1
+    data.value = value
+    error.value = null
+    loading.value = false
   }
 
   if (immediate) onMounted(() => void execute())
+  onBeforeUnmount(() => {
+    executionSequence = null
+    loading.value = false
+  })
 
-  return { data, error, loading, reload: execute }
+  return { data, error, loading, reload: execute, clear, replace }
 }
 
-interface ServerPageOptions {
-  /** The page's own reload, e.g. one that also clears a success message (`resource.reload` by default). */
-  reload?: () => unknown
+/**
+ * The record an id names, emptied and loaded again whenever the id changes. No id clears synchronously and
+ * invalidates any in-flight request for the previous id so stale responses or errors never land.
+ */
+export function useRecordById<T>(id: Readonly<Ref<number | null>>, load: (id: number) => Promise<T>) {
+  const record = useResource(() => (id.value === null ? Promise.resolve(null) : load(id.value)), false)
+
+  watch(
+    id,
+    (nextId) => {
+      if (nextId === null) {
+        record.clear()
+        return
+      }
+      record.data.value = null
+      void record.reload()
+    },
+    { immediate: true },
+  )
+
+  return record
+}
+
+/**
+ * A filter edit opens the first page and updates the address. Restoring filters from an address
+ * keeps its page and selection. A change only to the page keeps the current results while loading.
+ */
+export function usePageFilters<T>(
+  filters: Readonly<Ref<unknown>>[],
+  page: Ref<number>,
+  resource: Pick<ResourceState<T>, 'data' | 'reload'>,
+  onEdit: () => void,
+) {
+  let committed = filters.map((filter) => filter.value)
+  let linkedPage: number | null = null
+  watch(filters, () => {
+    committed = filters.map((filter) => filter.value)
+    page.value = linkedPage ?? 0
+    resource.data.value = null
+    if (linkedPage === null) onEdit()
+    linkedPage = null
+    void resource.reload()
+  })
+
+  return function followAddress(nextPage: number, applyFilters: () => void): void {
+    applyFilters()
+    // Compare against the watcher's last committed values so a same-tick change reversed by applyFilters still updates page.
+    if (filters.some((filter, index) => !Object.is(filter.value, committed[index]))) {
+      linkedPage = nextPage
+      void nextTick(() => {
+        if (linkedPage === nextPage) linkedPage = null
+      })
+    } else if (nextPage !== page.value) {
+      page.value = nextPage
+      void resource.reload()
+    }
+  }
 }
 
 interface ServerPage<T> {
   readonly items: ComputedRef<T[]>
+  readonly displayedPage: ComputedRef<number>
   readonly totalItems: ComputedRef<number>
   readonly totalPages: ComputedRef<number>
-  /** `{ from, to, total }` for a "Showing 11–20 of 45" line, formatted; 0–0 when the page has no rows. */
-  readonly range: ComputedRef<{ from: string; to: string; total: string }>
   readonly goToPage: (next: number) => void
 }
 
+interface ServerPageOptions {
+  /**
+   * A later page that comes back without rows (its last row was answered, moved or removed, or an address points past
+   * the end) steps back to the last page that has some and loads it, instead of saying there is nothing.
+   */
+  readonly stepBackFromEmpty?: boolean
+  /** Keeps a paginated address in sync with both navigation and a step back from an empty page. */
+  readonly onPageChange?: () => void
+}
+
 /**
- * The rows, totals and shown range of a server-paged resource, and `goToPage`, which keeps the 0-based `page` within
- * the known pages and reloads. When the page sits inside a larger answer (`{ requests: page, counts }`), `select`
- * picks it out.
+ * The rows and totals of a server-paged resource, and `goToPage`, which keeps the 0-based `page` within
+ * the known pages and reloads. A page that sits inside a larger answer (`{ requests: page, counts }`) comes in as a
+ * computed `data`.
  */
 export function useServerPage<T>(
-  resource: Pick<ResourceState<PageResponse<T> | null>, 'data' | 'reload'>,
+  resource: { readonly data: Readonly<Ref<PageResponse<T> | null>>; readonly reload: () => unknown },
   page: Ref<number>,
-  options?: ServerPageOptions,
-): ServerPage<T>
-export function useServerPage<R, T>(
-  resource: Pick<ResourceState<R>, 'data' | 'reload'>,
-  page: Ref<number>,
-  options: ServerPageOptions & { select: (data: R) => PageResponse<T> },
-): ServerPage<T>
-export function useServerPage<R, T>(
-  resource: Pick<ResourceState<R>, 'data' | 'reload'>,
-  page: Ref<number>,
-  { select, reload = resource.reload }: ServerPageOptions & { select?: (data: R) => PageResponse<T> } = {},
+  { stepBackFromEmpty = false, onPageChange }: ServerPageOptions = {},
 ): ServerPage<T> {
-  const current = computed(() => {
-    const data = resource.data.value
-    if (data === null) return null
-    return select ? select(data) : (data as PageResponse<T> | null)
-  })
+  const current = resource.data
   const items = computed(() => current.value?.items ?? [])
+  const displayedPage = computed(() => current.value?.page ?? page.value)
   const totalItems = computed(() => current.value?.totalItems ?? 0)
   const totalPages = computed(() => Math.max(1, current.value?.totalPages ?? 1))
-  const range = computed(() => {
-    const shown = items.value.length
-    const first = shown ? current.value!.page * current.value!.size + 1 : 0
-    return {
-      from: formatNumber(first),
-      to: formatNumber(shown ? first + shown - 1 : 0),
-      total: formatNumber(totalItems.value),
-    }
-  })
 
   function goToPage(next: number): void {
     page.value = Math.min(Math.max(0, next), totalPages.value - 1)
-    void reload()
+    onPageChange?.()
+    void resource.reload()
   }
 
-  return { items, totalItems, totalPages, range, goToPage }
+  if (stepBackFromEmpty) {
+    const stepBack = watch(current, (loaded) => {
+      if (!loaded || loaded.items.length || page.value === 0) return
+      goToPage(page.value - 1)
+    })
+    if (onPageChange) pauseDuringNavigation(stepBack)
+  }
+
+  return { items, displayedPage, totalItems, totalPages, goToPage }
 }

@@ -2,76 +2,59 @@ package com.example.aichinese.service;
 
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 
-import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
-import jakarta.persistence.criteria.Predicate;
-
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.example.aichinese.dto.PageResponse;
 import com.example.aichinese.dto.ai.AdminAiUsageLogResponse;
 import com.example.aichinese.dto.ai.AdminAiUsageSummaryResponse;
-import com.example.aichinese.entity.AiChatMessage;
-import com.example.aichinese.entity.AiChatSession;
 import com.example.aichinese.entity.AiUsageLog;
 import com.example.aichinese.entity.User;
-import com.example.aichinese.entity.enums.AiChatSenderRole;
 import com.example.aichinese.entity.enums.AiFeatureKey;
 import com.example.aichinese.entity.enums.AiRequestStatus;
+import com.example.aichinese.entity.enums.EnumLookups;
 import com.example.aichinese.entity.enums.RoleName;
-import com.example.aichinese.repository.AiChatMessageRepository;
-import com.example.aichinese.repository.AiChatSessionRepository;
 import com.example.aichinese.repository.AiUsageLogRepository;
 import com.example.aichinese.security.SecurityUserDetails;
-import com.example.aichinese.service.account.AccountRoles;
+import com.example.aichinese.service.account.CurrentAccount;
+import com.example.aichinese.service.learn.LearnClock;
 import com.example.aichinese.util.CsvWriter;
 import com.example.aichinese.util.PaginationUtils;
 import com.example.aichinese.util.TextUtils;
 
+import lombok.RequiredArgsConstructor;
+
 /**
- * Ask SparkBot chat history and the AI-usage log: one row per AI request (who, role, when, feature, result, provider,
- * model, tokens and the length of the prompt and reply, never their text), with the admin totals, the filtered log
- * and its CSV export.
+ * The AI-usage log: one row per AI request (who, role, when, feature, result, provider, model, tokens and the length
+ * of the prompt and reply, never their text), with the admin totals, the filtered log and its CSV export.
  */
 @Service
+@RequiredArgsConstructor
 public class AiLogService {
 
     /** Most rows one CSV export contains (newest first). */
     public static final int MAX_EXPORT_ROWS = 10_000;
 
     private static final int ERROR_SUMMARY_LIMIT = 255;
-    private static final DateTimeFormatter CSV_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ROOT);
 
     private final AiUsageLogRepository aiUsageLogRepository;
-    private final AiChatSessionRepository aiChatSessionRepository;
-    private final AiChatMessageRepository aiChatMessageRepository;
     private final AuditLogService auditLogService;
-
-    public AiLogService(
-            AiUsageLogRepository aiUsageLogRepository,
-            AiChatSessionRepository aiChatSessionRepository,
-            AiChatMessageRepository aiChatMessageRepository,
-            AuditLogService auditLogService) {
-        this.aiUsageLogRepository = aiUsageLogRepository;
-        this.aiChatSessionRepository = aiChatSessionRepository;
-        this.aiChatMessageRepository = aiChatMessageRepository;
-        this.auditLogService = auditLogService;
-    }
+    private final CurrentAccount currentAccount;
+    private final LearnClock clock;
 
     /** One AI-usage log row; {@code input} and {@code output} are only measured, never stored. */
     public record UsageEntry(
             User user,
+            String sessionId,
             AiFeatureKey feature,
             String language,
             AiRequestStatus status,
@@ -80,64 +63,48 @@ public class AiLogService {
             Integer tokenCount,
             String input,
             String output,
-            String errorSummary,
-            String relatedEntityType,
-            Long relatedEntityId) {
+            String errorSummary) {
     }
 
-    @Transactional
-    public AiChatSession createChatSession(User user, String languagePreference) {
-        AiChatSession session = new AiChatSession();
-        session.setUser(user);
-        session.setFeatureKey(AiFeatureKey.CHAT_TUTOR);
-        session.setLanguagePreference(languagePreference);
-        return aiChatSessionRepository.save(session);
-    }
-
-    @Transactional
-    public AiChatMessage appendChatMessage(AiChatSession session, AiChatSenderRole senderRole, String messageText) {
-        AiChatMessage message = new AiChatMessage();
-        message.setSession(session);
-        message.setSenderRole(senderRole);
-        message.setMessageText(messageText);
-        return aiChatMessageRepository.save(message);
-    }
-
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public AiUsageLog logUsage(UsageEntry entry) {
+        User user = currentAccount.lock(entry.user().getId(), entry.user().getSessionVersion(), entry.sessionId());
         AiUsageLog usageLog = new AiUsageLog();
-        usageLog.setUser(entry.user());
-        usageLog.setUserRole(AccountRoles.primary(entry.user()).name());
+        usageLog.setUser(user);
+        usageLog.setUserRole(user.requirePrimaryRole().name());
         usageLog.setFeatureKey(entry.feature());
         usageLog.setLanguagePreference(entry.language());
-        usageLog.setStatus(entry.status().name());
+        usageLog.setStatus(entry.status());
         usageLog.setProviderName(entry.providerName());
         usageLog.setModelName(entry.modelName());
         usageLog.setTokenCount(entry.tokenCount());
         usageLog.setInputSummary(contentMetadata(entry.input()));
         usageLog.setOutputSummary(contentMetadata(entry.output()));
         usageLog.setErrorSummary(TextUtils.safeTruncate(TextUtils.trimToNull(entry.errorSummary()), ERROR_SUMMARY_LIMIT));
-        usageLog.setRelatedEntityType(entry.relatedEntityType());
-        usageLog.setRelatedEntityId(entry.relatedEntityId());
         return aiUsageLogRepository.save(usageLog);
     }
 
-    /** All-time totals by result and the requests of every feature (zero included), for the admin Usage tab. */
+    /**
+     * All-time totals by result and the requests of every feature that calls the AI provider (zero included), for the
+     * admin Usage tab. Hints are built by rules and never logged, so they have no row.
+     */
     @Transactional(readOnly = true)
     public AdminAiUsageSummaryResponse getUsageSummary() {
         Map<AiFeatureKey, Long> byFeature = new EnumMap<>(AiFeatureKey.class);
         for (AiFeatureKey feature : AiFeatureKey.values()) {
-            byFeature.put(feature, 0L);
+            if (feature != AiFeatureKey.HINT) {
+                byFeature.put(feature, 0L);
+            }
         }
         long successful = 0;
         long unavailable = 0;
         long failed = 0;
         for (AiUsageLogRepository.FeatureStatusCount row : aiUsageLogRepository.countByFeatureAndStatus()) {
-            byFeature.merge(row.getFeatureKey(), row.getCount(), Long::sum);
-            switch (AiRequestStatus.valueOf(row.getStatus())) {
-                case SUCCESS -> successful += row.getCount();
-                case UNAVAILABLE -> unavailable += row.getCount();
-                case FAILED -> failed += row.getCount();
+            byFeature.merge(row.feature(), row.count(), Long::sum);
+            switch (row.status()) {
+                case SUCCESS -> successful += row.count();
+                case UNAVAILABLE -> unavailable += row.count();
+                case FAILED -> failed += row.count();
             }
         }
         return new AdminAiUsageSummaryResponse(
@@ -146,15 +113,16 @@ public class AiLogService {
                 unavailable,
                 failed,
                 byFeature.entrySet().stream()
-                        .map(entry -> new AdminAiUsageSummaryResponse.FeatureCount(entry.getKey().name(), entry.getValue()))
+                        .map(entry -> new AdminAiUsageSummaryResponse.FeatureCount(entry.getKey(), entry.getValue()))
                         .toList());
     }
 
     @Transactional(readOnly = true)
     public PageResponse<AdminAiUsageLogResponse> getUsageLogs(UsageFilter filter, int page, int size) {
-        return PageResponse.from(
-                aiUsageLogRepository.findAll(filter.specification(), PaginationUtils.newestPageable(page, size)),
-                AiLogService::toAdminUsageLogResponse);
+        Page<AdminAiUsageLogResponse> result = PaginationUtils.readPage(PaginationUtils.newestFirst(page, size),
+                request -> aiUsageLogRepository.findAdminPage(
+                        filter.feature(), filter.status(), filter.roleName(), request));
+        return new PageResponse<>(result.getContent(), result.getNumber(), result.getSize(), result.getTotalElements());
     }
 
     /**
@@ -163,19 +131,13 @@ public class AiLogService {
      */
     @Transactional
     public String exportUsageLogsCsv(SecurityUserDetails admin, UsageFilter filter) {
-        List<AiUsageLog> rows = aiUsageLogRepository.findAll(
-                filter.specification(),
-                PageRequest.of(0, MAX_EXPORT_ROWS, Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id"))))
-                .getContent();
+        PageRequest limit = PageRequest.of(0, MAX_EXPORT_ROWS, PaginationUtils.NEWEST_FIRST);
+        List<AdminAiUsageLogResponse> rows = aiUsageLogRepository.findExportRows(
+                filter.feature(), filter.status(), filter.roleName(), limit);
         CsvWriter csv = new CsvWriter().row(List.of("Time", "User", "Role", "Feature", "Result", "Detail"));
-        for (AiUsageLog row : rows) {
-            csv.row(Arrays.asList(
-                    row.getCreatedAt() == null ? null : CSV_TIME.format(row.getCreatedAt()),
-                    row.getUser() == null ? null : row.getUser().getDisplayName(),
-                    row.getUserRole(),
-                    row.getFeatureKey() == null ? null : row.getFeatureKey().name(),
-                    row.getStatus(),
-                    row.getErrorSummary()));
+        for (AdminAiUsageLogResponse row : rows) {
+            csv.row(Arrays.asList(clock.platformOffsetDateTimeOf(row.createdAt()), row.userName(), row.userRole(),
+                    row.featureKey().name(), row.status(), row.errorSummary()));
         }
         auditLogService.record(admin, "AI_USAGE_LOG_EXPORTED", "AI_USAGE_LOG", null,
                 "Admin exported " + rows.size() + " AI usage log rows as CSV.");
@@ -183,10 +145,10 @@ public class AiLogService {
     }
 
     /**
-     * The admin log filters: feature, result (SUCCESS / FAILED / UNAVAILABLE) and role (STUDENT / TEACHER); blank
-     * values mean "all".
+     * The admin log filters: feature, result (SUCCESS / FAILED / UNAVAILABLE) and role (STUDENT, or ADMIN for the
+     * lesson quiz drafts); blank values mean "all".
      */
-    public record UsageFilter(String feature, String status, String role) {
+    public record UsageFilter(AiFeatureKey feature, AiRequestStatus status, RoleName role) {
 
         public static UsageFilter parse(String feature, String status, String role) {
             return new UsageFilter(
@@ -195,47 +157,18 @@ public class AiLogService {
                     parseEnum(role, RoleName.class, "Invalid user role filter."));
         }
 
-        Specification<AiUsageLog> specification() {
-            return (root, query, cb) -> {
-                List<Predicate> predicates = new ArrayList<>();
-                if (feature != null) {
-                    predicates.add(cb.equal(root.get("featureKey"), AiFeatureKey.valueOf(feature)));
-                }
-                if (status != null) {
-                    predicates.add(cb.equal(root.get("status"), status));
-                }
-                if (role != null) {
-                    predicates.add(cb.equal(root.get("userRole"), role));
-                }
-                return predicates.isEmpty() ? cb.conjunction() : cb.and(predicates.toArray(Predicate[]::new));
-            };
+        private String roleName() {
+            return role == null ? null : role.name();
         }
 
-        private static <E extends Enum<E>> String parseEnum(String value, Class<E> type, String message) {
+        private static <E extends Enum<E>> E parseEnum(String value, Class<E> type, String message) {
             String trimmed = TextUtils.trimToNull(value);
             if (trimmed == null || "ALL".equalsIgnoreCase(trimmed)) {
                 return null;
             }
-            String upper = trimmed.toUpperCase(Locale.ROOT);
-            for (E constant : type.getEnumConstants()) {
-                if (constant.name().equals(upper)) {
-                    return upper;
-                }
-            }
-            throw new ResponseStatusException(BAD_REQUEST, message);
+            return EnumLookups.tryFrom(type, trimmed)
+                    .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, message));
         }
-    }
-
-    private static AdminAiUsageLogResponse toAdminUsageLogResponse(AiUsageLog logRecord) {
-        User user = logRecord.getUser();
-        return new AdminAiUsageLogResponse(
-                logRecord.getId(),
-                user != null ? user.getDisplayName() : null,
-                logRecord.getUserRole(),
-                logRecord.getFeatureKey().name(),
-                logRecord.getStatus(),
-                logRecord.getErrorSummary(),
-                logRecord.getCreatedAt());
     }
 
     /** Only the length of student content and AI output is stored, never the text. */

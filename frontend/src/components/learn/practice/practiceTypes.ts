@@ -1,105 +1,45 @@
-import { PRACTICE_TYPE_SLUGS } from '@/api/learn'
+import type { RouteLocationRaw } from 'vue-router'
+
+import { PRACTICE_ACTIVITIES, PRACTICE_TYPES } from '@/config/practiceActivities'
 import type { PracticeType } from '@/types/learn'
 
-/** The pigments of `tokens.css` (`--pigment-*`) a Practice type can wear. */
-export type PracticePigment = 'cobalt' | 'cinnabar' | 'teal' | 'ink' | 'plum' | 'jade' | 'ochre'
+/**
+ * What a player of answered items (Listening, Drag & Drop, Typing) saw of its finished run beyond the server's result:
+ * the done card says from it how many items were answered and whether anything went to Mistakes.
+ */
+export interface RunTally {
+  /** Items whose first answer was given, not skipped. */
+  readonly answered: number
+  /**
+   * Checks of the run that put an item on the Mistakes list: wrong answers (once more ones too) and skips, but not a
+   * skip whose audio did not play.
+   */
+  readonly mistakes: number
+}
+
+/** The Practice page opened on one set (`/student/practice/listening?set=12`). */
+export function practiceSetRoute(type: PracticeType, setId: number): RouteLocationRaw {
+  return { name: 'student-practice', params: { type: PRACTICE_ACTIVITIES[type].slug }, query: { set: String(setId) } }
+}
+
+/** The server's limit of one Mistakes review (MistakeService): a longer list reaches the review over several rounds. */
+export const MISTAKES_REVIEW_SIZE = 20
+/** XP for a review that clears at least one mistake, once a day (RewardRules.MISTAKES_REVIEW_XP). */
+const MISTAKES_REVIEW_XP = 10
+/** About half a minute a mistake, as the weekly mistakes reminder counts it (LearnerReminderJobs). */
+const MISTAKES_PER_MINUTE = 2
 
 /**
- * One Practice type as the room shows it: its own pigment and a character (set in a 田字格 tile) that tell the types
- * apart at a glance, on the hub, in the player header and on the done card. Keys are full message keys.
+ * What the next Mistakes review takes, for "Review all 6 · about 3 min · +10 XP" (Practice) and "Fix 6 mistakes ·
+ * Practice · 3 min · +10 XP" (Home): the mistakes one review works through and the minutes they take.
  */
-export interface PracticeTypeInfo {
-  readonly type: PracticeType
-  readonly slug: string
-  readonly glyph: string
-  readonly pigment: PracticePigment
-  readonly labelKey: string
-  readonly trainsKey: string
-  readonly unitKey: string
-  /** A typical set takes about this many minutes. */
-  readonly minutes: number
+export function mistakesReview(waiting: number): { count: number; minutes: number; xp: number } {
+  const count = Math.min(waiting, MISTAKES_REVIEW_SIZE)
+  return { count, minutes: Math.ceil(count / MISTAKES_PER_MINUTE), xp: MISTAKES_REVIEW_XP }
 }
 
-/** The seven types, in the order the room lists them. */
-export const PRACTICE_TYPES: readonly PracticeTypeInfo[] = [
-  {
-    type: 'FLASHCARDS',
-    slug: PRACTICE_TYPE_SLUGS.FLASHCARDS,
-    glyph: '卡',
-    pigment: 'cobalt',
-    labelKey: 'practice.typeFlashcards',
-    trainsKey: 'practice.trainsFlashcards',
-    unitKey: 'practice.unitCards',
-    minutes: 2,
-  },
-  {
-    type: 'QUIZZES',
-    slug: PRACTICE_TYPE_SLUGS.QUIZZES,
-    glyph: '测',
-    pigment: 'cinnabar',
-    labelKey: 'practice.typeQuizzes',
-    trainsKey: 'practice.trainsQuizzes',
-    unitKey: 'practice.unitQuestions',
-    minutes: 3,
-  },
-  {
-    type: 'LISTENING',
-    slug: PRACTICE_TYPE_SLUGS.LISTENING,
-    glyph: '听',
-    pigment: 'teal',
-    labelKey: 'practice.typeListening',
-    trainsKey: 'practice.trainsListening',
-    unitKey: 'practice.unitQuestions',
-    minutes: 3,
-  },
-  {
-    type: 'TRACING',
-    slug: PRACTICE_TYPE_SLUGS.TRACING,
-    glyph: '写',
-    pigment: 'ink',
-    labelKey: 'practice.typeTracing',
-    trainsKey: 'practice.trainsTracing',
-    unitKey: 'practice.unitWords',
-    minutes: 1,
-  },
-  {
-    type: 'DRAG_DROP',
-    slug: PRACTICE_TYPE_SLUGS.DRAG_DROP,
-    glyph: '句',
-    pigment: 'plum',
-    labelKey: 'practice.typeDragDrop',
-    trainsKey: 'practice.trainsDragDrop',
-    unitKey: 'practice.unitSentences',
-    minutes: 3,
-  },
-  {
-    type: 'MATCHING',
-    slug: PRACTICE_TYPE_SLUGS.MATCHING,
-    glyph: '配',
-    pigment: 'jade',
-    labelKey: 'practice.typeMatching',
-    trainsKey: 'practice.trainsMatching',
-    unitKey: 'practice.unitPairs',
-    minutes: 2,
-  },
-  {
-    type: 'STORY',
-    slug: PRACTICE_TYPE_SLUGS.STORY,
-    glyph: '读',
-    pigment: 'ochre',
-    labelKey: 'practice.typeStory',
-    trainsKey: 'practice.trainsStory',
-    unitKey: 'practice.unitQuestions',
-    minutes: 4,
-  },
-]
-
-export function practiceTypeInfo(type: PracticeType): PracticeTypeInfo {
-  return PRACTICE_TYPES.find((info) => info.type === type) ?? PRACTICE_TYPES[0]!
-}
-
-/** The type after this one in the room (wrapping round), for "Try …" once every set of a type is done. */
-export function nextPracticeType(type: PracticeType): PracticeTypeInfo {
-  const index = PRACTICE_TYPES.findIndex((info) => info.type === type)
+/** The activity after this one (wrapping round), for "Try …" once a type offers no next set. */
+export function nextPracticeType(type: PracticeType): PracticeType {
+  const index = PRACTICE_TYPES.indexOf(type)
   return PRACTICE_TYPES[(index + 1) % PRACTICE_TYPES.length]!
 }

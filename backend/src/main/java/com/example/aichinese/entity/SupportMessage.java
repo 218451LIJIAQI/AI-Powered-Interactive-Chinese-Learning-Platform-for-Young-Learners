@@ -25,7 +25,7 @@ public class SupportMessage extends BaseEntity {
     @JoinColumn(name = "request_id", nullable = false, updatable = false)
     private SupportRequest request;
 
-    /** The writer; null for a visitor's message (and after the writer deleted the account). */
+    /** The writer; null for a visitor's message. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "author_user_id")
     private User author;

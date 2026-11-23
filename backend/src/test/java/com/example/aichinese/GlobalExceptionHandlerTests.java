@@ -7,10 +7,14 @@ import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.core.MethodParameter;
+import org.springframework.dao.CannotAcquireLockException;
+import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -19,11 +23,16 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.validation.BeanPropertyBindingResult;
 import org.springframework.validation.FieldError;
+import org.springframework.validation.method.MethodValidationResult;
+import org.springframework.validation.method.ParameterErrors;
+import org.springframework.validation.method.ParameterValidationResult;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
+import org.springframework.web.method.annotation.ExceptionHandlerMethodResolver;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.MultipartException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
@@ -34,9 +43,6 @@ import com.example.aichinese.exception.FriendlyErrorMessageResolver;
 import com.example.aichinese.exception.GlobalExceptionHandler;
 import com.example.aichinese.util.RequestIdHolder;
 
-import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
-
 /**
  * Unit tests for {@link GlobalExceptionHandler}: safe fallbacks for null/blank messages,
  * status mapping (400/403/405/409/413/415/429/500), request-id propagation and when
@@ -45,6 +51,7 @@ import jakarta.validation.constraints.NotBlank;
 class GlobalExceptionHandlerTests {
 
     private static final String REQUEST_ID = "audit-request-123";
+    private static final String PROFILE_PATH = "/api/v1/users/me/profile";
     private static final String GENERIC_CLIENT_ERROR =
             "The request could not be processed. Please check the input and try again.";
     private static final String CONFLICT_MESSAGE =
@@ -75,45 +82,73 @@ class GlobalExceptionHandlerTests {
         ApiResponse<Void> body = body(response);
         assertThat(body.success()).isFalse();
         assertThat(body.message()).isNotBlank().doesNotContainIgnoringCase("null");
-        assertThat(body.errors()).isNotEmpty().noneMatch(item -> item == null || item.isBlank());
     }
 
     @Test
-    void illegalArgumentExceptionWithMessagePreservesOriginalMessage() {
+    void illegalArgumentExceptionReturnsGenericClientErrorWithoutLeakingInternalDetails() {
         ResponseEntity<ApiResponse<Void>> response = handler.handleIllegalArgumentException(
-                new IllegalArgumentException("Specific business rule violated."));
+                new IllegalArgumentException("No enum constant com.example.aichinese.entity.enums.RoleName.FOO"));
 
-        ApiResponse<Void> body = body(response);
-        assertThat(body.message()).isEqualTo("Specific business rule violated.");
-        assertThat(body.errors()).containsExactly("Specific business rule violated.");
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertGenericClientError(response);
+        assertThat(body(response).message()).doesNotContain("com.example", "RoleName");
     }
 
     @Test
-    void dailyAiLimitMessageReachesTheLearnerWhileOtherRateLimitsStayGeneric() {
-        ResponseEntity<ApiResponse<Void>> daily = handler.handleResponseStatusException(new ResponseStatusException(
-                HttpStatus.TOO_MANY_REQUESTS, "Daily AI request limit reached. Please try again tomorrow."));
-        ResponseEntity<ApiResponse<Void>> minute = handler.handleResponseStatusException(new ResponseStatusException(
-                HttpStatus.TOO_MANY_REQUESTS, "AI request limit reached. Please wait a minute before trying again."));
+    void serverErrorStatusNeverPassesThroughExceptionReasonEvenWhenHintSubstringMatches() {
+        ResponseEntity<ApiResponse<Void>> response = handler.handleResponseStatusException(
+                new ResponseStatusException(
+                        HttpStatus.INTERNAL_SERVER_ERROR,
+                        "Internal error: account is currently unavailable while loading shard 2"));
 
-        assertThat(daily.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
-        assertThat(body(daily).message()).isEqualTo("Daily AI request limit reached. Please try again tomorrow.");
-        assertThat(body(minute).message()).isEqualTo(TOO_MANY_REQUESTS_MESSAGE);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        assertThat(body(response).message()).isEqualTo(FriendlyErrorMessageResolver.serverUnavailableMessage());
     }
 
     @Test
-    void liveClassAccessMessagesReachTheStudentWhileOtherForbiddenMessagesStayGeneric() {
-        for (String message : List.of(
-                "This live class is not available.",
-                "The live class join window is not open yet.")) {
-            ResponseEntity<ApiResponse<Void>> response = handler.handleResponseStatusException(
-                    new ResponseStatusException(HttpStatus.FORBIDDEN, message));
+    void blankStatusExceptionMessagesUseStatusSpecificFriendlyFallbacks() {
+        assertThat(FriendlyErrorMessageResolver.resolve(HttpStatus.UNAUTHORIZED, null))
+                .isEqualTo(FriendlyErrorMessageResolver.sessionExpiredMessage());
+        assertThat(FriendlyErrorMessageResolver.resolve(HttpStatus.FORBIDDEN, " "))
+                .isEqualTo(FriendlyErrorMessageResolver.permissionDeniedMessage());
+        assertThat(FriendlyErrorMessageResolver.resolve(HttpStatus.NOT_FOUND, null))
+                .isEqualTo(FriendlyErrorMessageResolver.notFoundMessage());
+        assertThat(FriendlyErrorMessageResolver.resolve(HttpStatus.TOO_MANY_REQUESTS, null))
+                .isEqualTo(TOO_MANY_REQUESTS_MESSAGE);
+    }
 
-            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
-            assertThat(body(response).message()).isEqualTo(message);
+    @ParameterizedTest
+    @CsvSource({
+            "true, Daily AI request limit reached. Please try again tomorrow.",
+            "true, We just sent a link. Please wait a minute before asking for another one.",
+            "true, You asked for several links today. Please try again tomorrow.",
+            "false, AI request limit reached. Please wait a minute before trying again.",
+            "false, Too many requests.",
+            "false, Too many failed attempts."
+    })
+    void onlySpecificRateLimitMessagesReachTheUser(boolean showMessage, String message) {
+        ResponseEntity<ApiResponse<Void>> response = handler.handleResponseStatusException(
+                new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, message));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+        assertThat(body(response).message()).isEqualTo(showMessage ? message : TOO_MANY_REQUESTS_MESSAGE);
+    }
+
+    @Test
+    void accountMessagesReachTheUserWhileOtherForbiddenMessagesStayGeneric() {
+        String message = "This account is currently unavailable. Please contact the platform administrator.";
+        ResponseEntity<ApiResponse<Void>> response = handler.handleResponseStatusException(
+                new ResponseStatusException(HttpStatus.FORBIDDEN, message));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(body(response).message()).isEqualTo(message);
+        for (String other : List.of(
+                "Internal ownership check failed for lesson 42.",
+                // The teacher-only features are gone with their message.
+                "Only approved teachers can use this teaching feature.")) {
+            assertThat(body(handler.handleResponseStatusException(new ResponseStatusException(HttpStatus.FORBIDDEN, other)))
+                    .message()).isEqualTo(FriendlyErrorMessageResolver.permissionDeniedMessage());
         }
-        ResponseEntity<ApiResponse<Void>> other = handler.handleResponseStatusException(
-                new ResponseStatusException(HttpStatus.FORBIDDEN, "Internal ownership check failed for lesson 42."));
-        assertThat(body(other).message()).isEqualTo(FriendlyErrorMessageResolver.permissionDeniedMessage());
     }
 
     @Test
@@ -152,7 +187,6 @@ class GlobalExceptionHandlerTests {
         ApiResponse<Void> body = body(response);
         assertThat(body.success()).isFalse();
         assertThat(body.message()).isEqualTo(FriendlyErrorMessageResolver.serverUnavailableMessage());
-        assertThat(body.errors()).containsExactly(body.message());
         assertThat(body.message()).doesNotContain("select", "secret", "token");
     }
 
@@ -162,13 +196,12 @@ class GlobalExceptionHandlerTests {
                 new MissingServletRequestPartException("file"));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().message()).isEqualTo(FriendlyErrorMessageResolver.uploadFailedMessage());
+        assertThat(body(response).message()).isEqualTo(FriendlyErrorMessageResolver.uploadFailedMessage());
     }
 
     @Test
     void unsupportedMediaTypeReturnsClientErrorEnvelope() {
-        ResponseEntity<ApiResponse<Void>> response = handler.handleHttpMediaTypeNotSupportedException(
+        ResponseEntity<ApiResponse<Void>> response = handler.handleUnsupportedRequest(
                 new HttpMediaTypeNotSupportedException(
                         MediaType.APPLICATION_FORM_URLENCODED,
                         List.of(MediaType.APPLICATION_JSON)));
@@ -180,7 +213,7 @@ class GlobalExceptionHandlerTests {
 
     @Test
     void unsupportedMethodReturnsClientErrorEnvelope() {
-        ResponseEntity<ApiResponse<Void>> response = handler.handleHttpRequestMethodNotSupportedException(
+        ResponseEntity<ApiResponse<Void>> response = handler.handleUnsupportedRequest(
                 new HttpRequestMethodNotSupportedException("PATCH", List.of("GET", "POST")));
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.METHOD_NOT_ALLOWED);
@@ -192,7 +225,7 @@ class GlobalExceptionHandlerTests {
 
     @Test
     void databaseIntegrityViolationReturnsConflictWithoutLeakingSqlDetails() {
-        ResponseEntity<ApiResponse<Void>> response = handler.handleDataIntegrityViolationException(
+        ResponseEntity<ApiResponse<Void>> response = handler.handleDataConflict(
                 new DataIntegrityViolationException("Duplicate entry 'student@example.com' for key 'users.email'"));
 
         assertConflict(response);
@@ -200,14 +233,22 @@ class GlobalExceptionHandlerTests {
     }
 
     @Test
-    void optimisticLockingFailureReturnsConflict() {
-        assertConflict(handler.handleOptimisticLockingFailureException(
-                new ObjectOptimisticLockingFailureException("LessonProgress", 10L)));
+    void staleVersionsDeadlocksAndLockTimeoutsAreConflicts() {
+        ExceptionHandlerMethodResolver resolver = new ExceptionHandlerMethodResolver(GlobalExceptionHandler.class);
+        List<DataAccessException> conflicts = List.of(
+                new ObjectOptimisticLockingFailureException("LessonProgress", 10L),
+                new CannotAcquireLockException("Deadlock found when trying to get lock"),
+                new PessimisticLockingFailureException("Lock wait timeout exceeded"));
+
+        for (DataAccessException conflict : conflicts) {
+            assertThat(resolver.resolveMethodByThrowable(conflict).getName()).isEqualTo("handleDataConflict");
+            assertConflict(handler.handleDataConflict(conflict));
+        }
     }
 
     @Test
     void authenticatedValidationReturnsSafeFieldErrors() throws Exception {
-        bindRequestPath("/api/v1/teachers/profile");
+        bindRequestPath(PROFILE_PATH);
 
         ResponseEntity<ApiResponse<Void>> response = handler.handleMethodArgumentNotValidException(
                 validationException(
@@ -223,7 +264,7 @@ class GlobalExceptionHandlerTests {
 
     @Test
     void validationDropsOverlongFieldKeys() throws Exception {
-        bindRequestPath("/api/v1/teachers/profile");
+        bindRequestPath(PROFILE_PATH);
 
         ApiResponse<Void> body = body(handler.handleMethodArgumentNotValidException(validationException(
                 fieldError("a".repeat(81), "Too long."),
@@ -233,14 +274,47 @@ class GlobalExceptionHandlerTests {
     }
 
     @Test
-    void publicAuthValidationSuppressesFieldErrors() throws Exception {
-        bindRequestPath("/api/v1/auth/login");
+    void validationFlattensNestedFieldKeysAndStripsUnsafeCharacters() throws Exception {
+        bindRequestPath(PROFILE_PATH);
+
+        ApiResponse<Void> body = body(handler.handleMethodArgumentNotValidException(validationException(
+                fieldError("items[0].name", "Nested."),
+                fieldError("bad<key>", "Unsafe."),
+                fieldError("[]", "Nothing left."))));
+
+        assertThat(body.fieldErrors().keySet()).containsExactly("items.0.name", "badkey");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "/school"})
+    void publicAuthValidationSuppressesFieldErrors(String contextPath) throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", contextPath + "/api/v1/auth/login");
+        request.setContextPath(contextPath);
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
 
         ApiResponse<Void> body = body(handler.handleMethodArgumentNotValidException(
                 validationException(fieldError("email", "Email address is required."))));
 
         assertThat(body.fieldErrors()).isEmpty();
-        assertThat(body.errors()).containsExactly(body.message());
+        assertThat(body.message()).isEqualTo(VALIDATION_MESSAGE);
+    }
+
+    @Test
+    void handlerMethodValidationSuppressesBindingFailureFieldErrors() throws Exception {
+        bindRequestPath(PROFILE_PATH);
+        MethodParameter parameter = new MethodParameter(Object.class.getMethod("equals", Object.class), 0);
+        BeanPropertyBindingResult errors = new BeanPropertyBindingResult(new Object(), "sampleRequest");
+        errors.addError(new FieldError("sampleRequest", "topic", "BAD", true, null, null,
+                "Failed to convert property value of type 'java.lang.String' to 'com.example.aichinese.Topic'"));
+        errors.addError(fieldError("message", "Message is required."));
+        ParameterErrors paramErrors = new ParameterErrors(parameter, new Object(), errors, null, null, null);
+        MethodValidationResult result = MethodValidationResult.create(
+                new Object(), parameter.getMethod(), List.<ParameterValidationResult>of(paramErrors));
+
+        ApiResponse<Void> body = body(handler.handleMethodValidationException(new HandlerMethodValidationException(result)));
+
+        assertThat(body.fieldErrors()).containsOnlyKeys("message");
+        assertThat(body.fieldErrors().get("message")).containsExactly("Message is required.");
     }
 
     private static void bindRequestPath(String path) {
@@ -269,29 +343,19 @@ class GlobalExceptionHandlerTests {
         ApiResponse<Void> body = body(response);
         assertThat(body.success()).isFalse();
         assertThat(body.message()).isEqualTo(GENERIC_CLIENT_ERROR);
-        assertThat(body.errors()).containsExactly(body.message());
     }
 
     private static MethodArgumentNotValidException validationException(FieldError... errors) throws Exception {
-        SampleRequest target = new SampleRequest("");
-        BeanPropertyBindingResult bindingResult = new BeanPropertyBindingResult(target, "sampleRequest");
+        BeanPropertyBindingResult bindingResult = new BeanPropertyBindingResult(new Object(), "sampleRequest");
         for (FieldError error : errors) {
             bindingResult.addError(error);
         }
-        MethodParameter parameter = new MethodParameter(
-                GlobalExceptionHandlerTests.class.getDeclaredMethod("sampleEndpoint", SampleRequest.class),
-                0);
-        return new MethodArgumentNotValidException(parameter, bindingResult);
+        // The handler reads only the binding result; the exception merely requires some method parameter.
+        return new MethodArgumentNotValidException(
+                new MethodParameter(Object.class.getMethod("equals", Object.class), 0), bindingResult);
     }
 
     private static FieldError fieldError(String field, String message) {
         return new FieldError("sampleRequest", field, "", false, null, null, message);
-    }
-
-    @SuppressWarnings("unused")
-    private static void sampleEndpoint(@Valid SampleRequest request) {
-    }
-
-    private record SampleRequest(@NotBlank String displayName) {
     }
 }

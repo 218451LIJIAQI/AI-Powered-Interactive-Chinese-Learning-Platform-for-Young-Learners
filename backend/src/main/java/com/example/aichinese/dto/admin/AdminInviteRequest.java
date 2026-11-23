@@ -1,5 +1,8 @@
 package com.example.aichinese.dto.admin;
 
+import static com.example.aichinese.dto.DtoNormalization.redactValue;
+import static com.example.aichinese.dto.DtoNormalization.strip;
+
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -11,8 +14,11 @@ public record AdminInviteRequest(
         String email) {
 
     public AdminInviteRequest {
-        if (email != null) {
-            email = email.strip();
-        }
+        email = strip(email);
+    }
+
+    @Override
+    public String toString() {
+        return "AdminInviteRequest[email=" + redactValue(email) + "]";
     }
 }

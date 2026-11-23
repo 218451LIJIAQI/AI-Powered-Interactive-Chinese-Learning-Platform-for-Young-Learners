@@ -1,5 +1,6 @@
 package com.example.aichinese.dto.support;
 
+import static com.example.aichinese.dto.DtoNormalization.redactLength;
 import static com.example.aichinese.dto.DtoNormalization.strip;
 
 import jakarta.validation.constraints.NotBlank;
@@ -12,5 +13,10 @@ public record SupportReplyRequest(
 
     public SupportReplyRequest {
         body = strip(body);
+    }
+
+    @Override
+    public String toString() {
+        return "SupportReplyRequest[body=" + redactLength(body) + "]";
     }
 }

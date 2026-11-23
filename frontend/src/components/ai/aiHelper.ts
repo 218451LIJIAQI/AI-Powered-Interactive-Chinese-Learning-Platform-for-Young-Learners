@@ -1,13 +1,12 @@
 /**
- * Shared data of the AI Helper tabs: Xiaomei's scenarios, the topic ideas, report reasons and labels. Every map holds
- * FULL i18n keys of the `aiHelper` bundle (plugins/aiHelperMessages.ts) or the `aiSafety` bundle.
+ * Shared data of the AI Helper: Xiaomei's scenarios, the labels of a report, what a report is about and attaches, and
+ * how a new result comes into view. Every map holds FULL i18n keys of the `aiHelper` bundles
+ * (`aiHelperMessages.ts`, `aiTalkMessages.ts`) or the global `aiSafety` bundle.
  */
 import type { PillTone } from '@/components/common/StatusPill.vue'
 import { AI_REPORT_REASON_KEYS } from '@/plugins/aiSafetyMessages'
-import type { AiFeatureKey, AiResponseReportReason, AiResponseReportStatus, AiStoryLine } from '@/types/api'
-import type { AiReportPayload, XiaomeiScenario, XiaomeiTurn } from '@/types/ai'
-
-export type AiHelperTab = 'talk' | 'ask' | 'quiz' | 'story' | 'voice'
+import type { AiResponseReportReason, AiResponseReportStatus } from '@/types/api'
+import type { AiReportPayload, PracticeCheck, PracticeCheckType, XiaomeiScenario } from '@/types/ai'
 
 /** Why the AI Helper cannot send a request right now, as the page shows it. */
 export type AiBlockedReason = 'unavailable' | 'limit' | null
@@ -76,73 +75,22 @@ export const XIAOMEI_SCENARIOS: readonly XiaomeiScenarioOption[] = [
   },
 ]
 
-export const QUIZ_TOPIC_KEYS = [
-  'aiHelper.topicNumbers',
-  'aiHelper.topicFood',
-  'aiHelper.topicDirections',
-  'aiHelper.topicTime',
-  'aiHelper.topicFamily',
-  'aiHelper.topicShopping',
-] as const
-
-export const STORY_TOPIC_KEYS = [
-  'aiHelper.topicLrt',
-  'aiHelper.topicMyFamily',
-  'aiHelper.topicRainyDay',
-  'aiHelper.topicPasarMalam',
-  'aiHelper.topicWeekend',
-  'aiHelper.topicFirstDay',
-] as const
-
-/** The reasons a student can pick for each feature (a score has its own). */
-export function reportReasons(feature: AiFeatureKey): readonly AiResponseReportReason[] {
-  return feature === 'PRACTICE_CHECK'
-    ? ['SCORE_SEEMS_WRONG', 'INCORRECT_CONTENT', 'INAPPROPRIATE_CONTENT', 'OTHER']
-    : ['INCORRECT_CONTENT', 'UNCLEAR_EXPLANATION', 'INAPPROPRIATE_CONTENT', 'OTHER']
+export function reportReasonKey(reason: AiResponseReportReason): string {
+  return AI_REPORT_REASON_KEYS[reason] ?? AI_REPORT_REASON_KEYS.OTHER
 }
 
-export function reportReasonKey(reason: string): string {
-  return AI_REPORT_REASON_KEYS[reason as AiResponseReportReason] ?? 'aiSafety.reasonOther'
+export function practiceCheckKindKey(kind: PracticeCheckType): 'aiHelper.recording' | 'aiHelper.handwriting' {
+  return kind === 'RECORDING' ? 'aiHelper.recording' : 'aiHelper.handwriting'
 }
 
-/** Short feature names shown with a report ("Chat · sent May 16"). */
-const REPORT_FEATURE_KEYS: Readonly<Record<string, string>> = {
-  CHAT_TUTOR: 'aiHelper.featureChat',
-  XIAOMEI_CONVERSATION: 'aiHelper.featureXiaomei',
-  QUIZ_GENERATOR: 'aiHelper.featureQuiz',
-  STORY_GENERATOR: 'aiHelper.featureStory',
-  PRACTICE_CHECK: 'aiHelper.featureCheck',
-  LEARNING_PLAN: 'aiHelper.featurePlan',
+export function formatPracticeCheckMeta(check: PracticeCheck, when: string, fileName?: string | null): string {
+  return [check.lessonTitle, fileName, when].filter(Boolean).join(' · ')
 }
 
-export function reportFeatureKey(feature: string): string {
-  return REPORT_FEATURE_KEYS[feature] ?? 'aiHelper.featureChat'
-}
-
-export const REPORT_STATUS: Readonly<
-  Record<AiResponseReportStatus, { labelKey: string; tone: PillTone; icon: string }>
-> = {
-  PENDING_REVIEW: { labelKey: 'aiHelper.reportOpen', tone: 'info', icon: 'clock' },
-  RESOLVED: { labelKey: 'aiHelper.reportResolved', tone: 'success', icon: 'status' },
-  DISMISSED: { labelKey: 'aiHelper.reportDismissed', tone: 'neutral', icon: 'close' },
-}
-
-/** A conversation as plain text for a report: "小美: …" and "You: …" lines, the newest last. */
-export function transcriptText(turns: readonly XiaomeiTurn[], youLabel: string, limit = 12): string {
-  return turns
-    .slice(-limit)
-    .map((turn) => `${turn.speaker === 'XIAOMEI' ? '小美' : youLabel}: ${turn.text}`)
-    .join('\n')
-}
-
-/** A line of Chinese with its pinyin and translation as plain text. */
-export function lineText(line: AiStoryLine): string {
-  return [line.chinese, line.pinyin, line.translation].filter((part) => part?.trim()).join('\n')
-}
-
-/** Whole minutes between two times, at least one. */
-export function minutesBetween(start: number, end: number): number {
-  return Math.max(1, Math.round((end - start) / 60_000))
+export const REPORT_STATUS: Readonly<Record<AiResponseReportStatus, { labelKey: string; tone: PillTone }>> = {
+  PENDING_REVIEW: { labelKey: 'aiSafety.reportOpen', tone: 'info' },
+  RESOLVED: { labelKey: 'aiSafety.reportResolved', tone: 'success' },
+  DISMISSED: { labelKey: 'aiSafety.reportDismissed', tone: 'neutral' },
 }
 
 /** What a report is about and how the dialog words it; the student adds the reason and a note. */
@@ -150,6 +98,8 @@ export interface AiReportTarget {
   payload: Omit<AiReportPayload, 'reasonCategory' | 'description'>
   titleKey: string
   attachedKey: string
+  /** Where the admin's reply appears, when not the default "Ask SparkBot › My reports". */
+  leadKey?: string
 }
 
 /**
@@ -157,9 +107,10 @@ export interface AiReportTarget {
  * or low on it. A result already in view is left where it is.
  */
 export function revealResult(element: Element | null | undefined): void {
-  if (!element || typeof window === 'undefined') return
+  if (!element || !element.isConnected) return
   const top = element.getBoundingClientRect().top
-  if (top >= 0 && top <= window.innerHeight * 0.6) return
-  const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-  element.scrollIntoView?.({ block: 'start', behavior: reduceMotion ? 'auto' : 'smooth' })
+  const minTop = Number.parseFloat(getComputedStyle(element).scrollMarginTop) || 0
+  if (top >= minTop && top <= window.innerHeight * 0.6) return
+  const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+  element.scrollIntoView({ block: 'start', behavior: reduceMotion ? 'auto' : 'smooth' })
 }

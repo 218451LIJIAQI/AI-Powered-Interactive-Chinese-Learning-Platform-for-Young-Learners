@@ -2,7 +2,6 @@ package com.example.aichinese.config;
 
 import java.net.URI;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -13,44 +12,56 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
+import org.springframework.http.HttpHeaders;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import lombok.RequiredArgsConstructor;
+
 @Configuration(proxyBeanMethods = false)
+@RequiredArgsConstructor
 public class CorsConfig {
 
     private static final Logger log = LoggerFactory.getLogger(CorsConfig.class);
 
     private static final String CORS_ORIGIN_PROPERTY = "APP_CORS_ALLOWED_ORIGINS";
     private static final String ORIGIN_LABEL = "CORS allowed origin";
-    private static final int VITE_DEV_PORT_START = 5173;
-    private static final int VITE_DEV_PORT_END = 5183;
     private static final Duration PREFLIGHT_CACHE_MAX_AGE = Duration.ofHours(1);
 
-    static final List<String> DEFAULT_LOCAL_DEV_ORIGINS = buildDefaultLocalDevOrigins();
-    private static final String DEFAULT_LOCAL_DEV_ORIGINS_CSV = String.join(",", DEFAULT_LOCAL_DEV_ORIGINS);
+    /** The Vite dev server (strict port 5174); used outside production when no origin is configured. */
+    static final List<String> DEFAULT_LOCAL_DEV_ORIGINS = List.of(
+            "http://localhost:5174",
+            "http://127.0.0.1:5174");
     private static final List<String> ALLOWED_METHODS = List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS");
-    private static final List<String> ALLOWED_HEADERS = List.of(
-            "Authorization", "Content-Type", "Accept", "X-Requested-With", "X-Request-ID");
+    private static final List<String> ALLOWED_HEADERS = List.of("Authorization", "Content-Type", "Accept");
+    /**
+     * Response headers the web app reads (the sign-in pause from Retry-After, a download's file name). A browser
+     * hides every other header than the CORS-safelisted ones from a page on another origin unless they are listed.
+     */
+    private static final List<String> EXPOSED_HEADERS = List.of(HttpHeaders.RETRY_AFTER, HttpHeaders.CONTENT_DISPOSITION);
+
+    /** Immutable, validated browser origins shared by CORS configuration and {@link RefreshCookieOriginFilter}. */
+    record CorsAllowedOrigins(List<String> ordered, Set<String> exact) {
+        static CorsAllowedOrigins of(Set<String> resolved) {
+            return new CorsAllowedOrigins(List.copyOf(resolved), Set.copyOf(resolved));
+        }
+    }
 
     private final Environment environment;
 
-    public CorsConfig(Environment environment) {
-        this.environment = environment;
+    @Bean
+    CorsAllowedOrigins corsAllowedOrigins(@Value("${app.cors.allowed-origins:}") String allowedOrigins) {
+        return CorsAllowedOrigins.of(resolveExactOrigins(allowedOrigins, ProductionProfiles.isActive(environment)));
     }
 
     @Bean
-    public CorsConfigurationSource corsConfigurationSource(
-            @Value("${app.cors.allowed-origins:#{T(com.example.aichinese.config.CorsConfig).defaultLocalDevOriginsCsv()}}") String allowedOrigins) {
+    public CorsConfigurationSource corsConfigurationSource(CorsAllowedOrigins allowedOrigins) {
         CorsConfiguration configuration = new CorsConfiguration();
-
-        boolean productionProfileActive = ProductionProfiles.isActive(environment);
-        Set<String> exactOrigins = resolveExactOrigins(allowedOrigins, productionProfileActive);
-
-        configuration.setAllowedOrigins(List.copyOf(exactOrigins));
+        configuration.setAllowedOrigins(allowedOrigins.ordered());
         configuration.setAllowedHeaders(ALLOWED_HEADERS);
         configuration.setAllowedMethods(ALLOWED_METHODS);
+        configuration.setExposedHeaders(EXPOSED_HEADERS);
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(PREFLIGHT_CACHE_MAX_AGE);
 
@@ -59,14 +70,13 @@ public class CorsConfig {
         return source;
     }
 
-    public static String defaultLocalDevOriginsCsv() {
-        return DEFAULT_LOCAL_DEV_ORIGINS_CSV;
+    CorsConfigurationSource corsConfigurationSource(String allowedOrigins) {
+        return corsConfigurationSource(corsAllowedOrigins(allowedOrigins));
     }
 
     static Set<String> resolveExactOrigins(String allowedOrigins, boolean productionProfileActive) {
         Set<String> exactOrigins = new LinkedHashSet<>();
-        String configuredOrigins = allowedOrigins == null ? "" : allowedOrigins;
-        for (String rawOrigin : configuredOrigins.split(",")) {
+        for (String rawOrigin : allowedOrigins.split(",")) {
             String origin = rawOrigin.strip();
             if (origin.isEmpty()) {
                 continue;
@@ -85,22 +95,9 @@ public class CorsConfig {
                         CORS_ORIGIN_PROPERTY + " must contain explicit origins when the prod profile is active.");
             }
             exactOrigins.addAll(DEFAULT_LOCAL_DEV_ORIGINS);
-            log.warn("No explicit CORS origins were configured; falling back to local dev origins {}.",
-                    DEFAULT_LOCAL_DEV_ORIGINS);
         }
 
         return exactOrigins;
-    }
-
-    private static List<String> buildDefaultLocalDevOrigins() {
-        List<String> origins = new ArrayList<>();
-        origins.add("http://localhost:4173");
-        origins.add("http://127.0.0.1:4173");
-        for (int port = VITE_DEV_PORT_START; port <= VITE_DEV_PORT_END; port++) {
-            origins.add("http://localhost:" + port);
-            origins.add("http://127.0.0.1:" + port);
-        }
-        return List.copyOf(origins);
     }
 
     static String normalizeOrigin(String origin, boolean productionProfileActive) {
@@ -112,7 +109,7 @@ public class CorsConfig {
             throw new IllegalArgumentException("CORS allowed origin must not include a query string or fragment.");
         }
         if (productionProfileActive) {
-            HttpUrlValidation.requirePublicHttpsUrl(origin, CORS_ORIGIN_PROPERTY, "when the prod profile is active");
+            HttpUrlValidation.requirePublicHttpsUrl(uri, CORS_ORIGIN_PROPERTY, "when the prod profile is active");
         }
         return HttpUrlValidation.originOf(uri);
     }

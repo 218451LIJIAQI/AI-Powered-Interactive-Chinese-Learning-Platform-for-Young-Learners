@@ -3,29 +3,28 @@ package com.example.aichinese.repository;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
-import org.springframework.data.jpa.repository.EntityGraph;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.example.aichinese.entity.EmailChangeToken;
 
-public interface EmailChangeTokenRepository extends JpaRepository<EmailChangeToken, Long> {
+import jakarta.persistence.LockModeType;
 
-    @EntityGraph(attributePaths = { "user" })
-    Optional<EmailChangeToken> findByTokenHash(String tokenHash);
+public interface EmailChangeTokenRepository extends EmailVerificationTokenRepository<EmailChangeToken> {
 
-    /** The newest change link of the user that can still be opened (shown as "waiting for confirmation"). */
-    Optional<EmailChangeToken> findFirstByUserIdAndUsedAtIsNullAndExpiresAtAfterOrderByCreatedAtDesc(
-            Long userId, LocalDateTime now);
+    String LATEST_PENDING_BY_USER = """
+            from EmailChangeToken t
+            where t.user.id = :userId and t.usedAt is null and t.expiresAt > :now
+            order by t.createdAt desc, t.id desc
+            limit 1
+            """;
 
-    /** Retires every open link of the user, so only the newest one works. */
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("update EmailChangeToken t set t.usedAt = :now where t.user.id = :userId and t.usedAt is null")
-    int retireOpenTokensForUser(@Param("userId") Long userId, @Param("now") LocalDateTime now);
+    @Query("select t.newEmail " + LATEST_PENDING_BY_USER)
+    Optional<String> findPendingEmail(@Param("userId") Long userId, @Param("now") LocalDateTime now);
 
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("delete from EmailChangeToken t where t.user.id = :userId")
-    int deleteByUserId(@Param("userId") Long userId);
+    /** Locking read sees concurrent cancellations committed while waiting for the account lock. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select t " + LATEST_PENDING_BY_USER)
+    Optional<EmailChangeToken> findLockedPendingToken(@Param("userId") Long userId, @Param("now") LocalDateTime now);
 }

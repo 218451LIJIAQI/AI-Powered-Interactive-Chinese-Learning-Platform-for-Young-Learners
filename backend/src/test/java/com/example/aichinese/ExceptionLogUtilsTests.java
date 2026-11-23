@@ -18,14 +18,8 @@ class ExceptionLogUtilsTests {
 
         assertThat(summary)
                 .startsWith("RuntimeException:")
-                .contains("password=[REDACTED]")
-                .contains("Authorization: [REDACTED]")
-                .contains("token=[REDACTED]")
-                .doesNotContain("secret123")
-                .doesNotContain("abc.def")
-                .doesNotContain("reset-token")
-                .doesNotContain("\n")
-                .doesNotContain("\u202E")
+                .contains("password=[REDACTED]", "Authorization: [REDACTED]", "token=[REDACTED]")
+                .doesNotContain("secret123", "abc.def", "reset-token", "\n", "\u202E")
                 .hasSizeLessThanOrEqualTo(MAX_SAFE_SUMMARY_LENGTH);
     }
 
@@ -33,8 +27,6 @@ class ExceptionLogUtilsTests {
     void safeSummaryFallsBackToExceptionTypeWhenMessageIsBlank() {
         assertThat(ExceptionLogUtils.safeSummary(new IllegalStateException("  ")))
                 .isEqualTo("IllegalStateException");
-        assertThat(ExceptionLogUtils.safeSummary(null))
-                .isEqualTo("UnknownException");
     }
 
     private static String sensitiveMessage() {

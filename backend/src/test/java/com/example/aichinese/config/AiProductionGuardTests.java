@@ -35,9 +35,14 @@ class AiProductionGuardTests {
                 misconfiguration("HTTP base URL",
                         properties -> properties.setApiBaseUrl("http://api.deepseek.com"), "HTTPS"),
                 misconfiguration("loopback base URL", properties -> {
-                    properties.setProvider("openai_compatible");
+                    properties.setProvider("openai-compatible");
                     properties.setApiBaseUrl("https://localhost:11434");
-                }, "non-loopback public host"));
+                }, "non-loopback public host"),
+                // A URL the provider clients refuse would start production with every AI feature unavailable.
+                misconfiguration("base URL with a query",
+                        properties -> properties.setApiBaseUrl("https://api.deepseek.com?region=sg"), "query or fragment"),
+                misconfiguration("base URL with a fragment",
+                        properties -> properties.setApiBaseUrl("https://api.deepseek.com/v1#chat"), "query or fragment"));
     }
 
     @ParameterizedTest(name = "{0}")
@@ -50,6 +55,18 @@ class AiProductionGuardTests {
         assertThatThrownBy(() -> new AiProductionGuard(environment("prod"), properties))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining(expectedMessage);
+    }
+
+    @Test
+    void malformedUrlsAreDiagnosedWithoutQuotingTheirPrivateContents() {
+        AiProperties properties = configuredProperties();
+        properties.setApiBaseUrl("https://example.test/invalid path?token=private-value");
+
+        assertThatThrownBy(() -> new AiProductionGuard(environment("prod"), properties))
+                .hasMessageContaining("AI_API_BASE_URL")
+                .hasMessageNotContaining("private-value")
+                .rootCause()
+                .hasMessageNotContaining("private-value");
     }
 
     @Test

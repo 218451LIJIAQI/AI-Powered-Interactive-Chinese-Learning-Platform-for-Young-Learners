@@ -1,90 +1,78 @@
 <template>
-  <div class="admin-support page-stack">
-    <PageHeaderBlock :title="t('adminSupport.pageTitle')" :description="t('adminSupport.lede')" />
+  <div class="page-stack">
+    <PageHeaderBlock :title="t('nav.support')" hide-title />
 
-    <DataNotice
-      :error="actionError"
-      :success="actionSuccess"
-      :success-title="t('adminSupport.noticeDone')"
-      :error-title="t('adminSupport.noticeFailed')"
-    />
+    <DataNotice :error="actionError" :error-title="t('adminSupport.noticeFailed')" />
 
-    <div class="admin-inbox">
-      <section class="admin-sheet admin-queue" aria-labelledby="admin-support-queue-title">
-        <div class="admin-sheet-head">
-          <h2 id="admin-support-queue-title" class="admin-sheet-title">{{ t('adminSupport.queueLabel') }}</h2>
-          <SegmentedControl
-            :model-value="status"
-            :label="t('adminSupport.queueLabel')"
-            :options="
-              tabs.map((tab) => ({
-                value: tab.status,
-                label: tab.label,
-                testId: `admin-support-tab-${tab.status.toLowerCase()}`,
-              }))
-            "
-            @update:model-value="selectTab"
-          />
-        </div>
+    <div class="list-detail admin-list-detail">
+      <section class="panel admin-list" aria-labelledby="admin-support-queue-title">
+        <h2 id="admin-support-queue-title" class="sr-only">{{ t('adminSupport.queueLabel') }}</h2>
+        <FilterChips
+          :model-value="status"
+          :label="t('adminSupport.queueLabel')"
+          :options="filterOptions"
+          @update:model-value="selectTab"
+        />
 
-        <div v-if="queue.loading.value" class="admin-sheet-body">
-          <StatePanel
-            tone="loading"
-            :title="t('adminSupport.listLoading')"
-            :message="t('adminSupport.listLoadingHint')"
-          />
-        </div>
-        <div v-else-if="queue.error.value && !requests.length" class="admin-sheet-body">
-          <StatePanel tone="error" icon="alert" :title="t('adminSupport.listError')" :message="queue.error.value">
-            <template #actions>
-              <button class="btn btn-primary" type="button" @click="queue.reload">{{ t('adminSupport.retry') }}</button>
-            </template>
-          </StatePanel>
-        </div>
+        <StatePanel
+          v-if="queue.loading.value"
+          tone="loading"
+          :title="t('adminSupport.listLoading')"
+          :message="t('adminSupport.listLoadingHint')"
+        />
+        <StatePanel
+          v-else-if="queue.error.value"
+          tone="error"
+          icon="alert"
+          :title="t('adminSupport.listError')"
+          :message="queue.error.value"
+          @retry="queue.reload"
+        />
         <template v-else-if="requests.length">
-          <ul class="admin-queue-list" :aria-label="t('adminSupport.requestsLabel')">
+          <ul class="admin-select-list" :aria-label="t('adminSupport.requestsLabel')">
             <li v-for="request in requests" :key="request.id">
               <button
-                class="admin-queue-item"
+                class="select-card"
                 type="button"
                 :aria-current="request.id === selectedId ? 'true' : undefined"
                 data-testid="admin-support-item"
                 @click="selectRequest(request.id)"
               >
-                <span class="admin-support-number">#{{ request.number }}</span>
-                <span class="admin-queue-item-copy">
-                  <strong>{{ request.subject }}</strong>
-                  <span class="admin-queue-item-meta">{{ requestMeta(request) }}</span>
-                </span>
+                <span class="admin-meta">#{{ request.number }}</span>
+                <strong class="admin-select-title">{{ request.subject }}</strong>
+                <span class="admin-meta">{{ requestMeta(request) }}</span>
               </button>
             </li>
           </ul>
-          <div v-if="totalPages > 1" class="admin-sheet-foot">
-            <PaginationBar
-              :current-page="page + 1"
-              :total-pages="totalPages"
-              :label="t('adminSupport.pagination')"
-              icon-only
-              @update:current-page="goToPage($event - 1)"
-            />
-          </div>
+          <PaginationBar
+            :page="displayedPage"
+            :total-pages="totalPages"
+            :label="t('adminSupport.pagination')"
+            icon-only
+            @update:page="goToPage"
+          />
         </template>
-        <div v-else class="admin-sheet-body">
-          <StatePanel tone="empty" icon="inbox" :title="emptyState.title" :message="emptyState.message" />
-        </div>
+        <StatePanel
+          v-else
+          tone="empty"
+          icon="inbox"
+          :title="t(EMPTY_KEYS[status].title)"
+          :message="t(EMPTY_KEYS[status].hint)"
+        />
       </section>
 
-      <div ref="detailRef" class="admin-reader-slot" tabindex="-1">
+      <div ref="detailRef" class="admin-detail-slot" tabindex="-1">
+        <div v-if="selectedId === null && !queue.loading.value && !requests.length" class="panel">
+          <StatePanel
+            tone="empty"
+            icon="support"
+            spacious
+            :title="t('adminSupport.chooseRequest')"
+            :message="t('adminSupport.chooseRequestHint')"
+          />
+        </div>
         <StatePanel
-          v-if="selectedId === null"
-          tone="empty"
-          icon="support"
-          spacious
-          :title="t('adminSupport.chooseRequest')"
-          :message="t('adminSupport.chooseRequestHint')"
-        />
-        <StatePanel
-          v-else-if="detail.loading.value"
+          v-else-if="detail.loading.value || selectedId === null"
           tone="loading"
           spacious
           :title="t('adminSupport.detailLoading')"
@@ -97,53 +85,49 @@
           spacious
           :title="t('adminSupport.detailError')"
           :message="detail.error.value ?? ''"
-        >
-          <template #actions>
-            <button class="btn btn-primary" type="button" @click="detail.reload">{{ t('adminSupport.retry') }}</button>
-          </template>
-        </StatePanel>
+          @retry="detail.reload"
+        />
         <article
           v-else
-          class="panel admin-reader"
+          class="panel admin-detail"
           aria-labelledby="admin-support-title"
           data-testid="admin-support-detail"
         >
-          <header class="admin-reader-head">
-            <div class="admin-reader-heading">
-              <h2 id="admin-support-title">
-                {{
-                  t('adminSupport.detailTitle', { number: current.request.number, subject: current.request.subject })
-                }}
-              </h2>
-              <p>{{ fromLine }}</p>
-              <div class="admin-reader-tags">
+          <header class="admin-detail-head">
+            <div class="admin-detail-heading">
+              <div class="page-title-row">
+                <h2 id="admin-support-title" class="admin-detail-title">
+                  {{
+                    t('adminSupport.detailTitle', { number: current.request.number, subject: current.request.subject })
+                  }}
+                </h2>
                 <StatusPill
-                  :label="t(queueStatusKey(current.request.status))"
-                  :tone="supportStatusTone(current.request.status)"
+                  :label="t(QUEUE_STATUS_KEYS[current.request.status])"
+                  :tone="adminSupportTone(current.request.status)"
                 />
               </div>
+              <p class="admin-meta">{{ fromLine }}</p>
             </div>
             <RouterLink
               v-if="current.requesterUserId"
-              class="btn btn-link"
+              class="btn btn-ghost btn-sm admin-link-action"
               :to="{ name: 'admin-users', query: { user: current.requesterUserId } }"
-              :aria-label="t('adminSupport.viewUserLabel', { name: requesterName })"
+              :aria-label="t('adminSupport.viewUserLabel', { name: current.request.requesterName })"
             >
               {{ t('adminSupport.viewUser') }}
-              <IconGlyph name="chevronRight" :size="14" />
+              <IconGlyph name="chevronRight" :size="16" />
             </RouterLink>
           </header>
 
           <ol class="admin-support-thread" :aria-label="t('adminSupport.threadLabel')">
             <li
-              v-for="message in current.messages"
+              v-for="message in messages"
               :key="message.id"
               class="admin-support-message"
               :class="{ 'is-support': message.fromSupport }"
             >
-              <p class="admin-support-message-meta">
-                <strong>{{ authorLabel(message) }}</strong>
-                <span>{{ formatDateTime(message.createdAt) }}</span>
+              <p class="admin-meta">
+                <strong>{{ authorLabel(message) }}</strong> · {{ formatDateTime(message.createdAt) }}
               </p>
               <p class="admin-support-message-body">{{ message.body }}</p>
               <button
@@ -153,30 +137,23 @@
                 :aria-label="
                   t('adminSupport.attachmentLabel', {
                     name: message.attachment.fileName,
-                    size: formatFileSize(message.attachment.fileSize),
+                    size: message.attachmentSize,
                   })
                 "
-                :disabled="openingAttachment === message.id"
-                :aria-busy="openingAttachment === message.id"
+                :disabled="openingAttachments.has(message.id)"
+                :aria-busy="openingAttachments.has(message.id)"
                 @click="openAttachment(message.id)"
               >
                 <IconGlyph name="attach" :size="14" />
-                {{ message.attachment.fileName }} · {{ formatFileSize(message.attachment.fileSize) }}
+                <span>{{ message.attachment.fileName }} · {{ message.attachmentSize }}</span>
               </button>
             </li>
           </ol>
 
-          <p v-if="statusNote" class="admin-support-status-note">
-            <IconGlyph name="clock" :size="16" />
-            {{ statusNote }}
-          </p>
+          <p v-if="statusNote" class="admin-meta">{{ statusNote }}</p>
 
-          <form
-            v-if="current.request.status !== 'SOLVED'"
-            class="admin-support-reply"
-            novalidate
-            @submit.prevent="sendReply"
-          >
+          <!-- A solved request takes no reply; a reply goes to the requester by e-mail (A1.03, A1.04). -->
+          <form v-if="current.request.status !== 'SOLVED'" class="admin-section" novalidate @submit.prevent="sendReply">
             <div class="field">
               <label class="field-label" for="admin-support-reply">{{ t('adminSupport.yourReply') }}</label>
               <textarea
@@ -185,34 +162,29 @@
                 class="textarea"
                 rows="4"
                 maxlength="4000"
-                :aria-invalid="Boolean(replyError)"
-                :aria-describedby="replyError ? 'admin-support-reply-error' : 'admin-support-reply-hint'"
+                :disabled="pendingAction !== null"
+                :placeholder="current.request.status === 'ANSWERED' ? t('adminSupport.replyPlaceholder') : undefined"
                 data-testid="admin-support-reply"
               />
-              <p id="admin-support-reply-hint" class="field-hint" data-testid="admin-support-reply-hint">
-                {{ replyHint }}
-              </p>
-              <p v-if="replyError" id="admin-support-reply-error" class="field-error" role="alert">{{ replyError }}</p>
             </div>
             <div class="form-actions">
               <button
                 class="btn btn-secondary"
                 type="button"
-                :disabled="busy"
+                :disabled="pendingAction !== null"
+                :aria-busy="pendingAction === 'solve'"
                 data-testid="admin-support-solve"
                 @click="markSolved"
               >
-                <IconGlyph name="check" :size="16" />
                 {{ t('adminSupport.markSolved') }}
               </button>
               <button
                 class="btn btn-primary"
                 type="submit"
-                :disabled="busy"
-                :aria-busy="busy"
+                :disabled="pendingAction !== null || !reply.trim()"
+                :aria-busy="pendingAction === 'reply'"
                 data-testid="admin-support-send"
               >
-                <IconGlyph name="send" :size="16" />
                 {{ t('adminSupport.sendReply') }}
               </button>
             </div>
@@ -221,159 +193,188 @@
       </div>
     </div>
 
-    <AppToast :message="toast" />
+    <AppToast :message="toast" :action="toastAction" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
-import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { RouterLink, useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
 
 import { adminSupportApi } from '@/api/ops'
-import SegmentedControl from '@/components/common/SegmentedControl.vue'
+import { adminSupportTone } from '@/components/admin/adminDisplay'
+import { useSelectedRecord } from '@/components/admin/useSelectedRecord'
+import AppToast from '@/components/common/AppToast.vue'
 import DataNotice from '@/components/common/DataNotice.vue'
+import FilterChips from '@/components/common/FilterChips.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import PaginationBar from '@/components/common/PaginationBar.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
 import StatusPill from '@/components/common/StatusPill.vue'
-import AppToast from '@/components/common/AppToast.vue'
 import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
-import { useActionFeedback } from '@/composables/useActionFeedback'
 import { useLocalMessages } from '@/composables/useLocalMessages'
+import { notifyProgressChanged } from '@/composables/useProgressRefresh'
 import { useResource, useServerPage } from '@/composables/useResource'
 import { useToast } from '@/composables/useToast'
 import { adminSupportMessages } from '@/plugins/adminSupportMessages'
 import { opsLabelMessages } from '@/plugins/opsLabelMessages'
-import type { SupportMessage, SupportRequestDetail, SupportRequestSummary, SupportStatus } from '@/types/ops'
+import {
+  SUPPORT_STATUSES,
+  type SupportMessage,
+  type SupportRequestDetail,
+  type SupportRequestSummary,
+  type SupportRequesterRole,
+  type SupportStatus,
+} from '@/types/ops'
 import { resolveApiError } from '@/utils/apiError'
 import { formatDate, formatDateTime, formatFileSize, formatRelativeTime } from '@/utils/format'
 import { openFileDownload } from '@/utils/opsFiles'
-import { queueStatusKey, roleKey, supportStatusTone, supportTopicKey } from '@/utils/opsLabels'
+import { QUEUE_STATUS_KEYS, ROLE_KEYS, SUPPORT_TOPIC_KEYS } from '@/utils/opsLabels'
+import { queryOption } from '@/utils/queryText'
+import '@/styles/admin-shared.css'
 import '@/styles/ops-admin.css'
 
 const PAGE_SIZE = 20
-const STATUSES: readonly SupportStatus[] = ['OPEN', 'ANSWERED', 'SOLVED']
-const TAB_KEYS: Record<SupportStatus, string> = {
-  OPEN: 'adminSupport.tabOpen',
-  ANSWERED: 'adminSupport.tabAnswered',
-  SOLVED: 'adminSupport.tabSolved',
+const NO_BREAK_SPACE = '\u00a0'
+const EMPTY_KEYS: Record<SupportStatus, { title: string; hint: string }> = {
+  OPEN: { title: 'adminSupport.emptyOpenTitle', hint: 'adminSupport.emptyOpen' },
+  ANSWERED: { title: 'adminSupport.emptyAnsweredTitle', hint: 'adminSupport.emptyAnswered' },
+  SOLVED: { title: 'adminSupport.emptySolvedTitle', hint: 'adminSupport.emptySolved' },
 }
-const EMPTY_KEYS: Record<SupportStatus, readonly [string, string]> = {
-  OPEN: ['adminSupport.emptyOpenTitle', 'adminSupport.emptyOpen'],
-  ANSWERED: ['adminSupport.emptyAnsweredTitle', 'adminSupport.emptyAnswered'],
-  SOLVED: ['adminSupport.emptySolvedTitle', 'adminSupport.emptySolved'],
-}
+
+const { t, locale } = useLocalMessages({ adminSupport: adminSupportMessages, opsLabels: opsLabelMessages })
+const actionError = ref<string | null>(null)
+const { toast, toastAction, showToast, hideToast } = useToast()
+const detailRef = ref<HTMLElement | null>(null)
+
+// The queue: its tab is kept in the address (`?status=ANSWERED`); Open, the default, is left out.
 
 const route = useRoute()
 const router = useRouter()
-const { t } = useLocalMessages({ adminSupport: adminSupportMessages, opsLabels: opsLabelMessages })
-const { actionError, actionSuccess, clearFeedback, showError, showSuccess } = useActionFeedback()
-const { toast, showToast } = useToast()
-const detailRef = ref<HTMLElement | null>(null)
+function queryStatus(): SupportStatus {
+  return queryOption(route.query.status, SUPPORT_STATUSES) ?? 'OPEN'
+}
 
-// ----- queue -----
-
-const status = ref<SupportStatus>('OPEN')
+const status = ref<SupportStatus>(queryStatus())
 const page = ref(0)
 const queue = useResource(() => adminSupportApi.queue(status.value, page.value, PAGE_SIZE))
-const { items: requests, totalPages, goToPage } = useServerPage(queue, page, { select: (data) => data.requests })
+const queuePage = computed(() => queue.data.value?.requests ?? null)
+// A later page emptied by a reply or a solve (its last request moved to another tab) steps back to one with requests,
+// instead of saying the whole tab is empty while its pagination is gone.
+const {
+  items: requests,
+  displayedPage,
+  totalPages,
+  goToPage,
+} = useServerPage({ data: queuePage, reload: queue.reload }, page, {
+  stepBackFromEmpty: true,
+})
 
-const tabs = computed(() =>
-  STATUSES.map((value) => ({
-    status: value,
-    label: t(TAB_KEYS[value], { count: queue.data.value?.counts[value] ?? 0 }),
+function statusQuery(): LocationQueryRaw {
+  return { status: status.value === 'OPEN' ? undefined : status.value }
+}
+
+const filterOptions = computed(() =>
+  SUPPORT_STATUSES.map((value) => ({
+    value,
+    label: t(QUEUE_STATUS_KEYS[value]),
+    count: queue.data.value?.counts[value],
+    testId: `admin-support-tab-${value.toLowerCase()}`,
   })),
 )
-const emptyState = computed(() => ({ title: t(EMPTY_KEYS[status.value][0]), message: t(EMPTY_KEYS[status.value][1]) }))
 
-function selectTab(next: SupportStatus): void {
+function showTab(next: SupportStatus): void {
   if (status.value === next) return
   status.value = next
   page.value = 0
+  queue.data.value = null
   void queue.reload()
+}
+
+function selectTab(next: SupportStatus): void {
+  showTab(next)
+  void router.replace({ query: { ...route.query, ...statusQuery() } })
+}
+
+// The address can also change under the page (the sidebar's Support link opens it with no tab): the queue follows it.
+watch(
+  () => route.query.status,
+  () => {
+    if (route.name === 'admin-support') showTab(queryStatus())
+  },
+)
+
+/** "learner" for a learner's request; null for a role the platform no longer has (requests sent before 2026-11). */
+function requesterRoleLabel(role: SupportRequesterRole): string | null {
+  return role === 'STUDENT' ? t(ROLE_KEYS.STUDENT).toLowerCase() : null
 }
 
 function requestMeta(request: SupportRequestSummary): string {
   // "2 hr. ago" never breaks, and each "·" stays with the part before it, so no line starts with a separator.
-  const time = formatRelativeTime(request.updatedAt).replaceAll(' ', '\u00a0')
-  const meta =
-    request.requesterRole === 'VISITOR'
-      ? t('adminSupport.itemVisitor', { email: request.requesterEmail, time })
-      : t('adminSupport.itemMeta', {
-          name: request.requesterName ?? t('adminSupport.deletedAuthor'),
-          role: t(roleKey(request.requesterRole)).toLowerCase(),
-          time,
-        })
-  return meta.replaceAll(' · ', '\u00a0· ')
+  const time = formatRelativeTime(request.updatedAt).replaceAll(' ', NO_BREAK_SPACE)
+  const role = requesterRoleLabel(request.requesterRole)
+  let meta: string
+  if (request.requesterRole === 'VISITOR') meta = t('adminSupport.itemVisitor', { email: request.requesterEmail, time })
+  else if (role) meta = t('adminSupport.itemMeta', { name: request.requesterName, role, time })
+  else meta = t('adminSupport.itemAccount', { name: request.requesterName, time })
+  return meta.replaceAll(' · ', `${NO_BREAK_SPACE}· `)
 }
 
-// ----- selected request (`?request=<id>`) -----
+// The selected request (`?request=<id>`).
 
+/** The reply being written; Send reply waits until there is one (Mark as solved needs none). */
 const reply = ref('')
-const replyError = ref<string | null>(null)
+type SupportAction = 'reply' | 'solve' | 'reopen'
+const pendingActions = reactive(new Map<number, SupportAction>())
+let selectionVersion = 0
+let disposed = false
 
-const selectedId = computed<number | null>(() => {
-  const id = Number(route.query.request)
-  return Number.isInteger(id) && id > 0 ? id : null
+const { selectedId, detail, select } = useSelectedRecord(
+  'request',
+  adminSupportApi.get,
+  statusQuery,
+  () => requests.value[0]?.id,
+)
+const current = detail.data
+const pendingAction = computed<SupportAction | null>(() =>
+  selectedId.value === null ? null : (pendingActions.get(selectedId.value) ?? null),
+)
+const messages = computed(() =>
+  (current.value?.messages ?? []).map((message) => ({
+    ...message,
+    attachmentSize: message.attachment ? formatFileSize(message.attachment.fileSize, locale.value) : '',
+  })),
+)
+
+watch(selectedId, () => {
+  selectionVersion += 1
+  actionError.value = null
+  reply.value = ''
 })
-
-const detail = useResource<SupportRequestDetail | null>(
-  () => (selectedId.value ? adminSupportApi.get(selectedId.value) : Promise.resolve(null)),
-  false,
-)
-const current = computed(() => detail.data.value)
-
-watch(
-  selectedId,
-  (id, previous) => {
-    if (id !== previous) {
-      detail.data.value = null
-      reply.value = ''
-      replyError.value = null
-    }
-    void detail.reload()
-  },
-  { immediate: true },
-)
-
-// Without a choice in the URL, the oldest request in the queue opens beside it.
-watch(requests, (list) => {
-  const oldest = list[0]
-  if (selectedId.value === null && oldest) {
-    void router.replace({ query: { ...route.query, request: String(oldest.id) } })
-  }
+onBeforeUnmount(() => {
+  disposed = true
+  selectionVersion += 1
 })
 
 async function selectRequest(id: number): Promise<void> {
-  await router.replace({ query: { ...route.query, request: String(id) } })
+  await select(id)
   await nextTick()
   detailRef.value?.focus({ preventScroll: true })
 }
-
-const isVisitor = computed(() => current.value?.request.requesterRole === 'VISITOR')
-const requesterName = computed(() => current.value?.request.requesterName ?? t('adminSupport.deletedAuthor'))
 
 const fromLine = computed(() => {
   const request = current.value?.request
   if (!request) return ''
   const shared = {
     email: request.requesterEmail,
-    topic: t(supportTopicKey(request.topic)),
+    topic: t(SUPPORT_TOPIC_KEYS[request.topic]),
     date: formatDateTime(request.createdAt),
   }
   if (request.requesterRole === 'VISITOR') return t('adminSupport.fromVisitor', shared)
-  return t('adminSupport.from', {
-    ...shared,
-    name: requesterName.value,
-    role: t(roleKey(request.requesterRole)).toLowerCase(),
-  })
-})
-
-const replyHint = computed(() => {
-  const request = current.value?.request
-  if (!request) return ''
-  if (request.requesterRole === 'VISITOR') return t('adminSupport.replyHintVisitor', { email: request.requesterEmail })
-  return request.requesterRole === 'TEACHER' ? t('adminSupport.replyHintTeacher') : t('adminSupport.replyHintStudent')
+  const role = requesterRoleLabel(request.requesterRole)
+  return role
+    ? t('adminSupport.from', { ...shared, name: request.requesterName, role })
+    : t('adminSupport.fromAccount', { ...shared, name: request.requesterName })
 })
 
 const statusNote = computed(() => {
@@ -391,74 +392,111 @@ const statusNote = computed(() => {
   return ''
 })
 
+/** Support's replies name who wrote them; only a visitor's message has no author. */
 function authorLabel(message: SupportMessage): string {
-  if (message.fromSupport) {
-    return message.authorName
-      ? t('adminSupport.supportAuthor', { name: message.authorName })
-      : t('adminSupport.supportTeam')
-  }
-  if (isVisitor.value) return t('adminSupport.visitorAuthor')
-  return message.authorName ?? t('adminSupport.deletedAuthor')
+  if (message.fromSupport) return t('adminSupport.supportAuthor', { name: message.authorName })
+  return message.authorName ?? t('adminSupport.visitorAuthor')
 }
 
-// ----- reply, solve, attachments -----
+// Reply, solve, attachments.
 
-const busy = ref(false)
+/**
+ * Runs a change of the request; its answer replaces the detail, and the queue's tabs and counts and the sidebar badge
+ * catch up. `announce` shows its toast once it worked (with its Undo, if any).
+ */
+async function changeRequest(
+  targetId: number,
+  action: SupportAction,
+  change: () => Promise<SupportRequestDetail>,
+  failureKey: string,
+  announce?: () => void,
+): Promise<boolean> {
+  if (pendingActions.has(targetId)) return false
+  hideToast()
+  const version = selectionVersion
+  pendingActions.set(targetId, action)
+  if (selectedId.value === targetId || action === 'reopen') actionError.value = null
+  try {
+    const updated = await change()
+    // The sidebar badge counts outlive this page: they catch up even when the admin has already moved on.
+    notifyProgressChanged()
+    if (disposed) return false
+    // Update the open pane and deliver feedback whenever the modified request is currently displayed (including after switching back).
+    if (selectedId.value === updated.request.id) {
+      detail.clear()
+      current.value = updated
+      announce?.()
+    }
+    void queue.reload()
+    return version === selectionVersion
+  } catch (failure) {
+    if (!disposed && (selectedId.value === targetId || (action === 'reopen' && version === selectionVersion))) {
+      actionError.value = resolveApiError(failure, t(failureKey))
+    }
+    return false
+  } finally {
+    pendingActions.delete(targetId)
+  }
+}
 
 async function sendReply(): Promise<void> {
   const request = current.value?.request
-  if (!request) return
   const body = reply.value.trim()
-  replyError.value = body ? null : t('adminSupport.replyMissing')
-  if (!body) return
-  busy.value = true
-  clearFeedback()
-  try {
-    detail.data.value = await adminSupportApi.reply(request.id, body)
-    reply.value = ''
-    showSuccess(
-      isVisitor.value
-        ? t('adminSupport.replySentVisitor', { email: request.requesterEmail, number: request.number })
-        : t('adminSupport.replySent', { name: requesterName.value, number: request.number }),
-    )
-    void queue.reload()
-  } catch (failure) {
-    showError(resolveApiError(failure, t('adminSupport.replyFailed')))
-  } finally {
-    busy.value = false
-  }
+  if (!request || !body) return
+  const sent = await changeRequest(
+    request.id,
+    'reply',
+    () => adminSupportApi.reply(request.id, body),
+    'adminSupport.replyFailed',
+    () =>
+      showToast(
+        request.requesterRole === 'VISITOR'
+          ? t('adminSupport.replySentVisitor', { email: request.requesterEmail, number: request.number })
+          : t('adminSupport.replySent', { name: request.requesterName, number: request.number }),
+      ),
+  )
+  if (sent) reply.value = ''
 }
 
+/**
+ * Marks the request solved at once (A1.07, A1.08): it leaves the Open or Answered list, the counts change, and the
+ * reply being written is dropped. The toast's Undo reopens it.
+ */
 async function markSolved(): Promise<void> {
   const request = current.value?.request
   if (!request) return
-  busy.value = true
-  clearFeedback()
-  try {
-    detail.data.value = await adminSupportApi.solve(request.id)
-    showToast(
-      isVisitor.value
-        ? t('adminSupport.solvedToastVisitor', { number: request.number })
-        : t('adminSupport.solvedToast', { number: request.number, name: requesterName.value }),
-    )
-    void queue.reload()
-  } catch (failure) {
-    showError(resolveApiError(failure, t('adminSupport.solveFailed')))
-  } finally {
-    busy.value = false
-  }
+  const solved = await changeRequest(
+    request.id,
+    'solve',
+    () => adminSupportApi.solve(request.id),
+    'adminSupport.solveFailed',
+    () =>
+      showToast(t('adminSupport.solvedToast', { number: request.number }), {
+        label: t('common.undo'),
+        run: () => void reopen(request.id),
+      }),
+  )
+  if (solved) reply.value = ''
 }
 
-const openingAttachment = ref<number | null>(null)
+/** The Undo of Mark as solved: back to Answered after a reply, otherwise Open. */
+async function reopen(id: number): Promise<void> {
+  await changeRequest(id, 'reopen', () => adminSupportApi.reopen(id), 'adminSupport.reopenFailed')
+}
+
+const openingAttachments = reactive(new Set<number>())
 
 async function openAttachment(messageId: number): Promise<void> {
-  openingAttachment.value = messageId
+  if (openingAttachments.has(messageId)) return
+  openingAttachments.add(messageId)
+  const version = selectionVersion
+  actionError.value = null
   try {
     await openFileDownload(() => adminSupportApi.attachment(messageId), 'screenshot')
   } catch (failure) {
-    showError(resolveApiError(failure, t('adminSupport.attachmentFailed')))
+    if (version === selectionVersion) actionError.value = resolveApiError(failure, t('adminSupport.attachmentFailed'))
   } finally {
-    openingAttachment.value = null
+    openingAttachments.delete(messageId)
   }
 }
 </script>

@@ -1,88 +1,46 @@
 /**
- * Types of the ops module's API (public site forms, accounts, Help & support, teacher verification, admin users,
- * dashboard, analytics and audit log). Dates are ISO strings as the backend sends them.
+ * Types of the ops module's API (public site forms, accounts, support requests, admin users, dashboard, analytics and
+ * audit log). Dates are ISO strings as the backend sends them.
  */
-import type { ContentStatus, PageResponse, ReviewContentType, TeacherVerificationState, UserRole } from './api'
+import type { AiResponseReportReason, AiResultStatus, AppLanguage, ContentStatus, PageResponse, UserRole } from './api'
 
-// ----- shared -----
-
-/** A teacher's published class (teaching profile, account deletion). */
-export interface PublishedClassSummary {
-  id: number
-  title: string
-}
-
-/** A reset or invite link that still works: the account address. */
+/**
+ * An account's address: the one a reset, confirmation or invite link belongs to while the link can still be used, or
+ * the one an account was just created with (sign-up, an accepted admin invite).
+ */
 export interface LinkTokenResponse {
   email: string
 }
 
-// ----- account -----
+// Account
 
-/** E-mail notification preferences; a preference that does not apply to the role is null. */
+/**
+ * The e-mail notifications a user can switch off: an admin's daily summary of AI reports and support requests waiting
+ * (`reviewQueues`). Learners have none to switch, so it is null for them.
+ */
 export interface NotificationPreferences {
-  liveSessionReminders: boolean | null
-  feedback: boolean | null
-  contentReviews: boolean | null
   reviewQueues: boolean | null
 }
-
-export type AccountDeletionBlock = 'ADMIN_ACCOUNT' | 'PUBLISHED_CLASSES'
 
 export interface AccountSettingsResponse {
   fullName: string
   email: string
   pendingEmail: string | null
   notifications: NotificationPreferences
-  deletion: {
-    blockedBy: AccountDeletionBlock | null
-    publishedClasses: PublishedClassSummary[]
-  }
 }
 
 export interface EmailChangeResponse {
   pendingEmail: string
 }
 
-// ----- teacher verification -----
+// Support requests
 
-export type TeacherDocumentType = 'CERTIFICATE' | 'IDENTITY' | 'QUALIFICATION'
-/** READY: new since the last submission · IN_REVIEW · VERIFIED · SENT: already sent, unchanged. */
-export type TeacherDocumentStatus = 'READY' | 'IN_REVIEW' | 'VERIFIED' | 'SENT'
-
-export interface TeacherDocument {
-  id: number
-  documentType: TeacherDocumentType
-  fileName: string
-  fileSize: number
-  uploadedAt: string
-  status: TeacherDocumentStatus
-}
-
-export interface TeacherProfileResponse {
-  teacherId: number
-  fullName: string
-  email: string
-  bio: string | null
-  verificationState: TeacherVerificationState
-  submittedAt: string | null
-  approvedAt: string | null
-  latestDecision: {
-    outcome: TeacherVerificationState
-    reason: string | null
-    reviewerName: string | null
-    decidedAt: string
-  } | null
-  documents: TeacherDocument[]
-  publishedClasses: PublishedClassSummary[]
-}
-
-// ----- Help & support -----
-
-export type SupportStatus = 'OPEN' | 'ANSWERED' | 'SOLVED'
+export const SUPPORT_STATUSES = ['OPEN', 'ANSWERED', 'SOLVED'] as const
+export type SupportStatus = (typeof SUPPORT_STATUSES)[number]
+/** VERIFICATION only labels requests sent while teachers still applied to the platform; the forms no longer offer it. */
 export type SupportTopic = 'ACCOUNT' | 'CLASSES' | 'LEARNING' | 'AI_HELPER' | 'VERIFICATION' | 'SAFETY' | 'OTHER'
+/** A signed-in learner or a visitor of the Help page; TEACHER marks requests teacher accounts sent before 2026-11. */
 export type SupportRequesterRole = 'STUDENT' | 'TEACHER' | 'VISITOR'
-export type SupportClosedBy = 'REQUESTER' | 'SUPPORT' | 'AUTO'
 
 export interface SupportRequestSummary {
   id: number
@@ -95,10 +53,9 @@ export interface SupportRequestSummary {
   requesterRole: SupportRequesterRole
   createdAt: string
   updatedAt: string
-  lastSupportReplyAt: string | null
   closesAt: string | null
   solvedAt: string | null
-  closedBy: SupportClosedBy | null
+  closedBy: 'REQUESTER' | 'SUPPORT' | 'AUTO' | null
 }
 
 export interface SupportMessage {
@@ -121,6 +78,7 @@ export interface SupportQueueResponse {
   requests: PageResponse<SupportRequestSummary>
 }
 
+/** "Contact support" of a signed-in learner (S11.03, X2.21). */
 export interface NewSupportRequest {
   topic: SupportTopic
   subject: string
@@ -128,13 +86,21 @@ export interface NewSupportRequest {
   screenshot?: File | null
 }
 
+/** The number a new request got, and the address support's e-mail reply goes to. */
+export interface SupportRequestCreated {
+  number: number
+  email: string
+}
+
 export interface VisitorSupportMessage {
   email: string
   topic: SupportTopic
   message: string
+  /** The page's interface language: the e-mails that bring support's replies use it. */
+  language: AppLanguage
 }
 
-// ----- admin users -----
+// Admin users
 
 export interface AdminUserListItem {
   id: number
@@ -142,7 +108,6 @@ export interface AdminUserListItem {
   email: string
   role: UserRole
   active: boolean
-  verificationState: TeacherVerificationState | null
   joinedAt: string
 }
 
@@ -154,40 +119,21 @@ export interface AuditEntry {
   category: AuditCategory
   actorName: string | null
   actorEmail: string | null
-  targetType: string | null
   targetLabel: string | null
-  /** The account the entry is about (the user itself or a teacher profile's account). */
+  /** The account the entry is about. */
   targetUserId: number | null
   reason: string | null
   description: string | null
   createdAt: string
 }
 
-export interface AdminUserDetail {
-  id: number
-  fullName: string
-  email: string
-  role: UserRole
-  active: boolean
-  verificationState: TeacherVerificationState | null
-  approvedAt: string | null
-  joinedAt: string
-  deactivation: { actorName: string | null; actorEmail: string | null; reason: string | null; at: string } | null
+export interface AdminUserDetail extends Omit<AdminUserListItem, 'role'> {
+  /** Null for an account whose former role was removed. */
+  role: UserRole | null
+  deactivation: { actorName: string | null; reason: string | null; at: string } | null
   self: boolean
-  deactivationImpact: {
-    publishedClasses: string[]
-    upcomingSessions: number
-    bookings: number
-    reviewItems: number
-  } | null
+  /** The account's own recent events ("Account created", "Account deactivated" …), newest first. */
   recentAudit: AuditEntry[]
-}
-
-export interface AdminDeactivationResult {
-  user: AdminUserDetail
-  cancelledSessions: number
-  endedBookings: number
-  itemsBackToDraft: number
 }
 
 export interface AdminUserQuery {
@@ -202,84 +148,46 @@ export interface AdminInvite {
   id: number
   email: string
   sentAt: string
-  expiresAt: string
 }
 
-export interface TeacherApplicationSummary {
-  teacherId: number
-  userId: number
-  fullName: string
-  email: string
-  submittedAt: string | null
-  documentCount: number
-}
+// Admin dashboard, analytics and audit log
 
-export type TeacherApplicationEvent = 'ACCOUNT_CREATED' | 'APPLICATION_SUBMITTED' | 'APPROVED' | 'CHANGES_REQUESTED'
-
-export interface TeacherApplication {
-  teacherId: number
-  userId: number
-  fullName: string
-  email: string
-  bio: string | null
-  verificationState: TeacherVerificationState
-  submittedAt: string | null
-  documents: Omit<TeacherDocument, 'status'>[]
-  history: { event: TeacherApplicationEvent; actorName: string | null; at: string; note: string | null }[]
-}
-
-// ----- admin dashboard, analytics, audit -----
-
-export interface DayCount {
-  date: string
-  count: number
-}
-
-export interface PlatformNumbers {
-  users: { total: number; students: number; teachers: number; admins: number }
-  publishedContent: number
-  totalContent: number
-  aiRequests: number
-  successfulAiRequests: number
-  auditEvents: number
-}
-
-export interface AdminQueue<T> {
+interface AdminQueue<T> {
   count: number
   items: T[]
 }
 
+/** A draft class on the dashboard's Class drafts card (A1.01), newest first; archived lessons are not counted. */
+interface ClassDraftItem {
+  id: number
+  title: string
+  lessonCount: number
+  /** The last change to the class or any of its lessons ("edited 18 May"). */
+  updatedAt: string
+}
+
 export interface AdminDashboardResponse {
-  teacherApplications: AdminQueue<TeacherApplicationSummary>
-  reviewQueue: AdminQueue<{
-    type: ReviewContentType
-    id: number
-    title: string
-    ownerName: string | null
-    parentTitle: string | null
-    submittedAt: string | null
-  }>
+  classDrafts: AdminQueue<ClassDraftItem>
   aiReports: AdminQueue<{
     id: number
-    reason: string
-    featureKey: string
-    studentName: string | null
+    reason: AiResponseReportReason
+    studentName: string
     reportedAt: string
   }>
   support: AdminQueue<SupportRequestSummary>
-  numbers: PlatformNumbers
-  registrations: DayCount[]
 }
 
-export type AiRequestStatus = 'SUCCESS' | 'FAILED' | 'UNAVAILABLE'
-
 export interface AdminAnalyticsResponse {
-  days: number
+  days: 7 | 30
   from: string
   to: string
-  numbers: PlatformNumbers
+  numbers: {
+    users: { total: number; students: number; admins: number }
+    publishedContent: number
+    aiRequests: number
+  }
   newRegistrations: number
-  registrations: DayCount[]
+  registrations: { date: string; count: number }[]
   learning: {
     activeStudents: number
     totalStudents: number
@@ -288,7 +196,7 @@ export interface AdminAnalyticsResponse {
     needsSupport: number
   }
   contentByStatus: Record<ContentStatus, number>
-  aiRequestsByStatus: Record<AiRequestStatus, number>
+  aiRequestsByStatus: Record<AiResultStatus, number>
 }
 
 export interface AuditQuery {
@@ -298,6 +206,8 @@ export interface AuditQuery {
   /** Inclusive yyyy-MM-dd days. */
   from?: string
   to?: string
+  /** Only the entries by or about this account. */
+  userId?: number
   page?: number
   size?: number
 }

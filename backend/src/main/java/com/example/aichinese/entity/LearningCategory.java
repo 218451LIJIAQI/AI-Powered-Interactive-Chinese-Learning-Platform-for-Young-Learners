@@ -23,9 +23,6 @@ public class LearningCategory extends BaseEntity {
     @Column(name = "name", nullable = false, length = 120)
     private String name;
 
-    @Column(name = "description", length = 255)
-    private String description;
-
     @Column(name = "sort_order", nullable = false)
     private Integer sortOrder = 0;
 }

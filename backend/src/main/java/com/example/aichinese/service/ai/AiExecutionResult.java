@@ -12,7 +12,7 @@ import com.example.aichinese.entity.enums.AiRequestStatus;
 public record AiExecutionResult(AiRequestStatus status, String responseText, Map<String, Object> json, String userMessage) {
 
     public static AiExecutionResult success(String responseText, Map<String, Object> json) {
-        return new AiExecutionResult(AiRequestStatus.SUCCESS, responseText, json == null ? Map.of() : json, null);
+        return new AiExecutionResult(AiRequestStatus.SUCCESS, responseText, json, null);
     }
 
     public static AiExecutionResult unavailable(String userMessage) {

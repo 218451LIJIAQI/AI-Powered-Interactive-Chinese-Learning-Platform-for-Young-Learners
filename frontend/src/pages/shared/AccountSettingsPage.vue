@@ -1,476 +1,330 @@
 <template>
-  <div class="page-stack account-page">
-    <PageHeaderBlock
-      :title="t('account.pageTitle')"
-      :description="settings ? t('account.signedInAs', { email: settings.email }) : ''"
-    />
-    <AppToast :message="toast" />
+  <div class="page-stack">
+    <PageHeaderBlock :title="t('account.pageTitle')" hide-title />
+    <AppToast :message="toast" :action="toastAction" />
 
     <StatePanel
-      v-if="settingsResource.loading.value"
+      v-if="loading"
+      heading-tag="h2"
       tone="loading"
       spacious
       :title="t('account.loadingTitle')"
       :message="t('account.loadingHint')"
     />
     <StatePanel
-      v-else-if="settingsResource.error.value || !settings"
+      v-else-if="!settings"
+      heading-tag="h2"
       tone="error"
       icon="alert"
       spacious
       :title="t('account.loadErrorTitle')"
-      :message="settingsResource.error.value ?? ''"
-    >
-      <template #actions>
-        <button class="btn btn-primary" type="button" @click="settingsResource.reload">{{ t('account.retry') }}</button>
-      </template>
-    </StatePanel>
+      :message="error ?? ''"
+      @retry="reloadAll"
+    />
 
     <template v-else>
-      <DataNotice
-        :info="pendingEmail ? t('account.emailLinkSent', { email: pendingEmail }) : null"
-        :info-title="t('account.emailPendingTitle')"
-      />
-
       <div class="account-layout">
-        <!-- The section index: one jump per section, in page order (desktop). -->
-        <nav class="account-index" :aria-label="t('account.sectionsLabel')">
-          <ul>
-            <li v-for="section in sections" :key="section.id">
-              <RouterLink :to="{ hash: `#${section.id}` }" :class="{ 'is-danger': section.id === 'account-danger' }">
-                {{ section.label }}
-              </RouterLink>
-            </li>
-          </ul>
-        </nav>
+        <div class="account-column">
+          <section class="panel account-card" aria-labelledby="account-profile-title">
+            <h2 id="account-profile-title" class="card-title">
+              {{ isLearner ? t('account.profileLearner') : t('account.profileOther') }}
+            </h2>
 
-        <div class="account-sections">
-          <div class="panel account-sheet">
-            <section id="account-profile" class="account-section" aria-labelledby="account-profile-title">
-              <div class="account-section-head">
-                <h2 id="account-profile-title" class="account-section-title">
-                  {{ isStudent ? t('account.profileStudent') : t('account.profileOther') }}
-                </h2>
-                <p class="account-section-hint">{{ t('account.profileHint') }}</p>
-              </div>
-
-              <form id="account-profile-form" class="form-grid account-form" novalidate @submit.prevent="saveProfile">
-                <div class="field">
-                  <label for="account-name">{{ t('account.name') }}</label>
-                  <input
-                    id="account-name"
-                    v-model="profile.name"
-                    class="input"
-                    autocomplete="name"
-                    maxlength="120"
-                    :aria-invalid="Boolean(profileError)"
-                    :aria-describedby="profileError ? 'account-name-error' : undefined"
-                  />
-                  <p v-if="profileError" id="account-name-error" class="field-error" role="alert">{{ profileError }}</p>
-                </div>
-
-                <div class="field">
-                  <label for="account-email">{{ t('account.email') }}</label>
-                  <div class="account-email-row">
-                    <input id="account-email" class="input" type="email" :value="settings.email" disabled />
-                    <button
-                      class="btn btn-secondary"
-                      type="button"
-                      data-testid="account-change-email"
-                      @click="openEmailDialog"
-                    >
-                      {{ t('account.changeEmail') }}
-                    </button>
-                  </div>
-                </div>
-
-                <fieldset v-if="isStudent" class="field-set account-goal" aria-describedby="account-goal-hint">
-                  <legend class="field-label">{{ t('account.dailyGoal') }}</legend>
-                  <SegmentedControl
-                    v-model="profile.dailyGoal"
-                    :options="
-                      DAILY_GOALS.map((xp) => ({
-                        value: xp,
-                        label: t('account.dailyGoalOption', { xp }),
-                        testId: `account-goal-${xp}`,
-                      }))
-                    "
-                    :disabled="dailyGoalUnavailable"
-                  />
-                  <p id="account-goal-hint" class="field-hint">
-                    {{ dailyGoalUnavailable ? t('account.dailyGoalUnavailable') : t('account.dailyGoalHint') }}
-                  </p>
-                </fieldset>
-
-                <ul class="account-notes">
-                  <li v-if="isTeacher">
-                    <IconGlyph name="verified" :size="16" />
-                    <span>
-                      {{ t('account.teacherProfileHint') }}
-                      <RouterLink class="account-notes-link" :to="{ name: 'teacher-profile' }">
-                        {{ t('account.teachingProfile') }}<IconGlyph name="chevronRight" :size="14" />
-                      </RouterLink>
-                    </span>
-                  </li>
-                  <li>
-                    <IconGlyph name="language" :size="16" />
-                    <span>{{ t('account.languageHint') }}</span>
-                  </li>
-                </ul>
-
-                <div class="form-actions">
-                  <button
-                    class="btn btn-primary"
-                    type="submit"
-                    :disabled="savingProfile"
-                    :aria-busy="savingProfile"
-                    data-testid="account-save"
-                  >
-                    {{ savingProfile ? t('account.saving') : t('account.save') }}
-                  </button>
-                </div>
-              </form>
-            </section>
-
-            <section id="account-notifications" class="account-section" aria-labelledby="account-notifications-title">
-              <div class="account-section-head">
-                <h2 id="account-notifications-title" class="account-section-title">
-                  {{ t('account.notificationsTitle') }}
-                </h2>
-                <p class="account-section-hint">{{ t('account.notificationsHint') }}</p>
-              </div>
-              <div class="account-form">
-                <ul class="account-preferences">
-                  <li v-for="preference in preferenceRows" :key="preference.key" class="account-preference">
-                    <label class="account-preference-label" :for="`account-pref-${preference.key}`">
-                      <strong>{{ t(preference.title) }}</strong>
-                      <span>{{ t(preference.hint) }}</span>
-                    </label>
-                    <span class="account-preference-control">
-                      <span class="type-caption" aria-hidden="true">
-                        {{ preferences[preference.key] ? t('account.on') : t('account.off') }}
-                      </span>
-                      <input
-                        :id="`account-pref-${preference.key}`"
-                        class="switch"
-                        type="checkbox"
-                        role="switch"
-                        :checked="Boolean(preferences[preference.key])"
-                        :disabled="savingPreference === preference.key"
-                        :data-testid="`account-pref-${preference.key}`"
-                        @change="togglePreference(preference.key, ($event.target as HTMLInputElement).checked)"
-                      />
-                    </span>
-                  </li>
-                  <li class="account-preference">
-                    <span class="account-preference-label">
-                      <strong>{{ t('account.securityTitle') }}</strong>
-                      <span>{{ t('account.securityHint') }}</span>
-                    </span>
-                    <StatusPill :label="t('account.alwaysOn')" tone="neutral" icon="lock" />
-                  </li>
-                </ul>
-                <p v-if="preferencesError" class="field-error" role="alert">{{ preferencesError }}</p>
-              </div>
-            </section>
-
-            <section id="account-password" class="account-section" aria-labelledby="account-password-title">
-              <div class="account-section-head">
-                <h2 id="account-password-title" class="account-section-title">{{ t('account.passwordTitle') }}</h2>
-                <p class="account-section-hint">{{ t('account.passwordSignOutNote') }}</p>
-              </div>
-              <form
-                id="account-password-form"
-                class="form-grid account-form"
-                novalidate
-                @submit.prevent="changePassword"
-              >
-                <div v-for="field in PASSWORD_FIELDS" :key="field.key" class="field">
-                  <label :for="`account-${field.key}`">
-                    {{ t(field.label) }}<span class="required-mark" aria-hidden="true">*</span>
-                  </label>
-                  <input
-                    :id="`account-${field.key}`"
-                    v-model="password[field.key]"
-                    class="input"
-                    :type="showPasswords ? 'text' : 'password'"
-                    :autocomplete="field.autocomplete"
-                    aria-required="true"
-                    :aria-invalid="Boolean(passwordErrors[field.key])"
-                    :aria-describedby="describedBy(field.key)"
-                  />
-                  <p v-if="field.key === 'newPassword'" id="account-newPassword-hint" class="field-hint">
-                    {{ t('account.newPasswordHint') }}
-                  </p>
-                  <p
-                    v-if="passwordErrors[field.key]"
-                    :id="`account-${field.key}-error`"
-                    class="field-error"
-                    role="alert"
-                  >
-                    {{ t(passwordErrors[field.key] as string) }}
-                  </p>
-                </div>
-                <p v-if="passwordError" class="alert alert-danger" role="alert">
-                  <IconGlyph name="alert" :size="18" />
-                  <span>{{ passwordError }}</span>
+            <form id="account-profile-form" class="form-grid" novalidate @submit.prevent="saveProfile">
+              <div class="field">
+                <label for="account-name">
+                  {{ t('account.name') }}<span class="required-mark" aria-hidden="true">*</span>
+                </label>
+                <input
+                  id="account-name"
+                  v-model="profile.name"
+                  class="input"
+                  autocomplete="name"
+                  required
+                  maxlength="120"
+                  :aria-invalid="Boolean(nameError)"
+                  :aria-describedby="nameError ? 'account-name-error' : undefined"
+                  @blur="checkName"
+                />
+                <p v-if="nameError" id="account-name-error" class="field-error" role="alert">
+                  {{ t(nameError) }}
                 </p>
-                <div class="account-password-actions">
-                  <label class="choice">
-                    <input v-model="showPasswords" type="checkbox" data-testid="account-show-passwords" />
-                    <span>{{ t('account.showPasswords') }}</span>
-                  </label>
+              </div>
+
+              <div class="field">
+                <label for="account-email">{{ t('account.email') }}</label>
+                <div class="account-email-row">
+                  <input
+                    id="account-email"
+                    class="input"
+                    type="email"
+                    :value="settings.email"
+                    readonly
+                    :aria-describedby="pendingEmail ? 'account-email-pending' : undefined"
+                  />
                   <button
-                    class="btn btn-primary"
-                    type="submit"
-                    :disabled="changingPassword"
-                    :aria-busy="changingPassword"
-                    data-testid="account-change-password"
+                    ref="changeEmailButton"
+                    class="btn btn-secondary"
+                    type="button"
+                    data-testid="account-change-email"
+                    :disabled="pendingBusy"
+                    @click="emailDialogOpen = true"
                   >
-                    {{ changingPassword ? t('account.changingPassword') : t('account.changePassword') }}
+                    {{ t('account.changeEmail') }}
                   </button>
                 </div>
-              </form>
-            </section>
-
-            <section id="account-signout" class="account-section" aria-labelledby="account-signout-title">
-              <div class="account-section-head">
-                <h2 id="account-signout-title" class="account-section-title">{{ t('account.signOutTitle') }}</h2>
-                <p class="account-section-hint">{{ t('account.signOutHint') }}</p>
-                <!-- Admins cannot delete their own account; how an admin account ends is said here, not in a red zone. -->
-                <p v-if="isAdmin" class="account-section-hint">{{ t('account.adminDeleteNote') }}</p>
+                <!-- A change waits for its link: send it again, or cancel the change (its link stops working). -->
+                <p v-if="pendingEmail" class="field-hint" data-testid="account-email-pending">
+                  <span id="account-email-pending">{{ t('account.emailPending', { email: pendingEmail }) }}</span>
+                  <span aria-hidden="true"> · </span>
+                  <button
+                    class="btn btn-link"
+                    type="button"
+                    :disabled="pendingBusy"
+                    data-testid="account-email-resend"
+                    @click="changePendingEmail('resend')"
+                  >
+                    {{ t('account.resendLink') }}
+                  </button>
+                  <span aria-hidden="true"> · </span>
+                  <button
+                    class="btn btn-link"
+                    type="button"
+                    :disabled="pendingBusy"
+                    data-testid="account-email-cancel"
+                    @click="changePendingEmail('cancel')"
+                  >
+                    {{ t('account.cancelChange') }}
+                  </button>
+                </p>
+                <p v-if="pendingError" class="field-error" role="alert" data-testid="account-email-pending-error">
+                  {{ pendingError }}
+                </p>
               </div>
-              <div class="account-form account-row">
-                <button class="btn btn-secondary" type="button" data-testid="account-sign-out" @click="signOut">
-                  <IconGlyph name="logout" :size="16" />
-                  {{ t('account.signOut') }}
+
+              <fieldset
+                v-if="isLearner"
+                class="field-set"
+                :aria-describedby="dailyGoalResource.error.value ? 'account-goal-hint' : undefined"
+              >
+                <legend class="field-label">{{ t('common.dailyGoal') }}</legend>
+                <FilterChips
+                  v-model="profile.dailyGoal"
+                  :options="dailyGoalOptions"
+                  :disabled="!dailyGoalResource.data.value"
+                />
+                <p v-if="dailyGoalResource.error.value" id="account-goal-hint" class="field-hint">
+                  {{ t('account.dailyGoalUnavailable') }}
+                </p>
+              </fieldset>
+
+              <div v-if="profileError" class="alert alert-danger" role="alert" data-testid="account-save-error">
+                <IconGlyph name="alert" :size="18" />
+                <span>{{ profileError }}</span>
+              </div>
+              <div class="form-actions">
+                <button
+                  class="btn btn-primary"
+                  type="submit"
+                  :disabled="savingProfile || Boolean(nameError)"
+                  :aria-busy="savingProfile"
+                  data-testid="account-save"
+                >
+                  {{ savingProfile ? t('account.saving') : t('account.save') }}
                 </button>
               </div>
-            </section>
-          </div>
+            </form>
+          </section>
 
-          <section
-            v-if="!isAdmin"
-            id="account-danger"
-            class="account-section account-danger"
-            aria-labelledby="account-danger-title"
-          >
-            <div class="account-section-head">
-              <h2 id="account-danger-title" class="account-section-title">{{ t('account.dangerZone') }}</h2>
-              <p class="account-section-hint">{{ t('account.dangerHint') }}</p>
+          <HintSettingsCard v-if="isLearner" @saved="showToast" />
+
+          <section class="panel account-card" aria-labelledby="account-notifications-title">
+            <h2 id="account-notifications-title" class="card-title">{{ t('account.notificationsTitle') }}</h2>
+            <ul class="row-list account-preferences">
+              <li v-if="isAdmin">
+                <label class="row-list-copy account-preference-label" for="account-pref-daily-summary">
+                  <span class="row-list-title">{{ t('account.dailySummaryTitle') }}</span>
+                  <span class="row-list-meta">{{ t('account.dailySummaryHint') }}</span>
+                </label>
+                <span class="row-list-actions">
+                  <span class="type-caption" aria-hidden="true">
+                    {{ dailySummary ? t('account.on') : t('account.off') }}
+                  </span>
+                  <input
+                    id="account-pref-daily-summary"
+                    class="switch"
+                    type="checkbox"
+                    role="switch"
+                    :checked="dailySummary"
+                    :disabled="savingSummary"
+                    data-testid="account-pref-daily-summary"
+                    @change="toggleDailySummary(($event.target as HTMLInputElement).checked)"
+                  />
+                </span>
+              </li>
+              <li>
+                <span class="row-list-copy">
+                  <span class="row-list-title">{{ t('account.securityTitle') }}</span>
+                  <span class="row-list-meta">{{ t('account.securityHint') }}</span>
+                </span>
+                <span class="tag">{{ t('account.alwaysOn') }}</span>
+              </li>
+            </ul>
+            <p v-if="preferencesError" class="field-error" role="alert">{{ preferencesError }}</p>
+          </section>
+        </div>
+
+        <div class="account-column">
+          <AccountPasswordCard @changed="onPasswordChanged" />
+
+          <section class="panel account-card" aria-labelledby="account-device-title">
+            <div class="account-device-copy">
+              <h2 id="account-device-title" class="card-title">{{ t('account.deviceTitle') }}</h2>
+              <p class="type-caption" data-testid="account-device">{{ deviceLine }}</p>
             </div>
-            <div class="account-form account-row">
-              <button class="btn btn-danger-soft" type="button" data-testid="account-delete" @click="openDeleteDialog">
-                <IconGlyph name="trash" :size="16" />
-                {{ t('account.deleteAccount') }}
+            <!-- POST /auth/logout ends this browser's session only; a password change signs out the others. -->
+            <p class="field-hint">{{ t('account.signOutHint') }}</p>
+            <div class="form-actions">
+              <button
+                class="btn btn-secondary"
+                type="button"
+                :disabled="signingOut"
+                :aria-busy="signingOut"
+                data-testid="account-sign-out"
+                @click="signOut"
+              >
+                <IconGlyph name="logout" :size="16" />
+                {{ t('account.signOut') }}
               </button>
             </div>
           </section>
         </div>
       </div>
+
+      <section v-if="isLearner && !isAdmin" class="panel account-danger" aria-labelledby="account-danger-title">
+        <div class="row-list-copy">
+          <h2 id="account-danger-title" class="row-list-title">{{ t('account.dangerZone') }}</h2>
+          <p class="row-list-meta">{{ t('account.dangerHint') }}</p>
+        </div>
+        <button class="btn btn-danger-soft" type="button" data-testid="account-delete" @click="openDeleteDialog">
+          <IconGlyph name="trash" :size="16" />
+          {{ t('account.deleteAccount') }}
+        </button>
+      </section>
+      <!-- Admins cannot delete their own account; how an admin account ends is said here, not in a red zone. -->
+      <p v-else-if="isAdmin" class="callout">
+        <IconGlyph name="shield" :size="18" />
+        <span>{{ t('account.adminDeleteNote') }}</span>
+      </p>
     </template>
 
-    <AppOverlay
+    <AccountEmailChangeDialog
       :open="emailDialogOpen"
-      :title="t('account.emailDialogTitle')"
-      :subtitle="t('account.emailDialogSubtitle')"
-      test-id="account-email-dialog"
+      :current-email="settings?.email ?? null"
+      :disabled="pendingBusy"
       @close="emailDialogOpen = false"
-    >
-      <form id="account-email-form" class="form-grid" novalidate @submit.prevent="requestEmailChange">
-        <div class="field">
-          <label for="account-current-email">{{ t('account.currentEmail') }}</label>
-          <input id="account-current-email" class="input" type="email" :value="settings?.email" disabled />
-        </div>
-        <div class="field">
-          <label for="account-new-email">
-            {{ t('account.newEmail') }}<span class="required-mark" aria-hidden="true">*</span>
-          </label>
-          <input
-            id="account-new-email"
-            v-model="emailForm.newEmail"
-            class="input"
-            type="email"
-            autocomplete="email"
-            aria-required="true"
-            :aria-invalid="Boolean(emailErrors.newEmail)"
-            :aria-describedby="emailErrors.newEmail ? 'account-new-email-error' : undefined"
-          />
-          <p v-if="emailErrors.newEmail" id="account-new-email-error" class="field-error">{{ emailErrors.newEmail }}</p>
-        </div>
-        <div class="field">
-          <label for="account-email-password">
-            {{ t('account.passwordToConfirm') }}<span class="required-mark" aria-hidden="true">*</span>
-          </label>
-          <input
-            id="account-email-password"
-            v-model="emailForm.password"
-            class="input"
-            type="password"
-            autocomplete="current-password"
-            aria-required="true"
-            :aria-invalid="Boolean(emailErrors.password)"
-            :aria-describedby="emailErrors.password ? 'account-email-password-error' : undefined"
-          />
-          <p v-if="emailErrors.password" id="account-email-password-error" class="field-error">
-            {{ emailErrors.password }}
-          </p>
-        </div>
-        <p v-if="emailError" class="alert alert-danger" role="alert">
-          <IconGlyph name="alert" :size="18" />
-          <span>{{ emailError }}</span>
-        </p>
-      </form>
-      <template #footer>
-        <button class="btn btn-ghost" type="button" @click="emailDialogOpen = false">{{ t('account.cancel') }}</button>
-        <button
-          class="btn btn-primary"
-          type="submit"
-          form="account-email-form"
-          :disabled="sendingEmail"
-          :aria-busy="sendingEmail"
-          data-testid="account-send-link"
-        >
-          {{ sendingEmail ? t('account.sendingLink') : t('account.sendLink') }}
-        </button>
-      </template>
-    </AppOverlay>
+      @requested="onEmailChangeRequested"
+    />
 
-    <AppOverlay
+    <AccountDeleteDialog
       :open="deleteDialogOpen"
-      :title="t('account.deleteDialogTitle')"
-      :subtitle="t('account.deleteDialogSubtitle')"
-      test-id="account-delete-dialog"
+      :current-email="settings?.email ?? null"
       @close="deleteDialogOpen = false"
-    >
-      <div class="callout is-danger">
-        <IconGlyph name="alert" :size="18" />
-        <p>{{ isTeacher ? t('account.deleteTeacherCopy') : t('account.deleteStudentCopy') }}</p>
-      </div>
-      <form id="account-delete-form" novalidate @submit.prevent="deleteAccount">
-        <div class="field">
-          <label for="account-delete-confirm">{{ t('account.typeToConfirm', { email: settings?.email ?? '' }) }}</label>
-          <input
-            id="account-delete-confirm"
-            v-model="deleteConfirm"
-            class="input"
-            type="email"
-            autocomplete="off"
-            spellcheck="false"
-          />
-        </div>
-      </form>
-      <p v-if="deleteError" class="alert alert-danger" role="alert">
-        <IconGlyph name="alert" :size="18" />
-        <span>{{ deleteError }}</span>
-      </p>
-      <template #footer>
-        <button class="btn btn-ghost" type="button" @click="deleteDialogOpen = false">{{ t('account.cancel') }}</button>
-        <button
-          class="btn btn-danger"
-          type="submit"
-          form="account-delete-form"
-          :disabled="!deleteConfirmed || deleting"
-          :aria-busy="deleting"
-          data-testid="account-delete-confirm"
-        >
-          {{ deleting ? t('account.deleting') : t('account.deleteForever') }}
-        </button>
-      </template>
-    </AppOverlay>
-
-    <AppOverlay
-      :open="blockedDialogOpen"
-      :title="t('account.blockedTitle')"
-      :subtitle="t('account.blockedSubtitle')"
-      test-id="account-blocked-dialog"
-      @close="blockedDialogOpen = false"
-    >
-      <p class="card-subtitle">{{ t('account.blockedCopy') }}</p>
-      <ul class="account-blocked-list">
-        <li v-for="published in settings?.deletion.publishedClasses ?? []" :key="published.id">
-          <IconGlyph name="classes" :size="18" />
-          <span>{{ published.title }}</span>
-          <RouterLink class="btn btn-link" :to="{ name: 'teacher-class', params: { classId: published.id } }">
-            {{ t('account.openClass') }}
-          </RouterLink>
-        </li>
-      </ul>
-      <template #footer>
-        <button class="btn btn-secondary" type="button" @click="blockedDialogOpen = false">
-          {{ t('account.close') }}
-        </button>
-      </template>
-    </AppOverlay>
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
+import { computed, nextTick, reactive, ref, toRef, watch } from 'vue'
+import { useRouter } from 'vue-router'
 
+import { getAuthSessionVersion } from '@/api/http'
 import { xpApi } from '@/api/learn'
 import { accountOpsApi } from '@/api/ops'
-import { accountApi } from '@/api/services'
-import SegmentedControl from '@/components/common/SegmentedControl.vue'
-import DataNotice from '@/components/common/DataNotice.vue'
+import { authApi } from '@/api/services'
+import AccountDeleteDialog from '@/components/account/AccountDeleteDialog.vue'
+import AccountEmailChangeDialog from '@/components/account/AccountEmailChangeDialog.vue'
+import AccountPasswordCard from '@/components/account/AccountPasswordCard.vue'
+import AppToast from '@/components/common/AppToast.vue'
+import FilterChips, { type FilterChipOption } from '@/components/common/FilterChips.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
-import StatusPill from '@/components/common/StatusPill.vue'
-import AppOverlay from '@/components/common/AppOverlay.vue'
-import AppToast from '@/components/common/AppToast.vue'
+import HintSettingsCard from '@/components/learn/HintSettingsCard.vue'
 import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
+import { useIsUnmounted } from '@/composables/useIsUnmounted'
+import { useFieldCheck } from '@/composables/useFieldCheck'
 import { useLocalMessages } from '@/composables/useLocalMessages'
+import { notifyProgressChanged } from '@/composables/useProgressRefresh'
 import { useResource } from '@/composables/useResource'
 import { useToast } from '@/composables/useToast'
 import { accountMessages } from '@/plugins/accountMessages'
+import { appLocale } from '@/plugins/i18n'
 import { useAuthStore } from '@/stores/auth'
-import { useUiStore } from '@/stores/ui'
-import type { NotificationPreferences } from '@/types/ops'
-import { resolveApiError } from '@/utils/apiError'
-import { isValidEmail } from '@/utils/email'
-import {
-  hasPasswordChangeErrors,
-  validatePasswordChange,
-  type PasswordChangeErrors,
-  type PasswordChangeForm,
-} from '@/utils/password'
+import { hasServerMessage, resolveApiError } from '@/utils/apiError'
+import { formatShortDate } from '@/utils/format'
+import { SERVER_MESSAGE } from '@/utils/serverMessages'
+import { DAILY_GOALS } from '@/utils/xpLevel'
 import '@/styles/ops-account.css'
 
-type DailyGoal = 10 | 20 | 30
-type PreferenceKey = keyof NotificationPreferences
+/** The server's answer when a pending email change was already retired or expired (AccountEmailService). */
+const NO_PENDING_EMAIL_CHANGE = SERVER_MESSAGE.NO_PENDING_EMAIL_CHANGE
 
-const DAILY_GOALS: readonly DailyGoal[] = [10, 20, 30]
-const PASSWORD_FIELDS = [
-  { key: 'currentPassword', label: 'account.currentPassword', autocomplete: 'current-password' },
-  { key: 'newPassword', label: 'account.newPassword', autocomplete: 'new-password' },
-  { key: 'confirmPassword', label: 'account.confirmPassword', autocomplete: 'new-password' },
-] as const satisfies readonly { key: keyof PasswordChangeForm; label: string; autocomplete: string }[]
+const BROWSERS = [
+  [/Edg\//, 'Edge'],
+  [/OPR\//, 'Opera'],
+  [/Firefox\//, 'Firefox'],
+  [/Chrome\//, 'Chrome'],
+  [/Safari\//, 'Safari'],
+] as const
+
+// iOS also says "like Mac OS X", and Android also says "Linux".
+const SYSTEMS = [
+  [/Windows/, 'Windows'],
+  [/iPhone|iPad|iPod/, 'iOS'],
+  [/Mac OS X|Macintosh/, 'macOS'],
+  [/Android/, 'Android'],
+  [/CrOS/, 'ChromeOS'],
+  [/Linux/, 'Linux'],
+] as const
+
+function detectBrowserDevice(agent: string): { browser?: string; os?: string } {
+  return {
+    browser: BROWSERS.find(([pattern]) => pattern.test(agent))?.[1],
+    os: SYSTEMS.find(([pattern]) => pattern.test(agent))?.[1],
+  }
+}
 
 const { t } = useLocalMessages({ account: accountMessages })
 const auth = useAuthStore()
-const ui = useUiStore()
 const router = useRouter()
-const { toast, showToast } = useToast()
+const { toast, toastAction, showToast } = useToast()
 
-const isStudent = computed(() => auth.activeRole === 'STUDENT')
-const isTeacher = computed(() => auth.activeRole === 'TEACHER')
-const isAdmin = computed(() => auth.activeRole === 'ADMIN')
+const isUnmounted = useIsUnmounted()
 
-const settingsResource = useResource(() => accountOpsApi.settings())
-const settings = computed(() => settingsResource.data.value)
-// The learn module serves the daily goal; without it the control is shown disabled and the page still works.
-const dailyGoalResource = useResource(() => (isStudent.value ? xpApi.dailyGoal() : Promise.resolve(null)))
-const dailyGoalUnavailable = computed(() => Boolean(dailyGoalResource.error.value) || !dailyGoalResource.data.value)
+function canUpdatePage(version: number): boolean {
+  return !isUnmounted() && version === getAuthSessionVersion()
+}
+
+const isLearner = computed(() => auth.roles.includes('STUDENT'))
+const isAdmin = computed(() => auth.roles.includes('ADMIN'))
+
+const { data: settings, loading, error, reload } = useResource(accountOpsApi.settings)
+// The learn module serves the daily goal (learners only). Its control waits, disabled, for the goal; when the goal
+// cannot be loaded it says so and the rest of the page works.
+const dailyGoalResource = useResource(xpApi.dailyGoal, isLearner.value)
+const sessionResource = useResource(authApi.session)
 
 const pendingEmail = ref<string | null>(null)
-const profile = reactive({ name: '', dailyGoal: 20 as DailyGoal })
-const preferences = reactive<NotificationPreferences>({
-  liveSessionReminders: null,
-  feedback: null,
-  contentReviews: null,
-  reviewQueues: null,
-})
+const profile = reactive<{ name: string; dailyGoal: number | null }>({ name: '', dailyGoal: null })
+const dailySummary = ref(false)
+
+const dailyGoalOptions = computed<FilterChipOption<number | null>[]>(() =>
+  DAILY_GOALS.map((xp) => ({
+    value: xp,
+    label: t('account.dailyGoalOption', { xp }),
+    testId: `account-goal-${xp}`,
+  })),
+)
 
 watch(
   settings,
@@ -478,209 +332,190 @@ watch(
     if (!value) return
     profile.name = value.fullName
     pendingEmail.value = value.pendingEmail
-    Object.assign(preferences, value.notifications)
+    dailySummary.value = Boolean(value.notifications.reviewQueues)
   },
-  { immediate: true },
+  { once: true },
 )
 watch(
-  () => dailyGoalResource.data.value,
+  dailyGoalResource.data,
   (value) => {
-    if (value && DAILY_GOALS.includes(value.dailyGoalXp as DailyGoal))
-      profile.dailyGoal = value.dailyGoalXp as DailyGoal
+    if (value) profile.dailyGoal = value.dailyGoalXp
   },
-  { immediate: true },
+  { once: true },
 )
 
-const PREFERENCE_ROWS: Record<'STUDENT' | 'TEACHER' | 'ADMIN', { key: PreferenceKey; title: string; hint: string }[]> =
-  {
-    STUDENT: [
-      { key: 'liveSessionReminders', title: 'account.liveRemindersTitle', hint: 'account.liveRemindersStudent' },
-      { key: 'feedback', title: 'account.feedbackTitle', hint: 'account.feedbackHint' },
-    ],
-    TEACHER: [
-      { key: 'liveSessionReminders', title: 'account.liveRemindersTitle', hint: 'account.liveRemindersTeacher' },
-      { key: 'contentReviews', title: 'account.contentReviewsTitle', hint: 'account.contentReviewsHint' },
-    ],
-    ADMIN: [{ key: 'reviewQueues', title: 'account.reviewQueuesTitle', hint: 'account.reviewQueuesHint' }],
-  }
-const preferenceRows = computed(() => PREFERENCE_ROWS[auth.activeRole ?? 'STUDENT'])
+function reloadAll(): void {
+  void reload()
+  if (isLearner.value && dailyGoalResource.error.value) void dailyGoalResource.reload()
+  if (sessionResource.error.value) void sessionResource.reload()
+}
 
-/** The section index, in page order. */
-const sections = computed(() => [
-  { id: 'account-profile', label: isStudent.value ? t('account.profileStudent') : t('account.profileOther') },
-  { id: 'account-notifications', label: t('account.notificationsTitle') },
-  { id: 'account-password', label: t('account.passwordTitle') },
-  { id: 'account-signout', label: t('account.signOutTitle') },
-  ...(isAdmin.value ? [] : [{ id: 'account-danger', label: t('account.dangerZone') }]),
-])
+/** "Chrome on Windows · signed in since 12 May": read from the user agent and the current session. */
+const deviceLine = computed(() => {
+  const { browser, os } = detectBrowserDevice(navigator.userAgent)
+  const device = browser && os ? t('account.deviceLine', { browser, os }) : (browser ?? t('account.deviceUnknown'))
+  const signedInAt = sessionResource.data.value?.signedInAt
+  return signedInAt ? t('account.deviceSince', { device, date: formatShortDate(signedInAt, appLocale.value) }) : device
+})
 
-// ----- profile -----
+// Profile
 
 const savingProfile = ref(false)
 const profileError = ref<string | null>(null)
+const { error: nameError, validate: checkName } = useFieldCheck(toRef(profile, 'name'), (name) =>
+  name.trim() ? null : 'account.nameRequired',
+)
+
+async function saveDisplayName(version: number): Promise<void> {
+  const name = profile.name.trim()
+  if (!settings.value || name === settings.value.fullName) return
+  const user = await accountOpsApi.updateProfile({ displayName: name })
+  if (version !== getAuthSessionVersion()) return
+  // The header still needs the saved name if the user has left this page.
+  auth.applySavedName(user, version)
+  if (isUnmounted()) return
+  settings.value = { ...settings.value, fullName: user.fullName }
+  if (profile.name.trim() === name) profile.name = user.fullName
+}
+
+async function saveDailyGoal(version: number): Promise<void> {
+  const requested = profile.dailyGoal
+  const saved = dailyGoalResource.data.value
+  if (!saved || requested === null || requested === saved.dailyGoalXp) return
+  const goal = await xpApi.setDailyGoal(requested)
+  if (version !== getAuthSessionVersion()) return
+  notifyProgressChanged()
+  if (isUnmounted()) return
+  dailyGoalResource.replace(goal)
+  if (profile.dailyGoal === requested) profile.dailyGoal = goal.dailyGoalXp
+}
 
 async function saveProfile(): Promise<void> {
-  if (savingProfile.value || !settings.value) return
-  const name = profile.name.trim()
-  profileError.value = name ? null : t('account.nameRequired')
-  if (!name) return
+  if (savingProfile.value) return
+  profileError.value = null
+  if (!checkName()) {
+    await nextTick()
+    document.getElementById('account-name')?.focus()
+    return
+  }
 
   savingProfile.value = true
-  try {
-    const writes: Promise<unknown>[] = [
-      accountOpsApi.updateProfile({ displayName: name, preferredLanguage: ui.locale }).then((user) => {
-        auth.applyProfileUpdate(user)
-      }),
-    ]
-    const savedGoal = dailyGoalResource.data.value?.dailyGoalXp
-    if (isStudent.value && !dailyGoalUnavailable.value && savedGoal !== profile.dailyGoal) {
-      writes.push(xpApi.setDailyGoal(profile.dailyGoal).then((goal) => (dailyGoalResource.data.value = goal)))
-    }
-    await Promise.all(writes)
-    showToast(t('account.changesSaved'))
-  } catch (reason) {
-    profileError.value = resolveApiError(reason, t('account.saveError'))
-  } finally {
-    savingProfile.value = false
-  }
+  const version = getAuthSessionVersion()
+  // A failed write must not unlock Save while the other write is still running.
+  const results = await Promise.allSettled([saveDisplayName(version), saveDailyGoal(version)])
+  if (!isUnmounted()) savingProfile.value = false
+  if (!canUpdatePage(version)) return
+  const failed = results.find((result) => result.status === 'rejected')
+  if (failed) profileError.value = resolveApiError(failed.reason, t('account.saveError'))
+  else showToast(t('account.changesSaved'))
 }
 
-// ----- notification preferences -----
+// The admin's daily summary
 
-const savingPreference = ref<PreferenceKey | null>(null)
+const savingSummary = ref(false)
 const preferencesError = ref<string | null>(null)
 
-async function togglePreference(key: PreferenceKey, enabled: boolean): Promise<void> {
-  const previous = preferences[key]
-  preferences[key] = enabled
-  savingPreference.value = key
+async function toggleDailySummary(enabled: boolean): Promise<void> {
+  if (savingSummary.value) return
+  const version = getAuthSessionVersion()
+  const previous = dailySummary.value
+  dailySummary.value = enabled
+  savingSummary.value = true
   preferencesError.value = null
   try {
-    Object.assign(preferences, await accountOpsApi.updatePreferences({ [key]: enabled }))
+    const saved = await accountOpsApi.updatePreferences({ reviewQueues: enabled })
+    if (!canUpdatePage(version)) return
+    dailySummary.value = Boolean(saved.reviewQueues)
     showToast(t('account.changesSaved'))
   } catch (reason) {
-    preferences[key] = previous
+    // Always restore the optimistic switch while still mounted, even if a concurrent password change rotated the token.
+    if (!isUnmounted()) dailySummary.value = previous
+    if (!canUpdatePage(version)) return
     preferencesError.value = resolveApiError(reason, t('account.preferencesError'))
   } finally {
-    savingPreference.value = null
+    if (!isUnmounted()) savingSummary.value = false
   }
 }
 
-// ----- e-mail change -----
+// Pending e-mail change & password update hooks
 
 const emailDialogOpen = ref(false)
-const sendingEmail = ref(false)
-const emailError = ref<string | null>(null)
-const emailForm = reactive({ newEmail: '', password: '' })
-const emailErrors = reactive<{ newEmail: string | null; password: string | null }>({ newEmail: null, password: null })
+const changeEmailButton = ref<HTMLButtonElement | null>(null)
+const pendingBusy = ref(false)
+const pendingError = ref<string | null>(null)
 
-function openEmailDialog(): void {
-  emailForm.newEmail = ''
-  emailForm.password = ''
-  emailErrors.newEmail = null
-  emailErrors.password = null
-  emailError.value = null
-  emailDialogOpen.value = true
+function onEmailChangeRequested(nextPendingEmail: string): void {
+  pendingEmail.value = nextPendingEmail
+  pendingError.value = null
+  emailDialogOpen.value = false
+  showToast(t('account.emailLinkSent', { email: nextPendingEmail }))
 }
 
-async function requestEmailChange(): Promise<void> {
-  if (sendingEmail.value || !settings.value) return
-  const newEmail = emailForm.newEmail.trim().toLowerCase()
-  emailErrors.newEmail = !isValidEmail(newEmail)
-    ? t('account.newEmailInvalid')
-    : newEmail === settings.value.email
-      ? t('account.newEmailSame')
-      : null
-  emailErrors.password = emailForm.password ? null : t('account.passwordToConfirmRequired')
-  if (emailErrors.newEmail || emailErrors.password) return
+function onPasswordChanged(): void {
+  // Changing the password retires any open email-change confirmation on the server (AuthService.changePassword).
+  pendingEmail.value = null
+  pendingError.value = null
+  showToast(t('account.passwordChanged'))
+}
 
-  sendingEmail.value = true
-  emailError.value = null
+/** A pending change can get a new link or be cancelled; restoring focus when the pending row unmounts. */
+async function changePendingEmail(action: 'resend' | 'cancel'): Promise<void> {
+  if (pendingBusy.value) return
+  const version = getAuthSessionVersion()
+  pendingBusy.value = true
+  pendingError.value = null
+  let rowRemoved = false
   try {
-    const result = await accountOpsApi.requestEmailChange({ newEmail, currentPassword: emailForm.password })
-    pendingEmail.value = result.pendingEmail
-    emailDialogOpen.value = false
+    if (action === 'resend') {
+      const result = await accountOpsApi.resendEmailChange()
+      if (!canUpdatePage(version)) return
+      pendingEmail.value = result.pendingEmail
+      showToast(t('account.emailLinkSentAgain'))
+      return
+    }
+    await accountOpsApi.cancelEmailChange()
+    if (!canUpdatePage(version)) return
+    pendingEmail.value = null
+    rowRemoved = true
+    showToast(t('account.emailChangeCancelled'))
   } catch (reason) {
-    emailError.value = resolveApiError(reason, t('account.emailError'))
+    if (canUpdatePage(version)) {
+      if (action === 'resend' && hasServerMessage(reason, NO_PENDING_EMAIL_CHANGE)) {
+        pendingEmail.value = null
+        rowRemoved = true
+      }
+      pendingError.value = resolveApiError(
+        reason,
+        t(action === 'resend' ? 'account.emailResendError' : 'account.emailCancelError'),
+      )
+    }
   } finally {
-    sendingEmail.value = false
+    if (!isUnmounted()) pendingBusy.value = false
   }
+  if (!rowRemoved) return
+  await nextTick()
+  if (canUpdatePage(version) && document.activeElement === document.body) changeEmailButton.value?.focus()
 }
 
-// ----- password -----
+// Sign out and deletion
 
-const password = reactive<PasswordChangeForm>({ currentPassword: '', newPassword: '', confirmPassword: '' })
-const passwordErrors = ref<PasswordChangeErrors>({})
-const passwordError = ref<string | null>(null)
-const showPasswords = ref(false)
-const changingPassword = ref(false)
-
-function describedBy(key: keyof PasswordChangeForm): string | undefined {
-  const ids = [
-    key === 'newPassword' ? 'account-newPassword-hint' : '',
-    passwordErrors.value[key] ? `account-${key}-error` : '',
-  ].filter(Boolean)
-  return ids.length ? ids.join(' ') : undefined
-}
-
-async function changePassword(): Promise<void> {
-  if (changingPassword.value) return
-  passwordErrors.value = validatePasswordChange(password)
-  passwordError.value = null
-  if (hasPasswordChangeErrors(passwordErrors.value)) return
-
-  changingPassword.value = true
-  try {
-    const response = await accountApi.changePassword({ ...password })
-    auth.replaceAccessToken(response.token)
-    Object.assign(password, { currentPassword: '', newPassword: '', confirmPassword: '' })
-    showToast(t('account.passwordChanged'))
-  } catch (reason) {
-    passwordError.value = resolveApiError(reason, t('account.passwordError'))
-  } finally {
-    changingPassword.value = false
-  }
-}
-
-// ----- sign out and deletion -----
-
+const signingOut = ref(false)
 async function signOut(): Promise<void> {
-  await auth.logout()
-  await router.push('/')
+  if (signingOut.value) return
+  signingOut.value = true
+  try {
+    const signedOut = await auth.logout()
+    if (signedOut && (!isUnmounted() || Boolean(router.currentRoute.value.meta.roles?.length))) {
+      await router.push('/')
+    }
+  } finally {
+    if (!isUnmounted()) signingOut.value = false
+  }
 }
 
 const deleteDialogOpen = ref(false)
-const blockedDialogOpen = ref(false)
-const deleteConfirm = ref('')
-const deleteError = ref<string | null>(null)
-const deleting = ref(false)
-const deleteConfirmed = computed(
-  () => Boolean(settings.value) && deleteConfirm.value.trim().toLowerCase() === settings.value?.email.toLowerCase(),
-)
 
 function openDeleteDialog(): void {
-  if (settings.value?.deletion.blockedBy === 'PUBLISHED_CLASSES') {
-    blockedDialogOpen.value = true
-    return
-  }
-  deleteConfirm.value = ''
-  deleteError.value = null
   deleteDialogOpen.value = true
-}
-
-async function deleteAccount(): Promise<void> {
-  if (!deleteConfirmed.value || deleting.value) return
-  deleting.value = true
-  deleteError.value = null
-  try {
-    await accountOpsApi.deleteAccount(deleteConfirm.value.trim())
-    deleteDialogOpen.value = false
-    auth.clearSession()
-    await router.replace({ name: 'landing', query: { notice: 'account-deleted' } })
-  } catch (reason) {
-    deleteError.value = resolveApiError(reason, t('account.deleteError'))
-  } finally {
-    deleting.value = false
-  }
 }
 </script>

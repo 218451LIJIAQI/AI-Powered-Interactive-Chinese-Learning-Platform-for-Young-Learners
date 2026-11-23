@@ -2,6 +2,9 @@ package com.example.aichinese.entity;
 
 import java.time.LocalDateTime;
 
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import com.example.aichinese.entity.base.BaseEntity;
 import com.example.aichinese.entity.enums.AiFeatureKey;
 import com.example.aichinese.entity.enums.AiResponseReportReason;
@@ -16,8 +19,6 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.NamedAttributeNode;
-import jakarta.persistence.NamedEntityGraph;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
@@ -26,42 +27,21 @@ import lombok.Setter;
 @Setter
 @Entity
 @Table(name = "ai_response_reports", indexes = {
-        @Index(name = "idx_ai_response_reports_student_user_id", columnList = "student_user_id"),
-        @Index(name = "idx_ai_response_reports_status", columnList = "status"),
-        @Index(name = "idx_ai_response_reports_feature_key", columnList = "feature_key"),
-        @Index(name = "idx_ai_response_reports_chat_session_id", columnList = "chat_session_id"),
+        @Index(name = "idx_ai_response_reports_status_created_at", columnList = "status,created_at"),
         @Index(name = "idx_ai_response_reports_student_created", columnList = "student_user_id,created_at")
 })
-@NamedEntityGraph(
-        name = AiResponseReport.GRAPH_ADMIN_DETAIL,
-        attributeNodes = {
-                @NamedAttributeNode("studentUser"),
-                @NamedAttributeNode("reviewerUser"),
-                @NamedAttributeNode("chatSession"),
-                @NamedAttributeNode("chatMessage")
-        }
-)
 public class AiResponseReport extends BaseEntity {
-
-    public static final String GRAPH_ADMIN_DETAIL = "AiResponseReport.adminDetail";
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "student_user_id", nullable = false, updatable = false)
     private User studentUser;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "chat_session_id", updatable = false)
-    private AiChatSession chatSession;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "chat_message_id", updatable = false)
-    private AiChatMessage chatMessage;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "feature_key", nullable = false, updatable = false, length = 40)
     private AiFeatureKey featureKey;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "reason_category", nullable = false, updatable = false, length = 40)
     private AiResponseReportReason reasonCategory;
 
@@ -73,10 +53,11 @@ public class AiResponseReport extends BaseEntity {
     private String promptSnapshot;
 
     @Lob
-    @Column(name = "ai_response_snapshot", updatable = false, columnDefinition = "LONGTEXT")
+    @Column(name = "ai_response_snapshot", nullable = false, updatable = false, columnDefinition = "LONGTEXT")
     private String aiResponseSnapshot;
 
     @Enumerated(EnumType.STRING)
+    @JdbcTypeCode(SqlTypes.VARCHAR)
     @Column(name = "status", nullable = false, length = 30)
     private AiResponseReportStatus status = AiResponseReportStatus.PENDING_REVIEW;
 

@@ -1,16 +1,15 @@
-/**
- * Shared fixtures of the Learn module tests: a memory router with the routes the Learn, Practice and Progress pages
- * link to, and API responses shaped like the backend's (dto/learn).
- */
-import { createMemoryHistory, createRouter, type Router } from 'vue-router'
-
+/** Shared fixtures of the Learn module tests: API responses shaped like the backend's (dto/learn). */
 import type {
+  AdminPracticeSetDetail,
   AnswerCheck,
+  HintSettings,
   LearnPath,
   LessonPlay,
   LessonResult,
   PathStop,
   PathUnit,
+  PracticeItem,
+  PracticeItemData,
   PracticeResult,
   PracticeSet,
   ProgressOverview,
@@ -18,55 +17,25 @@ import type {
   XpResult,
 } from '@/types/learn'
 
-const Empty = { template: '<div />' }
-
-/** The routes the module's pages link to; the page under test is mounted directly. */
-export async function learnRouter(path: string): Promise<Router> {
-  const router = createRouter({
-    history: createMemoryHistory(),
-    routes: [
-      { path: '/student/learn', name: 'student-learn', component: Empty },
-      { path: '/student/learn/lessons/:lessonId', name: 'student-learn-lesson', component: Empty },
-      { path: '/student/practice/review', name: 'student-practice-review', component: Empty },
-      { path: '/student/practice/:type?', name: 'student-practice', component: Empty },
-      { path: '/student/ai/:tab?', name: 'student-ai', component: Empty },
-      { path: '/student/classes', name: 'student-classes', component: Empty },
-      { path: '/student/progress', name: 'student-progress', component: Empty },
-      { path: '/student/progress/plan', name: 'student-plan', component: Empty },
-      { path: '/student/setup', name: 'student-setup', component: Empty },
-      { path: '/admin/content', name: 'admin-content-review', component: Empty },
-      { path: '/admin/content/classes', name: 'admin-teacher-classes', component: Empty },
-      { path: '/admin/content/learning-path', name: 'admin-learning-path', component: Empty },
-      { path: '/admin/content/practice', name: 'admin-practice-library', component: Empty },
-    ],
-  })
-  await router.push(path)
-  await router.isReady()
-  return router
-}
-
 export function xpResult(overrides: Partial<XpResult> = {}): XpResult {
   return {
     xpEarned: 10,
     bonusXp: 0,
-    totalXp: 60,
     todayXp: 10,
     dailyGoalXp: 20,
     goalReached: false,
-    goalJustReached: false,
     currentStreak: 2,
     newBadges: [],
+    rankUp: null,
     ...overrides,
   }
 }
 
 export function today(overrides: Partial<TodaySummary> = {}): TodaySummary {
   return {
-    date: '2026-05-18',
     dailyGoalXp: 30,
     todayXp: 20,
     goalReached: false,
-    currentStreak: 7,
     week: [
       { date: '2026-05-12', goalReached: true },
       { date: '2026-05-13', goalReached: true },
@@ -76,13 +45,13 @@ export function today(overrides: Partial<TodaySummary> = {}): TodaySummary {
       { date: '2026-05-17', goalReached: true },
       { date: '2026-05-18', goalReached: false },
     ],
-    setsDoneToday: 2,
     mistakesWaiting: 6,
     ...overrides,
   }
 }
 
-function stop(id: number, position: number, title: string, overrides: Partial<PathStop> = {}): PathStop {
+/** A lesson on the path: locked, until `overrides` say otherwise. */
+export function pathStop(id: number, position: number, title: string, overrides: Partial<PathStop> = {}): PathStop {
   return {
     id,
     position,
@@ -103,6 +72,7 @@ function unit(id: number, number: number, overrides: Partial<PathUnit> = {}): Pa
     number,
     title: `Unit title ${number}`,
     titleZh: '你好',
+    iconKey: 'route',
     state: 'LOCKED',
     lessonCount: 3,
     completedCount: 0,
@@ -112,30 +82,17 @@ function unit(id: number, number: number, overrides: Partial<PathUnit> = {}): Pa
   }
 }
 
-/** Unit 1 with two lessons done and the third current, Unit 2 locked; Level 2 still locked. */
-export function learnPath(overrides: Partial<LearnPath> = {}): LearnPath {
+/**
+ * Unit 1 with two lessons done and the third current, Unit 2 locked with two lessons and a bonus chest (no lesson, so
+ * not counted, carrying the number of the lesson before it); Level 2 still locked.
+ */
+export function learnPath(): LearnPath {
   return {
-    totalLessons: 6,
-    completedLessons: 2,
-    learnMistakesWaiting: 4,
-    nextLesson: {
-      id: 13,
-      title: 'Your name',
-      kind: 'LESSON',
-      unitId: 1,
-      unitNumber: 1,
-      unitTitle: 'Greetings',
-      unitTitleZh: '你好',
-      position: 3,
-      unitLessonCount: 3,
-      minutes: 5,
-      xpReward: 10,
-    },
+    nextLesson: { unitId: 1, xpReward: 10 },
     levels: [
       {
         level: 1,
         hskLevel: 1,
-        lessonCount: 6,
         locked: false,
         units: [
           unit(1, 1, {
@@ -144,56 +101,45 @@ export function learnPath(overrides: Partial<LearnPath> = {}): LearnPath {
             completedCount: 2,
             unlockAfterUnit: null,
             lessons: [
-              stop(11, 1, 'Hello and goodbye', { state: 'DONE' }),
-              stop(12, 2, 'Polite phrases', { state: 'DONE' }),
-              stop(13, 3, 'Your name', { state: 'AVAILABLE', current: true }),
+              pathStop(11, 1, 'Hello and goodbye', { state: 'DONE' }),
+              pathStop(12, 2, 'Polite phrases', { state: 'DONE' }),
+              pathStop(13, 3, 'Your name', { state: 'AVAILABLE', current: true }),
             ],
           }),
           unit(2, 2, {
             title: 'Food',
+            lessonCount: 2,
             lessons: [
-              stop(21, 1, 'Fruit', { unlockAfter: 'Your name' }),
-              stop(22, 2, 'Drinks', { unlockAfter: 'Fruit' }),
-              stop(23, 3, 'Ordering', { kind: 'BONUS', unlockAfter: 'Drinks' }),
+              pathStop(21, 1, 'Fruit', { unlockAfter: 'Your name' }),
+              pathStop(22, 2, 'Drinks', { unlockAfter: 'Fruit' }),
+              pathStop(23, 2, 'Ordering', { kind: 'BONUS', unlockAfter: 'Drinks' }),
             ],
           }),
         ],
         checkpoint: {
           id: 90,
-          title: 'Level 1 checkpoint',
           questionCount: 10,
           xpReward: 50,
           passPercent: 70,
           state: 'LOCKED',
-          unlockAfter: 'Ordering',
         },
       },
       {
         level: 2,
         hskLevel: 2,
-        lessonCount: 4,
         locked: true,
         units: [unit(3, 3, { title: 'Travel', lessonCount: 4 })],
         checkpoint: null,
       },
     ],
-    ...overrides,
   }
 }
 
 /** A two-question lesson: a choice and a sentence to build. */
 export function lessonPlay(overrides: Partial<LessonPlay> = {}): LessonPlay {
   return {
-    id: 13,
     title: 'Your name',
     kind: 'LESSON',
-    unitId: 1,
-    unitNumber: 1,
-    unitTitle: 'Greetings',
-    position: 3,
-    unitLessonCount: 3,
-    minutes: 5,
-    xpReward: 10,
     passPercent: null,
     questions: [
       {
@@ -224,6 +170,8 @@ export function lessonPlay(overrides: Partial<LessonPlay> = {}): LessonPlay {
         tiles: ['叫', '我', 'Amira', '你'],
       },
     ],
+    runStartedAt: '2026-05-18T03:00:00.000001',
+    runSignature: 'c2lnbmVkLWJ5LXRoZS1zZXJ2ZXI',
     ...overrides,
   }
 }
@@ -234,48 +182,90 @@ export function answerCheck(overrides: Partial<AnswerCheck> = {}): AnswerCheck {
 
 export function lessonResult(overrides: Partial<LessonResult> = {}): LessonResult {
   return {
-    lessonId: 13,
-    title: 'Your name',
     kind: 'LESSON',
-    unitNumber: 1,
-    position: 3,
     passed: true,
     passPercent: null,
-    correctCount: 1,
-    questionCount: 2,
     accuracy: 50,
-    durationSeconds: 75,
-    nextLesson: { id: 21, title: 'Fruit', unlockedNow: true },
+    nextLesson: { title: 'Fruit', unlockedNow: true },
     xp: xpResult({ newBadges: ['UNIT_CHAMPION'] }),
     ...overrides,
   }
 }
 
-export function flashcardSet(overrides: Partial<PracticeSet> = {}): PracticeSet {
-  const card = (key: string, hanzi: string, meaning: string) => ({
+/** A student's hint setting: hints offered automatically, with the HSK 1 rule. */
+export function hintSettings(overrides: Partial<HintSettings> = {}): HintSettings {
+  return { mode: 'AUTOMATIC', tier: 'HSK1', delaySeconds: 15, perSet: 0, ...overrides }
+}
+
+/** One item of a practice set with nothing filled in; `overrides` give it what its activity shows. */
+export function practiceItem(key: string, overrides: Partial<PracticeItem> = {}): PracticeItem {
+  return {
     key,
     prompt: null,
-    hanzi,
+    hanzi: null,
     pinyin: null,
-    meaning,
-    audioText: hanzi,
+    meaning: null,
+    audioText: null,
     example: null,
     exampleMeaning: null,
     options: [],
     tiles: [],
-  })
+    ...overrides,
+  }
+}
+
+export function adminPracticeItem(overrides: Partial<PracticeItemData> = {}): PracticeItemData {
   return {
-    id: 5,
-    type: 'FLASHCARDS',
-    title: 'Greetings cards',
+    hanzi: null,
+    pinyin: null,
+    meaning: null,
+    prompt: null,
+    audioText: null,
+    example: null,
+    exampleMeaning: null,
+    options: [],
+    correctIndex: null,
+    explanation: null,
+    distractors: null,
+    ...overrides,
+  }
+}
+
+export function tracingSet(overrides: Partial<AdminPracticeSetDetail> = {}): AdminPracticeSetDetail {
+  return {
+    id: 2,
+    type: 'TRACING',
+    title: 'Write 你好',
     stage: 'GUIDED',
     hskLevel: 1,
     xpReward: 10,
+    status: 'DRAFT',
+    createdBy: null,
+    playedBy: 0,
+    items: [adminPracticeItem({ hanzi: '你好', pinyin: 'nǐ hǎo', meaning: 'hello' })],
+    strokeCount: 13,
+    characterStrokes: [7, 6],
+    history: [{ action: 'CREATED', actor: null, at: '2026-05-08T03:00:00Z' }],
+    ...overrides,
+  }
+}
+
+export function flashcardSet(overrides: Partial<PracticeSet> = {}): PracticeSet {
+  return {
+    id: 5,
+    type: 'FLASHCARDS',
+    stage: 'GUIDED',
+    xpReward: 10,
     done: false,
-    items: [card('1', '你好', 'hello'), card('2', '谢谢', 'thank you')],
-    storyLines: [],
+    items: [
+      practiceItem('1', { hanzi: '你好', meaning: 'hello', audioText: '你好' }),
+      practiceItem('2', { hanzi: '谢谢', meaning: 'thank you', audioText: '谢谢' }),
+    ],
     matchingChoices: [],
     strokeCount: null,
+    characterStrokes: null,
+    runStartedAt: '2026-05-18T03:00:00.000001',
+    runSignature: 'c2lnbmVkLWJ5LXRoZS1zZXJ2ZXI',
     ...overrides,
   }
 }
@@ -283,14 +273,11 @@ export function flashcardSet(overrides: Partial<PracticeSet> = {}): PracticeSet 
 export function practiceResult(overrides: Partial<PracticeResult> = {}): PracticeResult {
   return {
     type: 'FLASHCARDS',
-    setId: 5,
-    title: 'Greetings cards',
     correctCount: 2,
     itemCount: 2,
     allCorrect: true,
-    results: [],
     nextSet: { id: 6, title: 'Food cards' },
-    xp: xpResult({ todayXp: 30, dailyGoalXp: 30, goalReached: true, goalJustReached: true, bonusXp: 5 }),
+    xp: xpResult({ todayXp: 30, dailyGoalXp: 30, goalReached: true, bonusXp: 5 }),
     ...overrides,
   }
 }
@@ -301,9 +288,6 @@ export function progressOverview(overrides: Partial<ProgressOverview> = {}): Pro
     level: 3,
     xpIntoLevel: 40,
     nextLevelXp: 300,
-    dailyGoalXp: 30,
-    todayXp: 20,
-    goalReachedToday: false,
     currentStreak: 7,
     bestStreak: 9,
     calendar: {
@@ -314,11 +298,6 @@ export function progressOverview(overrides: Partial<ProgressOverview> = {}): Pro
       previousMonth: null,
       nextMonth: null,
     },
-    sources: { learn: 120, practice: 90, reviewsAndGoals: 30, earlier: 0 },
-    recent: [
-      { kind: 'LEARN_LESSON', title: 'Polite phrases', xp: 10, at: '2026-05-18T03:00:00Z' },
-      { kind: 'DAILY_GOAL', title: '', xp: 5, at: '2026-05-17T03:00:00Z' },
-    ],
     badges: [
       { key: 'FIRST_STEPS', earned: true, earnedAt: '2026-05-11T03:00:00Z' },
       { key: 'STREAK_EXPLORER', earned: true, earnedAt: '2026-05-13T03:00:00Z' },

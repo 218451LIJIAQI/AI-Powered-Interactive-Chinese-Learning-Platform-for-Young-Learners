@@ -10,9 +10,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import com.example.aichinese.dto.admin.AdminAnalyticsResponse.UserCounts;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.RoleName;
 
@@ -20,21 +22,39 @@ import jakarta.persistence.LockModeType;
 
 public interface UserRepository extends JpaRepository<User, Long> {
 
-    boolean existsByEmailIgnoreCase(String email);
+    @Query("select exists (select 1 from User u where u.email = lower(:email))")
+    boolean existsByEmailIgnoreCase(@Param("email") String email);
+
+    @Query("select u from User u where u.email = lower(:email)")
+    Optional<User> findByEmail(@Param("email") String email);
 
     @Query("select distinct u from User u left join fetch u.roles where u.email = lower(:email)")
     Optional<User> findByEmailWithRoles(@Param("email") String email);
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select u from User u where u.email = lower(:email)")
-    Optional<User> findLockedByEmail(@Param("email") String email);
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    Optional<User> findWithReadLockById(Long id);
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    Optional<User> findLockedById(Long id);
+    /** Locks a batch of user rows in deterministic ascending id order so concurrent account deletions cannot deadlock. */
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("select u from User u where u.id in :ids order by u.id asc")
+    List<User> findWithReadLockByIdInOrderByIdAsc(@Param("ids") Collection<Long> ids);
 
-    /** Accounts of one role that were not deleted by their owners. */
-    @Query("select count(distinct u) from User u join u.roles r where r.name = :roleName and u.deletedAt is null")
-    long countExistingByRoleName(@Param("roleName") RoleName roleName);
+    /**
+     * Increments the stored value directly under the DB update lock, including when the caller read an older account
+     * before another revocation. Omits {@code clearAutomatically} so callers holding a managed {@code User} must call
+     * {@code entityManager.refresh(user)} before reading {@code sessionVersion}.
+     */
+    @Modifying(flushAutomatically = true)
+    @Query("update User u set u.sessionVersion = u.sessionVersion + 1, u.updatedAt = :now where u.id = :id")
+    void incrementSessionVersion(@Param("id") Long id, @Param("now") LocalDateTime now);
+
+    /** Each account counts once in the total and once in each of its current roles. */
+    @Query("""
+            select new com.example.aichinese.dto.admin.AdminAnalyticsResponse$UserCounts(
+                count(distinct u.id), count(case when r.name = STUDENT then 1 end), count(case when r.name = ADMIN then 1 end))
+            from User u join u.roles r where u.deletedAt is null
+            """)
+    UserCounts countCurrentAccounts();
 
     @EntityGraph(attributePaths = { "roles" })
     List<User> findByIdIn(Collection<Long> ids);
@@ -43,48 +63,42 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findWithRolesById(@Param("id") Long id);
 
     /**
-     * The admin Users list: name or e-mail keyword, role and account state filters, newest accounts first. Accounts
-     * deleted by their owners are left out.
+     * The admin Users list: name or e-mail keyword, role and account state filters. Accounts deleted by their owners,
+     * and accounts left without a role (teacher accounts when teachers were removed), are left out. Callers pass the
+     * desired sort order via {@link Pageable} (e.g. {@link com.example.aichinese.util.PaginationUtils#newestFirst}).
      */
-    @Query(value = """
-            select u.id
-            from users u
-            where u.deleted_at is null
-              and (:roleName is null or exists (
-                  select 1 from user_roles ur
-                  join roles r on r.id = ur.role_id
-                  where ur.user_id = u.id
-                    and r.name = :roleName
-              ))
-              and (:keyword is null or lower(u.display_name) like :keyword or lower(u.email) like :keyword)
+    @Query("""
+            select u.id from User u
+            where u.deletedAt is null
+              and exists (
+                  select 1 from User u2 join u2.roles r
+                  where u2 = u and (:roleName is null or r.name = :roleName)
+              )
+              and (:keyword is null
+                   or locate(lower(:keyword), lower(u.displayName)) > 0
+                   or locate(lower(:keyword), lower(u.email)) > 0)
               and (:active is null or u.active = :active)
-            order by u.created_at desc, u.id desc
-            """,
-            countQuery = """
-            select count(*)
-            from users u
-            where u.deleted_at is null
-              and (:roleName is null or exists (
-                  select 1 from user_roles ur
-                  join roles r on r.id = ur.role_id
-                  where ur.user_id = u.id
-                    and r.name = :roleName
-              ))
-              and (:keyword is null or lower(u.display_name) like :keyword or lower(u.email) like :keyword)
-              and (:active is null or u.active = :active)
-            """,
-            nativeQuery = true)
+            """)
     Page<Long> findAdminUserIds(
-            @Param("roleName") String roleName,
+            @Param("roleName") RoleName roleName,
             @Param("keyword") String keyword,
             @Param("active") Boolean active,
             Pageable pageable);
 
     @EntityGraph(attributePaths = { "roles" })
-    @Query("select distinct u from User u join u.roles r where r.name = :roleName")
+    @Query("select distinct u from User u join u.roles r where r.name = :roleName and u.deletedAt is null")
     List<User> findAllByRoleName(@Param("roleName") RoleName roleName);
 
-    /** When the accounts created in [start, end) were created, for the registrations chart. */
-    @Query("select u.createdAt from User u where u.createdAt >= :start and u.createdAt < :end")
+    @Query("select u.id from User u join u.roles r where r.name = :roleName and u.active = true and u.deletedAt is null")
+    List<Long> findActiveIdsByRoleName(@Param("roleName") RoleName roleName);
+
+    /**
+     * When the accounts created in [start, end) were created, for the registrations chart: like the user totals, only
+     * accounts that still have a role and were not deleted by their owners since.
+     */
+    @Query("""
+            select u.createdAt from User u where u.createdAt >= :start and u.createdAt < :end
+              and u.deletedAt is null and u.roles is not empty
+            """)
     List<LocalDateTime> findCreatedAtBetween(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 }

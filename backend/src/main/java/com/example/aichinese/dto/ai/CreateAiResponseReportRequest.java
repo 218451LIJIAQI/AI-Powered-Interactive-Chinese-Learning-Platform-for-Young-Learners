@@ -4,14 +4,17 @@ import static com.example.aichinese.dto.DtoNormalization.redactLength;
 import static com.example.aichinese.dto.DtoNormalization.strip;
 import static com.example.aichinese.dto.DtoNormalization.stripToNull;
 
+import com.example.aichinese.entity.enums.AiResponseReportReason;
+
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
 /**
  * A student's report of an AI answer. An Ask SparkBot answer is named by {@code chatMessageId} and a practice score
- * by {@code practiceCheckId} (the server attaches what was asked and answered); a Xiaomei reply, a quiz or a story is
- * attached as the snapshots the page shows.
+ * by {@code practiceCheckId} (the server attaches what was asked and answered); a Xiaomei reply, a quiz, a story, a
+ * learning-plan note or a hint is attached as the snapshots the page shows.
  */
 public record CreateAiResponseReportRequest(
         @Positive(message = "Chat message id must be positive.")
@@ -20,10 +23,15 @@ public record CreateAiResponseReportRequest(
         @Positive(message = "Practice check id must be positive.")
         Long practiceCheckId,
 
+        @Schema(allowableValues = {
+                "CHAT_TUTOR", "XIAOMEI_CONVERSATION", "QUIZ_GENERATOR", "STORY_GENERATOR",
+                "PRACTICE_CHECK", "LEARNING_PLAN", "HINT"
+        })
         @NotBlank(message = "AI feature key is required.")
         @Size(max = 100, message = "AI feature key must be 100 characters or fewer.")
         String featureKey,
 
+        @Schema(implementation = AiResponseReportReason.class)
         @NotBlank(message = "Report reason category is required.")
         @Size(max = 40, message = "Report reason category must be 40 characters or fewer.")
         String reasonCategory,

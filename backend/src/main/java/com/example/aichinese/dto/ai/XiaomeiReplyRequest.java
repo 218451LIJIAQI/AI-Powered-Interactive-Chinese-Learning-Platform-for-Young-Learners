@@ -1,5 +1,7 @@
 package com.example.aichinese.dto.ai;
 
+import static com.example.aichinese.dto.DtoNormalization.immutableListOrEmpty;
+import static com.example.aichinese.dto.DtoNormalization.redactLength;
 import static com.example.aichinese.dto.DtoNormalization.strip;
 import static com.example.aichinese.dto.DtoNormalization.stripToNull;
 
@@ -17,9 +19,8 @@ public record XiaomeiReplyRequest(
         @NotNull(message = "Scenario is required.")
         XiaomeiScenario scenario,
 
-        @Valid
         @Size(max = 24, message = "A conversation sends at most 24 earlier turns.")
-        List<XiaomeiTurn> turns,
+        List<@NotNull(message = "Conversation turn is required.") @Valid XiaomeiTurn> turns,
 
         @NotBlank(message = "Message is required.")
         @Size(max = 200, message = "Message must not exceed 200 characters.")
@@ -29,8 +30,16 @@ public record XiaomeiReplyRequest(
         String languagePreference) {
 
     public XiaomeiReplyRequest {
-        turns = turns == null ? List.of() : List.copyOf(turns);
+        turns = immutableListOrEmpty(turns);
         message = strip(message);
         languagePreference = stripToNull(languagePreference);
+    }
+
+    @Override
+    public String toString() {
+        return "XiaomeiReplyRequest[scenario=" + scenario
+                + ", turns=" + turns.size()
+                + ", message=" + redactLength(message)
+                + ", languagePreference=" + languagePreference + "]";
     }
 }

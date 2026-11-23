@@ -1,11 +1,12 @@
 import { flushPromises } from '@vue/test-utils'
-import { ref } from 'vue'
+import { nextTick, ref } from 'vue'
 import { describe, expect, it, vi } from 'vitest'
 
-import { withSetup } from '@/test/helpers'
+import { deferred, withSetup } from '@/test/helpers'
+import { testRouter } from '@/test/routes'
 import type { PageResponse } from '@/types/api'
 
-import { useResource, useServerPage } from './useResource'
+import { usePageFilters, useRecordById, useResource, useServerPage } from './useResource'
 
 const SERVER_TROUBLE = 'The learning service is having trouble right now. Please try again shortly.'
 
@@ -51,12 +52,25 @@ describe('useResource', () => {
     expect(resource.data.value).toEqual({ count: 2 })
   })
 
+  it('drops a pending response and ignores a late reload after leaving the page', async () => {
+    const pending = deferred<string>()
+    const load = vi.fn(() => pending.promise)
+    const { result, wrapper } = withSetup(() => useResource(load))
+    wrapper.unmount()
+    await result.reload()
+    pending.resolve('previous page')
+    await flushPromises()
+    expect(load).toHaveBeenCalledOnce()
+    expect(result.data.value).toBeNull()
+    expect(result.loading.value).toBe(false)
+  })
+
   it('keeps showing the last data while a reload runs and ignores an older answer that arrives late', async () => {
-    let resolveFirst: (value: string) => void = () => {}
+    const first = deferred<string>()
     const loader = vi
       .fn()
       .mockResolvedValueOnce('initial')
-      .mockImplementationOnce(() => new Promise<string>((resolve) => (resolveFirst = resolve)))
+      .mockReturnValueOnce(first.promise)
       .mockResolvedValueOnce('latest')
     const resource = mountResource(loader)
     await flushPromises()
@@ -65,10 +79,157 @@ describe('useResource', () => {
     const slow = resource.reload()
     expect(resource.loading.value).toBe(false)
     await resource.reload()
-    resolveFirst('stale')
+    first.resolve('stale')
     await slow
 
     expect(resource.data.value).toBe('latest')
+  })
+
+  it('replaces data atomically, cancels in-flight reloads and ignores updates after unmount', async () => {
+    const pending = deferred<string>()
+    const failing = deferred<string>()
+    const loader = vi
+      .fn<() => Promise<string>>()
+      .mockRejectedValueOnce({ response: { status: 500, data: {} } })
+      .mockReturnValueOnce(pending.promise)
+      .mockReturnValueOnce(failing.promise)
+    const { result, wrapper } = withSetup(() => useResource(loader))
+    await flushPromises()
+    expect(result.error.value).toBe(SERVER_TROUBLE)
+
+    const reload1 = result.reload()
+    expect(result.loading.value).toBe(true)
+    result.replace('saved-value')
+    expect(result.data.value).toBe('saved-value')
+    expect(result.error.value).toBeNull()
+    expect(result.loading.value).toBe(false)
+
+    pending.resolve('stale-reload')
+    await reload1
+    expect(result.data.value).toBe('saved-value')
+
+    const reload2 = result.reload()
+    result.replace('newer-value')
+    failing.reject({ response: { status: 500, data: {} } })
+    await reload2
+    expect(result.data.value).toBe('newer-value')
+    expect(result.error.value).toBeNull()
+
+    wrapper.unmount()
+    result.replace('after-unmount')
+    expect(result.data.value).toBe('newer-value')
+  })
+})
+
+describe('useRecordById', () => {
+  it('empties at once when the id changes, so the last record is not shown while the next one loads', async () => {
+    const id = ref<number | null>(7)
+    const next = deferred<string>()
+    const load = vi
+      .fn<(id: number) => Promise<string>>()
+      .mockResolvedValueOnce('record 7')
+      .mockReturnValueOnce(next.promise)
+    const record = withSetup(() => useRecordById(id, load)).result
+    await flushPromises()
+    expect(record.data.value).toBe('record 7')
+
+    id.value = 8
+    await nextTick()
+    expect(load).toHaveBeenLastCalledWith(8)
+    expect(record.data.value).toBeNull()
+    expect(record.loading.value).toBe(true)
+
+    next.resolve('record 8')
+    await flushPromises()
+    expect(record.data.value).toBe('record 8')
+  })
+
+  it('clears data, cancels in-flight responses and wipes stale errors when id becomes null', async () => {
+    const id = ref<number | null>(7)
+    const pending = deferred<string>()
+    const load = vi
+      .fn<(id: number) => Promise<string>>()
+      .mockRejectedValueOnce({ response: { status: 500, data: {} } })
+      .mockReturnValueOnce(pending.promise)
+    const record = withSetup(() => useRecordById(id, load)).result
+    await flushPromises()
+    expect(record.error.value).toBe(SERVER_TROUBLE)
+
+    id.value = 8
+    await nextTick()
+    expect(record.loading.value).toBe(true)
+
+    id.value = null
+    await nextTick()
+    pending.resolve('stale record 8')
+    await flushPromises()
+
+    expect(load).toHaveBeenCalledTimes(2)
+    expect(record.data.value).toBeNull()
+    expect(record.error.value).toBeNull()
+    expect(record.loading.value).toBe(false)
+  })
+})
+
+describe('usePageFilters', () => {
+  function mountFilters() {
+    const filter = ref('ALL')
+    const page = ref(3)
+    const data = ref<string | null>('loaded')
+    const reload = vi.fn(async () => {})
+    const onEdit = vi.fn()
+    const followAddress = withSetup(() => usePageFilters([filter], page, { data, reload }, onEdit)).result
+    return { filter, page, data, reload, onEdit, followAddress }
+  }
+
+  it('resets page to 0, clears data, notifies onEdit and reloads on filter changes', async () => {
+    const { filter, page, data, reload, onEdit } = mountFilters()
+
+    filter.value = 'OPEN'
+    await nextTick()
+
+    expect(page.value).toBe(0)
+    expect(data.value).toBeNull()
+    expect(onEdit).toHaveBeenCalledTimes(1)
+    expect(reload).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the linked page without calling onEdit when followAddress updates filters, and preserves data for page-only changes', async () => {
+    const { filter, page, data, reload, onEdit, followAddress } = mountFilters()
+
+    followAddress(2, () => {
+      filter.value = 'OPEN'
+    })
+    await nextTick()
+    expect(page.value).toBe(2)
+    expect(data.value).toBeNull()
+    expect(onEdit).not.toHaveBeenCalled()
+    expect(reload).toHaveBeenCalledTimes(1)
+
+    data.value = 'page-2-rows'
+    followAddress(4, () => {
+      filter.value = 'OPEN'
+    })
+    await nextTick()
+    expect(page.value).toBe(4)
+    expect(data.value).toBe('page-2-rows')
+    expect(onEdit).not.toHaveBeenCalled()
+    expect(reload).toHaveBeenCalledTimes(2)
+  })
+
+  it('still updates page and reloads when followAddress reverses a same-tick filter edit back to the committed value', async () => {
+    const { filter, page, reload, onEdit, followAddress } = mountFilters()
+
+    // Edit filter then immediately revert via followAddress before Vue flushes the watcher.
+    filter.value = 'CLOSED'
+    followAddress(1, () => {
+      filter.value = 'ALL'
+    })
+    await nextTick()
+
+    expect(page.value).toBe(1)
+    expect(onEdit).not.toHaveBeenCalled()
+    expect(reload).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -77,58 +238,69 @@ describe('useServerPage', () => {
     const data = ref<PageResponse<string> | null>(null)
     const reload = vi.fn(async () => {})
     const page = ref(0)
-    const view = useServerPage({ data, reload }, page)
+    const onPageChange = vi.fn()
+    const view = useServerPage({ data, reload }, page, { onPageChange })
     expect([view.items.value, view.totalItems.value, view.totalPages.value]).toEqual([[], 0, 1])
 
     data.value = { items: ['a', 'b'], page: 0, size: 2, totalItems: 5, totalPages: 3 }
     expect([view.items.value, view.totalItems.value, view.totalPages.value]).toEqual([['a', 'b'], 5, 3])
     view.goToPage(7)
     expect(page.value).toBe(2)
+    expect(view.displayedPage.value).toBe(0)
+    data.value = { items: ['e'], page: 2, size: 2, totalItems: 5, totalPages: 3 }
+    expect(view.displayedPage.value).toBe(2)
     view.goToPage(-1)
     expect(page.value).toBe(0)
     expect(reload).toHaveBeenCalledTimes(2)
+    expect(onPageChange).toHaveBeenCalledTimes(2)
   })
 
-  it('shows the range of the rows on the page, and 0–0 for an empty page', () => {
+  it('steps back from a later page left empty when asked to, and tells the page', async () => {
+    const data = ref<PageResponse<string> | null>(null)
+    const reload = vi.fn()
+    const onPageChange = vi.fn()
+    const page = ref(4)
+    const router = await testRouter('/admin/content')
+    withSetup(() => useServerPage({ data, reload }, page, { stepBackFromEmpty: true, onPageChange }), [router])
+
+    data.value = { items: [], page: 4, size: 10, totalItems: 25, totalPages: 3 }
+    await nextTick()
+    expect(page.value).toBe(2)
+    expect(onPageChange).toHaveBeenCalledOnce()
+    expect(reload).toHaveBeenCalledOnce()
+
+    // A page with rows stays where it is.
+    data.value = { items: ['a'], page: 2, size: 10, totalItems: 21, totalPages: 3 }
+    await nextTick()
+    expect(page.value).toBe(2)
+    expect(reload).toHaveBeenCalledOnce()
+
+    // The first page stays at 0 even when empty.
+    page.value = 0
+    data.value = { items: [], page: 0, size: 10, totalItems: 0, totalPages: 0 }
+    await nextTick()
+    expect(page.value).toBe(0)
+    expect(reload).toHaveBeenCalledOnce()
+  })
+
+  it('stays on an empty later page unless asked to step back', async () => {
+    const data = ref<PageResponse<string> | null>(null)
+    const reload = vi.fn()
+    const page = ref(1)
+    useServerPage({ data, reload }, page)
+
+    data.value = { items: [], page: 1, size: 10, totalItems: 10, totalPages: 1 }
+    await nextTick()
+    expect(page.value).toBe(1)
+    expect(reload).not.toHaveBeenCalled()
+  })
+
+  it('keeps an empty list on its first page with a total of zero', () => {
     const data = ref<PageResponse<number> | null>(null)
     const view = useServerPage({ data, reload: vi.fn() }, ref(0))
-    expect(view.range.value).toEqual({ from: '0', to: '0', total: '0' })
 
     data.value = { items: [], page: 0, size: 10, totalItems: 0, totalPages: 0 }
-    expect(view.range.value).toEqual({ from: '0', to: '0', total: '0' })
+    expect(view.totalItems.value).toBe(0)
     expect(view.totalPages.value).toBe(1)
-
-    data.value = { items: [1, 2, 3], page: 1, size: 10, totalItems: 13, totalPages: 2 }
-    expect(view.range.value).toEqual({ from: '11', to: '13', total: '13' })
-
-    data.value = {
-      items: Array.from({ length: 10 }, (_, index) => index),
-      page: 199,
-      size: 10,
-      totalItems: 2500,
-      totalPages: 250,
-    }
-    expect(view.range.value).toEqual({ from: '1,991', to: '2,000', total: '2,500' })
-  })
-
-  it('reads a page nested in a larger answer and reloads with the page’s own reload', () => {
-    const data = ref<{ counts: number; requests: PageResponse<string> } | null>(null)
-    const resourceReload = vi.fn()
-    const ownReload = vi.fn()
-    const page = ref(0)
-    const view = useServerPage({ data, reload: resourceReload }, page, {
-      select: (answer) => answer.requests,
-      reload: ownReload,
-    })
-    expect(view.items.value).toEqual([])
-
-    data.value = { counts: 3, requests: { items: ['a'], page: 2, size: 5, totalItems: 11, totalPages: 3 } }
-    expect([view.items.value, view.totalItems.value, view.totalPages.value]).toEqual([['a'], 11, 3])
-    expect(view.range.value).toEqual({ from: '11', to: '11', total: '11' })
-
-    view.goToPage(1)
-    expect(page.value).toBe(1)
-    expect(ownReload).toHaveBeenCalledOnce()
-    expect(resourceReload).not.toHaveBeenCalled()
   })
 })

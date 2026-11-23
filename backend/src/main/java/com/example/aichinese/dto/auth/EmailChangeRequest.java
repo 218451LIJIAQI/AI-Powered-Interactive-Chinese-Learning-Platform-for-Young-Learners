@@ -1,8 +1,8 @@
 package com.example.aichinese.dto.auth;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
+import static com.example.aichinese.dto.DtoNormalization.redactValue;
+import static com.example.aichinese.dto.DtoNormalization.strip;
 
-import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -15,23 +15,16 @@ public record EmailChangeRequest(
         String newEmail,
 
         @NotBlank(message = "Current password is required.")
-        @Size(max = 72, message = "Current password must be at most 72 characters.")
+        @MaxUtf8Bytes
         String currentPassword) {
 
     public EmailChangeRequest {
-        if (newEmail != null) {
-            newEmail = newEmail.strip();
-        }
-    }
-
-    @JsonIgnore
-    @AssertTrue(message = "Password must be at most 72 bytes when encoded as UTF-8")
-    public boolean isPasswordWithinBcryptByteLimit() {
-        return AuthDtoValidation.isWithinBcryptByteLimit(currentPassword);
+        newEmail = strip(newEmail);
     }
 
     @Override
     public String toString() {
-        return "EmailChangeRequest[newEmail=" + newEmail + ", currentPassword=***REDACTED***]";
+        return "EmailChangeRequest[newEmail=" + redactValue(newEmail)
+                + ", currentPassword=" + redactValue(currentPassword) + "]";
     }
 }

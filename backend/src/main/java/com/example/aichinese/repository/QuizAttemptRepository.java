@@ -1,39 +1,42 @@
 package com.example.aichinese.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import com.example.aichinese.entity.QuizAttempt;
-import java.util.Collection;
 
 public interface QuizAttemptRepository extends JpaRepository<QuizAttempt, Long> {
 
-    @EntityGraph(attributePaths = { "quiz", "quiz.lesson", "student", "student.user" })
-    Optional<QuizAttempt> findByIdAndStudentUserId(Long id, Long studentUserId);
+    @EntityGraph(attributePaths = { "quiz.lesson", "student.user" })
+    Optional<QuizAttempt> findByIdAndStudentId(Long id, Long studentId);
 
     boolean existsByQuizIdAndSubmittedTrue(Long quizId);
 
-    /** Submitted attempts of the student on quizzes of the given lessons, newest first. */
-    @EntityGraph(attributePaths = { "quiz", "quiz.lesson" })
+    @Query("""
+            select distinct a.quiz.id from QuizAttempt a
+            where a.quiz.id in :quizIds and a.submitted = true
+            """)
+    Set<Long> findSubmittedQuizIds(@Param("quizIds") Collection<Long> quizIds);
+
+    /** The student's submitted attempts on quizzes of the given lessons, newest first. */
+    @EntityGraph(attributePaths = "quiz")
     List<QuizAttempt> findByStudentIdAndQuizLessonIdInAndSubmittedTrueOrderByCompletedAtDescIdDesc(
             Long studentId,
             Collection<Long> lessonIds);
 
-    /** Submitted attempts of the students on quizzes of the given lessons, newest first. */
-    @EntityGraph(attributePaths = { "quiz", "quiz.lesson", "student", "student.user" })
-    List<QuizAttempt> findByStudentIdInAndQuizLessonIdInAndSubmittedTrueOrderByCompletedAtDescIdDesc(
-            Collection<Long> studentIds,
-            Collection<Long> lessonIds);
+    /** The most recent open attempt of the student on the quiz. */
+    Optional<QuizAttempt> findFirstByStudentIdAndQuizIdAndSubmittedFalseOrderByIdDesc(Long studentId, Long quizId);
 
-    /** Open (not yet submitted) attempts of the student on the quiz. */
-    List<QuizAttempt> findByStudentIdAndQuizIdAndSubmittedFalseOrderByIdDesc(Long studentId, Long quizId);
-
-    @EntityGraph(attributePaths = { "quiz", "quiz.lesson" })
-    List<QuizAttempt> findByStudentIdAndQuizIdAndSubmittedTrueOrderByCompletedAtDescIdDesc(Long studentId, Long quizId);
-
-    @EntityGraph(attributePaths = { "student", "student.user" })
-    List<QuizAttempt> findByQuizIdInAndSubmittedTrueOrderByCompletedAtDescIdDesc(Collection<Long> quizIds);
+    @Query("""
+            select distinct a.quiz.id from QuizAttempt a
+            where a.student.id = :studentId and a.quiz.id in :quizIds and a.submitted = false
+            """)
+    Set<Long> findOpenQuizIds(@Param("studentId") Long studentId, @Param("quizIds") Collection<Long> quizIds);
 }

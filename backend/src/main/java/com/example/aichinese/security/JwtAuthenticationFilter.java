@@ -1,7 +1,6 @@
 package com.example.aichinese.security;
 
 import java.io.IOException;
-import java.util.Objects;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,26 +15,35 @@ import org.springframework.security.web.authentication.WebAuthenticationDetailsS
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+import com.example.aichinese.service.RefreshTokenService;
+
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
+import lombok.RequiredArgsConstructor;
+
+@RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
 
     private static final String BEARER_PREFIX = "Bearer ";
 
-    private static final int BEARER_PREFIX_LENGTH = BEARER_PREFIX.length();
-
     private final JwtService jwtService;
     private final UserDetailsService userDetailsService;
+    private final RefreshTokenService refreshTokenService;
 
-    public JwtAuthenticationFilter(JwtService jwtService, UserDetailsService userDetailsService) {
-        this.jwtService = Objects.requireNonNull(jwtService, "jwtService");
-        this.userDetailsService = Objects.requireNonNull(userDetailsService, "userDetailsService");
+    static String extractBearerToken(HttpServletRequest request) {
+        String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
+        if (!StringUtils.hasText(authHeader) || !authHeader.startsWith(BEARER_PREFIX)) {
+            return null;
+        }
+        String token = authHeader.substring(BEARER_PREFIX.length()).strip();
+        return token.isEmpty() ? null : token;
     }
 
     @Override
@@ -44,25 +52,22 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             @NonNull HttpServletResponse response,
             @NonNull FilterChain filterChain)
             throws ServletException, IOException {
-        String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
-
-        if (!StringUtils.hasText(authHeader) || !authHeader.startsWith(BEARER_PREFIX)) {
-            filterChain.doFilter(request, response);
-            return;
-        }
-
-        String token = authHeader.substring(BEARER_PREFIX_LENGTH);
-        if (!StringUtils.hasText(token)) {
+        String token = extractBearerToken(request);
+        if (token == null) {
             filterChain.doFilter(request, response);
             return;
         }
 
         Claims claims;
         String email;
+        String sessionId;
+        boolean persistent;
         try {
             claims = jwtService.extractAllClaims(token);
             email = claims.getSubject();
-        } catch (Exception exception) {
+            sessionId = jwtService.sessionId(claims);
+            persistent = jwtService.isPersistentSession(claims);
+        } catch (JwtException | IllegalArgumentException exception) {
             log.debug("Rejecting unparsable bearer token: {}", exception.getClass().getSimpleName());
             filterChain.doFilter(request, response);
             return;
@@ -77,25 +82,22 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 filterChain.doFilter(request, response);
                 return;
             }
-            if (userDetails.isEnabled() && isTokenValidForCurrentSession(claims, userDetails)) {
+            // Only SecurityUserDetails carries the session version that revokes old tokens (SDD 3.4); fail closed otherwise.
+            // A token of a browser that signed out (its session ended) is refused; one without a session predates them.
+            if (userDetails instanceof SecurityUserDetails account
+                    && account.isEnabled()
+                    && jwtService.isTokenValid(claims, account.getUsername(), account.getSessionVersion())
+                    && (sessionId == null || refreshTokenService.isSessionActive(account.getUserId(), sessionId))) {
+                SecurityUserDetails principal = account.withSession(persistent, sessionId);
                 UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(
-                        userDetails,
+                        principal,
                         null,
-                        userDetails.getAuthorities());
+                        principal.getAuthorities());
                 authenticationToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                 SecurityContextHolder.getContext().setAuthentication(authenticationToken);
             }
         }
 
         filterChain.doFilter(request, response);
-    }
-
-    private boolean isTokenValidForCurrentSession(@NonNull Claims claims, @NonNull UserDetails userDetails) {
-        // Only SecurityUserDetails carries the session version that revokes old tokens (SDD 3.4); fail closed otherwise.
-        return userDetails instanceof SecurityUserDetails securityUserDetails
-                && jwtService.isTokenValid(
-                        claims,
-                        securityUserDetails.getUsername(),
-                        securityUserDetails.getSessionVersion());
     }
 }

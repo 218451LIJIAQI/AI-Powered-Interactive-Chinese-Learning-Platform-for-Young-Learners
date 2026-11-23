@@ -5,7 +5,6 @@ import com.example.aichinese.entity.base.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
-import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -16,10 +15,7 @@ import lombok.Setter;
 @Getter
 @Setter
 @Entity
-@Table(name = "uploaded_files", indexes = {
-        @Index(name = "idx_uploaded_files_owner_user_id", columnList = "owner_user_id"),
-        @Index(name = "idx_uploaded_files_created_at", columnList = "created_at")
-}, uniqueConstraints = {
+@Table(name = "uploaded_files", uniqueConstraints = {
         @UniqueConstraint(name = "uk_uploaded_files_stored_file_name", columnNames = { "stored_file_name" })
 })
 public class UploadedFile extends BaseEntity {
@@ -34,17 +30,11 @@ public class UploadedFile extends BaseEntity {
     @Column(name = "stored_file_name", nullable = false, updatable = false, length = 255)
     private String storedFileName;
 
-    @Column(name = "file_path", nullable = false, updatable = false, length = 500)
-    private String filePath;
-
     @Column(name = "content_type", nullable = false, updatable = false, length = 120)
     private String contentType;
 
     @Column(name = "file_size", nullable = false, updatable = false)
     private Long fileSize;
-
-    @Column(name = "access_level", nullable = false, updatable = false, length = 30)
-    private String accessLevel;
 
     @Column(name = "active", nullable = false)
     private boolean active = true;

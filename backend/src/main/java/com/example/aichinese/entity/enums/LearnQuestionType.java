@@ -2,7 +2,7 @@ package com.example.aichinese.entity.enums;
 
 /**
  * How a Learn question asks about its word or sentence. The choice types offer options; the build types offer word
- * tiles the student puts in order. The interface writes the instruction ("Select the correct meaning", "Tap what you
+ * tiles the student puts in order. The interface writes the instruction ("Select the correct meaning", "Click what you
  * hear", ...) from the type, so it is shown in the student's language.
  */
 public enum LearnQuestionType {

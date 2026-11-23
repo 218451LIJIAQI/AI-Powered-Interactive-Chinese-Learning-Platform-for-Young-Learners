@@ -5,9 +5,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
@@ -23,13 +27,16 @@ import com.example.aichinese.repository.RefreshTokenRepository;
 import com.example.aichinese.repository.UserRepository;
 import com.example.aichinese.service.RefreshTokenService;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
+
 /**
  * Unit coverage for the refresh-token rotation boundary.
  *
  * <p>The service must lock the current refresh-token row before checking
  * {@code revokedAt}/{@code rotatedAt}; otherwise two concurrent refresh
  * requests could both observe the same token as active and each mint a
- * replacement. These tests pin the locking repository call, the
+ * replacement. These tests pin the pessimistic write locks, the
  * compromised-family session invalidation path and the short grace window
  * in which a second tab presenting the just-rotated token is only refused.</p>
  */
@@ -46,15 +53,16 @@ class RefreshTokenServiceTests {
 
     private final RefreshTokenRepository refreshTokenRepository = mock(RefreshTokenRepository.class);
     private final UserRepository userRepository = mock(UserRepository.class);
+    private final EntityManager entityManager = mock(EntityManager.class);
     private final RefreshTokenService service = new RefreshTokenService(refreshTokenRepository, userRepository,
-            securityProperties("RuntimeStyleJwtSecretForRefreshTests1234567890AB", 3_600_000L, false));
+            securityProperties("RuntimeStyleJwtSecretForRefreshTests1234567890AB", 3_600_000L, false), entityManager);
 
     @Test
     void rotateUsesLockedLookupBeforeMintingReplacement() {
         User user = activeUser(ACTIVE_SESSION_VERSION);
         RefreshToken current = activeToken(user);
 
-        when(refreshTokenRepository.findLockedByTokenHash(anyString())).thenReturn(Optional.of(current));
+        stubToken(current);
 
         RefreshTokenService.RefreshSession session = service.rotate("raw-refresh-token", CLIENT_IP, USER_AGENT);
 
@@ -63,28 +71,63 @@ class RefreshTokenServiceTests {
         assertThat(current.getRotatedAt()).isNotNull();
         assertThat(current.getRevokedAt()).isNotNull();
         assertThat(current.getReplacedByTokenHash()).isNotBlank();
-        verify(refreshTokenRepository).findLockedByTokenHash(anyString());
+        var locks = inOrder(entityManager, refreshTokenRepository);
+        locks.verify(entityManager).refresh(user, LockModeType.PESSIMISTIC_WRITE);
+        locks.verify(refreshTokenRepository).findByTokenHash(anyString());
+        locks.verify(entityManager).refresh(current, LockModeType.PESSIMISTIC_WRITE);
+        ArgumentCaptor<RefreshToken> replacement = ArgumentCaptor.forClass(RefreshToken.class);
+        locks.verify(refreshTokenRepository).save(replacement.capture());
+        assertThat(replacement.getValue()).isNotSameAs(current);
+        assertThat(replacement.getValue().getTokenHash()).isEqualTo(current.getReplacedByTokenHash());
     }
 
     @Test
-    void rotateRevokesFamilyAndBumpsLockedUserSessionOnConsumedTokenReplay() {
+    void rotateRevokesFamilyAndUsesTheStoredSessionVersionOnConsumedTokenReplay() {
         User user = activeUser(COMPROMISED_SESSION_VERSION);
         RefreshToken consumed = activeToken(user);
         LocalDateTime rotatedAt = LocalDateTime.now().minus(RefreshTokenService.ROTATION_GRACE_WINDOW).minusSeconds(1);
         consumed.setRotatedAt(rotatedAt);
         consumed.setRevokedAt(rotatedAt);
 
-        when(refreshTokenRepository.findLockedByTokenHash(anyString())).thenReturn(Optional.of(consumed));
-        when(userRepository.findLockedById(USER_ID)).thenReturn(Optional.of(user));
+        stubToken(consumed);
+        when(refreshTokenRepository.revokeActiveTokenFamilyOfUser(eq(USER_ID), anyString(), any(LocalDateTime.class)))
+                .thenReturn(1);
+        doAnswer(invocation -> {
+            user.setSessionVersion(COMPROMISED_SESSION_VERSION + 1);
+            return null;
+        }).when(entityManager).refresh(user);
 
         assertThatThrownBy(() -> service.rotate(REPLAYED_REFRESH_TOKEN, CLIENT_IP, USER_AGENT))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining(INVALID_REFRESH_MESSAGE);
 
         assertThat(user.getSessionVersion()).isEqualTo(COMPROMISED_SESSION_VERSION + 1);
-        verify(refreshTokenRepository).revokeActiveTokenFamily(anyString(), any(LocalDateTime.class));
-        verify(userRepository).findLockedById(USER_ID);
-        verify(userRepository).save(user);
+        verify(refreshTokenRepository).revokeActiveTokenFamilyOfUser(eq(USER_ID), anyString(), any(LocalDateTime.class));
+        var sequence = inOrder(userRepository, entityManager);
+        sequence.verify(userRepository).save(user);
+        sequence.verify(userRepository).incrementSessionVersion(eq(USER_ID), any(LocalDateTime.class));
+        sequence.verify(entityManager).refresh(user);
+    }
+
+    @Test
+    void rotateDoesNotAdvanceSessionVersionWhenReplayedFamilyWasAlreadyRevoked() {
+        User user = activeUser(COMPROMISED_SESSION_VERSION);
+        RefreshToken consumed = activeToken(user);
+        LocalDateTime rotatedAt = LocalDateTime.now().minus(RefreshTokenService.ROTATION_GRACE_WINDOW).minusSeconds(1);
+        consumed.setRotatedAt(rotatedAt);
+        consumed.setRevokedAt(rotatedAt);
+
+        stubToken(consumed);
+        when(refreshTokenRepository.revokeActiveTokenFamilyOfUser(eq(USER_ID), anyString(), any(LocalDateTime.class)))
+                .thenReturn(0);
+
+        assertThatThrownBy(() -> service.rotate(REPLAYED_REFRESH_TOKEN, CLIENT_IP, USER_AGENT))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining(INVALID_REFRESH_MESSAGE);
+
+        assertThat(user.getSessionVersion()).isEqualTo(COMPROMISED_SESSION_VERSION);
+        verify(refreshTokenRepository).revokeActiveTokenFamilyOfUser(eq(USER_ID), anyString(), any(LocalDateTime.class));
+        verify(userRepository, never()).incrementSessionVersion(eq(USER_ID), any(LocalDateTime.class));
     }
 
     @Test
@@ -138,7 +181,7 @@ class RefreshTokenServiceTests {
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining(INVALID_REFRESH_MESSAGE);
 
-        verify(refreshTokenRepository, never()).findLockedByTokenHash(anyString());
+        verifyNoInteractions(refreshTokenRepository, userRepository, entityManager);
     }
 
     private static RefreshToken activeToken(User user) {
@@ -164,14 +207,21 @@ class RefreshTokenServiceTests {
 
     /** The presented token is refused, but the account keeps its other sessions (no family revocation, no sign-out). */
     private void assertRotationRefusedWithoutSigningOut(User user, RefreshToken presented) {
-        when(refreshTokenRepository.findLockedByTokenHash(anyString())).thenReturn(Optional.of(presented));
+        stubToken(presented);
 
         assertThatThrownBy(() -> service.rotate(REPLAYED_REFRESH_TOKEN, CLIENT_IP, USER_AGENT))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining(INVALID_REFRESH_MESSAGE);
 
         assertThat(user.getSessionVersion()).isEqualTo(ACTIVE_SESSION_VERSION);
-        verify(refreshTokenRepository, never()).revokeActiveTokenFamily(anyString(), any(LocalDateTime.class));
-        verify(userRepository, never()).findLockedById(USER_ID);
+        verify(refreshTokenRepository, never())
+                .revokeActiveTokenFamilyOfUser(any(), anyString(), any(LocalDateTime.class));
+        verify(userRepository, never()).incrementSessionVersion(eq(USER_ID), any(LocalDateTime.class));
+    }
+
+    private void stubToken(RefreshToken token) {
+        when(refreshTokenRepository.findUserIdByTokenHash(anyString())).thenReturn(Optional.of(USER_ID));
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(token.getUser()));
+        when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.of(token));
     }
 }

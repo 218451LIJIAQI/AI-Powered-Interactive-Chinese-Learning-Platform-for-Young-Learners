@@ -12,17 +12,16 @@
     "format:check": "prettier . --check",
     "test:unit": "vitest run",
     "test:e2e": "playwright test",
-    "typecheck": "vue-tsc --noEmit -p tsconfig.app.json && vue-tsc --noEmit -p tsconfig.node.json && vue-tsc --noEmit -p tsconfig.e2e.json",
-    "build": "vue-tsc -b && vite build",
-    "preview": "vite preview"
+    "typecheck": "vue-tsc -b",
+    "build": "vue-tsc -b && vite build"
   },
   "dependencies": {
     "@lucide/vue": "^1.17.0",
-    "@sentry/vue": "^10.53.1",
+    "@tavus/embed": "0.26.1",
     "axios": "^1.16.1",
     "pinia": "^3.0.4",
-    "vue": "^3.5.35",
-    "vue-i18n": "^11.4.4",
+    "vue": "^3.5.42",
+    "vue-i18n": "^11.4.14",
     "vue-router": "^5.0.7"
   },
   "devDependencies": {
@@ -39,8 +38,14 @@
     "prettier": "^3.8.3",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.59.4",
-    "vite": "^8.0.12",
-    "vitest": "^4.1.7",
+    "vite": "^8.3.3",
+    "vitest": "^4.1.12",
     "vue-tsc": "^3.2.8"
+  },
+  "overrides": {
+    "js-beautify@1": {
+      "editorconfig": "^4.0.1",
+      "glob": "^14.0.6"
+    }
   }
 }

@@ -1,8 +1,8 @@
 <template>
-  <div class="segmented" :role="label ? 'group' : undefined" :aria-label="label || undefined">
+  <div class="segmented" role="group" :aria-label="label">
     <button
       v-for="option in options"
-      :key="String(option.value)"
+      :key="option.value"
       class="segmented-option"
       type="button"
       :aria-pressed="option.value === model"
@@ -16,23 +16,20 @@
   </div>
 </template>
 
-<script setup lang="ts" generic="T extends string | number | null">
-import IconGlyph from '@/components/common/IconGlyph.vue'
+<script setup lang="ts" generic="T extends string | number">
+import IconGlyph, { type IconName } from '@/components/common/IconGlyph.vue'
 
-/**
- * A row of mutually exclusive choices (a filter, a period, a type), each a toggle button with `aria-pressed`.
- * Give it a `label` unless it sits in a `<fieldset>` whose legend names the group already.
- */
+/** A row of mutually exclusive choices (a period, a type), each a toggle button with `aria-pressed`. */
 export interface SegmentedOption<V> {
   readonly value: V
   readonly label: string
-  readonly icon?: string
+  readonly icon?: IconName
   readonly testId?: string
 }
 
 defineProps<{
   options: readonly SegmentedOption<T>[]
-  label?: string
+  label: string
   disabled?: boolean
 }>()
 

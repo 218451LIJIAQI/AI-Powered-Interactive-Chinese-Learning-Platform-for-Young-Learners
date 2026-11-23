@@ -1,7 +1,7 @@
-import { expect, request } from '@playwright/test'
+import { type APIResponse, expect, request } from '@playwright/test'
 
 import { E2E_ACCOUNTS } from './accounts'
-import { API_BASE_URL, apiToken, bearer } from './support'
+import { API_BASE_URL, apiAuthHeaders } from './support'
 
 /**
  * Waits until the demo data is in. The backend answers its health check (the webServer `url`) as soon as Tomcat is
@@ -16,7 +16,7 @@ export default async function waitForDemoData(): Promise<void> {
       .poll(
         async () => {
           const response = await api.get(`${API_BASE_URL}/public/classes?page=0&size=1`)
-          return ((await response.json()) as { data: { totalItems: number } }).data.totalItems
+          return ((await answered(response)) as { data: { totalItems: number } }).data.totalItems
         },
         { timeout: 120_000 },
       )
@@ -24,12 +24,12 @@ export default async function waitForDemoData(): Promise<void> {
 
     // DemoOpsSeeder runs last and saves everything in one transaction: once its support requests are there, so is
     // the rest of the demo data.
-    const headers = bearer(await apiToken(api, E2E_ACCOUNTS.admin))
+    const headers = await apiAuthHeaders(api, E2E_ACCOUNTS.admin)
     await expect
       .poll(
         async () => {
           const response = await api.get(`${API_BASE_URL}/admin/support?page=0&size=1`, { headers })
-          return ((await response.json()) as { data: { requests: { totalItems: number } } }).data.requests.totalItems
+          return ((await answered(response)) as { data: { requests: { totalItems: number } } }).data.requests.totalItems
         },
         { timeout: 120_000 },
       )
@@ -37,4 +37,10 @@ export default async function waitForDemoData(): Promise<void> {
   } finally {
     await api.dispose()
   }
+}
+
+/** The body of a successful answer; a refused request fails the poll with its status and message, not a TypeError. */
+async function answered(response: APIResponse): Promise<unknown> {
+  if (!response.ok()) throw new Error(`${response.url()} answered HTTP ${response.status()}: ${await response.text()}`)
+  return response.json()
 }

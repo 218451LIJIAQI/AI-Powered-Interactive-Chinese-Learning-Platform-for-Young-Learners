@@ -1,12 +1,7 @@
 package com.example.aichinese.controller;
 
-import java.io.IOException;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
@@ -19,13 +14,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import com.example.aichinese.dto.ApiResponse;
 import com.example.aichinese.dto.PageResponse;
 import com.example.aichinese.dto.ai.AiChatRequest;
-import com.example.aichinese.dto.ai.AiChatResponse;
 import com.example.aichinese.dto.ai.AiHelperStatusResponse;
 import com.example.aichinese.dto.ai.AiQuizGeneratorRequest;
 import com.example.aichinese.dto.ai.AiQuizGeneratorResponse;
@@ -37,98 +30,81 @@ import com.example.aichinese.dto.ai.StudentAiResponseReportResponse;
 import com.example.aichinese.dto.ai.XiaomeiConversationRequest;
 import com.example.aichinese.dto.ai.XiaomeiReplyRequest;
 import com.example.aichinese.dto.ai.XiaomeiResponses;
-import com.example.aichinese.exception.FriendlyErrorMessageResolver;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.AiPracticeCheckService;
 import com.example.aichinese.service.AiResponseReportService;
 import com.example.aichinese.service.AiService;
 import com.example.aichinese.service.XiaomeiService;
-import com.example.aichinese.util.RequestIdHolder;
+import com.example.aichinese.service.ai.AiChatStreamRunner;
+import com.example.aichinese.service.ai.AiHelperStatusService;
 
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
+import lombok.RequiredArgsConstructor;
+
 /**
- * The student AI Helper ({@code /api/v1/ai/**}, STUDENT only): the status line, Ask SparkBot, Talk with Xiaomei,
- * Quick quiz, Story, pronunciation and handwriting checks, and the student's reports. Nothing here gives XP.
+ * The student AI Helper ({@code /api/v1/ai/**}, STUDENT only): the status line, Ask SparkBot, Talk with Xiaomei (what she
+ * remembers is in {@link XiaomeiMemoryController}), Quick quiz, Story, pronunciation and handwriting checks, and the
+ * student's reports. Nothing here gives XP.
  */
 @Validated
 @RestController
 @RequestMapping("/api/v1/ai")
+@RequiredArgsConstructor
 public class AiController {
 
-    private static final Logger log = LoggerFactory.getLogger(AiController.class);
-
-    private static final String SSE_DELTA_EVENT = "delta";
-    private static final String SSE_COMPLETE_EVENT = "complete";
-    private static final String SSE_ERROR_EVENT = "error";
-    private static final String STREAM_FAILED_MESSAGE = "AI chat stream failed. Please try again.";
-    private static final long CHAT_STREAM_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(45);
-    private static final int STREAM_CHUNK_SIZE = 24;
-
     private final AiService aiService;
+    private final AiChatStreamRunner chatStreamRunner;
+    private final AiHelperStatusService helperStatus;
     private final XiaomeiService xiaomeiService;
     private final AiPracticeCheckService practiceCheckService;
     private final AiResponseReportService aiResponseReportService;
 
-    public AiController(
-            AiService aiService,
-            XiaomeiService xiaomeiService,
-            AiPracticeCheckService practiceCheckService,
-            AiResponseReportService aiResponseReportService) {
-        this.aiService = aiService;
-        this.xiaomeiService = xiaomeiService;
-        this.practiceCheckService = practiceCheckService;
-        this.aiResponseReportService = aiResponseReportService;
-    }
-
-    /** Availability, today's request count against the daily limit, and the AI notice text. */
     @GetMapping("/status")
     public ApiResponse<AiHelperStatusResponse> status(@AuthenticationPrincipal SecurityUserDetails currentUser) {
-        return ApiResponse.success("AI Helper status retrieved successfully.", aiService.status(currentUser));
+        return ApiResponse.success("AI Helper status retrieved successfully.", helperStatus.forStudent(currentUser.getUserId()));
     }
 
-    /**
-     * Ask SparkBot: the answer arrives as {@code delta} events, then one {@code complete} event carrying the whole
-     * turn, or one {@code error} event with a safe message.
-     */
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200",
+            description = """
+                    UTF-8 server-sent events. Each `delta` carries the next piece of answer text, including any spaces.
+                    A `complete` event carries the full [AiChatResponse](#/components/schemas/AiChatResponse) as JSON.
+                    An `error` event carries a plain-text failure message. A timeout or disconnect can end the stream
+                    before a terminal event arrives.
+                    """,
+            content = @Content(mediaType = MediaType.TEXT_EVENT_STREAM_VALUE,
+                    schema = @Schema(implementation = String.class),
+                    examples = {
+                            @ExampleObject(name = "Completed", value = """
+                                    event:delta
+                                    data:你好
+
+                                    event:complete
+                                    data:{"sessionId":7,"chatMessageId":9,"aiResponse":"你好","status":"SUCCESS"}
+
+                                    """),
+                            @ExampleObject(name = "Failed", value = """
+                                    event:error
+                                    data:AI chat stream failed. Please try again.
+
+                                    """)
+                    }))
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "default",
+            description = "HTTP errors returned before streaming use the API's JSON error envelope.",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+                    schema = @Schema(ref = "#/components/schemas/ApiResponseVoid")))
     @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter chatStream(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @Valid @RequestBody AiChatRequest request) {
-        SseEmitter emitter = new SseEmitter(CHAT_STREAM_TIMEOUT_MS);
-        String requestId = RequestIdHolder.get();
-        Thread worker = Thread.ofVirtual().unstarted(() -> {
-            if (requestId != null) {
-                RequestIdHolder.bind(requestId);
-            }
-            try {
-                AiChatResponse response = aiService.chat(currentUser, request);
-                sendChunkedText(emitter, response.aiResponse());
-                emitter.send(SseEmitter.event()
-                        .name(SSE_COMPLETE_EVENT)
-                        .data(response, MediaType.APPLICATION_JSON));
-                emitter.complete();
-            } catch (Exception exception) {
-                log.warn("AI chat stream failed for user id {} with exception type {}.",
-                        currentUser == null ? null : currentUser.getUserId(),
-                        exception.getClass().getSimpleName());
-                completeWithSafeError(emitter, safeStreamErrorMessage(exception));
-            } finally {
-                RequestIdHolder.unbind();
-            }
-        });
-        emitter.onCompletion(worker::interrupt);
-        emitter.onError(ignored -> worker.interrupt());
-        emitter.onTimeout(() -> {
-            worker.interrupt();
-            emitter.complete();
-        });
-        worker.start();
-        return emitter;
+        // Validate account, message and session synchronously so 400/401/404 return JSON before SSE starts.
+        AiService.PreparedChat prepared = aiService.prepareChat(currentUser, request);
+        return chatStreamRunner.stream(currentUser, prepared);
     }
 
     @PostMapping("/conversation/reply")
@@ -136,13 +112,6 @@ public class AiController {
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @Valid @RequestBody XiaomeiReplyRequest request) {
         return ApiResponse.success("Xiaomei replied.", xiaomeiService.reply(currentUser, request));
-    }
-
-    @PostMapping("/conversation/suggestions")
-    public ApiResponse<XiaomeiResponses.Suggestions> conversationSuggestions(
-            @AuthenticationPrincipal SecurityUserDetails currentUser,
-            @Valid @RequestBody XiaomeiConversationRequest request) {
-        return ApiResponse.success("Reply ideas generated.", xiaomeiService.suggestions(currentUser, request));
     }
 
     @PostMapping("/conversation/summary")
@@ -178,13 +147,10 @@ public class AiController {
             @Size(max = 100, message = "Target text must not exceed 100 characters.")
             @RequestParam("targetText") String targetText,
             @RequestParam(value = "lessonId", required = false) Long lessonId,
-            @Min(value = 1, message = "Recording length must be at least 1 second.")
-            @Max(value = 600, message = "Recording length must not exceed 600 seconds.")
-            @RequestParam(value = "durationSeconds", required = false) Integer durationSeconds,
             @Size(max = 20, message = "Language preference must not exceed 20 characters.")
             @RequestParam(value = "languagePreference", required = false) String languagePreference) {
         return ApiResponse.success("Practice check processed.", practiceCheckService.check(currentUser,
-                new AiPracticeCheckService.CheckRequest(type, file, targetText, lessonId, durationSeconds, languagePreference)));
+                new AiPracticeCheckService.CheckRequest(type, file, targetText, lessonId, languagePreference)));
     }
 
     @GetMapping("/practice-checks")
@@ -202,12 +168,21 @@ public class AiController {
         return ApiResponse.success("Lessons retrieved successfully.", practiceCheckService.linkableLessons(currentUser));
     }
 
+    /** Deletes the check at once; {@code POST .../restore} is its Undo for a while (see AiPracticeCheckService). */
     @DeleteMapping("/practice-checks/{id}")
     public ApiResponse<Void> deletePracticeCheck(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @PathVariable Long id) {
         practiceCheckService.delete(currentUser, id);
         return ApiResponse.success("Practice check deleted.", null);
+    }
+
+    /** The Undo of Delete: the check is back in Recent checks. */
+    @PostMapping("/practice-checks/{id}/restore")
+    public ApiResponse<PracticeCheckResponses.Check> restorePracticeCheck(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long id) {
+        return ApiResponse.success("Practice check restored.", practiceCheckService.restore(currentUser, id));
     }
 
     @PostMapping("/reports")
@@ -227,40 +202,5 @@ public class AiController {
         return ApiResponse.success(
                 "AI response reports retrieved successfully.",
                 aiResponseReportService.getCurrentUserReports(currentUser, page, size));
-    }
-
-    private static void sendChunkedText(SseEmitter emitter, String text) throws IOException {
-        for (int start = 0; start < text.length();) {
-            int end = start;
-            int emittedCodePoints = 0;
-            while (end < text.length() && emittedCodePoints < STREAM_CHUNK_SIZE) {
-                end += Character.charCount(text.codePointAt(end));
-                emittedCodePoints++;
-            }
-            emitter.send(SseEmitter.event()
-                    .name(SSE_DELTA_EVENT)
-                    .data(text.substring(start, end)));
-            start = end;
-        }
-    }
-
-    /** A reached AI quota keeps its friendly 429 text (minute or daily limit); any other failure stays generic. */
-    private static String safeStreamErrorMessage(Exception exception) {
-        if (exception instanceof ResponseStatusException statusException
-                && statusException.getStatusCode().value() == HttpStatus.TOO_MANY_REQUESTS.value()) {
-            return FriendlyErrorMessageResolver.resolve(statusException.getStatusCode(), statusException.getReason());
-        }
-        return STREAM_FAILED_MESSAGE;
-    }
-
-    private static void completeWithSafeError(SseEmitter emitter, String message) {
-        try {
-            emitter.send(SseEmitter.event()
-                    .name(SSE_ERROR_EVENT)
-                    .data(message));
-        } catch (IOException | IllegalStateException ignored) {
-            // Client may have disconnected; the caller already logged a safe failure summary.
-        }
-        emitter.complete();
     }
 }

@@ -1,5 +1,5 @@
 import { AxiosError, type AxiosAdapter, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios'
-import { afterEach } from 'vitest'
+import { afterEach, expect } from 'vitest'
 
 import { http } from '@/api/http'
 
@@ -30,12 +30,12 @@ export function axiosResponse<T>(config: InternalAxiosRequestConfig, status: num
   }
 }
 
-/** What axios rejects with when the server answers a 4xx `status` with `data`. */
+/** What axios rejects with when the server answers an error `status` (4xx or 5xx) with `data`. */
 export function axiosHttpError<T>(config: InternalAxiosRequestConfig, status: number, data: T): AxiosError {
   const response = axiosResponse(config, status, data)
   return new AxiosError(
     `Request failed with status code ${status}`,
-    AxiosError.ERR_BAD_REQUEST,
+    status >= 500 ? AxiosError.ERR_BAD_RESPONSE : AxiosError.ERR_BAD_REQUEST,
     config,
     undefined,
     response,
@@ -55,10 +55,10 @@ function parseData(value: unknown): unknown {
 }
 
 /**
- * Replaces the shared axios adapter: records every request and answers each with a success envelope around `data`.
+ * Replaces the shared axios adapter: records every request and answers each with an empty success envelope.
  * See restoreAxiosAdapterAfterEach.
  */
-export function installAxiosCapture(data: unknown): CapturedRequest[] {
+export function installAxiosCapture(): CapturedRequest[] {
   const calls: CapturedRequest[] = []
   http.defaults.adapter = (async (config) => {
     calls.push({
@@ -67,7 +67,14 @@ export function installAxiosCapture(data: unknown): CapturedRequest[] {
       data: parseData(config.data),
       params: config.params,
     })
-    return axiosResponse(config, 200, { success: true, data })
+    return axiosResponse(config, 200, { success: true, data: {} })
   }) satisfies AxiosAdapter
   return calls
+}
+
+/** Runs each API call in turn and checks the request it sends, written `METHOD /path`. */
+export async function expectRequests(cases: [run: () => Promise<unknown>, request: string][]): Promise<void> {
+  const calls = installAxiosCapture()
+  for (const [run] of cases) await run()
+  expect(calls.map(({ method, url }) => `${method} ${url}`)).toEqual(cases.map(([, request]) => request))
 }

@@ -14,14 +14,9 @@ public record AiProviderPrompt(
         String featureKey,
         String systemInstruction,
         String userPrompt,
-        int maxOutputTokens,
         boolean expectJson,
         List<AiMessage> messageHistory,
         AiImageInput image) {
-
-    public boolean hasImage() {
-        return image != null;
-    }
 
     public record AiMessage(String role, String content) {
     }

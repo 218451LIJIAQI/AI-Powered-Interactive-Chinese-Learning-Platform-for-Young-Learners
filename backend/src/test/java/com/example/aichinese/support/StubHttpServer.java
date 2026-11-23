@@ -17,13 +17,21 @@ import com.sun.net.httpserver.HttpServer;
 public final class StubHttpServer implements AutoCloseable {
 
     private final HttpServer server;
-    private final ExecutorService executor = Executors.newCachedThreadPool();
+    private final ExecutorService executor =
+            Executors.newThreadPerTaskExecutor(Thread.ofVirtual().name("stub-http-", 0).factory());
 
     private StubHttpServer(String path, HttpHandler handler) throws IOException {
-        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-        server.createContext(path, handler);
-        server.setExecutor(executor);
-        server.start();
+        HttpServer created = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        try {
+            created.createContext(path, handler);
+            created.setExecutor(executor);
+            created.start();
+        } catch (RuntimeException failure) {
+            created.stop(0);
+            executor.shutdownNow();
+            throw failure;
+        }
+        server = created;
     }
 
     /** Starts a server that answers requests to {@code path} with {@code handler}. */
@@ -45,11 +53,16 @@ public final class StubHttpServer implements AutoCloseable {
     }
 
     public static void respond(HttpExchange exchange, int statusCode, String json) throws IOException {
-        byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
-        exchange.getResponseHeaders().add("Content-Type", "application/json");
-        exchange.sendResponseHeaders(statusCode, bytes.length);
-        exchange.getResponseBody().write(bytes);
-        exchange.close();
+        try (exchange) {
+            byte[] bytes = json == null ? new byte[0] : json.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
+            if (bytes.length == 0) {
+                exchange.sendResponseHeaders(statusCode, -1);
+                return;
+            }
+            exchange.sendResponseHeaders(statusCode, bytes.length);
+            exchange.getResponseBody().write(bytes);
+        }
     }
 
     @Override

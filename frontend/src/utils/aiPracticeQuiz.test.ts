@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { AiStoryGeneratorResponse } from '@/types/api'
 
-import { answersMatch, resolveAnswerKey, storyVocabularyRows } from './aiPracticeQuiz'
+import { draftAnswerIndex, matchesAnswer, storyVocabularyRows } from './aiPracticeQuiz'
 
 const story: AiStoryGeneratorResponse = {
   title: '周末',
@@ -15,28 +15,33 @@ const story: AiStoryGeneratorResponse = {
 }
 
 describe('AI practice answer matching', () => {
-  it('normalises answers with NFKC, trimming, collapsed spaces and case folding', () => {
-    expect(answersMatch('  Ni   HAO ', 'ni hao')).toBe(true)
-    expect(answersMatch('ＡＢＣ', 'abc')).toBe(true)
-    expect(answersMatch('多少钱？', '多少钱?')).toBe(true)
-    expect(answersMatch('It is delicious', 'It is delicious.')).toBe(true)
-    expect(answersMatch('我要一杯茶', '我要一杯茶。')).toBe(true)
-    expect(answersMatch('茶', '水')).toBe(false)
-    expect(answersMatch('', '')).toBe(false)
+  it.each([
+    ['  Ni   HAO ', 'ni hao', true],
+    ['ＡＢＣ', 'abc', true],
+    ['多少钱？', '多少钱?', true],
+    ['It is delicious', 'It is delicious.', true],
+    ['我要一杯茶', '我要一杯茶。', true],
+    ['茶', '水', false],
+    ['', '', false],
+  ])('compares option %j against answer %j', (option, answer, expected) => {
+    expect(matchesAnswer(answer)(option)).toBe(expected)
+  })
+
+  it('keeps punctuation-only options distinct', () => {
+    expect(['？', '!!', '?'].filter(matchesAnswer('?'))).toEqual(['？', '?'])
   })
 
   it('resolves single-letter answer keys to option indexes only when no option text matches', () => {
-    const indexes = (options: readonly string[], answer: string) => resolveAnswerKey(options, answer).indexes
     const options = ['Library', 'Canteen', 'Dormitory', 'Hall']
-    expect(indexes(options, 'B')).toEqual([1])
-    expect(indexes(options, '(c)')).toEqual([2])
-    expect(indexes(options, 'D.')).toEqual([3])
-    expect(indexes(options, 'E')).toEqual([])
-    expect(indexes(options, 'Bus')).toEqual([])
-    expect(indexes(['Library', 'Canteen', 'Dormitory'], 'b')).toEqual([1])
-    expect(indexes(['A', 'B'], 'B')).toEqual([1])
-    expect(indexes(['Yes', 'No'], 'D')).toEqual([])
-    expect(indexes(['True', 'False'], ' true ')).toEqual([0])
+    expect(draftAnswerIndex(options, 'B')).toBe(1)
+    expect(draftAnswerIndex(options, '(c)')).toBe(2)
+    expect(draftAnswerIndex(options, 'D.')).toBe(3)
+    expect(draftAnswerIndex(options, 'E')).toBe(-1)
+    expect(draftAnswerIndex(options, 'Bus')).toBe(-1)
+    expect(draftAnswerIndex(['Library', 'Canteen', 'Dormitory'], 'b')).toBe(1)
+    expect(draftAnswerIndex(['B', 'A'], 'B')).toBe(0)
+    expect(draftAnswerIndex(['Yes', 'No'], 'D')).toBe(-1)
+    expect(draftAnswerIndex(['True', 'False'], ' true ')).toBe(0)
   })
 
   it('picks vocabulary meanings by interface language', () => {

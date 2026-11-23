@@ -7,7 +7,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 
@@ -23,34 +22,27 @@ class SecurityLayerContractTests {
 
     private static final long USER_ID = 1L;
     private static final long PERSISTED_USER_ID = 42L;
-    private static final String TEACHER_EMAIL = "teacher@example.com";
+    private static final String ADMIN_EMAIL = "admin@example.com";
     private static final String SAME_EMAIL = "same@example.com";
-    private static final String DISPLAY_NAME = "Security Test User";
     private static final String PASSWORD_HASH = "$2a$10$abcdefghijklmnopqrstuv";
     private static final String IDEOGRAPHIC_SPACE = "\u3000";
-    private static final String ADMIN_ROLE_NAME = "ADMIN";
-    private static final String TEACHER_ROLE_NAME = "TEACHER";
     private static final String ADMIN_AUTHORITY = "ROLE_ADMIN";
-    private static final String TEACHER_AUTHORITY = "ROLE_TEACHER";
-    private static final String TEACHER_EMAIL_WITH_IDEOGRAPHIC_SPACES =
-            IDEOGRAPHIC_SPACE + TEACHER_EMAIL + IDEOGRAPHIC_SPACE;
+    private static final String STUDENT_AUTHORITY = "ROLE_STUDENT";
+    private static final String ADMIN_EMAIL_WITH_IDEOGRAPHIC_SPACES =
+            IDEOGRAPHIC_SPACE + ADMIN_EMAIL + IDEOGRAPHIC_SPACE;
 
     @Test
-    void securityUserDetailsFiltersNullAndDuplicateRoles() {
-        User user = user(USER_ID, TEACHER_EMAIL);
-        user.setRoles(new HashSet<>(Set.of(
-                role(RoleName.TEACHER),
-                role(RoleName.ADMIN),
-                role(RoleName.TEACHER),
-                new Role())));
-        user.getRoles().add(null);
+    void securityUserDetailsListsRolesByName() {
+        User user = user(USER_ID, ADMIN_EMAIL);
+        user.setRoles(Set.of(role(RoleName.STUDENT), role(RoleName.ADMIN)));
 
         SecurityUserDetails details = new SecurityUserDetails(user);
 
-        assertThat(details.getRoleNames()).containsExactly(ADMIN_ROLE_NAME, TEACHER_ROLE_NAME);
+        assertThat(details.hasRole(RoleName.ADMIN)).isTrue();
+        assertThat(details.hasRole(RoleName.STUDENT)).isTrue();
         assertThat(details.getAuthorities())
                 .extracting(authority -> authority.getAuthority())
-                .containsExactly(ADMIN_AUTHORITY, TEACHER_AUTHORITY);
+                .containsExactly(ADMIN_AUTHORITY, STUDENT_AUTHORITY);
     }
 
     @Test
@@ -65,14 +57,14 @@ class SecurityLayerContractTests {
     @Test
     void customUserDetailsServiceNormalizesUsernameBeforeRepositoryLookup() {
         UserRepository repository = mock(UserRepository.class);
-        User persistedUser = user(PERSISTED_USER_ID, TEACHER_EMAIL);
-        when(repository.findByEmailWithRoles(TEACHER_EMAIL)).thenReturn(Optional.of(persistedUser));
+        User persistedUser = user(PERSISTED_USER_ID, ADMIN_EMAIL);
+        when(repository.findByEmailWithRoles(ADMIN_EMAIL)).thenReturn(Optional.of(persistedUser));
 
         SecurityUserDetails details = (SecurityUserDetails) new CustomUserDetailsService(repository)
-                .loadUserByUsername(TEACHER_EMAIL_WITH_IDEOGRAPHIC_SPACES);
+                .loadUserByUsername(ADMIN_EMAIL_WITH_IDEOGRAPHIC_SPACES);
 
         assertThat(details.getUserId()).isEqualTo(PERSISTED_USER_ID);
-        verify(repository).findByEmailWithRoles(TEACHER_EMAIL);
+        verify(repository).findByEmailWithRoles(ADMIN_EMAIL);
     }
 
     @Test
@@ -88,7 +80,6 @@ class SecurityLayerContractTests {
         User user = new User();
         user.setId(id);
         user.setEmail(email);
-        user.setDisplayName(DISPLAY_NAME);
         user.setPasswordHash(PASSWORD_HASH);
         user.setActive(true);
         return user;

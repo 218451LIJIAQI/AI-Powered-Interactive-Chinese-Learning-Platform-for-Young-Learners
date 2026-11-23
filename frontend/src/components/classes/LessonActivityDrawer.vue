@@ -1,38 +1,25 @@
 <template>
   <AppOverlay
     variant="drawer"
-    :open="open"
-    :title="activity ? t('lessonEditor.activities.drawerEdit') : t('lessonEditor.activities.drawerNew')"
-    :busy="busy"
     size="lg"
+    :title="t('lessonEditor.activities.heading', { number, type: typeName })"
+    :busy="busy"
     test-id="activity-drawer"
     @close="emit('close')"
   >
     <form :id="formId" class="form-grid" @submit.prevent="save">
-      <div class="form-grid two">
-        <div class="field">
-          <label class="field-label" :for="`${formId}-type`">{{ t('lessonEditor.activities.type') }}</label>
-          <select
-            :id="`${formId}-type`"
-            v-model="type"
-            class="select"
-            :disabled="Boolean(activity)"
-            data-testid="activity-type"
-          >
-            <option v-for="value in TYPES" :key="value" :value="value">{{ t(ACTIVITY_TYPE_KEYS[value]) }}</option>
-          </select>
-        </div>
-        <div class="field">
-          <label class="field-label" :for="`${formId}-stage`">{{ t('lessonEditor.activities.stage') }}</label>
-          <select :id="`${formId}-stage`" v-model="stage" class="select">
-            <option :value="null">{{ t('lessonEditor.activities.noStage') }}</option>
-            <option v-for="value in STAGES" :key="value" :value="value">{{ t(STAGE_KEYS[value]) }}</option>
-          </select>
-        </div>
+      <!-- The slot decides the type, so it shows as text, not as a choice. -->
+      <div class="field" role="group" :aria-labelledby="`${formId}-type`">
+        <span :id="`${formId}-type`" class="field-label">{{ t('lessonEditor.activities.type') }}</span>
+        <span class="lesson-activity-kind" data-testid="activity-type">
+          <IconGlyph :name="ACTIVITY_ICONS[type]" :size="16" />{{
+            t('lessonEditor.activities.fixedType', { type: typeName, number, total: LESSON_ACTIVITY_TYPES.length })
+          }}
+        </span>
       </div>
       <div class="field">
         <label class="field-label" :for="`${formId}-title`">
-          {{ t('lessonEditor.activities.activityTitle') }}<span class="required-mark" aria-hidden="true">*</span>
+          {{ t('lessonEditor.fields.title') }}<span class="required-mark" aria-hidden="true">*</span>
         </label>
         <input
           :id="`${formId}-title`"
@@ -40,109 +27,65 @@
           class="input"
           required
           maxlength="200"
+          :disabled="busy"
+          data-autofocus
           data-testid="activity-title"
         />
       </div>
 
-      <p v-if="type === 'FLASHCARDS'" class="alert alert-success">{{ t('lessonEditor.activities.flashcardsNote') }}</p>
-
-      <fieldset v-else-if="type === 'TRACING'" class="form-section">
-        <legend class="form-section-title">{{ t('lessonEditor.activities.characters') }}</legend>
-        <div v-for="(row, index) in characters" :key="index" class="lesson-editor-row">
-          <span class="lesson-editor-row-number" aria-hidden="true">{{ index + 1 }}</span>
-          <input
-            v-model="row.character"
-            class="input cjk-text"
-            maxlength="2"
-            :aria-label="`${t('lessonEditor.activities.character')} ${index + 1}`"
-          />
-          <input
-            v-model="row.pinyin"
-            class="input"
-            maxlength="40"
-            :aria-label="`${t('lessonEditor.activities.charPinyin')} ${index + 1}`"
-            :placeholder="t('lessonEditor.activities.charPinyin')"
-          />
-          <input
-            v-model="row.meaning"
-            class="input"
-            maxlength="80"
-            :aria-label="`${t('lessonEditor.activities.charMeaning')} ${index + 1}`"
-            :placeholder="t('lessonEditor.activities.charMeaning')"
-          />
+      <div class="lesson-rows-set" role="group" :aria-labelledby="`${formId}-rows`">
+        <div class="lesson-rows-head">
+          <span :id="`${formId}-rows`" class="field-label">{{ t(rowSet.label) }}</span>
           <button
+            v-if="rows.length < rowSet.max"
             type="button"
-            class="btn btn-ghost btn-icon btn-sm"
-            :disabled="characters.length === 1"
-            :aria-label="t('lessonEditor.activities.removeCharacter', { number: index + 1 })"
-            @click="characters.splice(index, 1)"
+            class="btn btn-secondary btn-sm"
+            :disabled="busy"
+            @click="rows.push(blankRow())"
           >
-            <IconGlyph name="trash" :size="16" />
+            <IconGlyph name="plus" :size="16" />{{ t(rowSet.add) }}
           </button>
         </div>
-        <button
-          v-if="characters.length < 8"
-          type="button"
-          class="btn btn-outline btn-sm"
-          @click="characters.push(blankCharacter())"
-        >
-          <IconGlyph name="plus" :size="16" />{{ t('lessonEditor.activities.addCharacter') }}
-        </button>
-      </fieldset>
-
-      <fieldset v-else class="form-section">
-        <legend class="form-section-title">{{ t('lessonEditor.activities.pairs') }}</legend>
-        <div v-for="(row, index) in pairs" :key="index" class="lesson-editor-row">
-          <span class="lesson-editor-row-number" aria-hidden="true">{{ index + 1 }}</span>
-          <input
-            v-model="row.chinese"
-            class="input cjk-text"
-            maxlength="100"
-            :aria-label="`${t('lessonEditor.activities.pairChinese')} ${index + 1}`"
-            :placeholder="t('lessonEditor.activities.pairChinese')"
-          />
-          <input
-            v-model="row.pinyin"
-            class="input"
-            maxlength="200"
-            :aria-label="`${t('lessonEditor.activities.pairPinyin')} ${index + 1}`"
-            :placeholder="t('lessonEditor.activities.pairPinyin')"
-          />
-          <input
-            v-model="row.meaning"
-            class="input"
-            maxlength="300"
-            :aria-label="`${t('lessonEditor.activities.pairMeaning')} ${index + 1}`"
-            :placeholder="t('lessonEditor.activities.pairMeaning')"
-          />
-          <button
-            type="button"
-            class="btn btn-ghost btn-icon btn-sm"
-            :disabled="pairs.length <= 2"
-            :aria-label="t('lessonEditor.activities.removePair', { number: index + 1 })"
-            @click="pairs.splice(index, 1)"
-          >
-            <IconGlyph name="trash" :size="16" />
-          </button>
+        <!-- Only flashcards can be left without rows: their learners then review the lesson's key phrases. -->
+        <p v-if="type === 'FLASHCARDS' && !rows.length" class="callout" data-testid="no-cards">
+          <IconGlyph name="info" :size="18" /><span>{{ t('lessonEditor.activities.noCards') }}</span>
+        </p>
+        <div v-else class="lesson-rows-box">
+          <div class="lesson-rows-grid is-head" aria-hidden="true">
+            <span v-for="column in columns" :key="column.key">{{ column.label }}</span>
+            <span />
+          </div>
+          <div v-for="(row, index) in rows" :key="row.id" class="lesson-rows-grid">
+            <div v-for="column in columns" :key="column.key" class="lesson-phrase-field">
+              <span class="lesson-phrase-label" aria-hidden="true">{{ column.label }}</span>
+              <input
+                v-model="row[column.key]"
+                class="input"
+                :class="{ 'cjk-text': column.key === 'chinese' }"
+                :maxlength="column.maxlength"
+                :disabled="busy"
+                :aria-label="t('lessonEditor.activities.rowField', { field: column.label, number: index + 1 })"
+              />
+            </div>
+            <button
+              type="button"
+              class="btn btn-ghost btn-icon btn-sm"
+              :disabled="busy || rows.length <= rowSet.min"
+              :aria-label="t(rowSet.remove, { number: index + 1 })"
+              @click="rows.splice(index, 1)"
+            >
+              <IconGlyph name="trash" :size="16" />
+            </button>
+          </div>
         </div>
-        <button v-if="pairs.length < 12" type="button" class="btn btn-outline btn-sm" @click="pairs.push(blankPair())">
-          <IconGlyph name="plus" :size="16" />{{ t('lessonEditor.activities.addPair') }}
-        </button>
-      </fieldset>
-      <p v-if="error" class="field-error" role="alert">{{ error }}</p>
+      </div>
     </form>
     <template #footer>
-      <button type="button" class="btn btn-ghost" :disabled="busy" @click="emit('close')">
-        {{ t('classes.cancel') }}
+      <p v-if="error" class="field-error" role="alert">{{ error }}</p>
+      <button type="button" class="btn btn-secondary" :disabled="busy" @click="emit('close')">
+        {{ t('common.cancel') }}
       </button>
-      <button
-        type="submit"
-        class="btn btn-primary"
-        :form="formId"
-        :disabled="busy || !title.trim()"
-        :aria-busy="busy"
-        data-testid="activity-save"
-      >
+      <button type="submit" class="btn btn-primary" :form="formId" :disabled="busy || !title.trim()" :aria-busy="busy">
         {{ t('lessonEditor.activities.save') }}
       </button>
     </template>
@@ -150,67 +93,127 @@
 </template>
 
 <script setup lang="ts">
-import { ref, useId, watch } from 'vue'
-
-import IconGlyph from '@/components/common/IconGlyph.vue'
-import { useLocalMessages } from '@/composables/useLocalMessages'
-import { classesMessages } from '@/plugins/classesMessages'
-import { lessonEditorMessages } from '@/plugins/lessonEditorMessages'
-import type { LearningStage } from '@/types/api'
-import type { ActivityPayload, ClassActivityType, EditorActivity, MatchPair, TraceCharacter } from '@/types/classes'
-import { ACTIVITY_TYPE_KEYS, STAGE_KEYS } from '@/utils/classes'
-import { STAGES } from '@/utils/learnLabels'
+import { computed, ref, useId } from 'vue'
 
 import AppOverlay from '@/components/common/AppOverlay.vue'
+import IconGlyph from '@/components/common/IconGlyph.vue'
+import { useLocalMessages } from '@/composables/useLocalMessages'
+import { lessonEditorMessages } from '@/plugins/lessonEditorMessages'
+import type { ActivityPayload, EditorActivity } from '@/types/adminClasses'
+import type { ClassActivityType, KeyPhrase } from '@/types/classes'
+import { ACTIVITY_ICONS } from '@/utils/classes'
+import { LESSON_ACTIVITY_TYPES } from '@/utils/lessonEditor'
 
-/** Add or edit one lesson activity: flashcards (from the key phrases), tracing characters or matching pairs. */
-const props = defineProps<{ open: boolean; activity: EditorActivity | null; busy: boolean; error: string | null }>()
+/**
+ * Add or edit one of a lesson's 3 fixed activities with its rows: flashcards' cards, tracing characters or matching
+ * pairs. The slot it opens from sets the type (A3.16). The parent mounts it for one opening, so the draft starts from
+ * the activity it is given.
+ */
+const props = defineProps<{
+  /** The slot's type: activity 1 is Flashcards, 2 Tracing, 3 Matching. */
+  type: ClassActivityType
+  /** The slot's activity, or null to add it. */
+  activity: EditorActivity | null
+  busy: boolean
+  error: string | null
+}>()
 const emit = defineEmits<{ save: [payload: ActivityPayload]; close: [] }>()
 
-const { t } = useLocalMessages({ lessonEditor: lessonEditorMessages, classes: classesMessages })
+const { t } = useLocalMessages({ lessonEditor: lessonEditorMessages })
 const formId = useId()
-const TYPES: readonly ClassActivityType[] = ['FLASHCARDS', 'TRACING', 'MATCHING']
 
-const type = ref<ClassActivityType>('FLASHCARDS')
-const title = ref('')
-const stage = ref<LearningStage | null>('GUIDED')
-const characters = ref<TraceCharacter[]>([])
-const pairs = ref<MatchPair[]>([])
-
-const blankCharacter = (): TraceCharacter => ({ character: '', pinyin: '', meaning: '' })
-const blankPair = (): MatchPair => ({ chinese: '', pinyin: '', meaning: '' })
-
-watch(
-  () => [props.open, props.activity] as const,
-  ([open, activity]) => {
-    if (!open) return
-    type.value = activity?.type ?? 'FLASHCARDS'
-    title.value = activity?.title ?? ''
-    stage.value = activity ? activity.stage : 'GUIDED'
-    characters.value = activity?.characters.length
-      ? activity.characters.map((row) => ({ ...row, meaning: row.meaning ?? '' }))
-      : [blankCharacter()]
-    pairs.value = activity?.pairs.length ? activity.pairs.map((row) => ({ ...row })) : [blankPair(), blankPair()]
+/**
+ * The rows of each activity: their wording, columns (with the server's lengths), how few and many, and how many a new
+ * activity starts with. Flashcards may have none: learners then review the lesson's key phrases.
+ */
+const ROW_SETS = {
+  FLASHCARDS: {
+    label: 'lessonEditor.activities.cards',
+    add: 'lessonEditor.activities.addCard',
+    remove: 'lessonEditor.activities.removeCard',
+    min: 0,
+    max: 20,
+    lengths: { chinese: 100, pinyin: 200, meaning: 200 },
   },
-  { immediate: true },
+  TRACING: {
+    label: 'lessonEditor.activities.characters',
+    add: 'lessonEditor.activities.addCharacter',
+    remove: 'lessonEditor.activities.removeCharacter',
+    min: 1,
+    max: 8,
+    lengths: { chinese: 4, pinyin: 40, meaning: 80 },
+  },
+  MATCHING: {
+    label: 'lessonEditor.activities.pairs',
+    add: 'lessonEditor.activities.addPair',
+    remove: 'lessonEditor.activities.removePair',
+    min: 2,
+    max: 12,
+    lengths: { chinese: 100, pinyin: 200, meaning: 300 },
+  },
+} as const
+
+interface DraftRow extends KeyPhrase {
+  id: number
+}
+
+let nextRowId = 1
+const blankRow = (): DraftRow => ({ id: nextRowId++, chinese: '', pinyin: '', meaning: '' })
+
+function savedRows(activity: EditorActivity): DraftRow[] {
+  const items = { FLASHCARDS: activity.cards, TRACING: activity.characters, MATCHING: activity.pairs }[activity.type]
+  const existing = items.map((item) => ({
+    id: nextRowId++,
+    chinese: 'character' in item ? item.character : item.chinese,
+    pinyin: item.pinyin ?? '',
+    meaning: item.meaning ?? '',
+  }))
+  const min = ROW_SETS[activity.type].min
+  while (existing.length < min) existing.push(blankRow())
+  return existing
+}
+
+const typeName = computed(() => t(`practiceType.${props.type}`))
+/** The slot's place: activity 1, 2 or 3. */
+const number = computed(() => LESSON_ACTIVITY_TYPES.indexOf(props.type) + 1)
+const title = ref(props.activity?.title ?? '')
+const rowSet = computed(() => ROW_SETS[props.type])
+const columns = computed(() => {
+  const { lengths } = rowSet.value
+  return [
+    {
+      key: 'chinese',
+      label: t(props.type === 'TRACING' ? 'lessonEditor.fields.character' : 'lessonEditor.fields.chinese'),
+      maxlength: lengths.chinese,
+    },
+    { key: 'pinyin', label: t('lessonEditor.fields.pinyin'), maxlength: lengths.pinyin },
+    { key: 'meaning', label: t('lessonEditor.fields.meaning'), maxlength: lengths.meaning },
+  ] as const
+})
+// An activity keeps its rows (an older Flashcards activity has none); a new one starts with the rows to fill.
+const rows = ref<DraftRow[]>(
+  props.activity ? savedRows(props.activity) : Array.from({ length: Math.max(1, rowSet.value.min) }, blankRow),
 )
 
 function save(): void {
-  const payload: ActivityPayload = { type: type.value, title: title.value.trim(), stage: stage.value }
-  if (type.value === 'TRACING') {
-    payload.characters = characters.value
-      .map((row) => ({
-        character: row.character.trim(),
-        pinyin: row.pinyin.trim(),
-        meaning: row.meaning?.trim() || null,
-      }))
-      .filter((row) => row.character)
+  if (props.busy || !title.value.trim()) return
+  const payload: ActivityPayload = {
+    type: props.type,
+    title: title.value.trim(),
   }
-  if (type.value === 'MATCHING') {
-    payload.pairs = pairs.value
-      .map((row) => ({ chinese: row.chinese.trim(), pinyin: row.pinyin.trim(), meaning: row.meaning.trim() }))
-      .filter((row) => row.chinese || row.meaning)
+  // Leave out untouched rows, but submit partial ones so validation can tell the editor what is missing.
+  const typed = rows.value
+    .map((row) => ({ chinese: row.chinese.trim(), pinyin: row.pinyin.trim(), meaning: row.meaning.trim() }))
+    .filter((row) => row.chinese || row.pinyin || row.meaning)
+  if (props.type === 'TRACING') {
+    payload.characters = typed.map((row) => ({
+      character: row.chinese,
+      pinyin: row.pinyin,
+      meaning: row.meaning || null,
+    }))
   }
+  if (props.type === 'MATCHING') payload.pairs = typed
+  if (props.type === 'FLASHCARDS') payload.cards = typed
   emit('save', payload)
 }
 </script>

@@ -1,13 +1,13 @@
 package com.example.aichinese.repository;
 
-import com.example.aichinese.entity.MatchingGame;
 import java.util.Collection;
 import java.util.List;
 
-public interface MatchingGameRepository extends PracticeActivityRepository<MatchingGame> {
+import org.springframework.data.jpa.repository.JpaRepository;
 
-    /** The activities of a class lesson, in lesson order. */
-    List<MatchingGame> findByLessonIdOrderByLessonPositionAscIdAsc(Long lessonId);
+import com.example.aichinese.entity.MatchingGame;
+
+public interface MatchingGameRepository extends JpaRepository<MatchingGame, Long> {
 
     List<MatchingGame> findByLessonIdIn(Collection<Long> lessonIds);
 }

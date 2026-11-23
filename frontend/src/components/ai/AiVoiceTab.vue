@@ -1,18 +1,47 @@
 <template>
-  <div class="ai-stage">
-    <section class="ai-side" :aria-labelledby="`${baseId}-form`">
-      <header class="ai-side-head">
-        <h2 :id="`${baseId}-form`" class="ai-side-title">{{ t('aiHelper.checkTitle') }}</h2>
-      </header>
+  <div class="ai-voice">
+    <AiVoiceResult
+      v-if="result"
+      ref="resultView"
+      :result="result"
+      :reported="reportedIds.has(result.check.id)"
+      :ai-notice="aiNotice"
+      @report="report"
+      @try-again="tryAgain"
+    />
 
-      <form class="ai-check-fields" @submit.prevent="submit">
-        <SegmentedControl
-          :model-value="type"
-          :options="checkTypeOptions"
-          :label="t('aiHelper.checkType')"
-          :disabled="checking"
-          @update:model-value="setType"
-        />
+    <section v-else class="panel" :aria-labelledby="`${baseId}-form`">
+      <form class="ai-check-form" @submit.prevent="submit">
+        <h2 :id="`${baseId}-form`" class="card-title">{{ t('aiHelper.checkTitle') }}</h2>
+
+        <div class="ai-check-row">
+          <div class="field">
+            <span class="field-label" aria-hidden="true">{{ t('aiHelper.checkType') }}</span>
+            <SegmentedControl
+              :model-value="type"
+              :options="checkTypeOptions"
+              :label="t('aiHelper.checkType')"
+              :disabled="locked"
+              @update:model-value="setType"
+            />
+          </div>
+          <div class="field">
+            <label class="field-label" :for="`${baseId}-lesson`">{{ t('aiHelper.lessonOptional') }}</label>
+            <select :id="`${baseId}-lesson`" v-model="lessonId" class="select" :disabled="locked">
+              <option :value="null">{{ t('aiHelper.noLesson') }}</option>
+              <option v-for="lesson in lessons" :key="lesson.id" :value="lesson.id">{{ lesson.title }}</option>
+            </select>
+            <p v-if="lessonsResource.error.value" class="field-error" role="alert">
+              {{ lessonsResource.error.value }}
+              <button class="btn btn-link btn-sm" type="button" @click="lessonsResource.reload">
+                {{ t('common.retry') }}
+              </button>
+            </p>
+            <p v-else-if="!lessonsResource.loading.value && !lessons.length" class="field-hint">
+              {{ t('aiHelper.noLessonsHint') }}
+            </p>
+          </div>
+        </div>
 
         <div class="field">
           <label class="field-label" :for="`${baseId}-target`">
@@ -20,403 +49,363 @@
           </label>
           <input
             :id="`${baseId}-target`"
+            ref="targetInput"
             v-model="target"
-            class="input cjk-text ai-check-target-input"
+            class="input cjk-text"
             lang="zh-CN"
             required
             autocomplete="off"
             :maxlength="MAX_PRACTICE_TARGET_LENGTH"
-            :placeholder="type === 'RECORDING' ? '谢谢' : '好'"
+            :disabled="locked"
+            :placeholder="TARGET_FIELD[type].placeholder"
             :aria-describedby="`${baseId}-target-hint`"
           />
-          <p :id="`${baseId}-target-hint`" class="field-hint">
-            {{ type === 'RECORDING' ? t('aiHelper.targetHintRecording') : t('aiHelper.targetHintHandwriting') }}
-          </p>
+          <p :id="`${baseId}-target-hint`" class="field-hint">{{ t(TARGET_FIELD[type].hintKey) }}</p>
+          <div v-if="phraseChips" class="ai-topics" role="group" :aria-label="phraseChips.label">
+            <span class="ai-topics-label" aria-hidden="true">{{ phraseChips.label }}</span>
+            <div lang="zh-CN">
+              <FilterChips
+                :model-value="target.trim()"
+                :options="phraseChips.options"
+                size="sm"
+                :disabled="locked"
+                @update:model-value="target = $event"
+              />
+            </div>
+          </div>
         </div>
 
-        <template v-if="type === 'RECORDING'">
-          <div v-if="recorder.supported" class="ai-recorder" data-testid="ai-recorder">
+        <div v-if="type === 'RECORDING'" class="field">
+          <span class="field-label">{{ t('aiHelper.recordInBrowser') }}</span>
+          <div v-if="recorder.supported" class="ai-recorder">
             <button
               v-if="!recorder.isBusy.value"
-              class="ai-record"
+              class="btn btn-secondary"
               type="button"
-              :disabled="!typeAvailable || checking"
-              @click="startRecording"
+              :disabled="!typeAvailable || Boolean(blocked) || checking"
+              data-testid="ai-record"
+              @click="mic.request"
             >
-              <span class="ai-record-icon" aria-hidden="true"><IconGlyph name="mic" :size="20" /></span>
+              <IconGlyph name="mic" :size="16" />
               {{ recorder.recording.value ? t('aiHelper.recordAgain') : t('aiHelper.startRecording') }}
             </button>
-            <button v-else class="ai-record is-recording" type="button" @click="recorder.stop()">
-              <span class="ai-record-icon" aria-hidden="true"><IconGlyph name="stop" :size="20" /></span>
-              {{ t('aiHelper.stopRecording', { time: formatClock(recorder.elapsedSeconds.value) }) }}
+            <button
+              v-else
+              class="btn btn-danger-soft"
+              type="button"
+              data-testid="ai-record-stop"
+              @click="recorder.stop()"
+            >
+              <IconGlyph name="stop" :size="16" />
+              {{ t('aiHelper.stop') }}
             </button>
-            <p class="ai-recorder-status" role="status">{{ recorderStatus }}</p>
+            <p class="field-hint" role="status" data-testid="ai-recorder-status">
+              <!-- The clock is for the eye: a screen reader is not told every second. -->
+              <template v-if="recorder.isRecording.value">
+                {{ t('aiHelper.recordingNow') }}
+                <span aria-hidden="true">{{ formatClock(recorder.elapsedSeconds.value) }}</span>
+                {{ recordingLine }}
+              </template>
+              <template v-else>{{ recorderStatus }}</template>
+            </p>
           </div>
           <p v-else class="callout is-compact">
             <IconGlyph name="info" :size="16" /> {{ t('aiHelper.recorderUnsupported') }}
           </p>
-          <div v-if="recorder.previewUrl.value && !chosenFile" class="ai-recording">
-            <p class="ai-recording-name">
-              <strong>{{ t('aiHelper.yourRecording') }}</strong>
-              <small>{{ formatClock(recorder.elapsedSeconds.value) }}</small>
-            </p>
+          <div v-if="recorder.previewUrl.value && (!chosenFile || chosenFileError)" class="ai-recording">
+            <IconGlyph name="audio" :size="18" />
+            <div class="row-list-copy">
+              <strong class="ai-recording-name">{{ t('aiHelper.yourRecording') }}</strong>
+              <span class="row-list-meta">
+                {{ recorder.recording.value?.name }} · {{ formatClock(recorder.elapsedSeconds.value) }}
+              </span>
+            </div>
             <audio
+              ref="previewAudio"
               :src="recorder.previewUrl.value"
-              controls
               preload="metadata"
-              :aria-label="t('aiHelper.yourRecording')"
+              @play="previewPlaying = true"
+              @pause="previewPlaying = false"
+              @ended="previewPlaying = false"
             />
-            <button class="btn btn-ghost btn-sm" type="button" @click="recorder.reset()">
-              <IconGlyph name="trash" :size="16" />
-              {{ t('aiHelper.remove') }}
-            </button>
+            <div class="btn-group is-sm">
+              <button class="btn btn-ghost btn-sm" type="button" :disabled="checking" @click="togglePreview">
+                <IconGlyph :name="previewPlaying ? 'stop' : 'play'" :size="16" />
+                {{ previewPlaying ? t('aiHelper.pause') : t('aiHelper.play') }}
+              </button>
+              <button class="btn btn-ghost btn-sm" type="button" :disabled="checking" @click="removeRecording">
+                <IconGlyph name="trash" :size="16" />
+                {{ t('aiHelper.remove') }}
+              </button>
+            </div>
           </div>
-        </template>
+          <p v-if="recordingError" class="field-error" role="alert">
+            <IconGlyph name="alert" :size="16" />
+            {{ recordingError }}
+          </p>
+        </div>
 
         <div class="field">
           <label class="field-label" :for="`${baseId}-file`">
             {{ type === 'RECORDING' ? t('aiHelper.chooseAudio') : t('aiHelper.choosePhoto') }}
           </label>
-          <input
-            :id="`${baseId}-file`"
-            ref="fileInput"
-            class="input"
-            type="file"
-            :accept="type === 'RECORDING' ? UPLOAD_ACCEPT.audio : UPLOAD_ACCEPT.image"
-            :aria-invalid="Boolean(fileError) || undefined"
-            :aria-describedby="fileError ? `${baseId}-file-error` : `${baseId}-file-hint`"
-            @change="chooseFile"
-          />
-          <p :id="`${baseId}-file-hint`" class="field-hint">
-            {{ type === 'RECORDING' ? t('aiHelper.audioFileHint') : t('aiHelper.photoFileHint') }}
+          <div class="ai-file-row">
+            <label class="ai-file" :class="{ 'is-invalid': chosenFileError }">
+              <input
+                :id="`${baseId}-file`"
+                ref="fileInput"
+                class="sr-only"
+                type="file"
+                :accept="uploadAccept(type === 'RECORDING' ? 'audio' : 'image')"
+                :disabled="locked"
+                :aria-invalid="Boolean(chosenFileError) || undefined"
+                :aria-describedby="chosenFileError ? `${baseId}-file-error` : `${baseId}-file-hint`"
+                @change="chooseFile"
+              />
+              <span class="btn btn-sunken btn-sm" aria-hidden="true">
+                <IconGlyph name="upload" :size="16" />
+                {{ t('aiHelper.chooseFile') }}
+              </span>
+              <span class="ai-file-name">{{ fileLabel ?? t('aiHelper.noFileChosen') }}</span>
+            </label>
+            <button
+              v-if="fileLabel"
+              class="btn btn-ghost btn-icon btn-sm"
+              type="button"
+              :aria-label="t('aiHelper.remove')"
+              :disabled="checking"
+              @click="clearFile"
+            >
+              <IconGlyph name="close" :size="16" />
+            </button>
+          </div>
+          <p v-if="chosenFileError" :id="`${baseId}-file-error`" class="field-error" role="alert">
+            <IconGlyph name="alert" :size="16" />
+            {{ chosenFileError }}
           </p>
-          <p v-if="fileError" :id="`${baseId}-file-error`" class="field-error" role="alert">{{ fileError }}</p>
-        </div>
-        <div v-if="chosenFile" class="ai-recording">
+          <p :id="`${baseId}-file-hint`" class="field-hint">{{ fileHint }}</p>
+          <p v-if="type === 'HANDWRITING'" class="field-hint">{{ t('aiHelper.photoGuidance') }}</p>
           <img v-if="photoUrl" class="ai-photo-preview" :src="photoUrl" :alt="t('aiHelper.photoPreview')" />
-          <p class="ai-recording-name">
-            <strong>{{ chosenFile.name }}</strong>
-            <small>{{ formatFileSize(chosenFile.size) }}</small>
-          </p>
-          <button class="btn btn-ghost btn-sm" type="button" @click="clearFile">
-            <IconGlyph name="trash" :size="16" />
-            {{ t('aiHelper.remove') }}
-          </button>
         </div>
 
-        <div class="field">
-          <label class="field-label" :for="`${baseId}-lesson`">{{ t('aiHelper.lessonOptional') }}</label>
-          <select
-            :id="`${baseId}-lesson`"
-            v-model="lessonId"
-            class="select"
-            :aria-describedby="`${baseId}-lesson-hint`"
-          >
-            <option :value="null">{{ t('aiHelper.noLesson') }}</option>
-            <option v-for="lesson in lessons" :key="lesson.id" :value="lesson.id">{{ lesson.title }}</option>
-          </select>
-          <p :id="`${baseId}-lesson-hint`" class="field-hint">
-            {{ lessons.length ? t('aiHelper.lessonHint') : t('aiHelper.noLessonsHint') }}
-          </p>
-        </div>
-
-        <p v-if="!blocked && !typeAvailable" class="callout is-compact is-warning">
+        <p v-if="status && !blocked && !typeAvailable" class="callout is-compact is-warning">
           {{ type === 'RECORDING' ? t('aiHelper.recordingUnavailable') : t('aiHelper.handwritingUnavailable') }}
         </p>
         <p v-if="error" class="callout is-compact is-danger" role="alert">{{ error }}</p>
 
-        <div class="ai-check-submit">
+        <p v-if="type === 'RECORDING' && typeAvailable" class="field-hint">{{ t('aiHelper.recordingDataNotice') }}</p>
+
+        <div class="card-footer ai-check-submit">
+          <p v-if="checking" class="field-hint ai-check-status" role="status">{{ checkingLine }}</p>
           <button class="btn btn-primary" type="submit" :disabled="!canCheck" :aria-busy="checking">
             <IconGlyph v-if="!checking" name="send" :size="16" />
-            {{ t('aiHelper.checkWithSparkbot') }}
+            {{
+              checking
+                ? t('aiHelper.checking')
+                : t(type === 'RECORDING' ? 'aiHelper.checkPronunciation' : 'aiHelper.checkWithSparkbot')
+            }}
           </button>
-          <p class="field-hint">{{ t('aiHelper.checkSubmitHint') }}</p>
         </div>
       </form>
     </section>
 
-    <div class="ai-output">
-      <StatePanel
-        v-if="checking"
-        tone="loading"
-        :title="t('aiHelper.checking')"
-        :message="type === 'RECORDING' ? t('aiHelper.checkingRecording') : t('aiHelper.checkingPhoto')"
-      />
-      <section
-        v-else-if="result"
-        ref="resultEl"
-        class="ai-sheet ai-check-result"
-        :aria-labelledby="`${baseId}-result`"
-        data-testid="ai-check-result"
-      >
-        <header class="ai-result-head">
-          <div class="ai-result-heading">
-            <p class="ai-overline">{{ t('aiHelper.yourScore') }}</p>
-            <h2 :id="`${baseId}-result`" class="ai-result-title">
-              {{ kindLabel(result.type) }} · <span class="cjk-text" lang="zh-CN">{{ result.targetText }}</span>
-            </h2>
-          </div>
-          <div class="ai-result-tools">
-            <AiResultLabel />
-          </div>
-        </header>
-        <AiCheckScore :check="result" :meta="checkMeta(result, true)" />
-        <AiNotice :text="aiNotice" />
-        <p v-if="notice" class="callout is-compact" role="status">{{ notice }}</p>
-        <div class="ai-result-actions">
-          <button class="btn btn-primary" type="button" @click="tryAgain">
-            <IconGlyph name="retry" :size="16" />
-            {{ t('aiHelper.tryAgain') }}
-          </button>
-          <button v-if="!reportedIds.has(result.id)" class="btn btn-ghost" type="button" @click="report(result)">
-            <IconGlyph name="flag" :size="16" />
-            {{ t('aiHelper.reportScore') }}
-          </button>
-          <span v-else class="ai-reported"><IconGlyph name="status" :size="16" />{{ t('aiHelper.reported') }}</span>
-        </div>
-      </section>
-
-      <section class="ai-sheet ai-checks" :aria-labelledby="`${baseId}-recent`">
-        <header class="ai-checks-head">
-          <h2 :id="`${baseId}-recent`" class="ai-recap-label">{{ t('aiHelper.recentChecks') }}</h2>
-          <p class="ai-checks-caption">{{ t('aiHelper.recentChecksSubtitle') }}</p>
-        </header>
-        <StatePanel
-          v-if="checksResource.loading.value"
-          tone="loading"
-          :title="t('aiHelper.checksLoading')"
-          :message="t('aiHelper.checksLoadingHint')"
-          :skeleton="false"
-        />
-        <StatePanel
-          v-else-if="checksResource.error.value && !checks.length"
-          tone="error"
-          icon="alert"
-          :title="t('aiHelper.checksError')"
-          :message="checksResource.error.value"
-        >
-          <template #actions>
-            <button class="btn btn-secondary btn-sm" type="button" @click="checksResource.reload">
-              {{ t('aiHelper.retry') }}
-            </button>
-          </template>
-        </StatePanel>
-        <ul v-else-if="checks.length" class="ai-check-list">
-          <li v-for="check in checks" :key="check.id" class="ai-check-item">
-            <button
-              class="ai-check-open"
-              type="button"
-              :aria-label="t('aiHelper.openCheck', { kind: kindLabel(check.type), target: check.targetText })"
-              @click="openCheck = check"
-            >
-              <span class="ai-check-kind" aria-hidden="true">
-                <IconGlyph :name="check.type === 'RECORDING' ? 'mic' : 'pen'" :size="16" />
-              </span>
-              <span class="ai-check-item-copy">
-                <span class="ai-check-item-zh cjk-text" lang="zh-CN">{{ check.targetText }}</span>
-                <small>{{ kindLabel(check.type) }} · {{ checkMeta(check, false) }}</small>
-              </span>
-              <span class="ai-check-item-score">{{ t('aiHelper.outOf100', { score: check.score }) }}</span>
-              <IconGlyph name="chevronRight" :size="16" />
-            </button>
-          </li>
-        </ul>
-        <StatePanel
-          v-else
-          tone="empty"
-          icon="mic"
-          :title="t('aiHelper.noChecks')"
-          :message="t('aiHelper.noChecksHint')"
-        />
-        <PaginationBar
-          v-if="totalPages > 1"
-          :current-page="checksPage + 1"
-          :total-pages="totalPages"
-          :label="t('aiHelper.recentChecks')"
-          @update:current-page="goToPage($event - 1)"
-        />
-
-        <details class="ai-how">
-          <summary>
-            <IconGlyph class="ai-disclosure" name="chevronDown" :size="16" />
-            {{ t('aiHelper.howScoring') }}
-          </summary>
-          <ul class="ai-how-list">
-            <li><IconGlyph name="ear" :size="16" />{{ t('aiHelper.howRecording') }}</li>
-            <li><IconGlyph name="pen" :size="16" />{{ t('aiHelper.howHandwriting') }}</li>
-            <li><IconGlyph name="star" :size="16" />{{ t('aiHelper.howNoXp') }}</li>
-            <li><IconGlyph name="lock" :size="16" />{{ t('aiHelper.howPrivate') }}</li>
-            <li><IconGlyph name="flag" :size="16" />{{ t('aiHelper.howReport') }}</li>
-          </ul>
-        </details>
-      </section>
-    </div>
+    <AiPracticeCheckHistory
+      ref="historyRef"
+      :viewing-check-id="result?.check.id ?? null"
+      :reported-ids="reportedIds"
+      :ai-notice="aiNotice"
+      :drawer-suppressed="Boolean(reportTarget)"
+      @report="report"
+      @deleted="onCheckDeleted"
+      @toast="(message, action) => emit('toast', message, action)"
+    />
   </div>
 
-  <AppOverlay
-    v-if="openCheck && !confirmDelete && !reportTarget"
-    size="lg"
-    :title="t('aiHelper.checkDetailTitle', { kind: kindLabel(openCheck.type), target: openCheck.targetText })"
-    @close="openCheck = null"
-  >
-    <div class="ai-check-detail">
-      <dl class="kv-list">
-        <div>
-          <dt>{{ t('aiHelper.checkType') }}</dt>
-          <dd>{{ openCheck.type === 'RECORDING' ? t('aiHelper.recording') : t('aiHelper.handwritingPhoto') }}</dd>
-        </div>
-        <div>
-          <dt>{{ t('aiHelper.lesson') }}</dt>
-          <dd>{{ openCheck.lessonTitle || t('aiHelper.noLesson') }}</dd>
-        </div>
-        <div>
-          <dt>{{ t('aiHelper.checked') }}</dt>
-          <dd>{{ formatDateTime(openCheck.checkedAt) }}</dd>
-        </div>
-      </dl>
-      <AiCheckScore :check="openCheck" :meta="t('aiHelper.practiceScoreShort')" />
-      <p v-if="detailError" class="callout is-compact is-danger" role="alert">{{ detailError }}</p>
-    </div>
-    <template #footer>
-      <button class="btn btn-danger-soft" type="button" @click="confirmDelete = true">
-        <IconGlyph name="trash" :size="16" />
-        {{ t('aiHelper.delete') }}
-      </button>
-      <button v-if="!reportedIds.has(openCheck.id)" class="btn btn-secondary" type="button" @click="report(openCheck)">
-        <IconGlyph name="flag" :size="16" />
-        {{ t('aiHelper.reportScore') }}
-      </button>
-      <button class="btn btn-primary" type="button" @click="openCheck = null">{{ t('aiHelper.close') }}</button>
-    </template>
-  </AppOverlay>
   <ConfirmDialog
-    v-if="openCheck && confirmDelete"
-    tone="danger"
-    :busy="deleting"
-    :title="t('aiHelper.deleteCheckTitle')"
-    :message="t('aiHelper.deleteCheckMessage', { kind: kindLabel(openCheck.type), target: openCheck.targetText })"
-    :confirm-label="t('aiHelper.deleteCheckConfirm')"
-    @confirm="deleteCheck(openCheck)"
-    @cancel="confirmDelete = false"
+    v-if="mic.asking.value"
+    :title="t('aiHelper.micAskTitle')"
+    :message="t('aiHelper.micAskVoice')"
+    :confirm-label="t('common.allowMicrophone')"
+    :cancel-label="t('common.notNow')"
+    @confirm="mic.confirm"
+    @cancel="mic.cancel"
   />
-  <AiReportDialog v-if="reportTarget" :target="reportTarget" @close="reportTarget = null" @sent="onReported" />
+  <AiReportDialog
+    v-if="reportTarget"
+    :payload="reportTarget.payload"
+    :title="t(reportTarget.titleKey)"
+    :subtitle="reportTarget.leadKey ? t(reportTarget.leadKey) : undefined"
+    :attached="t(reportTarget.attachedKey)"
+    @close="reportTarget = null"
+    @sent="onReported"
+  />
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onDeactivated, reactive, ref, shallowRef, useId, watch } from 'vue'
 
 import { aiHelperApi } from '@/api/ai'
-import SegmentedControl, { type SegmentedOption } from '@/components/common/SegmentedControl.vue'
-import IconGlyph from '@/components/common/IconGlyph.vue'
-import PaginationBar from '@/components/common/PaginationBar.vue'
-import StatePanel from '@/components/common/StatePanel.vue'
-import { useAudioRecorder } from '@/composables/useAudioRecorder'
-import { useLocalMessages } from '@/composables/useLocalMessages'
-import { useResource, useServerPage } from '@/composables/useResource'
-import { aiHelperMessages } from '@/plugins/aiHelperMessages'
-import { useUiStore } from '@/stores/ui'
-import type { AiHelperStatus, PracticeCheck, PracticeCheckType } from '@/types/ai'
-import { resolveApiError } from '@/utils/apiError'
-import { formatClock, formatDateTime, formatFileSize } from '@/utils/format'
-import {
-  MAX_PRACTICE_TARGET_LENGTH,
-  MAX_PRACTICE_UPLOAD_BYTES,
-  practiceFileIssue,
-  UPLOAD_ACCEPT,
-} from '@/utils/practiceUpload'
-import { localizedServerMessage } from '@/utils/serverMessages'
-
-import AiCheckScore from './AiCheckScore.vue'
+import { getAuthSessionVersion } from '@/api/http'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
-import AppOverlay from '@/components/common/AppOverlay.vue'
-import AiNotice from './AiNotice.vue'
-import AiReportDialog from './AiReportDialog.vue'
-import AiResultLabel from './AiResultLabel.vue'
-import { revealResult, type AiBlockedReason, type AiReportTarget } from './aiHelper'
+import FilterChips from '@/components/common/FilterChips.vue'
+import IconGlyph from '@/components/common/IconGlyph.vue'
+import SegmentedControl, { type SegmentedOption } from '@/components/common/SegmentedControl.vue'
+import { useAudioRecorder } from '@/composables/useAudioRecorder'
+import { useIsUnmounted } from '@/composables/useIsUnmounted'
+import { useLocalMessages } from '@/composables/useLocalMessages'
+import { useMicPermission } from '@/composables/useMicPermission'
+import { useResource } from '@/composables/useResource'
+import { aiHelperMessages } from '@/plugins/aiHelperMessages'
+import { aiVoiceMessages } from '@/plugins/aiVoiceMessages'
+import { appLocale } from '@/plugins/i18n'
+import type { AiHelperStatus, PracticeCheck, PracticeCheckLesson, PracticeCheckType } from '@/types/ai'
+import { resolveApiError } from '@/utils/apiError'
+import { formatClock, formatFileSize } from '@/utils/format'
+import { MAX_PRACTICE_TARGET_LENGTH } from '@/utils/practiceUpload'
+import { serverMessageOr } from '@/utils/serverMessages'
+import { uploadAccept, uploadFileIssue } from '@/utils/uploadFormat'
 
-/**
- * Pronunciation & handwriting: what to check on the left (type, the target text, a recording made here or a chosen
- * file or photo, an optional lesson), the score and Recent checks on the right. SparkBot scores the file for the
- * student only; it is sent once and not kept, and Recent checks keep only the result. Teachers and admins never see
- * these checks.
- */
+import AiPracticeCheckHistory from './AiPracticeCheckHistory.vue'
+import AiReportDialog from './AiReportDialog.vue'
+import AiVoiceResult, { type PracticeCheckView } from './AiVoiceResult.vue'
+import '@/styles/ai-voice.css'
+import type { AiBlockedReason, AiReportTarget } from './aiHelper'
+
 const props = defineProps<{
   blocked: AiBlockedReason
   status: AiHelperStatus | null
   aiNotice: string
 }>()
-const emit = defineEmits<{ used: []; reported: [] }>()
+const emit = defineEmits<{
+  used: []
+  reported: []
+  toast: [message: string, action?: { label: string; run: () => void }]
+}>()
 
-const PAGE_SIZE = 5
-const { t } = useLocalMessages({ aiHelper: aiHelperMessages })
-const ui = useUiStore()
+const { t } = useLocalMessages({ aiHelper: [aiHelperMessages, aiVoiceMessages] })
 const baseId = useId()
+const isUnmounted = useIsUnmounted()
 const recorder = useAudioRecorder()
+const mic = useMicPermission(startRecording)
+
+const TARGET_FIELD: Readonly<Record<PracticeCheckType, { placeholder: string; hintKey: string }>> = {
+  RECORDING: { placeholder: '谢谢', hintKey: 'aiHelper.targetHintRecording' },
+  HANDWRITING: { placeholder: '好', hintKey: 'aiHelper.targetHintHandwriting' },
+}
 
 const type = ref<PracticeCheckType>('RECORDING')
 const checkTypeOptions = computed<SegmentedOption<PracticeCheckType>[]>(() => [
-  { value: 'RECORDING', label: t('aiHelper.recording') },
-  { value: 'HANDWRITING', label: t('aiHelper.handwriting') },
+  { value: 'RECORDING', label: t('aiHelper.recording'), icon: 'mic' },
+  { value: 'HANDWRITING', label: t('aiHelper.handwriting'), icon: 'pen' },
 ])
 const lessonId = ref<number | null>(null)
 const target = ref('')
-const chosenFile = ref<File | null>(null)
-const chosenDuration = ref<number | null>(null)
+const targetInput = ref<HTMLInputElement | null>(null)
+const chosenFile = shallowRef<File | null>(null)
 const photoUrl = ref<string | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
-const fileError = ref<string | null>(null)
+const previewAudio = ref<HTMLAudioElement | null>(null)
+const previewPlaying = ref(false)
 const error = ref<string | null>(null)
-const notice = ref<string | null>(null)
 const checking = ref(false)
-const result = ref<PracticeCheck | null>(null)
-const openCheck = ref<PracticeCheck | null>(null)
-const confirmDelete = ref(false)
-const deleting = ref(false)
-const detailError = ref<string | null>(null)
+const result = shallowRef<PracticeCheckView | null>(null)
 const reportTarget = ref<AiReportTarget | null>(null)
-const reportedIds = ref(new Set<number>())
-const checksPage = ref(0)
-const resultEl = ref<HTMLElement | null>(null)
+const reportedIds = reactive(new Set<number>())
+const resultView = ref<InstanceType<typeof AiVoiceResult> | null>(null)
+const historyRef = ref<InstanceType<typeof AiPracticeCheckHistory> | null>(null)
 
-const lessonsResource = useResource(() => aiHelperApi.practiceCheckLessons())
-const lessons = computed(() => lessonsResource.data.value ?? [])
-const checksResource = useResource(() => aiHelperApi.practiceChecks(checksPage.value, PAGE_SIZE))
-const { items: checks, totalPages, goToPage } = useServerPage(checksResource, checksPage)
+const lessonsResource = useResource(aiHelperApi.practiceCheckLessons)
+const lessons = computed<PracticeCheckLesson[]>(() => lessonsResource.data.value ?? [])
 
 const typeAvailable = computed(() =>
   type.value === 'RECORDING'
     ? Boolean(props.status?.speechCheckAvailable)
     : Boolean(props.status?.handwritingCheckAvailable),
 )
-const upload = computed<{ file: File; duration: number | null } | null>(() => {
-  if (chosenFile.value) return { file: chosenFile.value, duration: chosenDuration.value }
-  if (type.value === 'RECORDING' && recorder.recording.value) {
-    return { file: recorder.recording.value, duration: recorder.elapsedSeconds.value || null }
+const locked = computed(() => checking.value || recorder.isBusy.value)
+
+const phraseChips = computed(() => {
+  const lesson = lessons.value.find((item) => item.id === lessonId.value)
+  if (!lesson) return null
+  const texts = lesson.phrases.map((phrase) => phrase.chinese.trim()).filter(Boolean)
+  if (!texts.length) return null
+  return {
+    label: t('aiHelper.phrasesFrom', { lesson: lesson.title }),
+    options: [...new Set(texts)].map((text) => ({ value: text, label: text })),
   }
-  return null
 })
+const upload = computed(() => chosenFile.value ?? (type.value === 'RECORDING' ? recorder.recording.value : null))
+const maxBytes = computed(() =>
+  type.value === 'RECORDING' ? props.status?.audioUploadMaxBytes : props.status?.imageUploadMaxBytes,
+)
+const fileHint = computed(() => {
+  const audio = type.value === 'RECORDING'
+  if (maxBytes.value === undefined) return t(audio ? 'aiHelper.audioFormats' : 'aiHelper.photoFormats')
+  return t(audio ? 'aiHelper.audioFileHint' : 'aiHelper.photoFileHint', { max: formatFileSize(maxBytes.value) })
+})
+const fileLabel = computed(() =>
+  chosenFile.value ? `${chosenFile.value.name} · ${formatFileSize(chosenFile.value.size)}` : null,
+)
+
+function formatUploadIssue(file: File): string | null {
+  const issue = uploadFileIssue(file, type.value === 'RECORDING' ? 'audio' : 'image', maxBytes.value)
+  if (!issue) return null
+  if (issue === 'fileTooLarge') {
+    return t('aiHelper.fileTooLarge', { size: formatFileSize(file.size), max: formatFileSize(maxBytes.value) })
+  }
+  if (issue === 'fileEmpty') return t('aiHelper.fileEmpty')
+  return type.value === 'RECORDING' ? t('aiHelper.audioWrongType') : t('aiHelper.photoWrongType')
+}
+
+const chosenFileError = computed(() => (chosenFile.value ? formatUploadIssue(chosenFile.value) : null))
+const recordingError = computed(() =>
+  !chosenFile.value && type.value === 'RECORDING' && recorder.recording.value
+    ? formatUploadIssue(recorder.recording.value)
+    : null,
+)
+const fileError = computed(() => chosenFileError.value ?? recordingError.value)
 const canCheck = computed(
   () =>
-    !props.blocked && typeAvailable.value && !checking.value && Boolean(target.value.trim()) && Boolean(upload.value),
+    !props.blocked &&
+    typeAvailable.value &&
+    !locked.value &&
+    !!target.value.trim() &&
+    !!upload.value &&
+    !fileError.value,
 )
+
+watch(recorder.previewUrl, () => {
+  previewPlaying.value = false
+})
+watch(
+  () => (type.value === 'HANDWRITING' && !chosenFileError.value ? chosenFile.value : null),
+  (photo) => {
+    revokePhoto()
+    if (photo) photoUrl.value = URL.createObjectURL(photo)
+  },
+)
+
+const recordingLine = computed(() => {
+  const say = target.value.trim()
+  return [say ? t('aiHelper.recordingSay', { target: say }) : '', t('aiHelper.recordingStays')]
+    .filter(Boolean)
+    .join(' ')
+})
+
 const recorderStatus = computed(() => {
-  if (recorder.isRecording.value) return t('aiHelper.recordingNow')
-  if (recorder.status.value === 'denied') return t('aiHelper.micDenied')
+  if (recorder.status.value === 'denied') return t('aiHelper.recorderDenied')
   if (recorder.status.value === 'error') return t('aiHelper.recorderFailed')
   return t('aiHelper.recordingStaysHere')
 })
 
-function kindLabel(kind: PracticeCheckType): string {
-  return kind === 'RECORDING' ? t('aiHelper.recording') : t('aiHelper.handwriting')
-}
-
-function checkMeta(check: PracticeCheck, justNow: boolean): string {
-  const when = justNow ? t('aiHelper.checkedJustNow') : formatDateTime(check.checkedAt)
-  return [check.lessonTitle, when].filter(Boolean).join(' · ')
-}
+const checkingLine = computed(() => {
+  if (type.value !== 'RECORDING') return t('aiHelper.checkingPhoto')
+  return chosenFile.value ? t('aiHelper.checkingFile') : t('aiHelper.checkingRecording')
+})
 
 function setType(next: PracticeCheckType): void {
   if (next === type.value) return
+  mic.cancel()
   type.value = next
   clearFile()
   recorder.reset()
@@ -430,139 +419,134 @@ function revokePhoto(): void {
 
 function clearFile(): void {
   chosenFile.value = null
-  chosenDuration.value = null
-  fileError.value = null
-  revokePhoto()
   if (fileInput.value) fileInput.value.value = ''
+  error.value = null
 }
 
-/** The length of a chosen recording, when the browser can read it (helps SparkBot judge the pace). */
-function readDuration(file: File): void {
-  if (typeof Audio === 'undefined') return
-  const url = URL.createObjectURL(file)
-  const audio = new Audio()
-  audio.preload = 'metadata'
-  audio.onloadedmetadata = () => {
-    if (chosenFile.value === file && Number.isFinite(audio.duration)) chosenDuration.value = Math.round(audio.duration)
-    URL.revokeObjectURL(url)
-  }
-  audio.onerror = () => URL.revokeObjectURL(url)
-  audio.src = url
+function removeRecording(): void {
+  recorder.reset()
+  error.value = null
 }
 
 function chooseFile(event: Event): void {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0] ?? null
+  const file = (event.target as HTMLInputElement).files?.[0] ?? null
   clearFile()
   if (!file) return
-  const kind = type.value === 'RECORDING' ? 'audio' : 'image'
-  const issue = practiceFileIssue(file, kind)
-  if (issue) {
-    input.value = ''
-    fileError.value =
-      issue === 'fileTooLarge'
-        ? t('aiHelper.fileTooLarge', {
-            size: formatFileSize(file.size),
-            max: formatFileSize(MAX_PRACTICE_UPLOAD_BYTES),
-          })
-        : issue === 'fileEmpty'
-          ? t('aiHelper.fileEmpty')
-          : kind === 'audio'
-            ? t('aiHelper.audioWrongType')
-            : t('aiHelper.photoWrongType')
-    return
-  }
-  recorder.reset()
+  mic.cancel()
+  error.value = null
   chosenFile.value = file
-  if (kind === 'image') photoUrl.value = URL.createObjectURL(file)
-  else readDuration(file)
+  if (!chosenFileError.value) recorder.reset()
 }
 
 async function startRecording(): Promise<void> {
+  if (result.value || type.value !== 'RECORDING' || !typeAvailable.value || props.blocked || locked.value) return
   clearFile()
   error.value = null
   await recorder.start()
 }
 
-async function submit(): Promise<void> {
-  const chosen = upload.value
-  if (!canCheck.value || !chosen) return
+function pausePreview(): void {
+  if (previewAudio.value && !previewAudio.value.paused) previewAudio.value.pause()
+}
+
+async function togglePreview(): Promise<void> {
+  const audio = previewAudio.value
+  if (!audio) return
+  if (!audio.paused) {
+    audio.pause()
+    return
+  }
   error.value = null
-  notice.value = null
-  checking.value = true
   try {
-    const outcome = await aiHelperApi.checkPractice({
-      type: type.value,
-      file: chosen.file,
-      fileName: chosen.file.name,
-      targetText: target.value,
-      lessonId: lessonId.value,
-      durationSeconds: chosen.duration,
-      languagePreference: ui.locale,
-    })
-    if (outcome.status !== 'SUCCESS' || !outcome.check) {
-      error.value = localizedServerMessage(outcome.message, t('aiHelper.checkError'))
-      return
-    }
-    result.value = outcome.check
-    clearFile()
-    recorder.reset()
-    goToPage(0)
-    checking.value = false
-    await nextTick()
-    revealResult(resultEl.value)
+    await audio.play()
   } catch (reason) {
-    error.value = resolveApiError(reason, t('aiHelper.checkError'))
-  } finally {
-    checking.value = false
-    emit('used')
+    if (audio === previewAudio.value && !(reason instanceof DOMException && reason.name === 'AbortError')) {
+      error.value = t('aiHelper.previewFailed')
+    }
   }
 }
 
-/** Puts the score away and goes back to the target text for the next try. */
-function tryAgain(): void {
+async function submit(): Promise<void> {
+  const chosen = upload.value
+  const kind = type.value
+  if (!canCheck.value || !chosen) return
+  const sessionVersion = getAuthSessionVersion()
+  const stillActive = () => !isUnmounted() && sessionVersion === getAuthSessionVersion()
+  mic.cancel()
+  pausePreview()
+  const fileName = chosenFile.value?.name ?? null
+  error.value = null
+  checking.value = true
+  try {
+    const outcome = await aiHelperApi.checkPractice({
+      type: kind,
+      file: chosen,
+      targetText: target.value,
+      lessonId: lessonId.value,
+      languagePreference: appLocale.value,
+    })
+    if (!stillActive()) return
+    if (outcome.status !== 'SUCCESS' || !outcome.check) {
+      error.value = serverMessageOr(outcome.message, t('aiHelper.checkError'))
+      return
+    }
+    clearResult()
+    result.value = {
+      check: outcome.check,
+      photo: kind === 'HANDWRITING' ? photoUrl.value : null,
+      fileName,
+      audioFile: kind === 'RECORDING' && fileName !== null,
+    }
+    photoUrl.value = null
+    clearFile()
+    recorder.reset()
+    historyRef.value?.showNewest(outcome.check.id)
+    await nextTick()
+    if (stillActive()) resultView.value?.reveal()
+  } catch (reason) {
+    if (stillActive()) error.value = resolveApiError(reason, t('aiHelper.checkError'))
+  } finally {
+    if (!isUnmounted()) checking.value = false
+    if (stillActive()) emit('used')
+  }
+}
+
+function clearResult(): void {
+  if (result.value?.photo) URL.revokeObjectURL(result.value.photo)
   result.value = null
-  notice.value = null
-  document.getElementById(`${baseId}-target`)?.focus()
+}
+
+function onCheckDeleted(checkId: number): void {
+  if (result.value?.check.id === checkId) clearResult()
+}
+
+async function tryAgain(): Promise<void> {
+  clearResult()
+  await nextTick()
+  targetInput.value?.focus()
 }
 
 function report(check: PracticeCheck): void {
   reportTarget.value = {
     payload: { featureKey: 'PRACTICE_CHECK', practiceCheckId: check.id },
-    titleKey: 'aiHelper.reportScoreTitle',
+    titleKey: 'aiHelper.reportScore',
     attachedKey: 'aiHelper.reportScoreAttached',
   }
 }
 
 function onReported(): void {
   const id = reportTarget.value?.payload.practiceCheckId
-  if (id) reportedIds.value = new Set([...reportedIds.value, id])
+  if (id) reportedIds.add(id)
   reportTarget.value = null
-  notice.value = t('aiHelper.reportScoreSent')
   emit('reported')
 }
 
-async function deleteCheck(check: PracticeCheck): Promise<void> {
-  deleting.value = true
-  try {
-    await aiHelperApi.deletePracticeCheck(check.id)
-    if (result.value?.id === check.id) result.value = null
-    openCheck.value = null
-    confirmDelete.value = false
-    notice.value = null
-    void checksResource.reload()
-  } catch (reason) {
-    confirmDelete.value = false
-    detailError.value = resolveApiError(reason, t('aiHelper.deleteError'))
-  } finally {
-    deleting.value = false
-  }
-}
-
-watch(openCheck, () => {
-  detailError.value = null
-  confirmDelete.value = false
+onBeforeUnmount(() => {
+  revokePhoto()
+  clearResult()
 })
-
-onBeforeUnmount(revokePhoto)
+onDeactivated(() => {
+  recorder.stop()
+  pausePreview()
+})
 </script>

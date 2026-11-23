@@ -7,10 +7,8 @@ import com.example.aichinese.entity.base.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
-import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
@@ -19,11 +17,7 @@ import lombok.Setter;
 @Getter
 @Setter
 @Entity
-@Table(name = "student_badges", indexes = {
-        @Index(name = "idx_student_badges_student_id", columnList = "student_id"),
-        @Index(name = "idx_student_badges_badge_id", columnList = "badge_id"),
-        @Index(name = "idx_student_badges_student_awarded", columnList = "student_id,awarded_at")
-}, uniqueConstraints = {
+@Table(name = "student_badges", uniqueConstraints = {
         @UniqueConstraint(name = "uk_student_badges_student_badge", columnNames = { "student_id", "badge_id" })
 })
 public class StudentBadge extends BaseEntity {
@@ -38,12 +32,4 @@ public class StudentBadge extends BaseEntity {
 
     @Column(name = "awarded_at", nullable = false, updatable = false)
     private LocalDateTime awardedAt;
-
-    /** The award time is set once, when the badge row is first saved; nothing else sets it. */
-    @PrePersist
-    void ensureAwardedAt() {
-        if (awardedAt == null) {
-            awardedAt = LocalDateTime.now();
-        }
-    }
 }

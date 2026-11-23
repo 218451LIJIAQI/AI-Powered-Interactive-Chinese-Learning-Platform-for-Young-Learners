@@ -8,10 +8,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -19,97 +19,83 @@ import com.example.aichinese.dto.classes.ClassRequests;
 import com.example.aichinese.dto.classes.LessonViews;
 import com.example.aichinese.entity.ClassActivityCompletion;
 import com.example.aichinese.entity.Lesson;
-import com.example.aichinese.entity.MatchingGame;
 import com.example.aichinese.entity.MatchingGameItem;
+import com.example.aichinese.entity.Quiz;
 import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.entity.TracingExercise;
 import com.example.aichinese.entity.base.LessonActivity;
-import com.example.aichinese.entity.base.PracticeActivityContent;
 import com.example.aichinese.entity.enums.ClassActivityType;
-import com.example.aichinese.entity.enums.LearningStage;
 import com.example.aichinese.repository.ClassActivityCompletionRepository;
 import com.example.aichinese.security.SecurityUserDetails;
-import com.example.aichinese.service.QuizScoring;
+import com.example.aichinese.service.StudentLearningAccessService;
+import com.example.aichinese.util.TextUtils;
+
+import lombok.RequiredArgsConstructor;
 
 /**
- * The practice activities of a class lesson in focus mode: flashcards (the lesson's key phrases, reviewed card by
- * card), character tracing (not graded) and matching (checked on the server, so the answer key never reaches the
- * browser before an answer). Finishing an activity completes a lesson step; classes give no XP.
+ * The practice activities of a class lesson in focus mode: flashcards (the activity's cards, reviewed card by card),
+ * character tracing (not graded) and matching (checked on the server, so the answer key never reaches the browser
+ * before an answer). Finishing an activity completes a lesson step; classes give no XP.
  */
 @Service
+@RequiredArgsConstructor
 public class StudentClassActivityService {
 
     private static final String ACTIVITY_NOT_FOUND = "Activity was not found.";
 
     private final ClassAccessService access;
+    private final StudentLearningAccessService studentAccess;
     private final ClassContentSupport content;
     private final ClassProgressService progress;
     private final ClassActivityCompletionRepository completionRepository;
 
-    public StudentClassActivityService(
-            ClassAccessService access,
-            ClassContentSupport content,
-            ClassProgressService progress,
-            ClassActivityCompletionRepository completionRepository) {
-        this.access = access;
-        this.content = content;
-        this.progress = progress;
-        this.completionRepository = completionRepository;
+    private record OpenActivity(StudentProfile student, Long classId, Lesson lesson, LessonActivity activity) {
     }
 
-    private record OpenActivity(StudentProfile student, Lesson lesson, LessonActivity activity) {
-    }
-
-    private OpenActivity open(SecurityUserDetails currentUser, String type, Long activityId) {
-        StudentProfile student = access.requireStudent(currentUser);
-        ClassActivityType activityType = ClassActivityType.tryFrom(type == null ? null : type.toUpperCase(Locale.ROOT))
+    private OpenActivity open(StudentProfile student, String type, Long activityId) {
+        ClassActivityType activityType = ClassActivityType.tryFrom(type)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, ACTIVITY_NOT_FOUND));
         LessonActivity activity = content.findActivity(activityType, activityId)
                 .filter(found -> found.getLesson() != null)
                 .filter(ClassContentSupport::isLive)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, ACTIVITY_NOT_FOUND));
-        return new OpenActivity(student, access.requireOpenLesson(student, activity.getLesson().getId()).lesson(), activity);
+        ClassAccessService.StudentLesson context = access.requireOpenLesson(student, activity.getLesson().getId());
+        return new OpenActivity(student, context.coursePackage().getId(), context.lesson(), activity);
     }
 
     @Transactional(readOnly = true)
     public LessonViews.ActivityPlay play(SecurityUserDetails currentUser, String type, Long activityId) {
-        OpenActivity open = open(currentUser, type, activityId);
+        OpenActivity open = open(studentAccess.requireStudent(currentUser), type, activityId);
         List<LessonActivity> activities = content.activities(open.lesson().getId()).stream()
                 .filter(ClassContentSupport::isLive)
                 .toList();
-        int index = indexOf(activities, open.activity());
-        boolean done = completionRepository.findByStudentIdAndActivityTypeAndActivityId(
-                open.student().getId(), ClassContentSupport.typeOf(open.activity()), activityId).isPresent();
+        // Entities are equal by type and id; the open activity is one of the lesson's live activities.
+        int index = activities.indexOf(open.activity());
+        ClassActivityType activityType = ClassContentSupport.typeOf(open.activity());
         List<LessonViews.KeyPhrase> cards = List.of();
         List<LessonViews.TraceCharacter> characters = List.of();
         List<LessonViews.MatchWord> words = List.of();
         List<String> meanings = List.of();
-        switch (ClassContentSupport.typeOf(open.activity())) {
-            case FLASHCARDS -> cards = content.keyPhrases(open.lesson().getId()).stream()
-                    .map(phrase -> new LessonViews.KeyPhrase(phrase.getChinese(), phrase.getPinyin(), phrase.getMeaning()))
-                    .toList();
-            case TRACING -> characters = TracingCharacters.read((TracingExercise) open.activity()).stream()
-                    .map(entry -> new LessonViews.TraceCharacter(entry.character(), entry.pinyin(), entry.meaning()))
-                    .toList();
+        switch (activityType) {
+            case FLASHCARDS -> cards = flashcards(open);
+            case TRACING -> characters = TracingCharacters.read((TracingExercise) open.activity());
             case MATCHING -> {
                 List<MatchingGameItem> items = content.matchingItems(activityId);
                 words = items.stream().map(item -> new LessonViews.MatchWord(item.getId(), item.getLeftText(), item.getPinyin())).toList();
-                List<String> shuffled = new ArrayList<>(items.stream().map(MatchingGameItem::getRightText).toList());
-                Collections.shuffle(shuffled);
-                meanings = shuffled;
+                meanings = new ArrayList<>(items.stream().map(MatchingGameItem::getRightText).toList());
+                Collections.shuffle(meanings);
             }
         }
-        LearningStage stage = ((PracticeActivityContent) open.activity()).getLearningStage();
         return new LessonViews.ActivityPlay(
-                ClassContentSupport.typeOf(open.activity()).name(),
+                activityType.name(),
                 activityId,
+                open.classId(),
+                open.lesson().getId(),
                 open.activity().getTitle(),
-                stage == null ? null : stage.name(),
+                hintsAllowed(open.lesson()),
                 index + 1,
                 activities.size(),
                 open.lesson().getTitle(),
-                done,
-                index > 0 ? ref(activities.get(index - 1)) : null,
                 index + 1 < activities.size() ? ref(activities.get(index + 1)) : null,
                 cards,
                 characters,
@@ -117,55 +103,68 @@ public class StudentClassActivityService {
                 meanings);
     }
 
+    /** Older flashcard activities use the lesson's key phrases. */
+    private List<LessonViews.KeyPhrase> flashcards(OpenActivity open) {
+        List<LessonViews.KeyPhrase> own = content.cardViews(open.activity().getId());
+        return own.isEmpty() ? content.keyPhraseViews(open.lesson().getId()) : own;
+    }
+
     /** Flashcards (every card reviewed) and tracing (not graded) complete when the student says so. */
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public LessonViews.ActivityOutcome complete(SecurityUserDetails currentUser, String type, Long activityId) {
-        OpenActivity open = open(currentUser, type, activityId);
-        if (ClassContentSupport.typeOf(open.activity()) == ClassActivityType.MATCHING) {
-            throw new ResponseStatusException(BAD_REQUEST, "Check your pairs to finish a matching activity.");
+        OpenActivity open = open(studentAccess.requireLockedStudent(currentUser), type, activityId);
+        boolean hasMaterial = switch (ClassContentSupport.typeOf(open.activity())) {
+            case FLASHCARDS -> !flashcards(open).isEmpty();
+            case TRACING -> !TextUtils.isBlankOrSpaces(((TracingExercise) open.activity()).getTargetCharacter());
+            case MATCHING -> throw new ResponseStatusException(BAD_REQUEST, "Check your pairs to finish a matching activity.");
+        };
+        if (!hasMaterial) {
+            throw new ResponseStatusException(BAD_REQUEST, "This activity has no learning material yet.");
         }
-        record(open);
-        return outcome(open, true, List.of());
+        return new LessonViews.ActivityOutcome(true, List.of(), record(open).status());
     }
 
     /** Checks the student's pairs; the activity completes when every pair is right. */
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public LessonViews.ActivityOutcome checkMatching(
             SecurityUserDetails currentUser,
             Long activityId,
             ClassRequests.MatchingAnswer request) {
-        OpenActivity open = open(currentUser, ClassActivityType.MATCHING.name(), activityId);
-        Map<Long, MatchingGameItem> items = new HashMap<>();
-        content.matchingItems(activityId).forEach(item -> items.put(item.getId(), item));
+        OpenActivity open = open(studentAccess.requireLockedStudent(currentUser), ClassActivityType.MATCHING.name(), activityId);
+        List<MatchingGameItem> items = content.matchingItems(activityId);
         Map<Long, String> chosen = new HashMap<>();
         for (ClassRequests.ChosenPair pair : request.pairs()) {
-            if (!items.containsKey(pair.wordId())) {
-                throw new ResponseStatusException(BAD_REQUEST, "Pair the words of this activity only.");
+            if (chosen.containsKey(pair.wordId())) {
+                throw new ResponseStatusException(BAD_REQUEST, "Choose one meaning per word.");
             }
             chosen.put(pair.wordId(), pair.meaning());
         }
         List<LessonViews.PairResult> results = new ArrayList<>();
-        boolean allRight = true;
-        for (MatchingGameItem item : items.values().stream()
-                .sorted((first, second) -> Integer.compare(first.getSortOrder(), second.getSortOrder()))
-                .toList()) {
-            String meaning = chosen.get(item.getId());
+        boolean allRight = !items.isEmpty();
+        for (MatchingGameItem item : items) {
+            String meaning = chosen.remove(item.getId());
             boolean correct = meaning != null
-                    && QuizScoring.normalizeText(meaning).equals(QuizScoring.normalizeText(item.getRightText()));
+                    && TextUtils.normalizeAnswerText(meaning).equals(TextUtils.normalizeAnswerText(item.getRightText()));
             allRight &= correct;
             results.add(new LessonViews.PairResult(item.getId(), correct));
         }
-        if (allRight) {
-            record(open);
+        if (!chosen.isEmpty()) {
+            throw new ResponseStatusException(BAD_REQUEST, "Pair the words of this activity only.");
         }
-        return outcome(open, allRight, results);
+        ClassProgressService.LessonState state = allRight
+                ? record(open)
+                : progress.lessonState(open.student(), open.lesson());
+        return new LessonViews.ActivityOutcome(allRight, results, state.status());
     }
 
-    /** The meaning of one word, for the matching hint. The player offers hints by stage; Independent has none. */
+    /**
+     * The meaning of one word, for the matching hint: only in a lesson whose "Allow SparkBot hints" is on (the
+     * setting of its quiz).
+     */
     @Transactional(readOnly = true)
     public LessonViews.MatchHint matchingHint(SecurityUserDetails currentUser, Long activityId, Long wordId) {
-        OpenActivity open = open(currentUser, ClassActivityType.MATCHING.name(), activityId);
-        if (((MatchingGame) open.activity()).getLearningStage() == LearningStage.INDEPENDENT) {
+        OpenActivity open = open(studentAccess.requireStudent(currentUser), ClassActivityType.MATCHING.name(), activityId);
+        if (!hintsAllowed(open.lesson())) {
             throw new ResponseStatusException(BAD_REQUEST, "Hints are not available in this activity.");
         }
         return content.matchingItems(activityId).stream()
@@ -175,53 +174,35 @@ public class StudentClassActivityService {
                 .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Pair the words of this activity only."));
     }
 
-    private void record(OpenActivity open) {
+    /** The lesson's "Allow SparkBot hints": the setting of its published quiz (off without one). */
+    private boolean hintsAllowed(Lesson lesson) {
+        return content.quizzes(lesson.getId()).stream()
+                .filter(ClassContentSupport::isLive)
+                .anyMatch(Quiz::isHintsAllowed);
+    }
+
+    /** Saves the completion and the progress it earns while the caller holds the learner's lock. */
+    private ClassProgressService.LessonState record(OpenActivity open) {
         ClassActivityType type = ClassContentSupport.typeOf(open.activity());
         LocalDateTime now = LocalDateTime.now();
         ClassActivityCompletion completion = completionRepository
                 .findByStudentIdAndActivityTypeAndActivityId(open.student().getId(), type, open.activity().getId())
-                .map(existing -> {
-                    existing.setTimesCompleted(existing.getTimesCompleted() + 1);
-                    existing.setCompletedAt(now);
-                    return existing;
-                })
-                .orElseGet(() -> {
-                    ClassActivityCompletion created = new ClassActivityCompletion();
-                    created.setStudent(open.student());
-                    created.setLesson(open.lesson());
-                    created.setActivityType(type);
-                    created.setActivityId(open.activity().getId());
-                    created.setCompletedAt(now);
-                    created.setTimesCompleted(1);
-                    return created;
-                });
-        completionRepository.save(completion);
-        progress.recordProgress(open.student(), open.lesson());
-    }
-
-    private LessonViews.ActivityOutcome outcome(OpenActivity open, boolean done, List<LessonViews.PairResult> pairs) {
-        ClassProgressService.LessonState state = progress.lessonStates(open.student(), List.of(open.lesson()))
-                .get(open.lesson().getId());
-        return new LessonViews.ActivityOutcome(
-                done,
-                pairs,
-                state == null ? 0 : state.stepsDone(),
-                state == null ? 0 : state.stepsTotal(),
-                ClassProgressService.status(state));
-    }
-
-    private static int indexOf(List<LessonActivity> activities, LessonActivity activity) {
-        for (int index = 0; index < activities.size(); index++) {
-            LessonActivity candidate = activities.get(index);
-            if (candidate.getId().equals(activity.getId())
-                    && ClassContentSupport.typeOf(candidate) == ClassContentSupport.typeOf(activity)) {
-                return index;
-            }
+                .orElse(null);
+        if (completion == null) {
+            completion = new ClassActivityCompletion();
+            completion.setStudent(open.student());
+            completion.setLesson(open.lesson());
+            completion.setActivityType(type);
+            completion.setActivityId(open.activity().getId());
+        } else {
+            completion.setTimesCompleted(completion.getTimesCompleted() + 1);
         }
-        return 0;
+        completion.setCompletedAt(now);
+        completionRepository.save(completion);
+        return progress.recordProgress(open.student(), open.lesson());
     }
 
     private static LessonViews.ActivityRef ref(LessonActivity activity) {
-        return new LessonViews.ActivityRef(ClassContentSupport.typeOf(activity).name(), activity.getId(), activity.getTitle());
+        return new LessonViews.ActivityRef(ClassContentSupport.typeOf(activity).name(), activity.getId());
     }
 }

@@ -1,258 +1,216 @@
 package com.example.aichinese.config.seed;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.temporal.TemporalAdjusters;
 import java.util.List;
-import java.util.Set;
+import java.util.Locale;
+import java.util.stream.Stream;
 
-import org.springframework.beans.factory.annotation.Value;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.aichinese.entity.AiResponseReport;
 import com.example.aichinese.entity.AuditLog;
+import com.example.aichinese.entity.CoursePackage;
 import com.example.aichinese.entity.Notification;
-import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.entity.SupportMessage;
 import com.example.aichinese.entity.SupportRequest;
-import com.example.aichinese.entity.TeacherProfile;
-import com.example.aichinese.entity.TeacherVerificationDocument;
+import com.example.aichinese.entity.SystemSetting;
 import com.example.aichinese.entity.User;
+import com.example.aichinese.entity.enums.AiResponseReportStatus;
+import com.example.aichinese.entity.enums.ContentStatus;
 import com.example.aichinese.entity.enums.NotificationStatus;
 import com.example.aichinese.entity.enums.NotificationType;
+import com.example.aichinese.entity.enums.PracticeType;
 import com.example.aichinese.entity.enums.RoleName;
 import com.example.aichinese.entity.enums.SupportClosedBy;
 import com.example.aichinese.entity.enums.SupportRequestStatus;
 import com.example.aichinese.entity.enums.SupportRequesterRole;
 import com.example.aichinese.entity.enums.SupportTopic;
-import com.example.aichinese.entity.enums.TeacherStatus;
-import com.example.aichinese.entity.enums.TeacherVerificationDocumentType;
-import com.example.aichinese.repository.AuditLogRepository;
+import com.example.aichinese.repository.AiResponseReportRepository;
+import com.example.aichinese.repository.CoursePackageRepository;
+import com.example.aichinese.repository.LessonRepository;
 import com.example.aichinese.repository.NotificationRepository;
-import com.example.aichinese.repository.RoleRepository;
-import com.example.aichinese.repository.StudentProfileRepository;
-import com.example.aichinese.repository.SupportMessageRepository;
 import com.example.aichinese.repository.SupportRequestRepository;
-import com.example.aichinese.repository.TeacherProfileRepository;
-import com.example.aichinese.repository.TeacherVerificationDocumentRepository;
+import com.example.aichinese.repository.SystemSettingRepository;
 import com.example.aichinese.repository.UserRepository;
-import com.example.aichinese.service.FileStorageService;
+import com.example.aichinese.service.AiResponseReportService;
+import com.example.aichinese.service.PlatformSettingsService;
+import com.example.aichinese.service.admin.AuditLogQueryService;
+import com.example.aichinese.service.classes.ClassContentSupport;
+import com.example.aichinese.service.learn.LearnerReminderJobs;
+import com.example.aichinese.service.learn.PracticeSetDirectory;
+import com.example.aichinese.service.support.SupportService;
+
+import jakarta.persistence.EntityManager;
+import lombok.RequiredArgsConstructor;
 
 /**
- * Demo data of the ops module, as in the prototype: Help & support requests (Amira's #1038 answered and #1021 solved,
- * Li Wei's #1040 answered and #1033 solved, a visitor's open #1041), two teacher applications in review (Mei Lin with
- * three documents, Farah Aziz with two), a deactivated student, notifications for every role and a realistic audit
- * log. Dates are relative to the day the demo starts.
+ * Demo data of the ops module, as in the prototype: support requests (Amira's open #1042 "Lesson video won't play" from
+ * the lesson page's Report a problem, a visitor's open #1041, two answered and one solved), the admins' and learners'
+ * notifications of these events, and a realistic audit log: the learners' accounts, the admins' classes (published,
+ * archived, drafts), the deactivated learner of {@link DemoContentSeeder} and the reviewed AI reports. Dates are
+ * relative to the day the demo starts, on the platform clock ({@link DemoClock}).
  */
 @Component
 @Order(20)
 @Profile("demo & !prod & !production")
+@RequiredArgsConstructor
 public class DemoOpsSeeder implements CommandLineRunner {
 
-    static final DemoPersonas.Persona APPLICANT_FARAH = new DemoPersonas.Persona("farah.aziz@fyp.local", "Farah Aziz");
-    static final DemoPersonas.Persona DEACTIVATED_STUDENT =
-            new DemoPersonas.Persona("zhang.yuxi@fyp.local", "Zhang Yuxi");
-    static final String VISITOR_EMAIL = "aisyah.k@example.com";
+    private static final Logger log = LoggerFactory.getLogger(DemoOpsSeeder.class);
+    private static final String VISITOR_EMAIL = "aisyah.k@example.com";
+    private static final String OTHER_VISITOR_EMAIL = "daniel.ng@example.com";
 
     private final UserRepository userRepository;
-    private final RoleRepository roleRepository;
-    private final StudentProfileRepository studentProfileRepository;
-    private final TeacherProfileRepository teacherProfileRepository;
-    private final TeacherVerificationDocumentRepository documentRepository;
     private final SupportRequestRepository supportRequestRepository;
-    private final SupportMessageRepository supportMessageRepository;
+    private final CoursePackageRepository coursePackageRepository;
+    private final AiResponseReportRepository aiResponseReportRepository;
+    private final LessonRepository lessonRepository;
     private final NotificationRepository notificationRepository;
-    private final AuditLogRepository auditLogRepository;
-    private final FileStorageService fileStorageService;
-    private final PasswordEncoder passwordEncoder;
-
-    @Value("${DEMO_TEACHER_PASSWORD:DemoTeacher123!}")
-    private String teacherPassword;
-
-    @Value("${DEMO_STUDENT_PASSWORD:DemoStudent123!}")
-    private String studentPassword;
-
-    public DemoOpsSeeder(
-            UserRepository userRepository,
-            RoleRepository roleRepository,
-            StudentProfileRepository studentProfileRepository,
-            TeacherProfileRepository teacherProfileRepository,
-            TeacherVerificationDocumentRepository documentRepository,
-            SupportRequestRepository supportRequestRepository,
-            SupportMessageRepository supportMessageRepository,
-            NotificationRepository notificationRepository,
-            AuditLogRepository auditLogRepository,
-            FileStorageService fileStorageService,
-            PasswordEncoder passwordEncoder) {
-        this.userRepository = userRepository;
-        this.roleRepository = roleRepository;
-        this.studentProfileRepository = studentProfileRepository;
-        this.teacherProfileRepository = teacherProfileRepository;
-        this.documentRepository = documentRepository;
-        this.supportRequestRepository = supportRequestRepository;
-        this.supportMessageRepository = supportMessageRepository;
-        this.notificationRepository = notificationRepository;
-        this.auditLogRepository = auditLogRepository;
-        this.fileStorageService = fileStorageService;
-        this.passwordEncoder = passwordEncoder;
-    }
+    private final SystemSettingRepository systemSettingRepository;
+    private final ClassContentSupport classContent;
+    private final PracticeSetDirectory practiceSets;
+    private final EntityManager entityManager;
+    private final DemoClock clock;
 
     @Override
     @Transactional
     public void run(String... args) {
-        User admin = userRepository.findAllByRoleName(RoleName.ADMIN).stream().findFirst().orElse(null);
         User student = userRepository.findByEmailWithRoles(DemoPersonas.STUDENT.email()).orElse(null);
-        User teacher = userRepository.findByEmailWithRoles(DemoPersonas.TEACHER.email()).orElse(null);
-        if (admin == null || student == null || teacher == null || userRepository.existsByEmailIgnoreCase(APPLICANT_FARAH.email())) {
+        if (student == null) {
             return;
         }
-
-        TeacherProfile meiLin = teacherProfileRepository.findDetailedByUserId(
-                userRepository.findByEmailWithRoles(DemoPersonas.APPLICANT.email()).orElseThrow().getId()).orElseThrow();
-        submitApplication(meiLin, daysAgo(4, 9, 0), List.of(
-                TeacherVerificationDocumentType.CERTIFICATE,
-                TeacherVerificationDocumentType.IDENTITY,
-                TeacherVerificationDocumentType.QUALIFICATION));
-        TeacherProfile farah = createApplicant();
-        submitApplication(farah, daysAgo(5, 16, 0), List.of(
-                TeacherVerificationDocumentType.CERTIFICATE,
-                TeacherVerificationDocumentType.IDENTITY));
-        User deactivated = createDeactivatedStudent(admin);
-
-        seedSupport(admin, student, teacher);
-        seedNotifications(admin, student, teacher, meiLin.getUser(), farah.getUser());
-        seedAuditLog(admin, teacher, meiLin.getUser(), farah.getUser(), deactivated);
-    }
-
-    // ----- teacher applications -----
-
-    private TeacherProfile createApplicant() {
-        User user = new User();
-        user.setEmail(APPLICANT_FARAH.email());
-        user.setDisplayName(APPLICANT_FARAH.displayName());
-        user.setPasswordHash(passwordEncoder.encode(teacherPassword));
-        user.setPreferredLanguage("en");
-        user.setRoles(Set.of(roleRepository.findByName(RoleName.TEACHER).orElseThrow()));
-        user.setCreatedAt(daysAgo(5, 15, 30));
-        user = userRepository.save(user);
-
-        TeacherProfile profile = new TeacherProfile();
-        profile.setUser(user);
-        profile.setTeacherStatus(TeacherStatus.PENDING);
-        profile.setBio("Pre-service Mandarin teacher finishing a teaching degree, focusing on beginner speaking.");
-        return teacherProfileRepository.save(profile);
-    }
-
-    private void submitApplication(
-            TeacherProfile profile, LocalDateTime submittedAt, List<TeacherVerificationDocumentType> types) {
-        String owner = profile.getUser().getDisplayName();
-        String prefix = owner.replace(" ", "");
-        for (TeacherVerificationDocumentType type : types) {
-            String label = switch (type) {
-                case CERTIFICATE -> "Teaching certificate";
-                case IDENTITY -> "Identity document";
-                default -> "Degree certificate";
-            };
-            String suffix = switch (type) {
-                case CERTIFICATE -> "TeachingCertificate";
-                case IDENTITY -> "IC";
-                default -> "Degree";
-            };
-            TeacherVerificationDocument document = new TeacherVerificationDocument();
-            document.setTeacher(profile);
-            document.setUploadedFile(fileStorageService.storeVerificationDocument(
-                    DemoDocumentFile.pdf(prefix + "_" + suffix + ".pdf",
-                            List.of("MandarinSpark demo document", label, owner)),
-                    profile.getUser()));
-            document.setDocumentType(type);
-            document.setSubmittedAt(submittedAt.minusMinutes(10));
-            document.setCurrentVersion(true);
-            documentRepository.save(document);
+        // Seed learner-only notices and reminder watermarks even if no default admin is configured.
+        if (!notificationRepository.existsByUserIdAndNotificationType(student.getId(), NotificationType.DAILY_GOAL_REMINDER)) {
+            seedLearnerNotifications(student);
         }
-        profile.setTeacherStatus(TeacherStatus.PENDING);
-        profile.setVerificationSubmittedAt(submittedAt);
-        profile.setStandardsAcceptedAt(submittedAt);
-        teacherProfileRepository.save(profile);
+        seedReminderWatermarks();
+
+        User admin = userRepository.findAllByRoleName(RoleName.ADMIN).stream().findFirst().orElse(null);
+        if (admin == null) {
+            log.warn("No default admin account found in demo profile; skipping demo support requests, AI report notices, and audit log.");
+            return;
+        }
+        if (supportRequestRepository.count() > 0) {
+            return;
+        }
+        User deactivated = userRepository.findByEmailWithRoles(DemoPersonas.ZHANG_YUXI.email()).orElseThrow();
+        List<AiResponseReport> reports = aiResponseReportRepository.findAll();
+
+        seedSupport(admin, student);
+        seedAiReportNotifications(admin, reports);
+        seedAuditLog(admin, student, deactivated, reports);
     }
 
-    private User createDeactivatedStudent(User admin) {
-        User user = new User();
-        user.setEmail(DEACTIVATED_STUDENT.email());
-        user.setDisplayName(DEACTIVATED_STUDENT.displayName());
-        user.setPasswordHash(passwordEncoder.encode(studentPassword));
-        user.setPreferredLanguage("en");
-        user.setActive(false);
-        user.setRoles(Set.of(roleRepository.findByName(RoleName.STUDENT).orElseThrow()));
-        user.setCreatedAt(daysAgo(20, 11, 0));
-        user = userRepository.save(user);
-        StudentProfile profile = new StudentProfile();
-        profile.setUser(user);
-        studentProfileRepository.save(profile);
-        return user;
+    /** Prevent LearnerReminderJobs from immediately duplicating Amira's seeded daily-goal and mistakes notices on boot. */
+    private void seedReminderWatermarks() {
+        LocalDate today = clock.today();
+        seedSettingIfAbsent(LearnerReminderJobs.DAILY_GOAL_LAST_RUN_KEY, today.toString());
+        seedSettingIfAbsent(LearnerReminderJobs.MISTAKES_LAST_RUN_KEY,
+                today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)).toString());
     }
 
-    // ----- support -----
+    private void seedSettingIfAbsent(String key, String value) {
+        if (systemSettingRepository.findBySettingKey(key).isEmpty()) {
+            SystemSetting setting = new SystemSetting();
+            setting.setSettingKey(key);
+            setting.setSettingValue(value);
+            entityManager.persist(setting);
+        }
+    }
 
-    private void seedSupport(User admin, User student, User teacher) {
-        SupportRequest linkRequest = request(1038, student, SupportRequesterRole.STUDENT, SupportTopic.CLASSES,
-                "Live session link didn't open", daysAgo(2, 15, 52));
-        message(linkRequest, student, false,
-                "The Join button for “Greetings 问候” didn't open Zoom. It just kept loading.",
-                daysAgo(2, 15, 52));
-        answer(linkRequest, admin,
-                "Thanks for telling us. The join link opens 15 minutes before the start, so it couldn't open at "
-                        + "3:30 PM. It worked for everyone at 3:45 PM. If it happens again, use “Copy link” "
-                        + "in the session details and reply here.",
-                daysAgo(1, 10, 5));
+    // Support
 
+    private void seedSupport(User admin, User student) {
         SupportRequest nameRequest = request(1021, student, SupportRequesterRole.STUDENT, SupportTopic.ACCOUNT,
-                "Change my display name", daysAgo(16, 10, 20));
-        message(nameRequest, student, false, "Can I show my name as Amira H. instead of my full name?", daysAgo(16, 10, 20));
-        answer(nameRequest, admin, "Yes: open Account, change Name and press Save. It shows everywhere at once.",
-                daysAgo(15, 9, 0));
-        solve(nameRequest, SupportClosedBy.REQUESTER, daysAgo(15, 18, 0));
+                "Change my display name", null, clock.daysAgo(16, 10, 20));
+        answered(nameRequest, clock.daysAgo(15, 9, 0));
+        solved(nameRequest, clock.daysAgo(15, 18, 0));
+        save(nameRequest, "Can I show my name as Amira H. instead of my full name?",
+                admin, "Yes: open Account, change Name and press Save. It shows everywhere at once.");
 
-        SupportRequest lengthRequest = request(1040, teacher, SupportRequesterRole.TEACHER, SupportTopic.CLASSES,
-                "Can a live session be longer than 60 minutes?", daysAgo(3, 14, 10));
-        message(lengthRequest, teacher, false,
-                "I'd like to run a 90-minute Tones Clinic. Is there a time limit for live sessions?", daysAgo(3, 14, 10));
-        answer(lengthRequest, admin,
-                "Yes. A session can run up to 120 minutes. Open it in Live sessions › Edit and change the end "
-                        + "time; booked students are told about the new time automatically.",
-                daysAgo(2, 9, 30));
+        SupportRequest goalRequest = request(1038, student, SupportRequesterRole.STUDENT, SupportTopic.LEARNING,
+                "Daily goal didn't update", null, clock.daysAgo(2, 22, 40));
+        answered(goalRequest, clock.daysAgo(1, 10, 5));
+        save(goalRequest, "I finished a lesson last night, but my daily goal still showed 10 of 20 XP this morning.",
+                admin, "Thanks for telling us. You finished the lesson after midnight, so its XP counts for the next day. "
+                        + "If it happens again, reply to this email.");
 
-        SupportRequest reorderRequest = request(1033, teacher, SupportRequesterRole.TEACHER, SupportTopic.CLASSES,
-                "Reorder lessons after publishing", daysAgo(20, 11, 0));
-        message(reorderRequest, teacher, false,
-                "Can I change the order of the lessons in a class that is already published?", daysAgo(20, 11, 0));
-        answer(reorderRequest, admin,
-                "Yes. Reordering is an edit: an admin reviews it while students keep the current order.", daysAgo(19, 9, 0));
-        solve(reorderRequest, SupportClosedBy.REQUESTER, daysAgo(19, 12, 0));
+        SupportRequest emailRequest = request(1039, null, SupportRequesterRole.VISITOR, SupportTopic.ACCOUNT,
+                "How do I change my email address?", OTHER_VISITOR_EMAIL, clock.daysAgo(1, 13, 20));
+        answered(emailRequest, clock.daysAgo(1, 15, 0));
+        save(emailRequest, "How do I change my email address? I can't find the setting.",
+                admin, "Sign in, open Account and choose Change email. We send a link to the new address to confirm it.");
 
         SupportRequest visitorRequest = request(1041, null, SupportRequesterRole.VISITOR, SupportTopic.ACCOUNT,
-                "Can't sign in after resetting my password", LocalDateTime.now().minusHours(2));
-        message(visitorRequest, null, false,
-                "I reset my password, but the new one still doesn't work on the sign-in page.",
-                LocalDateTime.now().minusHours(2));
+                "Can't sign in after resetting my password", VISITOR_EMAIL, clock.now().minusHours(2));
+        save(visitorRequest, "I reset my password, but the new one still doesn't work on the sign-in page.");
+        notifyNewRequest(admin, visitorRequest, "A visitor (" + VISITOR_EMAIL + ")");
+
+        // Sent from "Still not loading? Report a problem" under the lesson video (Topic Classes, the message prefilled).
+        SupportRequest videoRequest = request(1042, student, SupportRequesterRole.STUDENT, SupportTopic.CLASSES,
+                "Lesson video won’t play", null, clock.now().minusMinutes(10));
+        save(videoRequest,
+                "The video “Meeting a classmate” in the Meeting Classmates lesson doesn’t load. It stays at 0:00. "
+                        + "I tried Chrome and Edge.");
+        notifyNewRequest(admin, videoRequest, student.getDisplayName());
     }
 
-    private SupportRequest request(int number, User requester, SupportRequesterRole role, SupportTopic topic,
-            String subject, LocalDateTime createdAt) {
+    /** A request as its requester sent it, not saved yet: see {@link #save(SupportRequest, String)}. */
+    private static SupportRequest request(int number, User requester, SupportRequesterRole role, SupportTopic topic,
+            String subject, String visitorEmail, LocalDateTime sentAt) {
         SupportRequest request = new SupportRequest();
         request.setNumber(number);
         request.setRequester(requester);
-        request.setRequesterEmail(requester == null ? VISITOR_EMAIL : requester.getEmail());
+        request.setRequesterEmail(requester == null ? visitorEmail : requester.getEmail());
         request.setRequesterRole(role);
         request.setTopic(topic);
         request.setSubject(subject);
         request.setStatus(SupportRequestStatus.OPEN);
-        request.setCreatedAt(createdAt);
-        request.setUpdatedAt(createdAt);
-        return supportRequestRepository.save(request);
+        request.setCreatedAt(sentAt);
+        request.setUpdatedAt(sentAt);
+        return request;
+    }
+
+    /** Support replied, by e-mail to the requester (no e-mail goes out from the demo: it has none configured). */
+    private static void answered(SupportRequest request, LocalDateTime at) {
+        request.setStatus(SupportRequestStatus.ANSWERED);
+        request.setLastSupportReplyAt(at);
+        request.setClosesAt(at.plusDays(7));
+        request.setUpdatedAt(at);
+    }
+
+    private static void solved(SupportRequest request, LocalDateTime at) {
+        request.setStatus(SupportRequestStatus.SOLVED);
+        request.setSolvedAt(at);
+        request.setClosedBy(SupportClosedBy.SUPPORT);
+        request.setClosesAt(null);
+        request.setUpdatedAt(at);
+    }
+
+    /**
+     * Saves the request as it stands now, then the requester's message, sent with it. Written once: a request changed
+     * after its first save would show as updated when the demo was seeded (BaseEntity stamps every update), not at its
+     * last event.
+     */
+    private void save(SupportRequest request, String body) {
+        supportRequestRepository.save(request);
+        message(request, request.getRequester(), false, body, request.getCreatedAt());
+    }
+
+    /** {@link #save(SupportRequest, String)} for an answered request, then support's reply at the time of the reply. */
+    private void save(SupportRequest request, String body, User admin, String reply) {
+        save(request, body);
+        message(request, admin, true, reply, request.getLastSupportReplyAt());
     }
 
     private void message(SupportRequest request, User author, boolean fromSupport, String body, LocalDateTime at) {
@@ -263,132 +221,129 @@ public class DemoOpsSeeder implements CommandLineRunner {
         message.setBody(body);
         message.setCreatedAt(at);
         message.setUpdatedAt(at);
-        supportMessageRepository.save(message);
+        entityManager.persist(message);
     }
 
-    private void answer(SupportRequest request, User admin, String body, LocalDateTime at) {
-        message(request, admin, true, body, at);
-        request.setStatus(SupportRequestStatus.ANSWERED);
-        request.setLastSupportReplyAt(at);
-        request.setClosesAt(at.plusDays(7));
-        request.setUpdatedAt(at);
-        supportRequestRepository.save(request);
-    }
+    // Notifications
 
-    private void solve(SupportRequest request, SupportClosedBy closedBy, LocalDateTime at) {
-        request.setStatus(SupportRequestStatus.SOLVED);
-        request.setSolvedAt(at);
-        request.setClosedBy(closedBy);
-        request.setClosesAt(null);
-        request.setUpdatedAt(at);
-        supportRequestRepository.save(request);
-    }
-
-    // ----- notifications -----
-
-    private void seedNotifications(User admin, User student, User teacher, User meiLin, User farah) {
-        notify(student, NotificationType.LIVE_CLASS_REMINDER, "Live session starts soon",
-                "“Greetings 问候” begins in 30 minutes.", "/student/classes/live",
-                LocalDateTime.now().minusMinutes(20), false);
-        notify(student, NotificationType.TEACHER_FEEDBACK, "New feedback from Li Wei",
-                "Li Wei left feedback on your “Lesson quiz: Greetings”.", "/student/classes",
-                LocalDateTime.now().minusHours(3), false);
-        notify(student, NotificationType.LIVE_CLASS_REMINDER, "Live session cancelled",
-                "Li Wei cancelled “Finding Places 问路”. Your booking was cancelled.",
-                "/student/classes/live", daysAgo(1, 10, 0), false);
-        notify(student, NotificationType.SUPPORT_REQUEST, "Support replied to your request",
-                admin.getDisplayName() + " answered #1038 “Live session link didn't open”. Reply, or mark it solved.",
-                supportPath("/student", 1038), daysAgo(1, 10, 5), true);
-        notify(student, NotificationType.AI_REPORT_REVIEW, "Your AI report was reviewed",
-                "An admin checked the SparkBot answer you reported and resolved it.", "/student/ai/ask",
-                daysAgo(1, 9, 0), true);
-        notify(student, NotificationType.LIVE_CLASS_REMINDER, "Live session rescheduled",
-                "“Tones Clinic” now starts one hour later.", "/student/classes/live", daysAgo(2, 17, 0), true);
-
-        notify(teacher, NotificationType.LIVE_CLASS_REMINDER, "New booking",
-                "Chen Hao booked “Greetings 问候”.", "/teacher/live-sessions", daysAgo(1, 16, 0), false);
-        notify(teacher, NotificationType.SUPPORT_REQUEST, "Support replied to your request",
-                admin.getDisplayName() + " answered #1040 “Can a live session be longer than 60 minutes?”.",
-                supportPath("/teacher", 1040), daysAgo(2, 9, 30), true);
-        notify(teacher, NotificationType.CLASS_ENROLMENT, "New student",
-                "Nur Aisyah joined “Mandarin for Beginners”. You can follow her progress in Students.",
-                "/teacher/students", daysAgo(2, 10, 0), true);
-        notify(teacher, NotificationType.CONTENT_REVIEW, "Changes requested: University Life",
-                "An admin asked for changes to your revision of “University Life”.", "/teacher/classes",
-                daysAgo(3, 15, 30), true);
-
-        notify(meiLin, NotificationType.TEACHER_APPROVAL, "Application received",
-                "Your documents are with an admin. You get a notification with the decision.", "/teacher/profile",
-                daysAgo(4, 9, 0), false);
-
+    /** "New support request", worded, targeted and linked as SupportService tells the admins of a request it receives. */
+    private void notifyNewRequest(User admin, SupportRequest request, String sender) {
         notify(admin, NotificationType.SUPPORT_REQUEST, "New support request",
-                "A visitor (" + VISITOR_EMAIL + ") sent #1041 “Can't sign in after resetting my password”. "
-                        + "Reply within 2 working days.",
-                "/admin/support", LocalDateTime.now().minusHours(2), false);
-        notify(admin, NotificationType.CONTENT_REVIEW, "Revision submitted for review",
-                "Li Wei submitted a revision of “Ordering Food at the Canteen”.", "/admin/content",
-                LocalDateTime.now().minusHours(5), false);
-        notify(admin, NotificationType.AI_REPORT_REVIEW, "New AI answer report",
-                "A student reported incorrect content about a self-introduction phrase.", "/admin/ai",
-                daysAgo(2, 12, 0), false);
-        notify(admin, NotificationType.TEACHER_APPROVAL, "New teacher application",
-                meiLin.getDisplayName() + " submitted verification documents.", "/admin/users/applications",
-                daysAgo(4, 9, 0), false);
-        notify(admin, NotificationType.TEACHER_APPROVAL, "New teacher application",
-                farah.getDisplayName() + " submitted verification documents.", "/admin/users/applications",
-                daysAgo(5, 16, 0), true);
+                sender + " sent #" + request.getNumber() + " “" + request.getSubject() + "”. Reply within 2 working days.",
+                SupportService.TARGET_TYPE, request.getId(), "/admin/support?request=" + request.getId(),
+                request.getCreatedAt(), false);
     }
 
-    private void notify(User recipient, NotificationType type, String title, String message, String path,
-            LocalDateTime at, boolean read) {
+    /**
+     * The notifications the real flows send for the demo's AI reports, worded, targeted and linked as
+     * AiResponseReportService writes them and stamped with the time of the event.
+     */
+    private void seedAiReportNotifications(User admin, List<AiResponseReport> reports) {
+        for (AiResponseReport report : reports) {
+            boolean waiting = report.getStatus() == AiResponseReportStatus.PENDING_REVIEW;
+            notify(admin, NotificationType.ADMIN_TASK, "AI report needs review",
+                    report.getStudentUser().getDisplayName() + " reported an AI answer ("
+                            + report.getReasonCategory().name().replace('_', ' ').toLowerCase(Locale.ROOT) + ").",
+                    AiResponseReportService.TARGET_TYPE, report.getId(), AiResponseReportService.adminReportPath(report),
+                    report.getCreatedAt(), !waiting);
+            if (report.getStatus() == AiResponseReportStatus.RESOLVED) {
+                notify(report.getStudentUser(), NotificationType.AI_REPORT_REVIEW, "An admin replied to your AI report",
+                        "Your report was resolved. Read the admin's note in AI Helper › Ask SparkBot › My reports.",
+                        AiResponseReportService.TARGET_TYPE, report.getId(), AiResponseReportService.STUDENT_REPORTS_PATH,
+                        report.getReviewedAt(), true);
+            }
+        }
+    }
+
+    /**
+     * Amira's inbox as in the prototype (S3.09): with the AI report reply of {@link #seedAiReportNotifications}, six
+     * notifications, three unread, worded, targeted and linked as LearnerNotifications writes them and stamped with the
+     * time of their event: today's daily-goal reminder (her 20 of 30 XP), the new listening set At the Café, the weekly
+     * mistakes reminder (her six mistakes), Rank 3 (reached two days ago, DemoLearnSeeder) and an update of the
+     * Greetings lesson of her class Mandarin Foundations three weeks ago.
+     */
+    private void seedLearnerNotifications(User student) {
+        LocalDateTime todayStart = clock.at(clock.today(), LocalTime.MIDNIGHT);
+        LocalDateTime goalReminderAt = clock.now().minusMinutes(30);
+        if (goalReminderAt.isBefore(todayStart)) {
+            goalReminderAt = todayStart;
+        }
+        notify(student, NotificationType.DAILY_GOAL_REMINDER, "Daily goal reminder",
+                "You're 10 XP away from today's goal.", null, null, "/student/home",
+                goalReminderAt, false);
+        practiceSets.sets(PracticeType.LISTENING, ContentStatus.PUBLISHED).stream()
+                .filter(set -> "At the Café".equals(set.getTitle()))
+                .findFirst()
+                .ifPresent(set -> notify(student, NotificationType.NEW_PRACTICE_SET, "New in Practice",
+                        "A new listening set is ready: “At the Café”.", PracticeType.LISTENING.referenceType(),
+                        set.getId(), "/student/practice/listening?set=" + set.getId(), clock.daysAgo(0, 9, 30), false));
+        notify(student, NotificationType.MISTAKES_TO_REVIEW, "Mistakes to review",
+                "You have 6 mistakes saved. Fixing them takes about 3 minutes.", null, null,
+                "/student/practice/mistakes", clock.daysAgo(1, 10, 0), false);
+        notify(student, NotificationType.RANK_REACHED, "You reached Rank 3",
+                "You're now Rank 3 · Regular. Rank 4 is next.", "RANK", 3L, "/student/progress",
+                clock.daysAgo(2, 18, 30), true);
+        lessonRepository.findByClassAndLessonTitle("Mandarin Foundations", DemoClassContent.GREETINGS.title())
+                .ifPresent(greetings -> {
+                    CoursePackage foundations = classContent.requireClassOfLesson(greetings);
+                    notify(student, NotificationType.LESSON_UPDATED, "Lesson updated",
+                            "“" + greetings.getTitle() + "” in " + foundations.getTitle() + " was updated with new content.",
+                            "LESSON", greetings.getId(),
+                            "/student/classes/" + foundations.getId() + "/lessons/" + greetings.getId(),
+                            clock.daysAgo(21, 10, 0), true);
+                });
+    }
+
+    private void notify(User recipient, NotificationType type, String title, String message, String targetType,
+            Long targetId, String path, LocalDateTime at, boolean read) {
         Notification notification = new Notification();
         notification.setUser(recipient);
         notification.setNotificationType(type);
         notification.setTitle(title);
         notification.setMessage(message);
+        notification.setTargetType(targetType);
+        notification.setTargetId(targetId);
         notification.setTargetPath(path);
         notification.setNotificationStatus(read ? NotificationStatus.READ : NotificationStatus.UNREAD);
         notification.setReadAt(read ? at.plusHours(1) : null);
         notification.setCreatedAt(at);
-        notification.setUpdatedAt(at);
-        notificationRepository.save(notification);
+        notification.setUpdatedAt(read ? notification.getReadAt() : at);
+        entityManager.persist(notification);
     }
 
-    private String supportPath(String root, int number) {
-        return supportRequestRepository.findAll().stream()
-                .filter(request -> request.getNumber() == number)
-                .findFirst()
-                .map(request -> root + "/support/" + request.getId())
-                .orElse(root + "/support");
-    }
+    // Audit log
 
-    // ----- audit log -----
-
-    private void seedAuditLog(User admin, User teacher, User meiLin, User farah, User deactivated) {
-        TeacherProfile teacherProfile = teacherProfileRepository.findByUserId(teacher.getId()).orElseThrow();
-        audit(admin, "ADMIN_TEACHER_APPROVE", "TeacherProfile", teacherProfile.getId(), teacher.getDisplayName(), null,
-                "Admin approved the teacher application.", daysAgo(60, 12, 0));
-        audit(admin, "ADMIN_USER_DEACTIVATE", "User", deactivated.getId(), deactivated.getDisplayName(),
-                "Shared the account with another person, against the Terms of Service.",
-                "Admin deactivated the account: signed out, sign-in blocked.", daysAgo(6, 9, 15));
-        audit(farah, "TEACHER_APPLICATION_SUBMITTED", "TeacherProfile",
-                teacherProfileRepository.findByUserId(farah.getId()).orElseThrow().getId(), farah.getDisplayName(), null,
-                "Teacher submitted the application.", daysAgo(5, 16, 0));
-        audit(meiLin, "TEACHER_APPLICATION_SUBMITTED", "TeacherProfile",
-                teacherProfileRepository.findByUserId(meiLin.getId()).orElseThrow().getId(), meiLin.getDisplayName(), null,
-                "Teacher submitted the application.", daysAgo(4, 9, 0));
-        audit(teacher, "CONTENT_SUBMIT", "Lesson", null, "University Life (revision)", null,
-                "Teacher submitted a lesson revision for review.", daysAgo(4, 16, 0));
-        audit(admin, "CONTENT_REJECT", "Lesson", null, "University Life (revision)",
-                "Add pinyin under the new words in the short story.", "Admin requested changes.", daysAgo(3, 15, 30));
-        audit(admin, "AI_RESPONSE_REPORT_REVIEW", "AiResponseReport", null, "Report from Amira Hassan · Chat", null,
-                "Admin resolved an AI answer report.", daysAgo(1, 9, 0));
-        audit(teacher, "CONTENT_SUBMIT", "CoursePackage", null, "Chinese Culture and Festivals", null,
-                "Teacher submitted a new class for review.", LocalDateTime.now().minusHours(6));
-        audit(teacher, "CONTENT_SUBMIT", "Lesson", null, "Ordering Food at the Canteen (revision)", null,
-                "Teacher submitted a lesson revision for review.", LocalDateTime.now().minusHours(5));
-        audit(admin, "ADMIN_PLATFORM_SETTINGS_UPDATED", "SystemSetting", null, "AI settings", null,
-                "Admin updated the AI settings.", LocalDateTime.now().minusHours(4));
+    /** Entries as the real actions write them, about the seeded records and at the times of their events. */
+    private void seedAuditLog(User admin, User student, User deactivated, List<AiResponseReport> reports) {
+        Stream<User> others = DemoPersonas.OTHER_STUDENTS.stream()
+                .map(persona -> userRepository.findByEmailWithRoles(persona.email()).orElseThrow());
+        Stream.concat(Stream.of(student), Stream.concat(others, Stream.of(deactivated)))
+                .forEach(learner -> audit(learner, "ACCOUNT_CREATED", AuditLogQueryService.TARGET_USER, learner.getId(),
+                        null, null, "User created a learner account.", learner.getCreatedAt()));
+        audit(admin, "ADMIN_USER_DEACTIVATE", AuditLogQueryService.TARGET_USER, deactivated.getId(),
+                deactivated.getDisplayName(), "Shared the account with another person, against the Terms of Service.",
+                "Admin deactivated the account: signed out, sign-in blocked.", clock.daysAgo(6, 9, 15));
+        List<CoursePackage> classes = coursePackageRepository.findAll();
+        for (CoursePackage coursePackage : classes) {
+            audit(admin, "ADMIN_CLASS_CREATE", "CoursePackage", coursePackage.getId(), coursePackage.getTitle(), null,
+                    "Admin created a class as a draft.", coursePackage.getCreatedAt());
+            if (coursePackage.getContentStatus() != ContentStatus.DRAFT) {
+                audit(admin, "ADMIN_CLASS_PUBLISH", "CoursePackage", coursePackage.getId(), coursePackage.getTitle(), null,
+                        "Admin published a class.", coursePackage.getCreatedAt().plusDays(2));
+            }
+            if (coursePackage.getContentStatus() == ContentStatus.ARCHIVED) {
+                audit(admin, "ADMIN_CLASS_ARCHIVE", "CoursePackage", coursePackage.getId(), coursePackage.getTitle(), null,
+                        "Admin archived a class.", coursePackage.getArchivedAt());
+            }
+        }
+        reports.stream()
+                .filter(report -> report.getStatus() == AiResponseReportStatus.RESOLVED)
+                .forEach(report -> audit(report.getReviewerUser(), AiResponseReportService.REVIEW_RESOLVED_ACTION,
+                        AiResponseReportService.TARGET_TYPE, report.getId(), null, null,
+                        "Admin resolved an AI report with a note to the student.", report.getReviewedAt()));
+        audit(admin, PlatformSettingsService.SETTINGS_UPDATED_ACTION, "SYSTEM_SETTING", null, null, null,
+                "Admin updated the AI notice, sensitive-word filter and AI safety check settings.",
+                clock.now().minusHours(4));
     }
 
     private void audit(User actor, String action, String targetType, Long targetId, String targetLabel, String reason,
@@ -404,12 +359,6 @@ public class DemoOpsSeeder implements CommandLineRunner {
         entry.setDescription(description);
         entry.setCreatedAt(at);
         entry.setUpdatedAt(at);
-        auditLogRepository.save(entry);
-    }
-
-    /** A wall-clock time {@code days} back; one later today than now moves to the day before. */
-    private static LocalDateTime daysAgo(int days, int hour, int minute) {
-        LocalDateTime time = LocalDate.now().minusDays(days).atTime(LocalTime.of(hour, minute));
-        return time.isAfter(LocalDateTime.now()) ? time.minusDays(1) : time;
+        entityManager.persist(entry);
     }
 }

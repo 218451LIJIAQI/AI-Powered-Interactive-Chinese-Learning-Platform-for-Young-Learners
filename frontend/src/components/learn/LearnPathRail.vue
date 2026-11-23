@@ -1,108 +1,60 @@
 <template>
   <aside class="learn-rail" :aria-label="t('learn.railLabel')">
-    <section class="learn-rail-card" data-testid="next-goal">
+    <section class="learn-rail-section learn-rail-goal" data-testid="next-goal">
       <h2 class="learn-rail-overline">{{ t('learn.nextGoal') }}</h2>
-      <template v-if="goal.kind === 'unit'">
-        <p class="learn-rail-title">{{ t('learn.unlockUnit', { number: goal.next.number }) }}</p>
-        <div class="learn-rail-units" aria-hidden="true">
-          <span class="seal is-outline learn-rail-seal" lang="zh-CN">{{ hanziNumeral(goal.current.number) }}</span>
-          <span class="learn-rail-thread" />
-          <span class="seal is-muted learn-rail-seal" lang="zh-CN">{{ hanziNumeral(goal.next.number) }}</span>
-        </div>
-        <p class="learn-rail-text">
-          {{
-            t(
-              'learn.lessonsToGo',
-              { count: goal.remaining, number: goal.current.number, next: `${goal.next.title} · ${goal.next.titleZh}` },
-              goal.remaining,
-            )
-          }}
-        </p>
+      <template v-if="goal.kind === 'lessons'">
+        <p class="learn-rail-title">{{ goal.title }}</p>
+        <p class="learn-rail-text">{{ t('learn.lessonsToGo', { count: goal.remaining }, goal.remaining) }}</p>
       </template>
       <template v-else-if="goal.kind === 'checkpoint'">
-        <p class="learn-rail-title">{{ goal.checkpoint.title }}</p>
-        <p class="learn-rail-text">{{ t('learn.checkpointGoal', { percent: goal.checkpoint.passPercent }) }}</p>
+        <p class="learn-rail-title">{{ t('learn.checkpointOverline', { hsk: goal.hskLevel }) }}</p>
+        <p class="learn-rail-text">
+          {{ t('learn.checkpointGoal', { percent: goal.checkpoint.passPercent, hsk: goal.hskLevel + 1 }) }}
+        </p>
         <RouterLink
-          class="btn btn-primary btn-sm"
+          class="btn btn-secondary btn-sm"
           :to="{ name: 'student-learn-lesson', params: { lessonId: goal.checkpoint.id } }"
         >
           {{ t('learn.startWithXp', { xp: goal.checkpoint.xpReward }) }}
         </RouterLink>
       </template>
-      <template v-else-if="goal.kind === 'level'">
-        <p class="learn-rail-title">{{ t('learn.reachCheckpoint') }}</p>
-        <p class="learn-rail-text">{{ t('learn.lessonsLeftInUnit', { count: goal.remaining }, goal.remaining) }}</p>
-      </template>
       <p v-else class="learn-rail-title">{{ t('learn.pathFinished') }}</p>
     </section>
 
-    <section class="learn-rail-card" data-testid="your-path">
-      <div class="learn-rail-head">
-        <h2 class="learn-rail-overline">{{ t('learn.yourPath') }}</h2>
-        <span class="learn-rail-meta">{{
-          t('learn.lessonsOfTotal', { done: path.completedLessons, total: path.totalLessons })
-        }}</span>
-      </div>
-      <ProgressBar
-        class="is-sm"
-        :progress="ratioPercent(path.completedLessons, path.totalLessons)"
-        :label="t('learn.yourPath')"
-      />
-    </section>
-
-    <section v-if="today" class="learn-rail-card">
+    <section v-if="today" class="learn-rail-section">
       <DailyGoalMeter
         :today-xp="today.todayXp"
         :goal-xp="today.dailyGoalXp"
         :reached="today.goalReached"
-        :streak="today.currentStreak"
         :pending-hint="goalHint"
       />
     </section>
-  </aside>
 
-  <div class="learn-more">
-    <PlanRailCard />
-
-    <section class="learn-rail-card" data-testid="practise-card">
-      <h2 class="learn-rail-overline">{{ t('learn.practiseWhatYouLearned') }}</h2>
-      <template v-if="path.learnMistakesWaiting > 0">
-        <p class="learn-rail-text">
-          {{ t('learn.lessonMistakesWaiting', { count: path.learnMistakesWaiting }, path.learnMistakesWaiting) }}
-        </p>
-        <RouterLink class="btn btn-link" :to="{ name: 'student-practice', params: { type: 'mistakes' } }">
-          {{ t('learn.seeMistakes', { count: path.learnMistakesWaiting }) }}<IconGlyph name="chevronRight" :size="14" />
-        </RouterLink>
-      </template>
-      <p v-else class="learn-rail-text">{{ t('learn.noLessonMistakes') }}</p>
+    <section v-if="today && today.mistakesWaiting > 0" class="learn-rail-section" data-testid="practise-card">
+      <h2 class="learn-rail-heading">{{ t('learn.practiseWhatYouLearned') }}</h2>
+      <p class="learn-rail-note">
+        {{ t('learn.mistakesWaiting', { count: today.mistakesWaiting }, today.mistakesWaiting) }}
+      </p>
+      <RouterLink class="btn btn-secondary btn-sm" :to="{ name: 'student-practice', params: { type: 'mistakes' } }">
+        {{ t('learn.seeMistakesShort') }}
+      </RouterLink>
     </section>
-
-    <p class="learn-rail-note">
-      {{ t('learn.lookingForClass') }}
-      <RouterLink :to="{ name: 'student-classes' }">{{ t('learn.itsInClasses') }}</RouterLink>
-    </p>
-  </div>
+  </aside>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 
-import IconGlyph from '@/components/common/IconGlyph.vue'
-import ProgressBar from '@/components/common/ProgressBar.vue'
-import PlanRailCard from '@/components/plan/PlanRailCard.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { learnMessages } from '@/plugins/learnMessages'
-import type { LearnPath, PathCheckpoint, PathUnit, TodaySummary } from '@/types/learn'
-import { ratioPercent } from '@/utils/format'
+import type { LearnPath, PathCheckpoint, TodaySummary } from '@/types/learn'
 
 import DailyGoalMeter from './DailyGoalMeter.vue'
-import { hanziNumeral } from './sealGlyphs'
 
 /**
- * The Learn page's side column. The rail (a compact strip above the path on smaller screens): what the next lessons
- * unlock, how far along the whole path is, and today's goal. Under it (after the path on smaller screens): the
- * learning plan, the lesson mistakes to practise and where a teacher's class lives.
+ * The Learn page's fixed side column: what the next lessons unlock, today's goal and the mistakes to practise (only
+ * when some are waiting). Every number comes from the path and today's summary.
  */
 interface Props {
   path: LearnPath
@@ -114,39 +66,50 @@ const props = defineProps<Props>()
 const { t } = useLocalMessages({ learn: learnMessages })
 
 type Goal =
-  | { kind: 'unit'; current: PathUnit; next: PathUnit; remaining: number }
-  | { kind: 'level'; remaining: number }
-  | { kind: 'checkpoint'; checkpoint: PathCheckpoint }
+  | { kind: 'lessons'; title: string; remaining: number }
+  | { kind: 'checkpoint'; checkpoint: PathCheckpoint; hskLevel: number }
   | { kind: 'done' }
 
-/** What the next lessons open: the next unit, the level checkpoint, or nothing (the path is finished). */
+/**
+ * What the next lessons open: the next unit, the level checkpoint (only a level that has one), the end of the path
+ * (its last unit), or nothing (the path is finished). A bonus chest is not a lesson, so it is never counted.
+ */
 const goal = computed<Goal>(() => {
-  const units = props.path.levels.flatMap((level) => level.units)
-  const nextLesson = props.path.nextLesson
+  const { nextLesson, levels } = props.path
   if (nextLesson) {
-    const index = units.findIndex((unit) => unit.id === nextLesson.unitId)
-    const current = units[index]
-    if (current) {
-      const remaining = current.lessons.filter((stop) => stop.kind !== 'BONUS' && stop.state !== 'DONE').length
-      const level = props.path.levels.find((candidate) => candidate.units.some((unit) => unit.id === current.id))
-      const next = level?.units[level.units.indexOf(current) + 1]
-      if (next) return { kind: 'unit', current, next, remaining }
-      return { kind: 'level', remaining }
+    for (const [levelIndex, level] of levels.entries()) {
+      const index = level.units.findIndex((unit) => unit.id === nextLesson.unitId)
+      const current = level.units[index]
+      if (!current) continue
+      const remaining = current.lessonCount - current.completedCount
+      if (!(remaining > 0)) break
+      const nextInLevel = level.units[index + 1]
+      if (nextInLevel) {
+        return { kind: 'lessons', title: t('learn.unlockUnit', { number: nextInLevel.number }), remaining }
+      }
+      if (level.checkpoint) return { kind: 'lessons', title: t('learn.reachCheckpoint'), remaining }
+      // No checkpoint closes this level: its last unit opens the next level, or ends the path.
+      const nextLevelUnit = levels.slice(levelIndex + 1).find((later) => later.units.length)?.units[0]
+      const title = nextLevelUnit ? t('learn.unlockUnit', { number: nextLevelUnit.number }) : t('learn.finishPath')
+      return { kind: 'lessons', title, remaining }
     }
   }
-  const checkpoint = props.path.levels.map((level) => level.checkpoint).find((c) => c?.state === 'AVAILABLE')
-  if (checkpoint) return { kind: 'checkpoint', checkpoint }
+  for (const level of levels) {
+    if (level.checkpoint?.state === 'AVAILABLE') {
+      return { kind: 'checkpoint', checkpoint: level.checkpoint, hskLevel: level.hskLevel }
+    }
+  }
   return { kind: 'done' }
 })
 
+/** How many lessons of the next one's size still reach today's goal. */
 const goalHint = computed(() => {
   const today = props.today
   if (!today) return ''
   const remaining = Math.max(0, today.dailyGoalXp - today.todayXp)
-  const lessonXp = props.path.nextLesson?.xpReward ?? 10
+  const rawXp = props.path.nextLesson?.xpReward ?? 10
+  const lessonXp = rawXp > 0 ? rawXp : 10
   const lessons = Math.max(1, Math.ceil(remaining / lessonXp))
-  return today.todayXp === 0
-    ? t('learn.goalHintFirst', { count: lessons }, lessons)
-    : t('learn.goalHintMore', { count: lessons }, lessons)
+  return t(today.todayXp === 0 ? 'learn.goalHintFirst' : 'learn.goalHintMore', { count: lessons }, lessons)
 })
 </script>

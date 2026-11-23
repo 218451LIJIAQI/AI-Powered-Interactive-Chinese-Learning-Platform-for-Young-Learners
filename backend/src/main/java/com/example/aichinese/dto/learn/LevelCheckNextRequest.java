@@ -1,9 +1,12 @@
 package com.example.aichinese.dto.learn;
 
+import static com.example.aichinese.dto.DtoNormalization.immutableListOrEmpty;
+
 import java.util.List;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
 import com.example.aichinese.entity.enums.MandarinLevel;
@@ -15,17 +18,19 @@ import com.example.aichinese.entity.enums.MandarinLevel;
 public record LevelCheckNextRequest(
         MandarinLevel startLevel,
 
-        @Size(max = 6, message = "The level check has at most 6 questions.")
-        List<@Valid Answer> answers) {
+        @Size(max = 8, message = "The level check has at most 8 questions.")
+        List<@NotNull(message = "Question is required.") @Valid Answer> answers) {
 
     public LevelCheckNextRequest {
-        answers = answers == null ? List.of() : List.copyOf(answers);
+        answers = immutableListOrEmpty(answers);
     }
 
     public record Answer(
             @NotNull(message = "Question is required.")
+            @Positive(message = "Question is required.")
             Long questionId,
 
+            @Positive(message = "Answer option id must be positive.")
             Long optionId) {
     }
 }

@@ -1,17 +1,29 @@
 /**
  * Types of the Learn module: the Learn path and lesson player, Practice, Mistakes, XP / daily goal / streak, the
- * Progress page, the level check and the admin Learning path and Practice library. They mirror the backend DTOs in
- * `dto/learn`.
+ * Progress page, the level check and the admin Learning path and Practice library. They hold the fields of the backend
+ * DTOs in `dto/learn` that the frontend reads.
  */
-import type { ContentStatus, LearningStage, PageResponse } from './api'
+import type { PracticeType } from '@/config/practiceActivities'
+
+import type { AiResponseReportReason, ContentStatus, LearningStage, PageResponse } from './api'
 
 export type StopState = 'LOCKED' | 'AVAILABLE' | 'DONE'
-export type UnitState = 'LOCKED' | 'ACTIVE' | 'DONE'
+type UnitState = 'LOCKED' | 'ACTIVE' | 'DONE'
 export type LessonKind = 'LESSON' | 'BONUS' | 'REVIEW' | 'CHECKPOINT'
-export type QuestionType = 'MEANING' | 'PINYIN' | 'HANZI' | 'LISTEN_CHOOSE' | 'LISTEN_BUILD' | 'TRANSLATE_BUILD'
-export type AnswerKind = 'CHOICE' | 'BUILD'
+type QuestionType = 'MEANING' | 'PINYIN' | 'HANZI' | 'LISTEN_CHOOSE' | 'LISTEN_BUILD' | 'TRANSLATE_BUILD'
+type AnswerKind = 'CHOICE' | 'BUILD'
 export type MistakeSource = 'LEARN' | 'PRACTICE'
-export type PracticeType = 'FLASHCARDS' | 'QUIZZES' | 'LISTENING' | 'TRACING' | 'DRAG_DROP' | 'MATCHING' | 'STORY'
+export type { PracticeType } from '@/config/practiceActivities'
+/** How sure the learner was when submitting an answer (Practice asks for Listening, Drag & Drop and Typing). */
+export type AnswerConfidence = 'GUESS' | 'SURE'
+/**
+ * How a learner rated a flashcard, sent as the card's answer when the set is finished: a card still being learned
+ * becomes a mistake, reviewed later as a multiple-choice question.
+ */
+export type FlashcardRating = 'GOT_IT' | 'STILL_LEARNING'
+/** When hints are offered: after being stuck, only on request, or never (Account page). */
+export type HintMode = 'AUTOMATIC' | 'ON_REQUEST' | 'OFF'
+export type HintTier = 'HSK1' | 'HSK2' | 'HSK3'
 export type PublishStatus = 'DRAFT' | 'PUBLISHED'
 export type BadgeKey =
   | 'FIRST_STEPS'
@@ -23,7 +35,7 @@ export type BadgeKey =
   | 'UNIT_CHAMPION'
   | 'XP_300'
 
-export interface ChoiceOption {
+interface ChoiceOption {
   readonly text: string
   readonly pinyin: string | null
 }
@@ -50,26 +62,33 @@ export interface AnswerCheck {
   readonly explanation: string | null
 }
 
+/**
+ * A rank the learner passed with a result (every 100 XP opens the next rank, `RewardRules.levelFor`): the rank
+ * reached, the total XP it opens at and the total XP the rank after it opens at.
+ */
+export interface RankUp {
+  readonly rank: number
+  readonly rankXp: number
+  readonly nextRankXp: number
+}
+
 export interface XpResult {
   readonly xpEarned: number
   readonly bonusXp: number
-  readonly totalXp: number
   readonly todayXp: number
   readonly dailyGoalXp: number
   readonly goalReached: boolean
-  readonly goalJustReached: boolean
   readonly currentStreak: number
   readonly newBadges: readonly BadgeKey[]
+  /** Null unless this result took the learner past a rank threshold (the rank-up dialog then opens). */
+  readonly rankUp: RankUp | null
 }
 
 export interface TodaySummary {
-  readonly date: string
   readonly dailyGoalXp: number
   readonly todayXp: number
   readonly goalReached: boolean
-  readonly currentStreak: number
   readonly week: readonly { readonly date: string; readonly goalReached: boolean }[]
-  readonly setsDoneToday: number
   readonly mistakesWaiting: number
 }
 
@@ -77,7 +96,7 @@ export interface DailyGoal {
   readonly dailyGoalXp: number
 }
 
-// ===== Learn path =====
+// Learn path
 
 export interface PathStop {
   readonly id: number
@@ -96,6 +115,8 @@ export interface PathUnit {
   readonly number: number
   readonly title: string
   readonly titleZh: string
+  /** The unit's line icon (an `IconGlyph` name). */
+  readonly iconKey: string
   readonly state: UnitState
   readonly lessonCount: number
   readonly completedCount: number
@@ -105,65 +126,42 @@ export interface PathUnit {
 
 export interface PathCheckpoint {
   readonly id: number
-  readonly title: string
   readonly questionCount: number
   readonly xpReward: number
   readonly passPercent: number
   readonly state: StopState
-  readonly unlockAfter: string | null
 }
 
 export interface PathLevel {
   readonly level: number
   readonly hskLevel: number
-  readonly lessonCount: number
   readonly locked: boolean
   readonly units: readonly PathUnit[]
   readonly checkpoint: PathCheckpoint | null
 }
 
-export interface NextLesson {
-  readonly id: number
-  readonly title: string
-  readonly kind: LessonKind
-  readonly unitId: number
-  readonly unitNumber: number
-  readonly unitTitle: string
-  readonly unitTitleZh: string
-  readonly position: number
-  readonly unitLessonCount: number
-  readonly minutes: number
-  readonly xpReward: number
-}
-
 export interface LearnPath {
-  readonly totalLessons: number
-  readonly completedLessons: number
   readonly levels: readonly PathLevel[]
-  readonly nextLesson: NextLesson | null
-  readonly learnMistakesWaiting: number
+  readonly nextLesson: { readonly unitId: number; readonly xpReward: number } | null
 }
 
 export interface Guidebook {
-  readonly unitId: number
-  readonly number: number
-  readonly title: string
-  readonly titleZh: string
   readonly phrases: readonly { readonly hanzi: string; readonly pinyin: string; readonly meaning: string }[]
   readonly tips: readonly string[]
 }
 
-export interface LessonPlay {
-  readonly id: number
+/**
+ * Identifies a single play of a lesson, practice set or mistakes review. The player sends both fields with each
+ * hint request so the server can verify the run and count hints toward its allowance.
+ */
+export interface HintRun {
+  readonly runStartedAt: string
+  readonly runSignature: string
+}
+
+export interface LessonPlay extends HintRun {
   readonly title: string
   readonly kind: LessonKind
-  readonly unitId: number
-  readonly unitNumber: number
-  readonly unitTitle: string
-  readonly position: number
-  readonly unitLessonCount: number
-  readonly minutes: number
-  readonly xpReward: number
   readonly passPercent: number | null
   readonly questions: readonly QuestionView[]
 }
@@ -175,22 +173,15 @@ export interface QuestionAnswer {
 }
 
 export interface LessonResult {
-  readonly lessonId: number
-  readonly title: string
   readonly kind: LessonKind
-  readonly unitNumber: number
-  readonly position: number
   readonly passed: boolean
   readonly passPercent: number | null
-  readonly correctCount: number
-  readonly questionCount: number
   readonly accuracy: number
-  readonly durationSeconds: number | null
-  readonly nextLesson: { readonly id: number; readonly title: string; readonly unlockedNow: boolean } | null
+  readonly nextLesson: { readonly title: string; readonly unlockedNow: boolean } | null
   readonly xp: XpResult
 }
 
-// ===== Mistakes =====
+// Mistakes
 
 export interface MistakeRow {
   readonly id: number
@@ -201,7 +192,10 @@ export interface MistakeRow {
   readonly meaning: string | null
   readonly yourAnswer: string | null
   readonly correctAnswer: string
-  readonly lastWrongAt: string
+  /** Answered wrong while "Sure": it leads the list and the review. */
+  readonly sureWrong: boolean
+  /** A flashcard the learner marked "Still learning" (reviewed as a multiple-choice question): nothing was answered. */
+  readonly stillLearning: boolean
 }
 
 export interface MistakeList {
@@ -211,33 +205,34 @@ export interface MistakeList {
   readonly practice: number
 }
 
-export interface MistakeReview {
-  readonly waiting: number
+export interface MistakeReview extends HintRun {
   readonly questions: readonly QuestionView[]
   readonly context: readonly {
     readonly sourceTitle: string
     readonly fromLearn: boolean
     readonly yourAnswer: string | null
+    /** A flashcard marked "Still learning" in Flashcards. */
+    readonly stillLearning: boolean
   }[]
 }
 
 export interface MistakeReviewResult {
-  readonly answered: number
   readonly cleared: number
   readonly left: number
   readonly xp: XpResult
 }
 
-// ===== Practice =====
+// Practice
 
 export interface PracticeSetSummary {
   readonly id: number
   readonly title: string
-  readonly stage: LearningStage | null
   readonly hskLevel: number | null
   readonly itemCount: number
   readonly xpReward: number
   readonly done: boolean
+  /** A run was finished but not every item was right yet. */
+  readonly started: boolean
 }
 
 export interface PracticeItem {
@@ -253,61 +248,108 @@ export interface PracticeItem {
   readonly tiles: readonly string[]
 }
 
-export interface StoryLine {
-  readonly hanzi: string
-  readonly pinyin: string | null
-  readonly translation: string | null
-}
-
-export interface PracticeSet {
+export interface PracticeSet extends HintRun {
   readonly id: number
   readonly type: PracticeType
-  readonly title: string
   readonly stage: LearningStage | null
-  readonly hskLevel: number | null
   readonly xpReward: number
   readonly done: boolean
   readonly items: readonly PracticeItem[]
-  readonly storyLines: readonly StoryLine[]
   readonly matchingChoices: readonly string[]
   readonly strokeCount: number | null
+  /** Tracing: the strokes of each character in order, adding up to `strokeCount`; null when the set does not say. */
+  readonly characterStrokes: readonly number[] | null
 }
 
 export interface PracticeItemAnswer {
   readonly itemKey: string
   readonly answer: string | null
+  /**
+   * Sent with a check; an answer after a hint always counts as a guess (the server knows which hints it gave for the
+   * item).
+   */
+  readonly confidence?: AnswerConfidence | null
+  /** Listening sets mark skipped items when browser speech playback failed. */
+  readonly audioFailed?: boolean
+}
+
+export interface HintPolicyLevel {
+  readonly tier: HintTier
+  readonly delaySeconds: number
+  /** Hints a set may use; 0 means every question may have one. */
+  readonly perSet: number
+}
+
+/** The hint rule of the student's level with their setting. A hint is one step; how much it says follows the tier. */
+export interface HintSettings extends HintPolicyLevel {
+  readonly mode: HintMode
+}
+
+type HintKind =
+  | 'RULE_OUT'
+  | 'CLUE'
+  | 'FIRST_SOUND'
+  | 'FIRST_LETTER'
+  | 'TWO_LEFT'
+  | 'FIRST_TILE'
+  | 'LEAVE_OUT'
+  | 'ORDER_START'
+  | 'INITIALS'
+  | 'TYPE_THIS'
+  | 'PAIR'
+  | 'STROKE_COUNT'
+  | 'STROKE_ORDER'
+
+/** An item's one hint; the interface writes its sentence from the kind and fields. */
+export interface HintStep {
+  readonly kind: HintKind
+  readonly words: readonly string[]
+  readonly pinyin: readonly string[]
+  readonly text: string | null
+  readonly count: number | null
+  /** Every answer ruled out so far (greyed out). */
+  readonly ruledOut: readonly string[]
+}
+
+/**
+ * A learner's report of a SparkBot hint (Report on the hint card). It joins the admins' AI reports as feature `HINT`,
+ * and the reply shows in Ask SparkBot › My reports.
+ */
+export interface HintReport {
+  readonly reasonCategory: AiResponseReportReason
+  readonly description: string | null
+  /** What the hint was for: the activity, set or lesson and item, and the page. */
+  readonly promptSnapshot: string
+  /** The hint as the learner read it. */
+  readonly aiResponseSnapshot: string
+}
+
+/** The Progress page's answers of the last 7 days. */
+export interface AnswerInsights {
+  readonly sureAndRight: number
+  readonly luckyGuesses: number
+  readonly sureButWrong: number
+  readonly wrongGuesses: number
+  readonly hintsUsed: number
+  readonly mostHintsIn: PracticeType | null
 }
 
 export interface PracticeResult {
   readonly type: PracticeType
-  readonly setId: number
-  readonly title: string
   readonly correctCount: number
   readonly itemCount: number
   readonly allCorrect: boolean
-  readonly results: readonly { readonly key: string; readonly correct: boolean }[]
   readonly nextSet: { readonly id: number; readonly title: string } | null
   readonly xp: XpResult
 }
 
-// ===== Progress =====
-
-export type XpSourceKind =
-  | 'LEARN_LESSON'
-  | 'PRACTICE_SET'
-  | 'QUIZ_STREAK'
-  | 'MISTAKES_REVIEW'
-  | 'DAILY_GOAL'
-  | 'EARLIER'
+// Progress
 
 export interface ProgressOverview {
   readonly totalXp: number
   readonly level: number
   readonly xpIntoLevel: number
   readonly nextLevelXp: number
-  readonly dailyGoalXp: number
-  readonly todayXp: number
-  readonly goalReachedToday: boolean
   readonly currentStreak: number
   readonly bestStreak: number
   readonly calendar: {
@@ -318,22 +360,25 @@ export interface ProgressOverview {
     readonly previousMonth: string | null
     readonly nextMonth: string | null
   }
-  readonly sources: {
-    readonly learn: number
-    readonly practice: number
-    readonly reviewsAndGoals: number
-    readonly earlier: number
-  }
-  readonly recent: readonly {
-    readonly kind: XpSourceKind
-    readonly title: string
-    readonly xp: number
-    readonly at: string
-  }[]
   readonly badges: readonly { readonly key: BadgeKey; readonly earned: boolean; readonly earnedAt: string | null }[]
 }
 
-// ===== Admin =====
+export type ProgressSkill = 'VOCABULARY' | 'LISTENING' | 'CHARACTERS' | 'SENTENCES'
+
+/** The Skills card of the Progress page, computed from the student's real completions. */
+export interface SkillProgress {
+  readonly skills: readonly {
+    readonly skill: ProgressSkill
+    /** The share of the skill's published items the student completed. */
+    readonly percent: number
+    /** Percentage points gained from completions in the last 7 days. */
+    readonly weeklyChange: number
+  }[]
+  /** Null until the student has completed anything. */
+  readonly weakest: ProgressSkill | null
+}
+
+// Admin
 
 export interface AdminUnitRow {
   readonly id: number
@@ -341,18 +386,19 @@ export interface AdminUnitRow {
   readonly title: string
   readonly titleZh: string
   readonly hskLevel: number
+  /** The unit's lessons and reviews: neither its bonus chests nor a level checkpoint (as on the student path). */
   readonly lessonCount: number
+  /** The unit's bonus chests, named beside its lessons. */
+  readonly bonusCount: number
   readonly studentsStarted: number
   readonly status: PublishStatus
 }
 
 export interface AdminLearningPath {
   readonly unitCount: number
-  readonly lessonCount: number
   readonly levels: readonly {
     readonly level: number
     readonly hskLevel: number
-    readonly lessonCount: number
     readonly units: readonly AdminUnitRow[]
   }[]
 }
@@ -361,42 +407,46 @@ export interface AdminUnitDetail {
   readonly unit: AdminUnitRow
   readonly lessons: readonly {
     readonly id: number
-    readonly position: number
     readonly title: string
     readonly kind: LessonKind
     readonly minutes: number
     readonly xpReward: number
-    readonly questionCount: number
   }[]
 }
 
-export type LevelCheckSkill = 'VOCABULARY' | 'LISTENING' | 'CHARACTERS' | 'SENTENCES' | 'PINYIN'
+export type LevelCheckSkill =
+  | 'VOCABULARY'
+  | 'LISTENING'
+  | 'CHARACTERS'
+  | 'NUMBERS'
+  | 'PINYIN'
+  | 'GRAMMAR'
+  | 'SENTENCES'
+  | 'IDIOMS'
 export type LevelCheckLevel = 'BEGINNER_1' | 'BEGINNER_2'
 export type Difficulty = 'EASY' | 'MEDIUM' | 'HARD'
 
 export interface LevelCheckQuestionRow {
   readonly id: number
   readonly prompt: string
-  readonly hanzi: string | null
   readonly skill: LevelCheckSkill
   readonly difficulty: Difficulty
   readonly level: LevelCheckLevel
   readonly status: PublishStatus
-  readonly answeredCount: number
-  readonly correctPercent: number | null
-}
-
-export interface LevelCheckOption {
-  readonly id?: number | null
-  readonly text: string
-  readonly correct: boolean
-  readonly explanation: string | null
 }
 
 export interface LevelCheckQuestionDetail extends LevelCheckQuestionRow {
+  readonly hanzi: string | null
   readonly pinyin: string | null
   readonly audioText: string | null
-  readonly options: readonly LevelCheckOption[]
+  readonly answeredCount: number
+  /** Null while nobody answered the question. */
+  readonly correctPercent: number | null
+  readonly options: readonly {
+    readonly text: string
+    readonly correct: boolean
+    readonly explanation: string | null
+  }[]
 }
 
 export interface LevelCheckQuestionPayload {
@@ -415,16 +465,13 @@ export interface AdminPracticeSetRow {
   readonly id: number
   readonly type: PracticeType
   readonly title: string
-  readonly stage: LearningStage | null
   readonly hskLevel: number | null
-  readonly itemCount: number
   readonly status: ContentStatus
   readonly updatedAt: string
 }
 
 /** One item of a set as admins edit it (fields used depend on the type). */
 export interface PracticeItemData {
-  id?: number | null
   hanzi: string | null
   pinyin: string | null
   meaning: string | null
@@ -438,6 +485,8 @@ export interface PracticeItemData {
   distractors: string | null
 }
 
+/** A practice set's status changes; `unarchive` is the Undo of Archive (back to the status before), `restore` a draft. */
+export type PracticeSetAction = 'publish' | 'unpublish' | 'archive' | 'restore' | 'unarchive'
 export type PracticeHistoryAction = 'CREATED' | 'UPDATED' | 'PUBLISHED' | 'UNPUBLISHED' | 'ARCHIVED' | 'RESTORED'
 
 export interface AdminPracticeSetDetail {
@@ -448,13 +497,13 @@ export interface AdminPracticeSetDetail {
   readonly hskLevel: number | null
   readonly xpReward: number
   readonly status: ContentStatus
+  /** Null for seeded platform content. */
   readonly createdBy: string | null
-  readonly createdAt: string
-  readonly updatedAt: string
   readonly playedBy: number
   readonly items: readonly PracticeItemData[]
-  readonly storyLines: readonly StoryLine[]
   readonly strokeCount: number | null
+  /** Tracing: the strokes of each character in order, adding up to `strokeCount`; null when not given. */
+  readonly characterStrokes: readonly number[] | null
   readonly history: readonly {
     readonly action: PracticeHistoryAction
     readonly actor: string | null
@@ -462,19 +511,25 @@ export interface AdminPracticeSetDetail {
   }[]
 }
 
+/** A new or edited set; the server works out its XP from its type, level and items. */
 export interface PracticeSetPayload {
   title: string
   stage: LearningStage | null
-  hskLevel: number | null
-  xpReward: number | null
+  hskLevel: number
   items: PracticeItemData[]
-  storyLines: { hanzi: string; pinyin: string | null; translation: string | null }[]
   strokeCount: number | null
+  /** Tracing: one number per character, adding up to `strokeCount`; empty when not given. */
+  characterStrokes: number[]
 }
 
-// ===== Level check (student; the plan module's setup uses it) =====
+// Level check (student; the plan module's setup uses it)
 
 export type MandarinLevel = 'NEW_TO_MANDARIN' | 'BEGINNER_1' | 'BEGINNER_2'
+
+export interface LevelCheckAnswer {
+  questionId: number
+  optionId: number | null
+}
 
 export interface LevelCheckStep {
   readonly feedback: {
@@ -489,13 +544,16 @@ export interface LevelCheckStep {
     readonly hanzi: string | null
     readonly pinyin: string | null
     readonly audioText: string | null
+    /** The skill this question tests: the check asks one question per skill. */
+    readonly skill: LevelCheckSkill
     readonly options: readonly { readonly id: number; readonly text: string }[]
   } | null
   readonly done: boolean
   readonly result: {
+    /** The starting level the check placed the learner at. */
+    readonly level: MandarinLevel
     readonly knownSkills: readonly LevelCheckSkill[]
     readonly newSkills: readonly LevelCheckSkill[]
-    readonly answeredCount: number
   } | null
   readonly answeredCount: number
   readonly maxQuestions: number

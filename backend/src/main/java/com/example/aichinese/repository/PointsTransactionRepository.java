@@ -3,8 +3,6 @@ package com.example.aichinese.repository;
 import java.time.LocalDateTime;
 import java.util.List;
 
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -12,8 +10,6 @@ import org.springframework.data.repository.query.Param;
 import com.example.aichinese.entity.PointsTransaction;
 
 public interface PointsTransactionRepository extends JpaRepository<PointsTransaction, Long> {
-
-    Page<PointsTransaction> findByStudentIdOrderByCreatedAtDesc(Long studentId, Pageable pageable);
 
     boolean existsByStudentIdAndSourceTypeAndSourceId(Long studentId, String sourceType, Long sourceId);
 
@@ -26,6 +22,13 @@ public interface PointsTransactionRepository extends JpaRepository<PointsTransac
             @Param("from") LocalDateTime from,
             @Param("to") LocalDateTime to);
 
+    /** Ids of the active accounts of learners who earned XP since {@code since} ("New in Practice"). */
+    @Query("""
+            select distinct p.student.user.id from PointsTransaction p
+            where p.createdAt >= :since and p.student.user.active = true and p.student.user.deletedAt is null
+            """)
+    List<Long> findActiveLearnerIdsSince(@Param("since") LocalDateTime since);
+
     /** Source ids of one source type in a range (the daily-goal rows use the epoch day as their id). */
     @Query("""
             select p.sourceId from PointsTransaction p
@@ -37,11 +40,4 @@ public interface PointsTransactionRepository extends JpaRepository<PointsTransac
             @Param("sourceType") String sourceType,
             @Param("fromId") Long fromId,
             @Param("toId") Long toId);
-
-    /** XP per source type, for "Where your XP comes from". */
-    @Query("""
-            select p.sourceType, sum(p.pointsDelta) from PointsTransaction p
-            where p.student.id = :studentId group by p.sourceType
-            """)
-    List<Object[]> sumBySourceType(@Param("studentId") Long studentId);
 }

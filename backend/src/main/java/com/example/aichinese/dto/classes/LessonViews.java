@@ -3,52 +3,56 @@ package com.example.aichinese.dto.classes;
 import java.time.LocalDateTime;
 import java.util.List;
 
-/** A class lesson as the student works through it: the lesson page, its activities and its quizzes. */
+import io.swagger.v3.oas.annotations.media.Schema;
+
+/** A class lesson as the learner works through it: the lesson page, its activities and its quizzes. */
 public final class LessonViews {
 
     private LessonViews() {
     }
 
+    /** A key phrase of the lesson; the admin lesson editor shows the same record. */
     public record KeyPhrase(String chinese, String pinyin, String meaning) {
     }
 
-    /** The lesson video; {@code streamPath} is set for an uploaded file, {@code externalUrl} for a link. */
+    /**
+     * The lesson video; {@code streamPath} is set for an uploaded file, {@code externalUrl} for a link (neither in an
+     * archived class, where the video no longer plays).
+     */
+    @Schema(name = "StudentLessonVideo")
     public record Video(
             String title,
             String externalUrl,
             String streamPath,
             Integer durationSeconds,
-            boolean watched,
-            int percentWatched) {
+            boolean watched) {
     }
 
-    /** A practice activity in the lesson, in the teacher's recommended order. */
-    public record ActivityStep(String type, Long id, String title, int number, String stage, boolean done) {
+    /** A practice activity in the lesson, in lesson order. */
+    public record ActivityStep(String type, Long id, String title, int number, boolean done) {
     }
 
-    /** A lesson quiz card: settings plus the student's best score and attempts. */
+    /**
+     * A lesson quiz card: its size plus the learner's best score and attempts. {@code bestAttemptId} is the submitted
+     * attempt with the best score (the newest of equal ones), behind "See best result"; null before the first attempt.
+     */
     public record QuizCard(
             Long id,
-            String title,
-            String stage,
             int questionCount,
-            int marks,
-            Integer timeLimitMinutes,
-            boolean hintsAvailable,
             Integer bestPercent,
             int attemptCount,
+            Long bestAttemptId,
             boolean inProgress) {
     }
 
+    /**
+     * A lesson of a joined class. {@code archived}: the class is archived, so the lesson is read-only (its key phrases,
+     * activities and quiz results show, but the video, activities and quiz no longer open).
+     */
     public record StudentLesson(
             Long classId,
             String classTitle,
-            String teacherName,
-            String unitTitle,
             String title,
-            int number,
-            String summary,
-            Integer minutes,
             boolean available,
             Video video,
             List<KeyPhrase> keyPhrases,
@@ -56,13 +60,11 @@ public final class LessonViews {
             List<QuizCard> quizzes,
             int stepsDone,
             int stepsTotal,
-            int percent,
             String status,
-            Integer bestQuizPercent,
-            List<LiveSessionViews.SessionBrief> liveSessions) {
+            boolean archived) {
     }
 
-    /** A character to trace, with its pinyin and meaning. */
+    /** A character to trace, with its pinyin and meaning; the admin lesson editor shows the same record. */
     public record TraceCharacter(String character, String pinyin, String meaning) {
     }
 
@@ -70,20 +72,23 @@ public final class LessonViews {
     public record MatchWord(Long id, String chinese, String pinyin) {
     }
 
-    public record ActivityRef(String type, Long id, String title) {
+    public record ActivityRef(String type, Long id) {
     }
 
-    /** One activity to play in focus mode. Only the part of its type is filled. */
+    /**
+     * One activity to play in focus mode. Only the part of its type is filled. {@code hintsAllowed}: the lesson's
+     * "Allow SparkBot hints" is on (its quiz's setting), so SparkBot may offer hints here too.
+     */
     public record ActivityPlay(
             String type,
             Long id,
+            Long classId,
+            Long lessonId,
             String title,
-            String stage,
+            boolean hintsAllowed,
             int number,
             int activityCount,
             String lessonTitle,
-            boolean done,
-            ActivityRef previous,
             ActivityRef next,
             List<KeyPhrase> cards,
             List<TraceCharacter> characters,
@@ -91,12 +96,10 @@ public final class LessonViews {
             List<String> meanings) {
     }
 
-    /** Outcome of finishing or checking an activity, with the lesson's progress afterwards. */
+    /** Outcome of finishing or checking an activity, with the lesson's status afterwards. */
     public record ActivityOutcome(
             boolean done,
             List<PairResult> pairs,
-            int stepsDone,
-            int stepsTotal,
             String lessonStatus) {
     }
 
@@ -106,7 +109,7 @@ public final class LessonViews {
     public record MatchHint(Long wordId, String meaning) {
     }
 
-    // ----- lesson quiz -----
+    // Lesson quiz
 
     public record QuizOption(Long id, String text) {
     }
@@ -125,37 +128,30 @@ public final class LessonViews {
     public record SavedAnswer(Long questionId, Long optionId, String answerText) {
     }
 
-    /** The quiz before it starts: what it holds and how the student did so far. */
+    /** The quiz and where it sits (its class and lesson), for the headers of the quiz and result pages. */
     public record QuizIntro(
             Long id,
-            String title,
-            String stage,
-            int questionCount,
-            int marks,
-            Integer timeLimitMinutes,
-            boolean hintsAvailable,
             Long classId,
             String classTitle,
             Long lessonId,
-            String lessonTitle,
-            Integer bestPercent,
-            Long openAttemptId) {
+            String lessonTitle) {
     }
 
-    /** A started (or resumed) attempt: answers are saved one by one until it is submitted or time is up. */
+    /** A started (or resumed) attempt: answers are saved one by one until it is submitted. */
     public record QuizSession(
             Long attemptId,
             QuizIntro quiz,
-            LocalDateTime expiresAt,
-            Long secondsLeft,
             List<QuizQuestion> questions,
             List<SavedAnswer> answers) {
     }
 
-    public record QuizHint(Long questionId, String hint) {
+    public record QuizHint(String hint) {
     }
 
-    /** One question of a submitted attempt with the student's answer, the right answer and the explanation. */
+    /**
+     * One question of a submitted attempt with the student's answer, the right answer and the explanation;
+     * {@code optionFeedback} is the feedback of the answer the student picked when it was wrong ("That's 面"), else null.
+     */
     public record ReviewedQuestion(
             Long questionId,
             int number,
@@ -164,28 +160,26 @@ public final class LessonViews {
             String correctAnswer,
             boolean correct,
             String explanation,
-            boolean hintUsed) {
+            String optionFeedback) {
     }
 
-    /** The activity of the lesson to practise after the quiz, picked from the skill most wrong answers are about. */
-    public record PracticeSuggestion(String skill, ActivityRef activity) {
-    }
-
+    /**
+     * A submitted attempt with its own {@code percent}; {@code bestPercent} is the best of the quiz's submitted attempts,
+     * this one included, and {@code bestCorrect} of {@code bestTotal} the right answers of that best attempt ("Your best
+     * is 4 out of 5 (80%)").
+     */
     public record QuizResult(
             Long attemptId,
             QuizIntro quiz,
             LocalDateTime submittedAt,
-            int score,
-            int maxScore,
             int percent,
-            Integer bestPercent,
-            int hintsUsed,
+            int bestPercent,
+            int bestCorrect,
+            int bestTotal,
             int correctCount,
             int wrongCount,
             List<ReviewedQuestion> questions,
             String lessonStatus,
-            int activitiesLeft,
-            PracticeSuggestion suggestion,
-            List<ClassViews.FeedbackItem> feedback) {
+            int activitiesLeft) {
     }
 }

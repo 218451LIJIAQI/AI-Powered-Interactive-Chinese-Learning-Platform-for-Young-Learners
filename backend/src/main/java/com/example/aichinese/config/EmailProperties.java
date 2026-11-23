@@ -3,6 +3,8 @@ package com.example.aichinese.config;
 import java.net.URI;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.util.StringUtils;
+import org.springframework.web.util.UriComponentsBuilder;
 
 @ConfigurationProperties(prefix = "app.email")
 public record EmailProperties(
@@ -17,20 +19,27 @@ public record EmailProperties(
     private static final int MAX_URL_LENGTH = 2048;
 
     public String resolveFrom(String fallbackEmail) {
-        if (hasText(from)) {
+        if (StringUtils.hasText(from)) {
             return sanitizeHeaderValue(from, "Email from address");
         }
-        if (hasText(fallbackEmail)) {
+        if (StringUtils.hasText(fallbackEmail)) {
             return sanitizeHeaderValue(fallbackEmail, "SMTP username fallback email");
         }
         return DEFAULT_FROM;
     }
 
     public String resolvePasswordResetBaseUrl() {
-        if (hasText(passwordResetBaseUrl)) {
-            return validateHttpUrl(passwordResetBaseUrl.trim(), "Password reset base URL");
-        }
-        return DEFAULT_RESET_URL;
+        return resolvePasswordResetBaseUri().toString();
+    }
+
+    /** Both reset tokens and admin invitations open the configured password page. Only one can be active in a link. */
+    public String passwordPageLink(String parameter, String hexToken) {
+        return UriComponentsBuilder.fromUri(resolvePasswordResetBaseUri())
+                .replaceQueryParam("token")
+                .replaceQueryParam("invite")
+                .queryParam(parameter, hexToken)
+                .build(true)
+                .toUriString();
     }
 
     /**
@@ -38,15 +47,44 @@ public record EmailProperties(
      * {@code confirm-email} for the e-mail change link.
      */
     public String resolveFrontendUrl(String page) {
-        return URI.create(resolvePasswordResetBaseUrl()).resolve(page).toString();
+        URI base = resolvePasswordResetBaseUri();
+        String rawPath = base.getRawPath();
+        if (rawPath == null || rawPath.isEmpty()) {
+            base = UriComponentsBuilder.fromUri(base)
+                    .replacePath("/")
+                    .build(true)
+                    .toUri();
+        } else if (rawPath.length() > 1 && rawPath.endsWith("/")) {
+            String withoutTrailingSlash = rawPath.replaceAll("/+$", "");
+            base = UriComponentsBuilder.fromUri(base)
+                    .replacePath(withoutTrailingSlash.isEmpty() ? "/" : withoutTrailingSlash)
+                    .build(true)
+                    .toUri();
+        }
+        return base.resolve(page).toString();
     }
 
-    private static boolean hasText(String value) {
-        return value != null && !value.isBlank();
+    private URI resolvePasswordResetBaseUri() {
+        if (!StringUtils.hasText(passwordResetBaseUrl)) {
+            return URI.create(DEFAULT_RESET_URL);
+        }
+        String url = passwordResetBaseUrl.strip();
+        if (url.length() > MAX_URL_LENGTH) {
+            throw new IllegalArgumentException("Password reset base URL must be at most " + MAX_URL_LENGTH + " characters.");
+        }
+        URI uri = HttpUrlValidation.requireAbsoluteHttpUrl(url, "Password reset base URL");
+        String rawPath = uri.getRawPath();
+        if (rawPath != null && rawPath.contains("//")) {
+            return UriComponentsBuilder.fromUri(uri)
+                    .replacePath(rawPath.replaceAll("/{2,}", "/"))
+                    .build(true)
+                    .toUri();
+        }
+        return uri;
     }
 
     private static String sanitizeHeaderValue(String value, String label) {
-        String trimmed = value.trim();
+        String trimmed = value.strip();
         if (trimmed.length() > MAX_FROM_LENGTH) {
             throw new IllegalArgumentException(
                     label + " must be at most " + MAX_FROM_LENGTH + " characters.");
@@ -61,14 +99,5 @@ public record EmailProperties(
             }
         }
         return trimmed;
-    }
-
-    private static String validateHttpUrl(String value, String label) {
-        if (value.length() > MAX_URL_LENGTH) {
-            throw new IllegalArgumentException(
-                    label + " must be at most " + MAX_URL_LENGTH + " characters.");
-        }
-        HttpUrlValidation.requireAbsoluteHttpUrl(value, label);
-        return value;
     }
 }

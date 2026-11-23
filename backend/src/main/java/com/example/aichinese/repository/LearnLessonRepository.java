@@ -14,4 +14,29 @@ public interface LearnLessonRepository extends JpaRepository<LearnLesson, Long> 
     List<LearnLesson> findPathInOrder();
 
     List<LearnLesson> findByUnitIdOrderByPositionAsc(Long unitId);
+
+    /**
+     * The overview only needs counts, not every lesson and its unit loaded as entities: per unit, its stops without a
+     * level checkpoint ({@code total}) and how many of those are bonus chests ({@code bonus}).
+     */
+    @Query("""
+            select l.unit.id as id,
+                   count(l) as total,
+                   sum(case when l.lessonKind = com.example.aichinese.entity.enums.LearnLessonKind.BONUS
+                            then 1 else 0 end) as bonus
+            from LearnLesson l
+            where l.lessonKind <> com.example.aichinese.entity.enums.LearnLessonKind.CHECKPOINT
+            group by l.unit.id
+            """)
+    List<UnitLessonCounts> countLessonsPerUnit();
+
+    /** One unit's row of {@link #countLessonsPerUnit()}. */
+    interface UnitLessonCounts {
+
+        Long getId();
+
+        long getTotal();
+
+        long getBonus();
+    }
 }

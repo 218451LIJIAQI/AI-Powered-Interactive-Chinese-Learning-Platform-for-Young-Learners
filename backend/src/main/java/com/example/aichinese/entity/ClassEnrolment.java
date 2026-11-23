@@ -7,7 +7,6 @@ import com.example.aichinese.entity.base.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
-import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -15,13 +14,11 @@ import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.Setter;
 
-/** A student joined a teacher's class (every class is free); it gives access to the class lessons. */
+/** A learner joined a class (every class is free); it gives access to the class lessons. */
 @Getter
 @Setter
 @Entity
-@Table(name = "class_enrolments", indexes = {
-        @Index(name = "idx_class_enrolments_class_id", columnList = "course_package_id")
-}, uniqueConstraints = {
+@Table(name = "class_enrolments", uniqueConstraints = {
         @UniqueConstraint(name = "uk_class_enrolments_student_class", columnNames = { "student_id", "course_package_id" })
 })
 public class ClassEnrolment extends BaseEntity {

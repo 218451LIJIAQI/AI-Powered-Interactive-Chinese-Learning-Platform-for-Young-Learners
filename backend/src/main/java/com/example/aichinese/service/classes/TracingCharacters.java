@@ -4,7 +4,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.example.aichinese.dto.classes.ClassRequests;
+import com.example.aichinese.dto.classes.LessonViews;
 import com.example.aichinese.entity.TracingExercise;
+import com.example.aichinese.util.TextUtils;
 
 /**
  * The characters of a class tracing activity ("Trace 你 and 好"). They are stored on one tracing exercise: the
@@ -13,40 +15,42 @@ import com.example.aichinese.entity.TracingExercise;
  */
 public final class TracingCharacters {
 
-    static final String SEPARATOR = "|";
+    private static final String SEPARATOR = "|";
 
     private TracingCharacters() {
     }
 
-    public record Entry(String character, String pinyin, String meaning) {
-    }
-
-    public static List<Entry> read(TracingExercise exercise) {
+    public static List<LessonViews.TraceCharacter> read(TracingExercise exercise) {
         String target = exercise.getTargetCharacter() == null ? "" : exercise.getTargetCharacter();
         List<String> characters = target.codePoints()
-                .filter(codePoint -> !Character.isWhitespace(codePoint))
-                .mapToObj(TracingCharacters::codePointText)
+                .filter(codePoint -> !TextUtils.isSpace(codePoint))
+                .mapToObj(Character::toString)
                 .toList();
         List<String> pinyin = split(exercise.getPinyin());
         List<String> meanings = split(exercise.getMeaning());
-        List<Entry> result = new ArrayList<>(characters.size());
+        List<LessonViews.TraceCharacter> result = new ArrayList<>(characters.size());
         for (int index = 0; index < characters.size(); index++) {
-            result.add(new Entry(characters.get(index), at(pinyin, index), at(meanings, index)));
+            result.add(new LessonViews.TraceCharacter(characters.get(index), at(pinyin, index), at(meanings, index)));
         }
         return result;
     }
 
     public static void write(TracingExercise exercise, List<ClassRequests.TraceCharacter> characters) {
         exercise.setTargetCharacter(String.join("", characters.stream().map(ClassRequests.TraceCharacter::character).toList()));
-        exercise.setPinyin(String.join(SEPARATOR, characters.stream().map(ClassRequests.TraceCharacter::pinyin).toList()));
-        exercise.setMeaning(String.join(SEPARATOR, characters.stream()
-                .map(character -> character.meaning() == null ? "" : character.meaning().replace(SEPARATOR, "/"))
-                .toList()));
+        exercise.setPinyin(joined(characters.stream().map(ClassRequests.TraceCharacter::pinyin).toList()));
+        exercise.setMeaning(joined(characters.stream().map(ClassRequests.TraceCharacter::meaning).toList()));
+    }
+
+    /** One value per character; a separator typed inside a value would shift the values after it. */
+    private static String joined(List<String> values) {
+        return String.join(SEPARATOR, values.stream()
+                .map(value -> value == null ? "" : value.replace(SEPARATOR, "/"))
+                .toList());
     }
 
     /** True when the text is exactly one character (one code point), e.g. 好 or 𠀀. */
     public static boolean isSingleCharacter(String text) {
-        return text != null && text.codePointCount(0, text.length()) == 1;
+        return !TextUtils.isBlankOrSpaces(text) && text.codePointCount(0, text.length()) == 1;
     }
 
     private static List<String> split(String value) {
@@ -60,11 +64,7 @@ public final class TracingCharacters {
         if (index >= values.size()) {
             return null;
         }
-        String value = values.get(index).strip();
+        String value = TextUtils.stripFormSpaces(values.get(index));
         return value.isEmpty() ? null : value;
-    }
-
-    private static String codePointText(int codePoint) {
-        return new String(Character.toChars(codePoint));
     }
 }

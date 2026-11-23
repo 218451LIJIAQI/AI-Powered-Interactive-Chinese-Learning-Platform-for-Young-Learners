@@ -1,22 +1,32 @@
 import { apiClientMessage } from '@/plugins/apiClientMessages'
 import { documentLanguage } from '@/utils/locale'
-import { localizeServerMessage } from '@/utils/serverMessages'
+import { localizeServerMessage, messageKey } from '@/utils/serverMessages'
+import { truncateText } from '@/utils/truncateText'
+
+/** Gives REST envelope and streaming errors the same status and message shape as an HTTP failure. */
+export class ApiEnvelopeError extends Error {
+  readonly response: { status?: number; data: { message: string } }
+
+  constructor(message: string, status?: number) {
+    super(message)
+    this.name = 'ApiEnvelopeError'
+    this.response = { status, data: { message } }
+  }
+}
 
 type ApiErrorPayload = {
   response?: {
     status?: number
     data?: {
       message?: unknown
-      errors?: unknown[]
-      fieldErrors?: Record<string, unknown>
     }
   }
   request?: unknown
   code?: string
-  message?: string
 }
 
 const MAX_USER_MESSAGE_LENGTH = 280
+// eslint-disable-next-line no-control-regex
 const UNSAFE_MESSAGE_CHARACTERS = /[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g
 const TRANSPORT_INTERNAL_MESSAGES = new Set(['Request failed', 'Network Error'])
 
@@ -34,7 +44,7 @@ export function cleanServerMessage(value: unknown): string | null {
     return null
   }
 
-  return trimmed.length > MAX_USER_MESSAGE_LENGTH ? `${trimmed.slice(0, MAX_USER_MESSAGE_LENGTH - 3)}...` : trimmed
+  return trimmed.length > MAX_USER_MESSAGE_LENGTH ? `${truncateText(trimmed, MAX_USER_MESSAGE_LENGTH - 3)}...` : trimmed
 }
 
 /**
@@ -45,12 +55,9 @@ export function cleanServerMessage(value: unknown): string | null {
 export function resolveApiError(reason: unknown, fallback?: string): string {
   const payload = reason as ApiErrorPayload | null
   const serverMessage = cleanServerMessage(payload?.response?.data?.message)
-  const serverError = cleanServerMessage(payload?.response?.data?.errors?.[0])
 
   // FRLANG02: known backend messages are shown in the interface language; others stay as sent.
-  const locale = documentLanguage()
-  if (serverMessage) return localizeServerMessage(serverMessage, locale)
-  if (serverError) return localizeServerMessage(serverError, locale)
+  if (serverMessage) return localizeServerMessage(serverMessage, documentLanguage())
 
   const status = payload?.response?.status
   if (status === 401) return apiClientMessage('unauthorized')
@@ -59,9 +66,8 @@ export function resolveApiError(reason: unknown, fallback?: string): string {
   if (status === 429) return apiClientMessage('rateLimited')
   if (status && status >= 500) return apiClientMessage('server')
 
-  const rawMessage = payload?.message ?? ''
-  const timedOut = payload?.code === 'ECONNABORTED' || /timeout/i.test(rawMessage)
-  if (timedOut) return apiClientMessage('timeout')
+  // Axios marks a timed-out request with this code.
+  if (payload?.code === 'ECONNABORTED') return apiClientMessage('timeout')
 
   if (payload?.request && !payload?.response) {
     return apiClientMessage('network')
@@ -70,17 +76,17 @@ export function resolveApiError(reason: unknown, fallback?: string): string {
   return fallback ?? apiClientMessage('fallback')
 }
 
-/**
- * The first server validation message for one request field (`fieldErrors` of a 400 answer), in the interface language,
- * or null when the server sent none for that field. Lets a form show the server's rule next to the field it concerns.
- */
-export function apiFieldError(reason: unknown, field: string): string | null {
-  const messages = (reason as ApiErrorPayload | null)?.response?.data?.fieldErrors?.[field]
-  const message = Array.isArray(messages) ? cleanServerMessage(messages[0]) : null
-  return message ? localizeServerMessage(message, documentLanguage()) : null
-}
-
 /** HTTP status of a failed request, or null for network errors and non-HTTP failures. */
 export function apiErrorStatus(reason: unknown): number | null {
   return (reason as ApiErrorPayload | null)?.response?.status ?? null
+}
+
+/**
+ * True when a failed request is the server's refusal with `message` (its English text), for a refusal a page explains
+ * in its own words. Matched as a message is matched for translation: case, repeated spaces and a final full stop do
+ * not matter.
+ */
+export function hasServerMessage(reason: unknown, message: string): boolean {
+  const sent = cleanServerMessage((reason as ApiErrorPayload | null)?.response?.data?.message)
+  return sent !== null && messageKey(sent) === messageKey(message)
 }

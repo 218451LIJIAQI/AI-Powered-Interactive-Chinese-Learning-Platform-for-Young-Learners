@@ -42,21 +42,37 @@ public class RequestIdFilter extends OncePerRequestFilter {
         }
     }
 
+    /** Stripped again after the cut, so the header, the log context and the response body carry the same id. */
     private static String normalizeRequestId(String requestId) {
         String stripped = TextUtils.trimToNull(requestId);
         if (stripped == null) {
             return null;
         }
-        String sanitized = toPrintableAscii(stripped);
-        return sanitized.length() > MAX_REQUEST_ID_LENGTH ? sanitized.substring(0, MAX_REQUEST_ID_LENGTH) : sanitized;
+        String bounded = TextUtils.trimToNull(stripped.substring(0, Math.min(stripped.length(), MAX_REQUEST_ID_LENGTH)));
+        if (bounded == null) {
+            return null;
+        }
+        StringBuilder sanitized = new StringBuilder(bounded.length());
+        boolean hasSafeChar = false;
+        for (int i = 0; i < bounded.length(); i++) {
+            char c = bounded.charAt(i);
+            if (isAllowedRequestIdChar(c)) {
+                sanitized.append(c);
+                hasSafeChar = true;
+            } else {
+                sanitized.append('_');
+            }
+        }
+        return hasSafeChar ? sanitized.toString() : null;
     }
 
-    private static String toPrintableAscii(String value) {
-        StringBuilder sb = new StringBuilder(value.length());
-        for (int i = 0; i < value.length(); i++) {
-            char c = value.charAt(i);
-            sb.append((c >= 0x20 && c <= 0x7E) ? c : '_');
-        }
-        return sb.toString();
+    private static boolean isAllowedRequestIdChar(char c) {
+        return (c >= 'a' && c <= 'z')
+                || (c >= 'A' && c <= 'Z')
+                || (c >= '0' && c <= '9')
+                || c == '.'
+                || c == '_'
+                || c == ':'
+                || c == '-';
     }
 }

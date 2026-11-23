@@ -2,30 +2,46 @@
   <AppOverlay
     variant="drawer"
     size="lg"
-    :open="open"
     :title="existing ? t('adminLearning.editActivity') : t('adminLearning.newActivity')"
     :subtitle="subtitle"
     test-id="set-editor"
     @close="emit('close')"
   >
-    <form :id="formId" class="form-grid admin-learning-form" novalidate @submit.prevent="save">
-      <p v-if="existing" class="type-caption">
-        {{
-          t(
-            'adminLearning.createdByPlayed',
-            { author: existing.createdBy ?? t('adminLearning.platformTeam'), count: existing.playedBy },
-            existing.playedBy,
-          )
-        }}
-      </p>
+    <form
+      :id="formId"
+      class="form-grid admin-learning-form"
+      novalidate
+      @input="formError = null"
+      @change="formError = null"
+      @submit.prevent="save"
+    >
+      <div v-if="existing" class="admin-tags">
+        <span class="tag is-outline">{{ t(`practiceType.${existing.type}`) }}</span>
+        <span class="admin-meta">
+          {{
+            t(
+              'adminLearning.createdByPlayed',
+              { author: existing.createdBy ?? t('adminLearning.platformTeam'), count: formatNumber(existing.playedBy) },
+              existing.playedBy,
+            )
+          }}
+        </span>
+      </div>
       <div v-else class="field">
         <label class="field-label" :for="`${formId}-type`">{{ t('adminLearning.type') }}</label>
-        <select :id="`${formId}-type`" v-model="type" class="select" data-testid="editor-type" @change="changeType">
+        <select
+          :id="`${formId}-type`"
+          v-model="type"
+          class="select"
+          :disabled="saving"
+          data-testid="editor-type"
+          data-autofocus
+          @change="changeType"
+        >
           <option v-for="option in PRACTICE_TYPES" :key="option" :value="option">
-            {{ t(practiceTypeKey(option)) }}
+            {{ t(`practiceType.${option}`) }}
           </option>
         </select>
-        <p class="field-hint">{{ t('adminLearning.typeFirstHint') }}</p>
       </div>
 
       <div class="field">
@@ -34,324 +50,179 @@
         </label>
         <input
           :id="`${formId}-title`"
+          ref="titleField"
           v-model="form.title"
           class="input"
           maxlength="200"
           required
+          :disabled="saving"
+          :aria-invalid="Boolean(titleError)"
+          :aria-describedby="titleError ? `${formId}-title-error` : undefined"
           :placeholder="t('adminLearning.titlePlaceholder')"
           data-testid="editor-title"
+          data-autofocus
         />
+        <p v-if="titleError" :id="`${formId}-title-error`" class="field-error" role="alert">{{ titleError }}</p>
       </div>
 
-      <fieldset class="form-section">
-        <legend class="form-section-title">{{ t('adminLearning.stage') }}</legend>
-        <SegmentedControl
-          v-model="form.stage"
-          :label="t('adminLearning.stage')"
-          :options="STAGES.map((stage) => ({ value: stage, label: t(stageKey(stage)) }))"
-        />
-        <p class="field-hint">{{ t('classes.stageHint') }}</p>
-      </fieldset>
-
-      <div class="form-grid two">
-        <div class="field">
-          <label class="field-label" :for="`${formId}-level`">{{ t('adminLearning.level') }}</label>
-          <select :id="`${formId}-level`" v-model.number="form.hskLevel" class="select">
-            <option v-for="level in 6" :key="level" :value="level">HSK {{ level }}</option>
-          </select>
-        </div>
-        <div class="field">
-          <label class="field-label" :for="`${formId}-xp`">{{ t('adminLearning.xp') }}</label>
-          <input :id="`${formId}-xp`" v-model.number="form.xpReward" class="input" type="number" min="0" max="100" />
-        </div>
+      <div class="field">
+        <label class="field-label" :for="`${formId}-level`">
+          {{ t('adminLearning.level') }}<span class="required-mark" aria-hidden="true">*</span>
+        </label>
+        <select :id="`${formId}-level`" v-model.number="form.hskLevel" class="select" :disabled="saving">
+          <option v-for="level in 6" :key="level" :value="level">{{ t('hsk.number', { level }) }}</option>
+        </select>
       </div>
 
-      <!-- Tracing: one set of characters -->
-      <fieldset v-if="type === 'TRACING'" class="form-section">
-        <legend class="form-section-title">{{ t('adminLearning.characters') }}</legend>
-        <div class="form-grid two">
-          <div class="field">
-            <label class="field-label" :for="`${formId}-chars`">
-              {{ t('adminLearning.charactersToWrite') }}<span class="required-mark" aria-hidden="true">*</span>
-            </label>
-            <input
-              :id="`${formId}-chars`"
-              v-model="form.items[0]!.hanzi"
-              class="input cjk-text"
-              lang="zh-CN"
-              maxlength="10"
-            />
-          </div>
-          <div class="field">
-            <label class="field-label" :for="`${formId}-strokes`">
-              {{ t('adminLearning.strokes') }}<span class="required-mark" aria-hidden="true">*</span>
-            </label>
-            <input
-              :id="`${formId}-strokes`"
-              v-model.number="form.strokeCount"
-              class="input"
-              type="number"
-              min="1"
-              max="60"
-            />
-          </div>
-          <div class="field">
-            <label class="field-label" :for="`${formId}-tpinyin`">{{ t('adminLearning.pinyin') }}</label>
-            <input :id="`${formId}-tpinyin`" v-model="form.items[0]!.pinyin" class="input" maxlength="200" />
-          </div>
-          <div class="field">
-            <label class="field-label" :for="`${formId}-tmeaning`">{{ t('adminLearning.meaning') }}</label>
-            <input :id="`${formId}-tmeaning`" v-model="form.items[0]!.meaning" class="input" maxlength="200" />
-          </div>
-        </div>
-      </fieldset>
-
-      <!-- Story lines -->
-      <fieldset v-if="type === 'STORY'" class="form-section">
-        <legend class="form-section-title">
-          {{ t('adminLearning.storyLines', { count: form.storyLines.length }) }}
-        </legend>
-        <div v-for="(line, index) in form.storyLines" :key="`line-${index}`" class="admin-learning-item">
-          <div class="admin-learning-item-head">
-            <strong>{{ t('adminLearning.lineNumber', { number: index + 1 }) }}</strong>
-            <button
-              class="btn btn-ghost btn-icon btn-sm"
-              type="button"
-              :disabled="form.storyLines.length <= 1"
-              :aria-label="t('adminLearning.removeLine', { number: index + 1 })"
-              @click="form.storyLines.splice(index, 1)"
-            >
-              <IconGlyph name="trash" :size="16" />
-            </button>
-          </div>
-          <input
-            v-model="line.hanzi"
-            class="input cjk-text"
-            lang="zh-CN"
-            maxlength="300"
-            :aria-label="t('adminLearning.chineseFor', { number: index + 1 })"
-            :placeholder="t('adminLearning.chinese')"
-          />
-          <input
-            v-model="line.pinyin"
-            class="input"
-            maxlength="500"
-            :aria-label="t('adminLearning.pinyinFor', { number: index + 1 })"
-            :placeholder="t('adminLearning.pinyin')"
-          />
-          <input
-            v-model="line.translation"
-            class="input"
-            maxlength="500"
-            :aria-label="t('adminLearning.translationFor', { number: index + 1 })"
-            :placeholder="t('adminLearning.translation')"
-          />
-        </div>
-        <button
-          class="btn btn-secondary btn-sm"
-          type="button"
-          :disabled="form.storyLines.length >= 20"
-          @click="form.storyLines.push(emptyLine())"
-        >
-          <IconGlyph name="plus" :size="14" />{{ t('adminLearning.addLine') }}
-        </button>
-      </fieldset>
+      <TracingSetFields
+        v-if="type === 'TRACING'"
+        v-model:hanzi="form.items[0]!.hanzi"
+        v-model:pinyin="form.items[0]!.pinyin"
+        v-model:meaning="form.items[0]!.meaning"
+        v-model:stroke-count="form.strokeCount"
+        :form-id="formId"
+        :disabled="saving"
+        :tracing-characters="tracingCharacters"
+        :character-strokes="characterStrokes"
+        :character-limit-error="characterLimitError"
+        :total-strokes-error="totalStrokesError"
+        :character-strokes-error="characterStrokesError"
+        @update-stroke="(index, value) => (characterStrokes[index] = value)"
+        @blur-strokes="strokesChecked = true"
+      />
 
       <!-- Items of every other type -->
-      <fieldset v-if="type !== 'TRACING'" class="form-section">
-        <legend class="form-section-title">{{ t(itemKeys.count, { count: form.items.length }) }}</legend>
+      <fieldset v-else-if="itemKeys" class="field-set" :disabled="saving">
+        <legend>{{ t(itemKeys.count, { count: form.items.length }) }}</legend>
+        <p v-if="type === 'DRAG_DROP' || type === 'TYPING'" class="field-hint">
+          {{ t(type === 'DRAG_DROP' ? 'adminLearning.extraTiles' : 'adminLearning.lookAlike') }}
+        </p>
+
         <div
           v-for="(item, index) in form.items"
           :key="`item-${index}`"
-          class="admin-learning-item"
+          :class="usesWords ? 'admin-learning-words' : 'admin-learning-item'"
           data-testid="editor-item"
         >
-          <div class="admin-learning-item-head">
-            <strong>{{ t(itemKeys.number, { number: index + 1 }) }}</strong>
-            <button
-              class="btn btn-ghost btn-icon btn-sm"
-              type="button"
-              :disabled="form.items.length <= 1"
-              :aria-label="t('adminLearning.removeItem', { number: index + 1 })"
-              @click="form.items.splice(index, 1)"
-            >
-              <IconGlyph name="trash" :size="16" />
-            </button>
-          </div>
-
           <template v-if="usesWords">
-            <div class="admin-learning-item-row">
-              <input
-                v-model="item.hanzi"
-                class="input cjk-text"
-                lang="zh-CN"
-                maxlength="100"
-                :aria-label="
+            <div class="admin-learning-word-row" :class="{ 'is-sentence': type === 'DRAG_DROP' }">
+              <label class="field">
+                <span class="field-label">{{
                   t(type === 'DRAG_DROP' ? 'adminLearning.sentenceTilesFor' : 'adminLearning.chineseFor', {
                     number: index + 1,
                   })
-                "
-                :placeholder="type === 'DRAG_DROP' ? t('adminLearning.sentenceTiles') : t('adminLearning.chinese')"
-              />
-              <input
-                v-model="item.pinyin"
-                class="input"
-                maxlength="200"
-                :aria-label="t('adminLearning.pinyinFor', { number: index + 1 })"
-                :placeholder="t('adminLearning.pinyin')"
-              />
-              <input
-                v-model="item.meaning"
-                class="input"
-                maxlength="200"
-                :aria-label="t('adminLearning.meaningFor', { number: index + 1 })"
-                :placeholder="t('adminLearning.meaning')"
-              />
-            </div>
-            <div v-if="type === 'FLASHCARDS'" class="admin-learning-item-row is-two">
-              <input
-                v-model="item.example"
-                class="input cjk-text"
-                lang="zh-CN"
-                maxlength="200"
-                :aria-label="t('adminLearning.exampleFor', { number: index + 1 })"
-                :placeholder="t('adminLearning.example')"
-              />
-              <input
-                v-model="item.exampleMeaning"
-                class="input"
-                maxlength="300"
-                :aria-label="t('adminLearning.exampleMeaningFor', { number: index + 1 })"
-                :placeholder="t('adminLearning.exampleMeaning')"
-              />
-            </div>
-            <input
-              v-if="type === 'DRAG_DROP'"
-              v-model="item.distractors"
-              class="input cjk-text"
-              lang="zh-CN"
-              maxlength="255"
-              :aria-label="t('adminLearning.extraTilesFor', { number: index + 1 })"
-              :placeholder="t('adminLearning.extraTiles')"
-            />
-          </template>
-
-          <template v-else>
-            <input
-              v-model="item.prompt"
-              class="input"
-              maxlength="300"
-              :aria-label="t('adminLearning.questionFor', { number: index + 1 })"
-              :placeholder="t('adminLearning.question')"
-            />
-            <div v-if="type === 'QUIZZES'" class="admin-learning-item-row is-two">
-              <input
-                v-model="item.hanzi"
-                class="input cjk-text"
-                lang="zh-CN"
-                maxlength="100"
-                :aria-label="t('adminLearning.chineseFor', { number: index + 1 })"
-                :placeholder="t('adminLearning.chineseOptional')"
-              />
-              <input
-                v-model="item.pinyin"
-                class="input"
-                maxlength="200"
-                :aria-label="t('adminLearning.pinyinFor', { number: index + 1 })"
-                :placeholder="t('adminLearning.pinyin')"
-              />
-            </div>
-            <input
-              v-if="type === 'LISTENING'"
-              v-model="item.audioText"
-              class="input cjk-text"
-              lang="zh-CN"
-              maxlength="200"
-              :aria-label="t('adminLearning.readAloudFor', { number: index + 1 })"
-              :placeholder="t('adminLearning.readAloud')"
-            />
-            <div
-              class="admin-learning-options"
-              role="radiogroup"
-              :aria-label="t('adminLearning.answersFor', { number: index + 1 })"
-            >
-              <div v-for="(option, optionIndex) in item.options" :key="optionIndex" class="admin-learning-answer">
-                <label class="choice">
-                  <input
-                    v-model="item.correctIndex"
-                    type="radio"
-                    :name="`${formId}-right-${index}`"
-                    :value="optionIndex"
-                  />
-                  <span class="sr-only">{{ t('adminLearning.rightAnswerFor', { number: optionIndex + 1 }) }}</span>
-                </label>
+                }}</span>
                 <input
-                  v-model="option.text"
+                  v-model="item.hanzi"
+                  class="input cjk-text"
+                  lang="zh-CN"
+                  maxlength="100"
+                  :placeholder="type === 'DRAG_DROP' ? t('adminLearning.sentenceTiles') : undefined"
+                />
+              </label>
+              <label class="field">
+                <span class="field-label">{{ t('adminLearning.pinyin') }}</span>
+                <input
+                  v-model="item.pinyin"
                   class="input"
                   maxlength="200"
-                  :aria-label="t('adminLearning.answerNumber', { number: optionIndex + 1 })"
-                  :placeholder="t('adminLearning.answer')"
+                  :aria-label="t('adminLearning.pinyinFor', { number: index + 1 })"
                 />
+              </label>
+              <label class="field">
+                <span class="field-label">{{ t('adminLearning.meaning') }}</span>
                 <input
-                  v-if="type !== 'STORY'"
-                  v-model="option.pinyin"
+                  v-model="item.meaning"
                   class="input"
                   maxlength="200"
-                  :aria-label="t('adminLearning.answerPinyin', { number: optionIndex + 1 })"
-                  :placeholder="t('adminLearning.pinyin')"
+                  :aria-label="t('adminLearning.meaningFor', { number: index + 1 })"
                 />
-                <button
-                  class="btn btn-ghost btn-icon btn-sm"
-                  type="button"
-                  :disabled="item.options.length <= 2"
-                  :aria-label="t('adminLearning.removeAnswer', { number: optionIndex + 1 })"
-                  @click="removeOption(item, optionIndex)"
-                >
-                  <IconGlyph name="close" :size="14" />
-                </button>
-              </div>
+              </label>
               <button
-                class="btn btn-ghost btn-sm"
+                class="btn btn-ghost btn-icon btn-sm"
                 type="button"
-                :disabled="item.options.length >= 6"
-                @click="item.options.push({ text: '', pinyin: null })"
+                :disabled="form.items.length <= 1"
+                :aria-label="t('adminLearning.removeItem', { number: index + 1 })"
+                @click="removeItem(index)"
               >
-                <IconGlyph name="plus" :size="14" />{{ t('adminLearning.addAnswer') }}
+                <IconGlyph name="trash" :size="16" />
               </button>
             </div>
-            <input
-              v-model="item.explanation"
-              class="input"
-              maxlength="500"
-              :aria-label="t('adminLearning.explanationFor', { number: index + 1 })"
-              :placeholder="t('adminLearning.explanation')"
-            />
+            <!-- A card's example sentence and its meaning, shown on the back of the card. -->
+            <div v-if="type === 'FLASHCARDS'" class="admin-learning-item-row">
+              <label class="field">
+                <span class="field-label">{{ t('adminLearning.example') }}</span>
+                <input
+                  v-model="item.example"
+                  class="input cjk-text"
+                  lang="zh-CN"
+                  maxlength="200"
+                  :aria-label="t('adminLearning.exampleFor', { number: index + 1 })"
+                />
+              </label>
+              <label class="field">
+                <span class="field-label">{{ t('adminLearning.exampleMeaning') }}</span>
+                <input
+                  v-model="item.exampleMeaning"
+                  class="input"
+                  maxlength="300"
+                  :aria-label="t('adminLearning.exampleMeaningFor', { number: index + 1 })"
+                />
+              </label>
+            </div>
+            <label v-if="type === 'DRAG_DROP' || type === 'TYPING'" class="field">
+              <span class="field-label">{{
+                t(type === 'DRAG_DROP' ? 'adminLearning.extraTilesFor' : 'adminLearning.lookAlikeFor', {
+                  number: index + 1,
+                })
+              }}</span>
+              <input v-model="item.distractors" class="input cjk-text" lang="zh-CN" maxlength="255" />
+            </label>
           </template>
+
+          <ListeningQuestionCard
+            v-else
+            :item="item"
+            :index="index"
+            :form-id="formId"
+            :can-remove="form.items.length > 1"
+            @update:item="(updated) => updateItem(index, updated)"
+            @remove="removeItem(index)"
+          />
         </div>
+
         <button
           class="btn btn-secondary btn-sm"
           type="button"
           :disabled="form.items.length >= 30"
           data-testid="editor-add"
-          @click="form.items.push(emptyItem(type))"
+          @click="addItem"
         >
-          <IconGlyph name="plus" :size="14" />{{ t(itemKeys.add) }}
+          <IconGlyph name="plus" :size="14" />
+          <span>{{ t(itemKeys.add) }}</span>
         </button>
       </fieldset>
 
-      <p class="field-hint">
-        <template v-if="form.stage === 'GUIDED'">{{ t('adminLearning.guidedNote') }} </template>
-        {{ t('adminLearning.xpRule', { xp: form.xpReward ?? 0 }) }}
+      <p v-if="existing" class="field-hint">
+        {{
+          t(existing.type === 'FLASHCARDS' ? 'adminLearning.flashcardXpRule' : 'adminLearning.xpRule', {
+            xp: existing.xpReward,
+          })
+        }}
       </p>
-      <p v-if="formError" class="field-error" role="alert">{{ formError }}</p>
     </form>
     <template #footer>
-      <button class="btn btn-ghost" type="button" @click="emit('close')">{{ t('adminLearning.cancel') }}</button>
+      <p v-if="formError" class="field-error" role="alert">{{ formError }}</p>
+      <button class="btn btn-secondary" type="button" @click="emit('close')">
+        {{ t('common.cancel') }}
+      </button>
       <button
         class="btn btn-primary"
         type="submit"
         :form="formId"
-        :disabled="saving"
+        :disabled="
+          saving || Boolean(characterLimitError) || totalStrokesError !== null || characterStrokesError !== null
+        "
         :aria-busy="saving"
         data-testid="editor-save"
       >
@@ -364,82 +235,132 @@
 <script setup lang="ts">
 import { computed, reactive, ref, useId, watch } from 'vue'
 
-import { adminLearningApi } from '@/api/learn'
-import SegmentedControl from '@/components/common/SegmentedControl.vue'
-import IconGlyph from '@/components/common/IconGlyph.vue'
+import type { adminLearningApi } from '@/api/learn'
 import AppOverlay from '@/components/common/AppOverlay.vue'
+import IconGlyph from '@/components/common/IconGlyph.vue'
+import { useFieldCheck } from '@/composables/useFieldCheck'
+import { useIsUnmounted } from '@/composables/useIsUnmounted'
 import { useLocalMessages } from '@/composables/useLocalMessages'
-import { adminLearningMessages } from '@/plugins/adminLearningMessages'
-import { classesMessages } from '@/plugins/classesMessages'
-import type { LearningStage } from '@/types/api'
+import { PRACTICE_TYPES } from '@/config/practiceActivities'
+import { adminLearningSharedMessages } from '@/plugins/adminLearningSharedMessages'
+import { adminPracticeLibraryMessages } from '@/plugins/adminPracticeLibraryMessages'
 import type { AdminPracticeSetDetail, PracticeItemData, PracticeType } from '@/types/learn'
 import { resolveApiError } from '@/utils/apiError'
-import { PRACTICE_TYPES, practiceTypeKey, STAGES, stageKey } from '@/utils/learnLabels'
+import { formatNumber } from '@/utils/format'
+import { normalizeAppLanguage } from '@/utils/locale'
+import { localizeServerMessage } from '@/utils/serverMessages'
+import { tracingGlyphs } from '@/utils/tracing'
 
-/**
- * New or edited Practice set. The type is chosen first (a new set only) and decides the items: cards, questions with
- * answers, characters to trace, sentences, pairs or a story with questions. The server checks every type's rules.
- */
-const props = defineProps<{ open: boolean; existing: AdminPracticeSetDetail | null }>()
+import ListeningQuestionCard from './ListeningQuestionCard.vue'
+import TracingSetFields from './TracingSetFields.vue'
+
+const props = defineProps<{
+  existing: AdminPracticeSetDetail | null
+  saveSet: typeof adminLearningApi.savePracticeSet
+}>()
 const emit = defineEmits<{ close: []; saved: [set: AdminPracticeSetDetail] }>()
 
-const DEFAULT_XP: Readonly<Record<PracticeType, number>> = {
-  FLASHCARDS: 10,
-  QUIZZES: 15,
-  LISTENING: 15,
-  TRACING: 10,
-  DRAG_DROP: 15,
-  MATCHING: 15,
-  STORY: 20,
-}
-
-const { t } = useLocalMessages({ adminLearning: adminLearningMessages, classes: classesMessages })
+const { t, locale } = useLocalMessages({ adminLearning: [adminLearningSharedMessages, adminPracticeLibraryMessages] })
+const serverRule = (message: string) => localizeServerMessage(message, normalizeAppLanguage(locale.value) ?? 'en')
 const formId = `set-${useId()}`
+const isUnmounted = useIsUnmounted()
 
-const type = ref<PracticeType>('FLASHCARDS')
-const form = reactive({
-  title: '',
-  stage: 'GUIDED' as LearningStage | null,
-  hskLevel: 1 as number | null,
-  xpReward: 10 as number | null,
-  items: [] as PracticeItemData[],
-  storyLines: [] as { hanzi: string; pinyin: string | null; translation: string | null }[],
-  strokeCount: null as number | null,
+const type = ref<PracticeType>(props.existing?.type ?? 'FLASHCARDS')
+const form = reactive<{
+  title: string
+  hskLevel: number
+  items: PracticeItemData[]
+  strokeCount: number | string | null
+}>({
+  title: props.existing?.title ?? '',
+  hskLevel: props.existing?.hskLevel ?? 1,
+  items: props.existing?.items.length
+    ? props.existing.items.map((item) => ({ ...item, options: item.options.map((option) => ({ ...option })) }))
+    : [emptyItem(type.value)],
+  strokeCount: props.existing?.strokeCount ?? null,
 })
 const saving = ref(false)
 const formError = ref<string | null>(null)
+const titleField = ref<HTMLInputElement | null>(null)
+const { error: titleError, validate: validateTitle } = useFieldCheck(
+  computed(() => form.title),
+  (title) => (title.trim() ? null : t('adminLearning.titleRequired')),
+)
 
-const usesWords = computed(() => ['FLASHCARDS', 'MATCHING', 'DRAG_DROP'].includes(type.value))
-const subtitle = computed(() => {
-  if (!props.existing) return t('adminLearning.newActivitySubtitle')
-  return props.existing.status === 'PUBLISHED'
-    ? t('adminLearning.liveEditSubtitle')
-    : t('adminLearning.draftEditSubtitle')
-})
+const tracingCharacters = computed(() => (type.value === 'TRACING' ? tracingGlyphs(form.items[0]?.hanzi ?? '') : []))
+const characterLimitError = computed(() =>
+  tracingCharacters.value.length > 10 ? serverRule('A tracing set has at most 10 characters.') : null,
+)
+const characterStrokes = ref<(number | string | null)[]>([...(props.existing?.characterStrokes ?? [])])
+const strokesChecked = ref(false)
 
-/** A type's items (list title, item heading, add button) are cards, pairs, sentences or questions. */
-const QUESTION_KEYS = {
-  count: 'adminLearning.questionsCount',
-  number: 'adminLearning.questionNumber',
-  add: 'adminLearning.addQuestion',
-} as const
-const ITEM_KEYS: Readonly<Record<PracticeType, { count: string; number: string; add: string }>> = {
-  FLASHCARDS: { count: 'adminLearning.cardsCount', number: 'adminLearning.cardNumber', add: 'adminLearning.addCard' },
-  QUIZZES: QUESTION_KEYS,
-  LISTENING: QUESTION_KEYS,
-  TRACING: QUESTION_KEYS,
-  DRAG_DROP: {
-    count: 'adminLearning.sentencesCount',
-    number: 'adminLearning.sentenceNumber',
-    add: 'adminLearning.addSentence',
+watch(
+  tracingCharacters,
+  (characters, previous) => {
+    const previousCharacters = previous ?? characters
+    characterStrokes.value =
+      characters.length > 1
+        ? characters.map((char, index) =>
+            previousCharacters[index] === char ? (characterStrokes.value[index] ?? null) : null,
+          )
+        : []
+    strokesChecked.value = false
   },
-  MATCHING: { count: 'adminLearning.pairsCount', number: 'adminLearning.pairNumber', add: 'adminLearning.addPair' },
-  STORY: QUESTION_KEYS,
+  { immediate: true },
+)
+
+function isStrokeNumber(value: number | string | null): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
 }
-const itemKeys = computed(() => ITEM_KEYS[type.value])
+
+const strokeValues = computed(() => characterStrokes.value.filter(isStrokeNumber))
+
+const totalStrokesProblem = computed(() => {
+  if (type.value !== 'TRACING' || !isStrokeNumber(form.strokeCount)) return null
+  const single = tracingCharacters.value.length === 1
+  const maxTotal = single ? 60 : 600
+  if (!Number.isInteger(form.strokeCount) || form.strokeCount < 1 || form.strokeCount > maxTotal) {
+    return serverRule(single ? 'Strokes must be between 1 and 60.' : 'Total strokes must be between 1 and 600.')
+  }
+  return null
+})
+const characterStrokesProblem = computed(() => {
+  if (type.value !== 'TRACING' || tracingCharacters.value.length < 2) return null
+  const given = strokeValues.value
+  if (!given.length) return null
+  if (given.some((strokes) => !Number.isInteger(strokes) || strokes < 1 || strokes > 60)) {
+    return serverRule('Each character needs 1 to 60 strokes.')
+  }
+  const total = given.reduce((sum, strokes) => sum + strokes, 0)
+  return given.length === characterStrokes.value.length && total === form.strokeCount
+    ? null
+    : serverRule('Give the strokes of each character, adding up to the total.')
+})
+const totalStrokesError = computed(() => (strokesChecked.value ? totalStrokesProblem.value : null))
+const characterStrokesError = computed(() => (strokesChecked.value ? characterStrokesProblem.value : null))
+
+const usesWords = computed(() => type.value !== 'LISTENING')
+
+const STATUS_SUBTITLE_KEYS: Readonly<Record<AdminPracticeSetDetail['status'], string>> = {
+  PUBLISHED: 'adminLearning.liveEditSubtitle',
+  DRAFT: 'adminLearning.draftEditSubtitle',
+  ARCHIVED: 'adminLearning.archivedEditSubtitle',
+}
+const subtitle = computed(() =>
+  t(props.existing ? STATUS_SUBTITLE_KEYS[props.existing.status] : 'adminLearning.newActivitySubtitle'),
+)
+
+const ITEM_KEYS: Readonly<Record<Exclude<PracticeType, 'TRACING'>, { count: string; add: string }>> = {
+  FLASHCARDS: { count: 'adminLearning.cardsCount', add: 'adminLearning.addCard' },
+  LISTENING: { count: 'adminLearning.questionsCount', add: 'adminLearning.addQuestion' },
+  DRAG_DROP: { count: 'adminLearning.sentencesCount', add: 'adminLearning.addSentence' },
+  MATCHING: { count: 'adminLearning.pairsCount', add: 'adminLearning.addPair' },
+  TYPING: { count: 'adminLearning.wordsCount', add: 'adminLearning.addWord' },
+}
+const itemKeys = computed(() => (type.value === 'TRACING' ? null : ITEM_KEYS[type.value]))
 
 function emptyItem(forType: PracticeType): PracticeItemData {
-  const choice = forType === 'QUIZZES' || forType === 'LISTENING' || forType === 'STORY'
+  const choice = forType === 'LISTENING'
   return {
     hanzi: null,
     pinyin: null,
@@ -460,96 +381,57 @@ function emptyItem(forType: PracticeType): PracticeItemData {
   }
 }
 
-function emptyLine() {
-  return { hanzi: '', pinyin: null, translation: null }
+function addItem(): void {
+  formError.value = null
+  form.items.push(emptyItem(type.value))
+}
+
+function updateItem(index: number, updated: PracticeItemData): void {
+  formError.value = null
+  form.items[index] = updated
+}
+
+function removeItem(index: number): void {
+  formError.value = null
+  form.items.splice(index, 1)
 }
 
 function changeType(): void {
   form.items = [emptyItem(type.value)]
-  form.storyLines = type.value === 'STORY' ? [emptyLine()] : []
   form.strokeCount = null
-  form.xpReward = DEFAULT_XP[type.value]
-}
-
-watch(
-  () => props.open,
-  (open) => {
-    if (!open) return
-    formError.value = null
-    const existing = props.existing
-    if (!existing) {
-      type.value = 'FLASHCARDS'
-      Object.assign(form, { title: '', stage: 'GUIDED', hskLevel: 1 })
-      changeType()
-      return
-    }
-    type.value = existing.type
-    Object.assign(form, {
-      title: existing.title,
-      stage: existing.stage,
-      hskLevel: existing.hskLevel ?? 1,
-      xpReward: existing.xpReward,
-      items: existing.items.map((item) => ({ ...item, options: item.options.map((option) => ({ ...option })) })),
-      storyLines: existing.storyLines.map((line) => ({ ...line })),
-      strokeCount: existing.strokeCount,
-    })
-    if (!form.items.length) form.items = [emptyItem(existing.type)]
-  },
-)
-
-function removeOption(item: PracticeItemData, optionIndex: number): void {
-  item.options.splice(optionIndex, 1)
-  if (item.correctIndex !== null && item.correctIndex >= item.options.length)
-    item.correctIndex = item.options.length - 1
-  else if (item.correctIndex !== null && item.correctIndex > optionIndex) item.correctIndex -= 1
-}
-
-function clean(value: string | null): string | null {
-  const trimmed = value?.trim()
-  return trimmed ? trimmed : null
+  characterStrokes.value = []
+  strokesChecked.value = false
+  formError.value = null
 }
 
 async function save(): Promise<void> {
+  if (saving.value) return
   formError.value = null
-  if (!form.title.trim()) {
-    formError.value = t('adminLearning.titleRequired')
+  if (!validateTitle()) {
+    titleField.value?.focus()
     return
   }
+  if (type.value === 'LISTENING' && form.items.some((item) => item.correctIndex === null)) {
+    formError.value = serverRule('Tick exactly one right answer.')
+  }
+  strokesChecked.value = true
+  if (formError.value || characterLimitError.value || totalStrokesProblem.value || characterStrokesProblem.value) return
+  const tracing = type.value === 'TRACING'
   saving.value = true
   try {
-    const saved = await adminLearningApi.savePracticeSet(type.value, props.existing?.id ?? null, {
+    const saved = await props.saveSet(type.value, props.existing?.id ?? null, {
       title: form.title.trim(),
-      stage: form.stage,
+      stage: props.existing ? props.existing.stage : 'GUIDED',
       hskLevel: form.hskLevel,
-      xpReward: form.xpReward,
-      strokeCount: type.value === 'TRACING' ? form.strokeCount : null,
-      storyLines:
-        type.value === 'STORY'
-          ? form.storyLines.map((line) => ({
-              hanzi: line.hanzi.trim(),
-              pinyin: clean(line.pinyin),
-              translation: clean(line.translation),
-            }))
-          : [],
-      items: form.items.map((item) => ({
-        ...item,
-        hanzi: clean(item.hanzi),
-        pinyin: clean(item.pinyin),
-        meaning: clean(item.meaning),
-        prompt: clean(item.prompt),
-        audioText: clean(item.audioText),
-        example: clean(item.example),
-        exampleMeaning: clean(item.exampleMeaning),
-        explanation: clean(item.explanation),
-        distractors: clean(item.distractors),
-        options: item.options.map((option) => ({ text: option.text.trim(), pinyin: clean(option.pinyin) })),
-      })),
+      strokeCount: tracing && isStrokeNumber(form.strokeCount) ? form.strokeCount : null,
+      characterStrokes: tracing && tracingCharacters.value.length > 1 ? strokeValues.value : [],
+      items: form.items,
     })
-    emit('saved', saved)
+    if (!isUnmounted()) emit('saved', saved)
   } catch (reason) {
-    formError.value = resolveApiError(reason, t('adminLearning.saveFailed'))
+    if (!isUnmounted()) formError.value = resolveApiError(reason, t('adminLearning.saveFailed'))
   } finally {
-    saving.value = false
+    if (!isUnmounted()) saving.value = false
   }
 }
 </script>

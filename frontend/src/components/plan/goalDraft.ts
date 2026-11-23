@@ -1,22 +1,23 @@
-/** The goal while the student edits it (setup, "Edit my goal", "Update my goal"), and what is sent to the server. */
+/** The goal while the learner edits it (setup, "Edit my goal", "Update my goal"), and what is sent to the server. */
 import type { GoalInput, LearningPlan, PlanFocus, PlanGoal, PlanPace, PlanReason } from '@/types/plan'
+import { shiftDay } from '@/utils/format'
 
-import { addDays, addMonths, isoDay } from './planFormat'
-
-export type DeadlineChoice = '2w' | '1m' | '2m' | '3m' | '6m' | 'none' | 'date'
-
-export const DEADLINE_CHOICES: readonly DeadlineChoice[] = ['2w', '1m', '2m', '3m', '6m', 'none', 'date']
+/** "1–2 hours", the band most learners gave in Shen & Wu (2026): chosen until the learner picks another. */
+export const DEFAULT_PACE: PlanPace = 'HOURS_1_TO_2'
 
 const MAX_FOCUS = 2
+
+/** The latest goal date the server accepts, in days after the platform's today (two years). */
+const LATEST_DEADLINE_DAYS = 730
 
 export interface GoalDraft {
   reason: PlanReason | null
   reasonText: string
   goals: PlanGoal[]
   goalText: string
-  deadlineChoice: DeadlineChoice | null
-  customDate: string
-  pace: PlanPace | null
+  /** Undefined until chosen, null for “No date”, or a calendar date (yyyy-MM-dd). */
+  deadline: string | null | undefined
+  pace: PlanPace
   focus: PlanFocus[]
 }
 
@@ -26,61 +27,75 @@ export function emptyDraft(): GoalDraft {
     reasonText: '',
     goals: [],
     goalText: '',
-    deadlineChoice: null,
-    customDate: '',
-    pace: null,
+    deadline: undefined,
+    pace: DEFAULT_PACE,
     focus: [],
   }
 }
 
-/** The plan's goal as a draft: its deadline becomes a picked date. */
+/**
+ * "Today" in the goal's rules is the platform's day (`today`, yyyy-MM-dd, as the plan and the setup options send it),
+ * the one the server checks a goal date against: the browser's own day can be a day behind or ahead of it.
+ * A goal date that is not after today has passed: the server plans no more towards it.
+ */
+export function deadlinePassed(deadline: string | null, today: string): boolean {
+  return deadline !== null && deadline <= today
+}
+
+/**
+ * The plan's goal as a draft. A date that has passed (on the plan's `today`) is left unpicked, so the learner chooses a
+ * new date (or no date) before rebuilding.
+ */
 export function draftFromPlan(plan: LearningPlan): GoalDraft {
+  const { deadline } = plan.goal
   return {
     reason: plan.goal.reason,
     reasonText: plan.goal.reasonText ?? '',
     goals: [...plan.goal.picks],
     goalText: plan.goal.ownWords ?? '',
-    deadlineChoice: plan.goal.deadline ? 'date' : 'none',
-    customDate: plan.goal.deadline ?? '',
+    deadline: deadlinePassed(deadline, plan.today) ? undefined : deadline,
     pace: plan.pace.key,
     focus: [...plan.goal.focus],
   }
 }
 
-/** The deadline of a choice as an ISO date (null for no deadline, or an unpicked date). */
-export function deadlineFor(choice: DeadlineChoice | null, customDate: string, today = new Date()): string | null {
-  switch (choice) {
-    case '2w':
-      return isoDay(addDays(today, 14))
-    case '1m':
-      return isoDay(addMonths(today, 1))
-    case '2m':
-      return isoDay(addMonths(today, 2))
-    case '3m':
-      return isoDay(addMonths(today, 3))
-    case '6m':
-      return isoDay(addMonths(today, 6))
-    case 'date':
-      return customDate || null
-    default:
-      return null
-  }
-}
-
+/** A date or "No date" is chosen. */
 export function deadlineReady(draft: GoalDraft): boolean {
-  return draft.deadlineChoice !== null && (draft.deadlineChoice !== 'date' || draft.customDate !== '')
+  return draft.deadline !== undefined
 }
 
-export function goalInput(draft: GoalDraft): GoalInput {
+function goalFields(draft: GoalDraft) {
   return {
-    reason: draft.reason ?? 'OTHER',
+    reason: draft.reason,
     reasonText: draft.reason === 'OTHER' ? draft.reasonText.trim() || null : null,
-    goals: [...draft.goals],
+    goals: draft.goals,
     goalText: draft.goalText.trim() || null,
-    deadline: deadlineFor(draft.deadlineChoice, draft.customDate),
-    pace: draft.pace ?? 'REGULAR',
-    focus: [...draft.focus],
+    deadline: draft.deadline,
+    pace: draft.pace,
+    focus: draft.focus,
   }
+}
+
+/** Only a completed draft can be sent to the server. */
+export function goalInput(draft: GoalDraft): GoalInput {
+  const { reason, deadline, ...fields } = goalFields(draft)
+  if (reason === null || deadline === undefined) throw new Error('A goal needs a reason and a deadline choice.')
+  return { ...fields, reason, deadline }
+}
+
+/**
+ * The two drafts ask for the same goal (the order of the picks aside). "Update my goal" opens on the plan's own goal and
+ * offers "Rebuild my plan" only once something differs. "No date" counts as a change from a date that has passed.
+ */
+export function sameGoal(a: GoalDraft, b: GoalDraft): boolean {
+  const key = (draft: GoalDraft) => {
+    return JSON.stringify({
+      ...goalFields(draft),
+      goals: [...draft.goals].sort(),
+      focus: [...draft.focus].sort(),
+    })
+  }
+  return key(a) === key(b)
 }
 
 /** "Not sure yet" stands alone: picking it clears the others, and picking another goal clears it. */
@@ -97,12 +112,12 @@ export function toggledFocus(focus: readonly PlanFocus[], picked: PlanFocus): Pl
   return [...focus, picked]
 }
 
-/** Today plus one day: the earliest date a goal can have. */
-export function earliestDeadline(today = new Date()): string {
-  return isoDay(addDays(today, 1))
+/** The platform's today plus one day: the earliest date a goal can have. */
+export function earliestDeadline(today: string): string {
+  return shiftDay(today, 1)
 }
 
-/** Two years ahead: the latest date the server accepts. */
-export function latestDeadline(today = new Date()): string {
-  return isoDay(addDays(today, 730))
+/** The latest date the server accepts. */
+export function latestDeadline(today: string): string {
+  return shiftDay(today, LATEST_DEADLINE_DAYS)
 }

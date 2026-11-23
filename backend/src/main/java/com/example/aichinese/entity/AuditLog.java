@@ -17,12 +17,10 @@ import lombok.Setter;
 @Setter
 @Entity
 @Table(name = "audit_logs", indexes = {
-        @Index(name = "idx_audit_logs_actor_user_id", columnList = "actor_user_id"),
-        @Index(name = "idx_audit_logs_action_type", columnList = "action_type"),
+        @Index(name = "idx_audit_logs_action_created_at", columnList = "action_type,created_at"),
         @Index(name = "idx_audit_logs_created_at", columnList = "created_at"),
         @Index(name = "idx_audit_logs_target_created", columnList = "target_type,target_id,created_at"),
-        @Index(name = "idx_audit_logs_actor_created", columnList = "actor_user_id,created_at"),
-        @Index(name = "idx_audit_logs_actor_email_created", columnList = "actor_email,created_at")
+        @Index(name = "idx_audit_logs_actor_created", columnList = "actor_user_id,created_at")
 })
 public class AuditLog extends BaseEntity {
 

@@ -1,7 +1,6 @@
 package com.example.aichinese.config;
 
 import java.util.List;
-import java.util.Locale;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -14,8 +13,6 @@ public record ForwardedHeaderProperties(List<String> trustedProxies) {
                 : trustedProxies.stream()
                         .filter(value -> value != null && !value.isBlank())
                         .map(String::strip)
-                        .map(value -> value.toLowerCase(Locale.ROOT))
-                        .distinct()
                         .toList();
     }
 }

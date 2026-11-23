@@ -10,16 +10,15 @@ import com.example.aichinese.dto.admin.AdminAnalyticsResponse;
 import com.example.aichinese.dto.admin.AdminDashboardResponse;
 import com.example.aichinese.service.admin.AdminOverviewService;
 
+import lombok.RequiredArgsConstructor;
+
 /** The admin dashboard and analytics. */
 @RestController
 @RequestMapping("/api/v1/admin")
+@RequiredArgsConstructor
 public class AdminOverviewController {
 
     private final AdminOverviewService adminOverviewService;
-
-    public AdminOverviewController(AdminOverviewService adminOverviewService) {
-        this.adminOverviewService = adminOverviewService;
-    }
 
     @GetMapping("/dashboard")
     public ApiResponse<AdminDashboardResponse> dashboard() {

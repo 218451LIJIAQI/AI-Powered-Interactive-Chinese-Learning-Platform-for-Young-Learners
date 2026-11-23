@@ -1,11 +1,11 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { createPinia } from 'pinia'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { deferred } from '@/test/helpers'
 
 const api = vi.hoisted(() => ({ chatStream: vi.fn(), report: vi.fn() }))
 
 vi.mock('@/api/ai', () => ({ aiHelperApi: api }))
-vi.mock('vue-router', async () => ({ RouterLink: (await import('@/test/helpers')).routerLinkStub }))
 
 import AiAskTab from './AiAskTab.vue'
 
@@ -16,7 +16,7 @@ function mountAsk(initialQuestion: string | null = null) {
       initialQuestion,
       aiNotice: 'AI can make mistakes.',
     },
-    global: { plugins: [createPinia()], stubs: { IconGlyph: true, teleport: true } },
+    global: { stubs: { IconGlyph: true, teleport: true } },
   })
 }
 
@@ -27,21 +27,83 @@ async function askQuestion(wrapper: ReturnType<typeof mountAsk>, text: string) {
 }
 
 describe('AiAskTab (Ask SparkBot)', () => {
+  beforeEach(() => {
+    Object.values(api).forEach((fn) => fn.mockReset())
+  })
+
   it('fills the question box from a link', () => {
     const wrapper = mountAsk('What does 加油 mean?')
 
     expect(wrapper.get<HTMLTextAreaElement>('textarea').element.value).toBe('What does 加油 mean?')
   })
 
-  it('streams the answer, labels it as AI and keeps the chat session for follow-up questions', async () => {
-    api.chatStream.mockImplementation(async (_payload, handlers) => {
-      handlers.onDelta('谢谢 (xièxie) ')
-      handlers.onDelta('means thank you.')
-      return { sessionId: 9, chatMessageId: 55, aiResponse: '谢谢 (xièxie) means thank you.', status: 'SUCCESS' }
+  it('does not start a request when the tab closes before its first render finishes', async () => {
+    api.chatStream.mockResolvedValue({ aiResponse: 'Answer', status: 'SUCCESS' })
+    const wrapper = mountAsk('Hello')
+
+    wrapper.get('form.ai-ask-bar').element.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    wrapper.unmount()
+    await flushPromises()
+
+    expect(api.chatStream).not.toHaveBeenCalled()
+  })
+
+  it('aborts a request already streaming when the tab closes', async () => {
+    let signal: AbortSignal | undefined
+    api.chatStream.mockImplementation((_payload, handlers) => {
+      signal = handlers.signal
+      return new Promise((_resolve, reject) => {
+        signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))
+      })
     })
     const wrapper = mountAsk()
+    await askQuestion(wrapper, 'Hello')
+    expect(signal?.aborted).toBe(false)
 
-    await askQuestion(wrapper, 'How do I say thank you?')
+    wrapper.unmount()
+    await flushPromises()
+
+    expect(signal?.aborted).toBe(true)
+  })
+
+  it('streams the answer, labels it as AI and keeps the chat session for follow-up questions', async () => {
+    const firstReply = deferred<{
+      sessionId: number
+      chatMessageId: number
+      aiResponse: string
+      status: string
+    }>()
+    let emitDelta: ((chunk: string) => void) | undefined
+    api.chatStream
+      .mockImplementationOnce((_payload, handlers) => {
+        emitDelta = handlers.onDelta
+        return firstReply.promise
+      })
+      .mockResolvedValueOnce({
+        sessionId: 9,
+        chatMessageId: 56,
+        aiResponse: 'You can say 不客气 (bù kèqi).',
+        status: 'SUCCESS',
+      })
+    const wrapper = mountAsk()
+
+    await wrapper.get('textarea').setValue('How do I say thank you?')
+    await wrapper.get('form.ai-ask-bar').trigger('submit')
+    await flushPromises()
+
+    emitDelta!('谢谢 (xièxie) ')
+    await flushPromises()
+    expect(wrapper.get('.ai-message.is-bot .ai-answer').text()).toBe('谢谢 (xièxie)')
+    expect(wrapper.find('[data-testid="ai-result-label"]').exists()).toBe(false)
+
+    emitDelta!('means thank you.')
+    firstReply.resolve({
+      sessionId: 9,
+      chatMessageId: 55,
+      aiResponse: '谢谢 (xièxie) means thank you.',
+      status: 'SUCCESS',
+    })
+    await flushPromises()
     await askQuestion(wrapper, 'And a reply?')
 
     expect(api.chatStream.mock.calls[0]![0]).toEqual({

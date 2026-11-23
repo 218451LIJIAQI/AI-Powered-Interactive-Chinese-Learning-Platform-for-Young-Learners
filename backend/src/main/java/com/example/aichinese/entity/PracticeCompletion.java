@@ -16,16 +16,16 @@ import com.example.aichinese.entity.base.BaseEntity;
 import com.example.aichinese.entity.enums.PracticeType;
 
 /**
- * One finished run of a Practice set (every run, right or wrong): "sets done today", "played by N students" and
- * whether a set is done (every item right at least once) come from these rows. The set lives in the table of its
- * type, so {@code activityId} is not a foreign key.
+ * One finished run of a Practice set. A set is done after a run with every item correct.
+ * The practice type determines which table holds {@code activityId}.
  */
 @Getter
 @Setter
 @Entity
 @Table(name = "practice_completions", indexes = {
-        @Index(name = "idx_practice_completions_student_created", columnList = "student_id,created_at"),
-        @Index(name = "idx_practice_completions_set", columnList = "practice_type,activity_id")
+        @Index(name = "idx_practice_completions_set", columnList = "practice_type,activity_id"),
+        @Index(name = "idx_practice_completions_student_type_activity", columnList = "student_id,practice_type,activity_id"),
+        @Index(name = "idx_practice_completions_created_at", columnList = "created_at")
 })
 public class PracticeCompletion extends BaseEntity {
 
@@ -45,11 +45,4 @@ public class PracticeCompletion extends BaseEntity {
 
     @Column(name = "item_count", nullable = false, updatable = false)
     private Integer itemCount;
-
-    @Column(name = "xp_awarded", nullable = false, updatable = false)
-    private Integer xpAwarded = 0;
-
-    public boolean allCorrect() {
-        return itemCount != null && itemCount > 0 && itemCount.equals(correctCount);
-    }
 }

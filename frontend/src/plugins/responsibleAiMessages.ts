@@ -1,96 +1,139 @@
-/** The Responsible AI guidance page. Namespace `responsibleAi`. */
+import { aiDisclosureMessages } from './aiDisclosureMessages'
+
+const xiaomeiContext = {
+  en: ' In Talk with Xiaomei, also your plan goal and the short notes she remembers (forget them in any chat summary).',
+  ms: ' Dalam Berbual dengan Xiaomei, juga matlamat pelan anda dan nota ringkas yang diingatinya (lupakan nota itu dalam mana-mana ringkasan perbualan).',
+  'zh-CN': '在“和小美聊天”中，还会用到你的计划目标和她记住的简短内容（你可以在任何一次聊天总结中让她忘记）。',
+} as const
+
+/** The Responsible AI guidance (the public page and the learner's drawer: useResponsibleAiGuidance). Namespace `responsibleAi`. */
 export const responsibleAiMessages = {
   en: {
     title: 'Responsible AI guidance',
-    intro: 'What the AI Helper does and does not do, how its answers are bounded and how your data is protected.',
     roleTitle: 'Optional support for beginners',
     roleCopy:
-      'The AI Helper (talk with Xiaomei, ask SparkBot, quick quizzes, stories, pronunciation and handwriting practice) is optional support for Mandarin beginners. Lessons, practice and your teachers stay the main way to learn, and the AI Helper never earns XP.',
+      'The AI Helper is optional. You can finish every lesson, practice set and class without it, and you can turn AI hints off on your Account page.',
     limitsTitle: 'AI can be wrong',
+    // The first mention of Xiaomei on the public site: it says who she is.
     limitsCopy:
-      'AI responses may contain errors and do not replace your teacher. Check important answers against your lessons or ask your teacher. SparkBot never gives official grades.',
+      'SparkBot and Xiaomei (the speaking partner in AI Helper) write their replies with an AI model. A reply can sound sure and still be wrong, most often with tones, names and cultural details. Check important answers against your lessons, and if an answer looks wrong, use Report so an admin can review it.',
     boundsTitle: 'How answers are bounded',
     boundsCopy:
-      'Answers stay at beginner level (around HSK 1–2), short and about learning Mandarin. Requests about other things are politely refused. You can ask for explanations in English, Bahasa Melayu or Simplified Chinese, and there is a daily limit of AI requests.',
+      'Answers stay at beginner level (around HSK 1–2), short, about learning Mandarin and labelled as AI. Requests about other things are politely refused. You can ask for explanations in English, Bahasa Melayu or Simplified Chinese, and there is a daily limit of AI requests.',
     voiceTitle: 'Voice, speaking and handwriting',
     voiceCopy:
-      'When you practise speaking or handwriting, SparkBot gives a practice score with tips. Scores are for practice only: they are never shown to teachers and never count as grades.',
+      'Pronunciation and handwriting checks give you a practice score and feedback. XP and rank come from your learning progress.',
     dataTitle: 'What is sent to the AI provider',
-    dataCopy:
-      'Requests go from our server to the OpenAI Responses API (model {model}); your browser never contacts the provider directly. Your name, email and account ID are not sent, and emails, phone numbers and IC-like numbers typed into a request are removed first. Requests are sent with store=false, so the provider does not keep them for training or storage.',
-    dataCopyNoModel:
-      'Requests go from our server to the OpenAI Responses API; your browser never contacts the provider directly. Your name, email and account ID are not sent, and emails, phone numbers and IC-like numbers typed into a request are removed first. Requests are sent with store=false, so the provider does not keep them for training or storage.',
+    providerDeepseek: aiDisclosureMessages.en.providerDeepseek,
+    providerCompatible: aiDisclosureMessages.en.providerCompatible,
+    dataPronunciation: aiDisclosureMessages.en.pronunciation,
+    dataLiveVideo: aiDisclosureMessages.en.liveVideo,
+    // The data section names the provider the server reports (useResponsibleAiGuidance): what is sent, the target, then
+    // what that provider does with it.
+    // The second sentence: what Talk with Xiaomei adds (S7.14), the same for every provider.
+    dataWhat:
+      'The request uses the text or handwriting photo you submit, plus relevant context such as your level and the lesson topic.' +
+      xiaomeiContext.en,
+    dataWhatText:
+      'The request uses the text you submit, plus relevant context such as your level and the lesson topic.' +
+      xiaomeiContext.en,
+    dataTarget: 'Requests go from our server to {target}; your browser never contacts the provider directly.',
+    targetOpenAi: 'the OpenAI Responses API',
+    targetModel: '{target} (model {model})',
+    targetOther: 'the Chat Completions API of {provider}',
+    dataMinimise: aiDisclosureMessages.en.piiFilter + ' Avoid including personal information in what you send.',
+    dataOpenAi: aiDisclosureMessages.en.openAi,
+    dataOther: aiDisclosureMessages.en.other,
+    dataUnknown:
+      'When the AI Helper is connected to an AI provider, requests go from our server to that provider; your browser never contacts it directly.',
+    dataOff: aiDisclosureMessages.en.off,
     safetyTitle: 'Safety checks',
     safetyCopy:
-      'When an admin turns it on, a safety check screens requests and answers for unsafe content before they are shown, and a word filter blocks unsafe words in teacher content and AI requests.',
+      'The safety checks are on unless an admin turns them off. Your AI requests and the AI answers are screened against a list of unsafe words: a request that fails is not sent and an answer that fails is not shown.',
     reportTitle: 'Report an answer',
     reportCopy:
-      'Every AI answer and score has a Report option. Choose a reason and add a note if you like. An admin reviews every report and tells you the outcome in your notifications.',
-    disclaimerLabel: 'Shown with every AI answer',
-    disclaimer: 'AI responses may contain errors and do not replace your teacher.',
-    signInForHelper: 'Students: sign in to use the AI Helper',
-    openHelper: 'Open the AI Helper',
+      'Use Report on any AI reply, quiz, story or score: choose a reason and add a note if you like. An admin reads every report and replies in Ask SparkBot › My reports.',
+    disclaimerLabel: 'Shown with every AI answer:',
   },
   ms: {
     title: 'Panduan AI Bertanggungjawab',
-    intro:
-      'Apa yang dilakukan dan tidak dilakukan oleh Pembantu AI, bagaimana jawapannya dihadkan dan bagaimana data anda dilindungi.',
     roleTitle: 'Sokongan pilihan untuk pemula',
     roleCopy:
-      'Pembantu AI (berbual dengan Xiaomei, tanya SparkBot, kuiz ringkas, cerita, latihan sebutan dan tulisan tangan) ialah sokongan pilihan untuk pemula Mandarin. Pelajaran, latihan dan guru anda kekal sebagai cara utama untuk belajar, dan Pembantu AI tidak sekali-kali memberi XP.',
+      'Pembantu AI adalah pilihan. Anda boleh menyelesaikan setiap pelajaran, set latihan dan kelas tanpanya, dan anda boleh mematikan petunjuk AI di halaman Akaun anda.',
     limitsTitle: 'AI boleh tersilap',
     limitsCopy:
-      'Jawapan AI mungkin mengandungi kesilapan dan tidak menggantikan guru anda. Semak jawapan penting dengan pelajaran anda atau tanya guru anda. SparkBot tidak sekali-kali memberi gred rasmi.',
+      'SparkBot dan Xiaomei (rakan bertutur dalam Pembantu AI) menulis balasan mereka dengan model AI. Balasan boleh kedengaran yakin tetapi masih salah, paling kerap tentang nada, nama dan butiran budaya. Semak jawapan penting dengan pelajaran anda, dan jika jawapan kelihatan salah, gunakan Laporkan supaya pentadbir dapat menyemaknya.',
     boundsTitle: 'Bagaimana jawapan dihadkan',
     boundsCopy:
-      'Jawapan kekal pada tahap pemula (sekitar HSK 1–2), ringkas dan berkaitan pembelajaran Mandarin. Permintaan tentang perkara lain ditolak dengan sopan. Anda boleh meminta penerangan dalam bahasa Inggeris, Bahasa Melayu atau Bahasa Cina Ringkas, dan terdapat had harian permintaan AI.',
+      'Jawapan kekal pada tahap pemula (sekitar HSK 1–2), ringkas, berkaitan pembelajaran Mandarin dan dilabel sebagai AI. Permintaan tentang perkara lain ditolak dengan sopan. Anda boleh meminta penerangan dalam bahasa Inggeris, Bahasa Melayu atau Bahasa Cina Ringkas, dan terdapat had harian permintaan AI.',
     voiceTitle: 'Suara, pertuturan dan tulisan tangan',
     voiceCopy:
-      'Apabila anda berlatih bertutur atau menulis, SparkBot memberi skor latihan beserta tip. Skor hanya untuk latihan: ia tidak sekali-kali ditunjukkan kepada guru dan tidak dikira sebagai gred.',
+      'Semakan sebutan dan tulisan tangan memberi anda skor latihan dan maklum balas. XP dan pangkat datang daripada kemajuan pembelajaran anda.',
     dataTitle: 'Apa yang dihantar kepada penyedia AI',
-    dataCopy:
-      'Permintaan dihantar daripada pelayan kami kepada OpenAI Responses API (model {model}); pelayar anda tidak menghubungi penyedia secara terus. Nama, e-mel dan ID akaun anda tidak dihantar, dan e-mel, nombor telefon serta nombor seperti IC yang ditaip dalam permintaan dibuang terlebih dahulu. Permintaan dihantar dengan store=false, jadi penyedia tidak menyimpannya untuk latihan atau penyimpanan.',
-    dataCopyNoModel:
-      'Permintaan dihantar daripada pelayan kami kepada OpenAI Responses API; pelayar anda tidak menghubungi penyedia secara terus. Nama, e-mel dan ID akaun anda tidak dihantar, dan e-mel, nombor telefon serta nombor seperti IC yang ditaip dalam permintaan dibuang terlebih dahulu. Permintaan dihantar dengan store=false, jadi penyedia tidak menyimpannya untuk latihan atau penyimpanan.',
+    providerDeepseek: aiDisclosureMessages.ms.providerDeepseek,
+    providerCompatible: aiDisclosureMessages.ms.providerCompatible,
+    dataPronunciation: aiDisclosureMessages.ms.pronunciation,
+    dataLiveVideo: aiDisclosureMessages.ms.liveVideo,
+    dataWhat:
+      'Permintaan menggunakan teks atau foto tulisan tangan yang anda hantar, serta maklumat pembelajaran yang berkaitan seperti tahap anda dan topik pelajaran.' +
+      xiaomeiContext.ms,
+    dataWhatText:
+      'Permintaan menggunakan teks yang anda hantar, serta maklumat pembelajaran yang berkaitan seperti tahap anda dan topik pelajaran.' +
+      xiaomeiContext.ms,
+    dataTarget:
+      'Permintaan dihantar daripada pelayan kami kepada {target}; pelayar anda tidak menghubungi penyedia secara terus.',
+    targetOpenAi: 'OpenAI Responses API',
+    targetModel: '{target} (model {model})',
+    targetOther: 'API Chat Completions {provider}',
+    dataMinimise:
+      aiDisclosureMessages.ms.piiFilter + ' Elakkan memasukkan maklumat peribadi dalam apa yang anda hantar.',
+    dataOpenAi: aiDisclosureMessages.ms.openAi,
+    dataOther: aiDisclosureMessages.ms.other,
+    dataUnknown:
+      'Apabila Pembantu AI disambungkan kepada penyedia AI, permintaan dihantar daripada pelayan kami kepada penyedia itu; pelayar anda tidak menghubunginya secara terus.',
+    dataOff: aiDisclosureMessages.ms.off,
     safetyTitle: 'Semakan keselamatan',
     safetyCopy:
-      'Apabila pentadbir menghidupkannya, semakan keselamatan menapis permintaan dan jawapan untuk kandungan tidak selamat sebelum ia dipaparkan, dan penapis perkataan menyekat perkataan tidak selamat dalam kandungan guru dan permintaan AI.',
+      'Semakan keselamatan dihidupkan melainkan pentadbir mematikannya. Permintaan AI anda dan jawapan AI disemak berdasarkan senarai perkataan tidak selamat: permintaan yang gagal tidak dihantar dan jawapan yang gagal tidak dipaparkan.',
     reportTitle: 'Laporkan jawapan',
     reportCopy:
-      'Setiap jawapan dan skor AI mempunyai pilihan Laporkan. Pilih sebab dan tambah nota jika mahu. Pentadbir menyemak setiap laporan dan memaklumkan keputusannya dalam pemberitahuan anda.',
-    disclaimerLabel: 'Dipaparkan bersama setiap jawapan AI',
-    disclaimer: 'Jawapan AI mungkin mengandungi kesilapan dan tidak menggantikan guru anda.',
-    signInForHelper: 'Pelajar: log masuk untuk menggunakan Pembantu AI',
-    openHelper: 'Buka Pembantu AI',
+      'Gunakan Laporkan pada mana-mana balasan, kuiz, cerita atau skor AI: pilih sebab dan tambah nota jika mahu. Pentadbir membaca setiap laporan dan membalas dalam Tanya SparkBot › Laporan saya.',
+    disclaimerLabel: 'Dipaparkan bersama setiap jawapan AI:',
   },
   'zh-CN': {
-    title: '负责任的 AI 指南',
-    intro: 'AI 助手能做什么、不能做什么，它的回答受哪些限制，以及你的数据如何受到保护。',
+    title: '负责任 AI 指南',
     roleTitle: '为初学者提供的可选支持',
-    roleCopy:
-      'AI 助手（和小美聊天、向 SparkBot 提问、小测验、故事、发音和书写练习）是为中文初学者提供的可选支持。课程、练习和老师仍然是主要的学习方式，AI 助手不计 XP。',
+    roleCopy: 'AI 助手是可选的。不用它，你也能完成每个课时、每组练习和每个课堂；你还可以在“账号”页面关闭 AI 提示。',
     limitsTitle: 'AI 可能出错',
     limitsCopy:
-      'AI 的回答可能有误，不能取代你的老师。重要的答案请对照课程内容或询问老师。SparkBot 绝不会给出正式成绩。',
+      'SparkBot 和小美（AI 助手里的口语伙伴）都用 AI 模型撰写回复。回复听起来很肯定，也可能是错的，最常见于声调、名字和文化细节。重要的答案请对照课时内容；如果回答看起来不对，请使用“举报”，让管理员审核。',
     boundsTitle: '回答受到哪些限制',
     boundsCopy:
-      '回答保持初学者水平（约 HSK 1–2），简短并与中文学习相关。与学习无关的请求会被礼貌地拒绝。你可以要求用英语、马来语或简体中文解释，AI 请求每天有使用上限。',
+      '回答保持初学者水平（约 HSK 1–2），简短、与中文学习相关，并标注为 AI 生成。与学习无关的请求会被礼貌地拒绝。你可以要求用英语、马来语或简体中文解释，AI 请求每天有使用上限。',
     voiceTitle: '语音、口语和书写',
-    voiceCopy: '当你练习口语或书写时，SparkBot 会给出练习评分和建议。评分仅用于练习：绝不会展示给老师，也不计入成绩。',
+    voiceCopy: '发音和书写都会提供练习评分和反馈。你的 XP 和段位根据学习进度计算。',
     dataTitle: '哪些内容会发送给 AI 提供方',
-    dataCopy:
-      '请求由我们的服务器发送到 OpenAI Responses API（模型 {model}）；你的浏览器不会直接联系提供方。你的姓名、邮箱和账号 ID 不会被发送，请求中输入的邮箱、电话号码和类似身份证号码的数字会先被移除。请求带有 store=false，因此提供方不会将其保存或用于训练。',
-    dataCopyNoModel:
-      '请求由我们的服务器发送到 OpenAI Responses API；你的浏览器不会直接联系提供方。你的姓名、邮箱和账号 ID 不会被发送，请求中输入的邮箱、电话号码和类似身份证号码的数字会先被移除。请求带有 store=false，因此提供方不会将其保存或用于训练。',
+    providerDeepseek: aiDisclosureMessages['zh-CN'].providerDeepseek,
+    providerCompatible: aiDisclosureMessages['zh-CN'].providerCompatible,
+    dataPronunciation: aiDisclosureMessages['zh-CN'].pronunciation,
+    dataLiveVideo: aiDisclosureMessages['zh-CN'].liveVideo,
+    dataWhat: '请求会使用你提交的文字或手写照片，以及相关学习信息，例如你的水平和课时主题。' + xiaomeiContext['zh-CN'],
+    dataWhatText: '请求会使用你提交的文字及相关学习信息，例如你的水平和课时主题。' + xiaomeiContext['zh-CN'],
+    dataTarget: '请求由我们的服务器发送到 {target}；你的浏览器不会直接联系提供方。',
+    targetOpenAi: 'OpenAI Responses API',
+    targetModel: '{target}（模型 {model}）',
+    targetOther: '{provider}的 Chat Completions API',
+    dataMinimise: aiDisclosureMessages['zh-CN'].piiFilter + '请避免在你发送的内容中提供个人信息。',
+    dataOpenAi: aiDisclosureMessages['zh-CN'].openAi,
+    dataOther: aiDisclosureMessages['zh-CN'].other,
+    dataUnknown: '当 AI 助手连接到 AI 提供方时，请求会由我们的服务器发送给该提供方；你的浏览器不会直接联系它。',
+    dataOff: aiDisclosureMessages['zh-CN'].off,
     safetyTitle: '安全检查',
     safetyCopy:
-      '当管理员开启时，安全检查会在显示前筛查请求和回答中的不安全内容，敏感词过滤器会拦截老师内容和 AI 请求中的不安全词语。',
+      '安全检查默认开启，除非管理员将其关闭。你的 AI 请求和 AI 回答都会对照不安全词语列表进行筛查：未通过的请求不会发送，未通过的回答不会显示。',
     reportTitle: '举报回答',
     reportCopy:
-      '每个 AI 回答和评分都有“举报”选项。选择原因，并可添加备注。管理员会审核每条举报，并在通知中告诉你处理结果。',
-    disclaimerLabel: '每个 AI 回答都会显示',
-    disclaimer: 'AI 的回答可能有误，不能取代你的老师。',
-    signInForHelper: '学生：登录后使用 AI 助手',
-    openHelper: '打开 AI 助手',
+      '任何 AI 回复、测验、故事或评分都可以使用“举报”：选择原因，并可添加备注。管理员会阅读每条举报，并在“问 SparkBot › 我的举报”中回复。',
+    disclaimerLabel: '每个 AI 回答都会显示：',
   },
 }

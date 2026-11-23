@@ -1,14 +1,15 @@
 package com.example.aichinese.security;
 
 import java.net.InetAddress;
-import java.net.UnknownHostException;
-import java.util.Arrays;
+import java.util.Collections;
+import java.util.Enumeration;
 import java.util.List;
 
+import org.springframework.security.web.util.matcher.IpAddressMatcher;
 import org.springframework.stereotype.Component;
 
 import com.example.aichinese.config.ForwardedHeaderProperties;
-import com.example.aichinese.config.HttpUrlValidation;
+import com.example.aichinese.util.NetworkAddresses;
 
 import jakarta.servlet.http.HttpServletRequest;
 
@@ -17,140 +18,56 @@ public class ClientIpResolver {
 
     private static final String X_FORWARDED_FOR_HEADER = "X-Forwarded-For";
 
-    private final List<CidrRange> trustedProxyCidrs;
-    private final List<String> trustedProxyLiterals;
+    private final List<IpAddressMatcher> trustedProxies;
 
+    /** Each entry is an address or CIDR range; a host name is rejected at startup. */
     public ClientIpResolver(ForwardedHeaderProperties forwardedHeaderProperties) {
-        this.trustedProxyLiterals = forwardedHeaderProperties.trustedProxies().stream()
-                .filter(entry -> !entry.contains("/"))
-                .map(ClientIpResolver::parseTrustedProxyLiteral)
-                .toList();
-        this.trustedProxyCidrs = forwardedHeaderProperties.trustedProxies().stream()
-                .filter(entry -> entry.contains("/"))
-                .map(CidrRange::parse)
+        this.trustedProxies = forwardedHeaderProperties.trustedProxies().stream()
+                .map(IpAddressMatcher::new)
                 .toList();
     }
 
+    /**
+     * The client address the per-IP rate limits and the refresh-token records use. From a trusted proxy (loopback or
+     * a configured one) X-Forwarded-For is read from the right: the first hop that is no trusted proxy is the client,
+     * or the left-most hop when all are. Otherwise, or when a hop is no address, it is the connection's peer. The
+     * address comes back in one canonical form, so every spelling of it shares a limit.
+     */
     public String resolve(HttpServletRequest request) {
-        if (request == null) {
-            return "";
-        }
-
-        String remoteAddress = HttpUrlValidation.normalizeHost(request.getRemoteAddr());
-        InetAddress remote = parseNumericAddress(remoteAddress);
+        String remoteAddress = request.getRemoteAddr();
+        InetAddress remote = NetworkAddresses.parseCanonicalLiteral(remoteAddress);
         if (remote == null) {
-            return remoteAddress;
+            return NetworkAddresses.normalizeHost(remoteAddress);
         }
-        String forwardedHeader = request.getHeader(X_FORWARDED_FOR_HEADER);
-        if (!isTrustedForwardingProxy(remote) || forwardedHeader == null || forwardedHeader.isBlank()) {
-            return canonical(remote);
+        if (!isTrustedForwardingProxy(remote)) {
+            return remote.getHostAddress();
+        }
+        // A proxy may add its own header line instead of extending the client's, so every line counts, in order.
+        Enumeration<String> forwardedHeaders = request.getHeaders(X_FORWARDED_FOR_HEADER);
+        if (forwardedHeaders == null || !forwardedHeaders.hasMoreElements()) {
+            return remote.getHostAddress();
+        }
+        String forwardedHeader = String.join(",", Collections.list(forwardedHeaders));
+        if (forwardedHeader.isBlank()) {
+            return remote.getHostAddress();
         }
         String[] forwardedHops = forwardedHeader.split(",", -1);
         InetAddress leftMostTrustedHop = remote;
         for (int index = forwardedHops.length - 1; index >= 0; index--) {
-            // Normalised here and again inside parseNumericAddress, so "[ 203.0.113.9 ]" still counts as an address.
-            InetAddress hop = parseNumericAddress(HttpUrlValidation.normalizeHost(forwardedHops[index]));
+            InetAddress hop = NetworkAddresses.parseCanonicalLiteral(forwardedHops[index]);
             if (hop == null) {
-                return canonical(remote);
+                return remote.getHostAddress();
             }
             if (!isTrustedForwardingProxy(hop)) {
-                return canonical(hop);
+                return hop.getHostAddress();
             }
             leftMostTrustedHop = hop;
         }
-        return canonical(leftMostTrustedHop);
+        return leftMostTrustedHop.getHostAddress();
     }
 
     private boolean isTrustedForwardingProxy(InetAddress address) {
         return address.isLoopbackAddress()
-                || trustedProxyLiterals.contains(canonical(address))
-                || trustedProxyCidrs.stream().anyMatch(range -> range.matches(address));
-    }
-
-    private static String canonical(InetAddress address) {
-        return HttpUrlValidation.normalizeHost(address.getHostAddress());
-    }
-
-    private static String parseTrustedProxyLiteral(String value) {
-        InetAddress parsedAddress = parseNumericAddress(HttpUrlValidation.normalizeHost(value));
-        if (parsedAddress == null) {
-            throw new IllegalArgumentException("Trusted proxy entry contains an invalid address: " + value);
-        }
-        return canonical(parsedAddress);
-    }
-
-    private static InetAddress parseNumericAddress(String value) {
-        String normalized = HttpUrlValidation.normalizeHost(value);
-        try {
-            String[] ipv4Parts = normalized.split("\\.", -1);
-            if (ipv4Parts.length == 4) {
-                byte[] address = new byte[4];
-                for (int index = 0; index < ipv4Parts.length; index++) {
-                    if (ipv4Parts[index].isBlank() || !ipv4Parts[index].chars().allMatch(Character::isDigit)) {
-                        return null;
-                    }
-                    int octet = Integer.parseInt(ipv4Parts[index]);
-                    if (octet > 255) {
-                        return null;
-                    }
-                    address[index] = (byte) octet;
-                }
-                return InetAddress.getByAddress(address);
-            }
-            if (!normalized.contains(":")
-                    || normalized.contains("%")
-                    || !normalized.matches("[0-9a-f:.]+")) {
-                return null;
-            }
-            return InetAddress.getByName(normalized);
-        } catch (UnknownHostException | NumberFormatException exception) {
-            return null;
-        }
-    }
-
-    private record CidrRange(byte[] network, int prefixLength) {
-
-        static CidrRange parse(String value) {
-            String[] parts = value.strip().split("/", 2);
-            if (parts.length != 2) {
-                throw new IllegalArgumentException("Trusted proxy CIDR must be in address/prefix form: " + value);
-            }
-
-            try {
-                InetAddress networkAddress = parseNumericAddress(parts[0].strip());
-                if (networkAddress == null) {
-                    throw new IllegalArgumentException("Trusted proxy CIDR contains an invalid address: " + value);
-                }
-                int prefixLength = Integer.parseInt(parts[1].strip());
-                int maxBits = networkAddress.getAddress().length * 8;
-                if (prefixLength < 0 || prefixLength > maxBits) {
-                    throw new IllegalArgumentException("Trusted proxy CIDR prefix is out of range: " + value);
-                }
-                return new CidrRange(mask(networkAddress.getAddress(), prefixLength), prefixLength);
-            } catch (NumberFormatException exception) {
-                throw new IllegalArgumentException("Trusted proxy CIDR contains an invalid prefix: " + value, exception);
-            }
-        }
-
-        boolean matches(InetAddress candidate) {
-            byte[] candidateAddress = candidate.getAddress();
-            return candidateAddress.length == network.length
-                    && Arrays.equals(network, mask(candidateAddress, prefixLength));
-        }
-
-        private static byte[] mask(byte[] value, int prefixLength) {
-            byte[] masked = value.clone();
-            int remainingBits = prefixLength;
-            for (int index = 0; index < masked.length; index++) {
-                int bitsThisByte = Math.max(0, Math.min(8, remainingBits));
-                if (bitsThisByte == 0) {
-                    masked[index] = 0;
-                } else if (bitsThisByte < 8) {
-                    masked[index] = (byte) (masked[index] & (0xFF << (8 - bitsThisByte)));
-                }
-                remainingBits -= 8;
-            }
-            return masked;
-        }
+                || trustedProxies.stream().anyMatch(proxy -> proxy.matches(address.getHostAddress()));
     }
 }

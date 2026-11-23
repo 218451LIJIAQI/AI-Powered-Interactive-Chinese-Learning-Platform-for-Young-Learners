@@ -1,0 +1,16 @@
+# Copy this file to backend/config/application-local.yml (ignored by git) for private local-profile overrides.
+# Files under src/main/resources are packaged into the jar; keep local credentials here or outside the repository.
+spring:
+  config:
+    # Optionally load local AI settings (for example app.ai.enable-real-provider and app.ai.api-key-file)
+    # from the user's private credentials directory without putting secrets in the repository.
+    import: "optional:file:${LOCALAPPDATA:${user.home}/.config}/MandarinSpark/credentials/ai-local.properties"
+
+app:
+  ai:
+    # Keep environment-variable overrides working by referencing the placeholder defaults here when overriding.
+    enable-real-provider: ${AI_ENABLE_REAL_PROVIDER:false}
+    pronunciation:
+      secret-id: ${TENCENT_SOE_SECRET_ID:}
+      secret-key: ${TENCENT_SOE_SECRET_KEY:}
+      soe-app-id: ${TENCENT_SOE_APP_ID:}

@@ -21,7 +21,10 @@ import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.Setter;
 
-/** A Help & support request (#1000 upwards) from a student, a teacher or a visitor, answered in the admin queue. */
+/**
+ * A Help & support request (#1000 upwards) from a learner or a visitor (teacher accounts sent some before teachers were
+ * removed), answered in the admin queue and by e-mail.
+ */
 @Getter
 @Setter
 @Entity
@@ -37,7 +40,7 @@ public class SupportRequest extends BaseEntity {
     @Column(name = "request_number", nullable = false, updatable = false)
     private Integer number;
 
-    /** The signed-in requester; null for a visitor (and after the requester deleted the account). */
+    /** The signed-in requester; null for a visitor. Deleting an account deletes its requests. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "requester_user_id")
     private User requester;
@@ -45,6 +48,10 @@ public class SupportRequest extends BaseEntity {
     /** Where a visitor's replies are e-mailed and what support sees; a snapshot taken when the request was sent. */
     @Column(name = "requester_email", nullable = false, length = 150)
     private String requesterEmail;
+
+    /** The visitor's reply language. Signed-in requesters receive replies in their account language. */
+    @Column(name = "requester_language", length = 10, updatable = false)
+    private String requesterLanguage;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "requester_role", nullable = false, updatable = false, length = 20)
@@ -64,7 +71,7 @@ public class SupportRequest extends BaseEntity {
     @Column(name = "last_support_reply_at")
     private LocalDateTime lastSupportReplyAt;
 
-    /** While ANSWERED: when the request closes by itself if the requester does not reply. */
+    /** While ANSWERED: when the request closes by itself if nobody replies. */
     @Column(name = "closes_at")
     private LocalDateTime closesAt;
 

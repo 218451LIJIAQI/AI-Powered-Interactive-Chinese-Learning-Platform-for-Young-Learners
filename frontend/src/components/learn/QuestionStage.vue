@@ -1,60 +1,55 @@
 <template>
-  <section class="learn-question" :aria-labelledby="`${baseId}-instruction`" data-testid="question-stage">
-    <h2 :id="`${baseId}-instruction`" class="learn-question-instruction">{{ instruction }}</h2>
-    <p v-if="context" class="learn-question-context">{{ context }}</p>
+  <section
+    class="learn-question"
+    :aria-labelledby="`${baseId}-instruction`"
+    data-testid="question-stage"
+    @dragend="dragged = null"
+  >
+    <h2 :id="`${baseId}-instruction`" ref="heading" class="focus-title" tabindex="-1">{{ instruction }}</h2>
+    <p v-if="context && !contextAfterPinyin" class="learn-question-context">{{ context }}</p>
 
     <div v-if="isListening" class="learn-question-prompt">
-      <ListenButtons :text="question.audioText ?? ''" :label="t('learn.theAudio')" large slow />
+      <ListenButtons :key="question.id" v-model:failed="audioFailed" :text="question.audioText ?? ''" large />
     </div>
     <div v-else-if="question.hanzi" class="learn-question-prompt">
-      <p v-if="hanziTiles.length" class="learn-question-word" lang="zh-CN">
-        <span class="sr-only">{{ question.hanzi }}</span>
-        <span
-          v-for="(character, index) in hanziTiles"
-          :key="`${character}-${index}`"
-          class="hanzi-tile learn-question-tile"
-          aria-hidden="true"
-          >{{ character }}</span
-        >
-      </p>
-      <p v-else class="learn-question-hanzi" lang="zh-CN">{{ question.hanzi }}</p>
-      <p v-if="question.pinyin" class="learn-question-pinyin">{{ question.pinyin }}</p>
-      <ListenButtons v-if="question.audioText" :text="question.audioText" />
+      <ListenButtons v-if="listenText" :text="listenText" prompt />
+      <div class="learn-question-word">
+        <p class="hanzi learn-question-hanzi" lang="zh-CN">{{ question.hanzi }}</p>
+        <p v-if="caption" class="learn-question-pinyin">{{ caption }}</p>
+      </div>
     </div>
     <p v-else-if="question.type === 'TRANSLATE_BUILD' && question.meaning" class="learn-question-meaning">
       “{{ question.meaning }}”
     </p>
 
-    <ol
-      v-if="question.answerKind === 'CHOICE'"
-      class="learn-options"
-      :class="optionsLayout"
-      :aria-label="t('learn.answers')"
-    >
-      <li v-for="(option, index) in question.options" :key="`${option.text}-${index}`">
+    <ol v-if="question.answerKind === 'CHOICE'" class="learn-options" :aria-label="t('learn.answers')">
+      <li v-for="(option, index) in choiceOptions" :key="`${option.text}-${index}`">
         <button
-          class="learn-option"
-          :class="optionClass(option.text)"
+          class="option-row learn-option"
+          :class="{
+            'is-correct': option.mark === 'correct',
+            'is-wrong': option.mark === 'incorrect',
+            'is-ruled-out': option.ruledOut,
+          }"
           type="button"
           :aria-pressed="modelValue === option.text"
-          :disabled="locked"
+          :disabled="locked || option.ruledOut"
           :data-testid="`option-${index}`"
           @click="emit('update:modelValue', option.text)"
         >
-          <span class="learn-option-key" aria-hidden="true">{{ index + 1 }}</span>
+          <span class="option-keycap" aria-hidden="true">{{ index + 1 }}</span>
           <span class="learn-option-text">
-            <span
-              :class="{ 'learn-option-hanzi': isChinese(option.text) }"
-              :lang="isChinese(option.text) ? 'zh-CN' : undefined"
-            >
+            <span v-if="option.mark === 'correct'" class="sr-only">{{ t('learn.correctAnswer') }} </span>
+            <span :class="{ 'hanzi learn-option-hanzi': option.han }" :lang="option.han ? 'zh-CN' : undefined">
               {{ option.text }}
             </span>
             <span v-if="option.pinyin" class="learn-option-pinyin">{{ option.pinyin }}</span>
           </span>
           <IconGlyph
-            v-if="optionMark(option.text)"
+            v-if="option.mark"
             class="learn-option-mark"
-            :name="optionMark(option.text)!"
+            :class="`is-${option.mark}`"
+            :name="option.mark === 'correct' ? 'check' : 'close'"
             :size="22"
           />
         </button>
@@ -64,38 +59,51 @@
     <div v-else class="learn-build">
       <div
         class="learn-build-answer"
-        :class="buildClass"
+        :class="{ 'is-correct': check?.correct === true, 'is-wrong': check?.correct === false }"
         role="group"
         :aria-label="t('learn.yourSentence')"
         data-testid="build-answer"
+        @dragover="allowDrop"
+        @drop="dropOnAnswer"
       >
         <span v-if="!placed.length" class="learn-build-placeholder">{{ t('learn.clickTilesHint') }}</span>
         <button
           v-for="(tileIndex, position) in placed"
           :key="`placed-${tileIndex}`"
           class="learn-tile"
-          lang="zh-CN"
+          :class="{ hanzi: tiles[tileIndex]?.han }"
+          :lang="tiles[tileIndex]?.han ? 'zh-CN' : undefined"
           type="button"
           :disabled="locked"
           :aria-label="t('learn.removeTile', { tile: question.tiles[tileIndex] })"
+          :draggable="draggableTiles && !locked"
           @click="remove(position)"
+          @dragstart="startDrag($event, tileIndex)"
         >
           {{ question.tiles[tileIndex] }}
         </button>
       </div>
-      <div class="learn-build-bank" role="group" :aria-label="t('learn.wordTiles')">
+      <div
+        class="learn-build-bank"
+        role="group"
+        :aria-label="t('learn.wordTiles')"
+        @dragover="allowDrop"
+        @drop="dropOnBank"
+      >
         <button
-          v-for="(tile, index) in question.tiles"
+          v-for="(tile, index) in tiles"
           :key="`bank-${index}`"
           class="learn-tile"
-          :class="{ 'is-used': placed.includes(index) }"
-          lang="zh-CN"
+          :class="{ 'is-used': tile.used, 'is-ruled-out': tile.ruledOut, hanzi: tile.han }"
+          :lang="tile.han ? 'zh-CN' : undefined"
           type="button"
-          :disabled="locked || placed.includes(index)"
+          :disabled="!tile.available"
           :data-testid="`tile-${index}`"
+          :draggable="draggableTiles && tile.available"
           @click="add(index)"
+          @dragstart="startDrag($event, index)"
         >
-          {{ tile }}
+          {{ tile.text }}
         </button>
       </div>
     </div>
@@ -107,120 +115,175 @@ import { computed, ref, useId, watch } from 'vue'
 
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
-import { learnMessages } from '@/plugins/learnMessages'
+import { learnSharedMessages } from '@/plugins/learnSharedMessages'
 import type { AnswerCheck, QuestionView } from '@/types/learn'
+import { hasHan } from '@/utils/cjkText'
 
 import ListenButtons from './ListenButtons.vue'
+import { isListeningQuestion } from './listeningQuestion'
 
 /**
- * One question of a lesson or a review, on a quiet stage: its instruction (written from the question type, or the
- * question's own wording), what it asks about (a short word on 田字格 tiles, a longer one in the hanzi serif, with
- * its pinyin and Listen; or the audio; or the sentence to say), and either large numbered options or word tiles to
- * put in order. The answer is the chosen option text, or the placed tiles separated by spaces. Every state is drawn:
- * selected (ink), checking and locked (the rest fade), right (jade, with a check) and wrong (red, with a cross).
+ * One question of a lesson, the mistakes review, the level check or a Practice set: its instruction (written from the
+ * question type, or the question's own wording), what it asks about (the word with its speaker and pinyin, the audio,
+ * or the sentence to translate), and either answer rows with keycaps or word tiles to put in order. The answer is the
+ * chosen option text, or the placed tiles separated by spaces. Only Chinese is marked `lang="zh-CN"`: an option or a
+ * tile can be pinyin, English or a name. Every state is drawn: selected, locked after the check, right (with a check)
+ * and wrong (with a cross).
  */
 interface Props {
   question: QuestionView
   modelValue: string | null
   /** After the check: nothing can change any more. */
-  locked?: boolean
-  check?: AnswerCheck | null
-  /** A line under the instruction, such as what the student answered last time. */
+  locked: boolean
+  check: AnswerCheck | null
+  /**
+   * Where the question comes from, such as what the learner answered last time: after the word's pinyin when it shows
+   * one, else under the instruction.
+   */
   context?: string
+  /** Word tiles can also be dragged, to the sentence and back (Practice's Drag & Drop); clicks and keys always work. */
+  draggableTiles?: boolean
+  /** Answers or tiles a hint ruled out: shown faded and no longer chosen. */
+  ruledOut?: readonly string[]
 }
 
-const props = withDefaults(defineProps<Props>(), { locked: false, check: null, context: '' })
+const props = withDefaults(defineProps<Props>(), { context: '', ruledOut: () => [] })
+const audioFailed = defineModel<boolean>('audioFailed', { default: false })
 
 const emit = defineEmits<{
   'update:modelValue': [value: string | null]
 }>()
 
-const { t } = useLocalMessages({ learn: learnMessages })
+const { t } = useLocalMessages({ learn: learnSharedMessages })
 const baseId = useId()
 
-const isListening = computed(() => {
-  const type = props.question.type
-  if (type === 'LISTEN_CHOOSE' || type === 'LISTEN_BUILD') return true
-  return type === null && Boolean(props.question.audioText) && !props.question.hanzi
-})
+function isRuledOut(text: string): boolean {
+  return !props.check && props.ruledOut.includes(text)
+}
 
+const isListening = computed(() => isListeningQuestion(props.question))
+
+const INSTRUCTION_KEYS: Readonly<Record<NonNullable<QuestionView['type']>, string>> = {
+  MEANING: 'learn.instructionMeaning',
+  PINYIN: 'learn.instructionPinyin',
+  HANZI: 'learn.instructionHanzi',
+  LISTEN_CHOOSE: 'learn.instructionListenChoose',
+  LISTEN_BUILD: 'learn.instructionListenBuild',
+  TRANSLATE_BUILD: 'learn.instructionTranslate',
+}
+
+/** Written from the question type ("{meaning}" only the hanzi one uses), else the question's own wording. */
 const instruction = computed(() => {
-  switch (props.question.type) {
-    case 'MEANING':
-      return t('learn.instructionMeaning')
-    case 'PINYIN':
-      return t('learn.instructionPinyin')
-    case 'HANZI':
-      return t('learn.instructionHanzi', { meaning: props.question.meaning ?? '' })
-    case 'LISTEN_CHOOSE':
-      return t('learn.instructionListenChoose')
-    case 'LISTEN_BUILD':
-      return t('learn.instructionListenBuild')
-    case 'TRANSLATE_BUILD':
-      return t('learn.instructionTranslate')
-    default:
-      return props.question.prompt ?? ''
-  }
+  const { type, meaning, prompt } = props.question
+  if (type) return t(INSTRUCTION_KEYS[type], { meaning: meaning ?? '' })
+  const text = prompt?.trim()
+  if (text) return text
+  return isListening.value ? t('learn.instructionListenChoose') : ''
 })
 
-/** A word of one to four characters sits on 田字格 tiles, one per character; a longer phrase is set as text. */
-const hanziTiles = computed(() => {
-  const characters = Array.from(props.question.hanzi ?? '')
-  return characters.length >= 1 && characters.length <= 4 && characters.every(isChinese) ? characters : []
+/** A pinyin question asks for the sound of the word, so the student may hear it even though no audio text is sent. */
+const listenText = computed(() => (props.question.type === 'PINYIN' ? props.question.hanzi : props.question.audioText))
+
+/** A context line follows the word's pinyin ("nǐ hǎo · marked “Still learning” in Flashcards") when it has one. */
+const contextAfterPinyin = computed(() =>
+  Boolean(
+    props.context &&
+    !isListening.value &&
+    props.question.hanzi &&
+    props.question.type !== 'PINYIN' &&
+    props.question.pinyin,
+  ),
+)
+
+/** The line under the word: its pinyin (and the context), or, when the pinyin is the answer, a nudge to listen first. */
+const caption = computed(() => {
+  if (props.question.type === 'PINYIN') return t('learn.hintPinyin')
+  const pinyin = props.question.pinyin ?? ''
+  return contextAfterPinyin.value ? `${pinyin} · ${props.context}` : pinyin
 })
 
-// ----- choices -----
+// The button that went on (Continue, Next) left with the last question, and the focus with it: the new question takes
+// it, so the keyboard and a screen reader go on from its instruction. A focus kept anywhere else stays there.
+const heading = ref<HTMLHeadingElement | null>(null)
+watch(
+  () => props.question,
+  () => {
+    if (!document.activeElement || document.activeElement === document.body) heading.value?.focus()
+  },
+  { flush: 'post' },
+)
 
-/** Short options sit side by side (three across for three); a long one puts them all in one column. */
-const optionsLayout = computed(() => {
-  const options = props.question.options
-  if (options.some((option) => option.text.length + (option.pinyin?.length ?? 0) > 22)) return 'is-stacked'
-  return options.length === 3 ? 'is-three' : ''
-})
+// Choices
 
-function same(a: string | null | undefined, b: string | null | undefined): boolean {
-  const normalize = (value: string | null | undefined) =>
-    (value ?? '')
+/** As the server compares answers (`LearnAnswers.matches`): case, width, spaces and punctuation do not count. */
+function normalizeAnswer(value: string): string {
+  return (
+    value
       .normalize('NFKC')
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\s\u001c-\u001f\u0085]/gu, '')
       .toLowerCase()
-      .replace(/[\s\p{P}]/gu, '')
-  return normalize(a) !== '' && normalize(a) === normalize(b)
+      .replace(/\p{P}/gu, '')
+  )
 }
 
-function optionClass(text: string): Record<string, boolean> {
-  const checked = props.check !== null
-  return {
-    'is-selected': props.modelValue === text,
-    'is-correct': checked && same(text, props.check?.correctAnswer),
-    'is-wrong': checked && props.modelValue === text && !same(text, props.check?.correctAnswer),
-  }
-}
+/** Level checks return the exact option. Learn can return an answer key whose spelling differs from the option. */
+const correctChoice = computed(() => {
+  const answer = props.check?.correctAnswer
+  if (!answer) return undefined
+  const { options } = props.question
+  if (options.some((option) => option.text === answer)) return answer
+  const key = normalizeAnswer(answer)
+  return key ? options.find((option) => normalizeAnswer(option.text) === key)?.text : undefined
+})
 
-function optionMark(text: string): string | null {
-  if (!props.check) return null
-  if (same(text, props.check.correctAnswer)) return 'correct'
-  return props.modelValue === text ? 'incorrect' : null
-}
+const choiceOptions = computed(() => {
+  return props.question.options.map((option) => {
+    let mark: 'correct' | 'incorrect' | null = null
+    if (props.check) {
+      if (props.modelValue === option.text) mark = props.check.correct ? 'correct' : 'incorrect'
+      else if (option.text === correctChoice.value) mark = 'correct'
+    }
+    return { ...option, mark, han: hasHan(option.text), ruledOut: isRuledOut(option.text) }
+  })
+})
 
-function isChinese(text: string): boolean {
-  return /\p{Script=Han}/u.test(text)
-}
-
-// ----- tiles -----
+// Tiles
 
 const placed = ref<number[]>([])
+const tiles = computed(() => {
+  const placedIndexes = new Set(placed.value)
+  return props.question.tiles.map((text, index) => {
+    const used = placedIndexes.has(index)
+    const ruledOut = isRuledOut(text)
+    return { text, used, ruledOut, han: hasHan(text), available: !props.locked && !used && !ruledOut }
+  })
+})
+/** The tile being dragged, as its index in `question.tiles`: only a drag `startDrag` allows sets it. */
+let dragged: number | null = null
 
+// Every caller clears the answer on the next question, on Skip and on Reset. Also clear placed tiles on question switch.
 watch(
-  () => props.question.id,
-  () => {
-    placed.value = []
+  [() => props.modelValue, () => props.question, () => props.locked, () => props.draggableTiles],
+  ([value, nextQuestion], [, previousQuestion]) => {
+    if (value === null || nextQuestion !== previousQuestion) placed.value = []
+    dragged = null
   },
 )
 
+// A hint that rules out the chosen answer, or a placed tile, takes it back: what it greys out is never the answer sent.
 watch(
-  () => props.modelValue,
-  (value) => {
-    if (value === null && placed.value.length) placed.value = []
+  () => props.ruledOut,
+  (ruledOut) => {
+    if (props.locked || props.check) return
+    if (props.question.answerKind === 'CHOICE') {
+      if (props.modelValue !== null && ruledOut.includes(props.modelValue)) emit('update:modelValue', null)
+      return
+    }
+    const kept = placed.value.filter((index) => !ruledOut.includes(props.question.tiles[index]))
+    if (kept.length === placed.value.length) return
+    placed.value = kept
+    sync()
   },
 )
 
@@ -232,19 +295,39 @@ function sync(): void {
 }
 
 function add(index: number): void {
-  if (props.locked || placed.value.includes(index)) return
-  placed.value = [...placed.value, index]
+  // A placed tile can be dragged and dropped on the sentence again.
+  if (!tiles.value[index]?.available) return
+  placed.value.push(index)
   sync()
 }
 
 function remove(position: number): void {
   if (props.locked) return
-  placed.value = placed.value.filter((_, at) => at !== position)
+  placed.value.splice(position, 1)
   sync()
 }
 
-const buildClass = computed(() => ({
-  'is-correct': props.check?.correct === true,
-  'is-wrong': props.check?.correct === false,
-}))
+function startDrag(event: DragEvent, tileIndex: number): void {
+  if (props.locked || !props.draggableTiles) return
+  dragged = tileIndex
+  // Firefox starts a drag only with data set.
+  event.dataTransfer?.setData('text/plain', props.question.tiles[tileIndex] ?? '')
+}
+
+function allowDrop(event: DragEvent): void {
+  if (dragged !== null) event.preventDefault()
+}
+
+function dropOnAnswer(event: DragEvent): void {
+  event.preventDefault()
+  if (dragged !== null) add(dragged)
+  dragged = null
+}
+
+function dropOnBank(event: DragEvent): void {
+  event.preventDefault()
+  const position = dragged === null ? -1 : placed.value.indexOf(dragged)
+  if (position >= 0) remove(position)
+  dragged = null
+}
 </script>

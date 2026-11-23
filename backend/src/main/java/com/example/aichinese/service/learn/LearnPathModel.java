@@ -6,7 +6,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
+import com.example.aichinese.dto.learn.StopState;
+import com.example.aichinese.dto.learn.UnitState;
 import com.example.aichinese.entity.LearnLesson;
 import com.example.aichinese.entity.LearnUnit;
 import com.example.aichinese.entity.enums.LearnLessonKind;
@@ -15,12 +18,16 @@ import com.example.aichinese.entity.enums.LearnLessonKind;
  * One student's view of the published path: which stops are done, open or locked. Stops unlock in order: a lesson,
  * review or checkpoint opens when the required stop before it is done; a bonus chest opens with the stop after it
  * but is optional, so nothing waits for it. Level 2 therefore opens with the Level 1 checkpoint.
+ *
+ * <p>What counts as a lesson is the same everywhere a student (or the admin editor) sees a count: a unit's lessons and
+ * its review. A bonus chest is an optional extra on the road, a checkpoint closes a level; neither is numbered or
+ * counted as a lesson, so a unit whose every lesson is done reads "7 of 7" even with its chest left closed.
+ *
+ * <p>A unit is done when its lessons are. The level checkpoint is stored with the last unit of its level but is the
+ * gate of the level, not part of that unit: it opens once every lesson of the level is done, the unit is done (and
+ * earns Unit Champion) by then, and the checkpoint stays the path's next step until it is passed.
  */
 public final class LearnPathModel {
-
-    public enum StopState { LOCKED, AVAILABLE, DONE }
-
-    public enum UnitState { LOCKED, ACTIVE, DONE }
 
     private final List<UnitNode> units;
     private final Map<Long, StopNode> stopsById = new LinkedHashMap<>();
@@ -32,57 +39,45 @@ public final class LearnPathModel {
 
     /**
      * @param publishedUnits units students can see, in path order
-     * @param lessonsInOrder every stop of those units, in path order
+     * @param lessonsInOrder the stops of the whole path, in path order (those of other units are left out)
      * @param completedLessonIds stops the student finished
      */
     public static LearnPathModel build(
             List<LearnUnit> publishedUnits,
             List<LearnLesson> lessonsInOrder,
             Set<Long> completedLessonIds) {
-        Map<Long, List<LearnLesson>> byUnit = new LinkedHashMap<>();
-        publishedUnits.forEach(unit -> byUnit.put(unit.getId(), new ArrayList<>()));
-        lessonsInOrder.forEach(lesson -> {
-            List<LearnLesson> list = byUnit.get(lesson.getUnit().getId());
-            if (list != null) {
-                list.add(lesson);
-            }
-        });
+        Map<Long, List<LearnLesson>> byUnit = lessonsInOrder.stream()
+                .collect(Collectors.groupingBy(lesson -> lesson.getUnit().getId()));
 
         List<UnitNode> units = new ArrayList<>();
         StopNode previousRequired = null;
-        UnitNode previousUnit = null;
+        LearnUnit previousUnit = null;
         for (LearnUnit unit : publishedUnits) {
             List<StopNode> stops = new ArrayList<>();
-            List<LearnLesson> lessons = byUnit.get(unit.getId());
-            int unitLessons = (int) lessons.stream()
-                    .filter(lesson -> lesson.getLessonKind() != LearnLessonKind.CHECKPOINT)
-                    .count();
-            for (int index = 0; index < lessons.size(); index++) {
-                LearnLesson lesson = lessons.get(index);
+            List<LearnLesson> lessons = byUnit.getOrDefault(unit.getId(), List.of());
+            int lessonCount = 0;
+            int completedCount = 0;
+            for (LearnLesson lesson : lessons) {
                 boolean done = completedLessonIds.contains(lesson.getId());
+                if (lesson.getLessonKind().countsAsLesson()) {
+                    lessonCount++;
+                    if (done) {
+                        completedCount++;
+                    }
+                }
                 boolean open = previousRequired == null || previousRequired.state() == StopState.DONE;
                 StopState state = done ? StopState.DONE : open ? StopState.AVAILABLE : StopState.LOCKED;
-                StopNode stop = new StopNode(lesson, index + 1, unitLessons, state,
+                StopNode stop = new StopNode(lesson, lessonCount, state,
                         previousRequired == null ? null : previousRequired.lesson());
                 stops.add(stop);
-                if (lesson.getLessonKind() != LearnLessonKind.BONUS) {
+                if (stop.required()) {
                     previousRequired = stop;
                 }
             }
-            UnitNode node = new UnitNode(unit, stops, unitState(stops), previousUnit == null ? null : previousUnit.unit());
-            units.add(node);
-            previousUnit = node;
+            units.add(new UnitNode(unit, stops, lessonCount, completedCount, previousUnit));
+            previousUnit = unit;
         }
         return new LearnPathModel(units);
-    }
-
-    private static UnitState unitState(List<StopNode> stops) {
-        List<StopNode> required = stops.stream().filter(StopNode::required).toList();
-        if (!required.isEmpty() && required.stream().allMatch(stop -> stop.state() == StopState.DONE)) {
-            return UnitState.DONE;
-        }
-        boolean started = stops.stream().anyMatch(stop -> stop.state() != StopState.LOCKED);
-        return started ? UnitState.ACTIVE : UnitState.LOCKED;
     }
 
     public List<UnitNode> units() {
@@ -93,57 +88,72 @@ public final class LearnPathModel {
         return Optional.ofNullable(stopsById.get(lessonId));
     }
 
-    public Optional<UnitNode> unitOf(Long lessonId) {
-        return units.stream()
-                .filter(unit -> unit.stops().stream().anyMatch(stop -> stop.lesson().getId().equals(lessonId)))
-                .findFirst();
+    public Optional<UnitNode> unit(Long unitId) {
+        return units.stream().filter(node -> node.unit().getId().equals(unitId)).findFirst();
     }
 
     /** The next stop to do: the first open required stop, else the first open bonus chest. */
     public Optional<StopNode> next() {
-        List<StopNode> open = stopsById.values().stream().filter(stop -> stop.state() == StopState.AVAILABLE).toList();
-        return open.stream().filter(StopNode::required).findFirst().or(() -> open.stream().findFirst());
-    }
-
-    /** Lessons on the path (every stop except checkpoints) and how many of them are done. */
-    public int lessonCount() {
-        return (int) stopsById.values().stream().filter(StopNode::countsAsLesson).count();
-    }
-
-    public int completedLessonCount() {
-        return (int) stopsById.values().stream()
-                .filter(StopNode::countsAsLesson)
-                .filter(stop -> stop.state() == StopState.DONE)
-                .count();
+        StopNode firstBonus = null;
+        for (StopNode stop : stopsById.values()) {
+            if (stop.state() == StopState.AVAILABLE) {
+                if (stop.required()) {
+                    return Optional.of(stop);
+                }
+                if (firstBonus == null) {
+                    firstBonus = stop;
+                }
+            }
+        }
+        return Optional.ofNullable(firstBonus);
     }
 
     /**
      * A stop on the path.
      *
-     * @param position 1-based place in its unit
-     * @param unitLessons how many lessons the unit has (its checkpoint aside)
+     * @param position the lesson's number in its unit ("Lesson 3 of 7"); a bonus chest or a checkpoint, which are not
+     *        numbered, carries the number of the lesson before it
      * @param unlockAfter the required stop that must be finished first, null for the first stop
      */
-    public record StopNode(LearnLesson lesson, int position, int unitLessons, StopState state, LearnLesson unlockAfter) {
+    public record StopNode(LearnLesson lesson, int position, StopState state, LearnLesson unlockAfter) {
 
         public boolean required() {
             return lesson.getLessonKind() != LearnLessonKind.BONUS;
         }
 
+        /** A lesson or the unit review; not a bonus chest or a checkpoint. */
         public boolean countsAsLesson() {
+            return lesson.getLessonKind().countsAsLesson();
+        }
+
+        /** Drawn on its unit's road: every stop but the level checkpoint. */
+        public boolean onRoad() {
             return lesson.getLessonKind() != LearnLessonKind.CHECKPOINT;
         }
     }
 
-    /** A unit with its stops; {@code previousUnit} must be finished before it opens. */
-    public record UnitNode(LearnUnit unit, List<StopNode> stops, UnitState state, LearnUnit previousUnit) {
+    /**
+     * A unit with its stops; {@code previousUnit} must be finished before it opens. The last unit of a level also holds
+     * the level's checkpoint, which is not part of its state.
+     */
+    public record UnitNode(LearnUnit unit, List<StopNode> stops, int lessonCount, int completedCount, LearnUnit previousUnit) {
 
-        public List<StopNode> lessons() {
-            return stops.stream().filter(StopNode::countsAsLesson).toList();
+        public UnitState state() {
+            if (lessonCount > 0 && completedCount == lessonCount) {
+                return UnitState.DONE;
+            }
+            boolean started = stops.stream().anyMatch(stop -> stop.onRoad() && stop.state() != StopState.LOCKED);
+            return started ? UnitState.ACTIVE : UnitState.LOCKED;
         }
 
+        /** The stops on the unit's road, in order: its lessons, bonus chests and review. */
+        public List<StopNode> roadStops() {
+            return stops.stream().filter(StopNode::onRoad).toList();
+        }
+
+        /** The checkpoint of the unit's level, held by its last unit: the gate to the next level. */
         public Optional<StopNode> checkpoint() {
-            return stops.stream().filter(stop -> !stop.countsAsLesson()).findFirst();
+            return stops.stream().filter(stop -> !stop.onRoad()).findFirst();
         }
     }
 }

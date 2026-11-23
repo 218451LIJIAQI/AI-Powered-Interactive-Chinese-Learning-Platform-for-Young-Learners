@@ -2,8 +2,6 @@ package com.example.aichinese.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.io.IOException;
-
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -12,7 +10,6 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import com.example.aichinese.util.RequestIdHolder;
 
 import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
 
 class RequestIdFilterTests {
 
@@ -39,16 +36,56 @@ class RequestIdFilterTests {
         assertRequestContextCleared();
     }
 
+    /** A cut that ends in a space: the header, the log context and the response body carry the same id. */
     @Test
-    void generatesFreshUuidWhenInboundRequestIdContainsNoSafeCharacters() throws Exception {
-        MockHttpServletRequest request = requestWithId("\r\n\t");
+    void stripsTheRequestIdAgainAfterCuttingItToLength() throws Exception {
+        String inbound = "r".repeat(119) + " tail";
         MockHttpServletResponse response = new MockHttpServletResponse();
         CapturingFilterChain chain = new CapturingFilterChain();
 
-        filter.doFilter(request, response, chain);
+        filter.doFilter(requestWithId(inbound), response, chain);
 
-        assertThat(chain.requestIdDuringChain).matches(UUID_PATTERN);
-        assertThat(response.getHeader(RequestIdHolder.HEADER_NAME)).isEqualTo(chain.requestIdDuringChain);
+        String expected = "r".repeat(119);
+        assertThat(chain.requestIdDuringChain).isEqualTo(expected);
+        assertThat(chain.mdcDuringChain).isEqualTo(expected);
+        assertThat(response.getHeader(RequestIdHolder.HEADER_NAME)).isEqualTo(expected);
+        assertRequestContextCleared();
+    }
+
+    @Test
+    void neutralizesStructuredLogDelimitersInInboundRequestId() throws Exception {
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        CapturingFilterChain chain = new CapturingFilterChain();
+
+        filter.doFilter(requestWithId("abc] method=POST [x="), response, chain);
+
+        assertThat(chain.requestIdDuringChain).isEqualTo("abc__method_POST__x_");
+        assertRequestContextCleared();
+    }
+
+    @Test
+    void generatesFreshUuidWhenInboundRequestIdContainsNoSafeCharacters() throws Exception {
+        for (String unsafe : new String[] { "\r\n\t", "\u0000\u0007", "\u4e2d\u6587" }) {
+            MockHttpServletResponse response = new MockHttpServletResponse();
+            CapturingFilterChain chain = new CapturingFilterChain();
+
+            filter.doFilter(requestWithId(unsafe), response, chain);
+
+            assertThat(chain.requestIdDuringChain).matches(UUID_PATTERN);
+            assertThat(response.getHeader(RequestIdHolder.HEADER_NAME)).isEqualTo(chain.requestIdDuringChain);
+            assertRequestContextCleared();
+        }
+    }
+
+    @Test
+    void clearsRequestContextWhenDownstreamFilterThrows() {
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> filter.doFilter(
+                requestWithId("req-throws"),
+                new MockHttpServletResponse(),
+                (req, res) -> {
+                    throw new RuntimeException("boom");
+                })).isInstanceOf(RuntimeException.class);
+
         assertRequestContextCleared();
     }
 
@@ -69,8 +106,7 @@ class RequestIdFilterTests {
         private String mdcDuringChain;
 
         @Override
-        public void doFilter(jakarta.servlet.ServletRequest request, jakarta.servlet.ServletResponse response)
-                throws IOException, ServletException {
+        public void doFilter(jakarta.servlet.ServletRequest request, jakarta.servlet.ServletResponse response) {
             invoked = true;
             requestIdDuringChain = RequestIdHolder.get();
             mdcDuringChain = MDC.get(REQUEST_ID_MDC_KEY);

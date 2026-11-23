@@ -1,4 +1,9 @@
-/** Pointer and keyboard geometry for the character tracing pad (TracingPad). */
+/** Characters the learner traces, one Unicode code point per cell. Spaces separate characters in authored text. */
+export function tracingGlyphs(text: string): string[] {
+  return Array.from(text).filter((character) => character.trim() !== '')
+}
+
+/** A point in the tracing canvas's coordinate system. */
 export interface StrokePoint {
   x: number
   y: number
@@ -30,9 +35,15 @@ const ARROW_STEPS: Readonly<Record<string, StrokePoint>> = {
 /**
  * Keyboard drawing: moves the pen cursor for an arrow key (clamped to the pad), or returns null for other keys.
  */
-export function moveCursor(point: StrokePoint, key: string, step: number, padSize: number): StrokePoint | null {
+export function moveCursor(
+  point: StrokePoint,
+  key: string,
+  step: number,
+  width: number,
+  height: number,
+): StrokePoint | null {
+  if (!Object.hasOwn(ARROW_STEPS, key)) return null
   const direction = ARROW_STEPS[key]
-  if (!direction) return null
-  const clamp = (value: number) => Math.min(Math.max(value, 0), padSize)
-  return { x: clamp(point.x + direction.x * step), y: clamp(point.y + direction.y * step) }
+  const clamp = (value: number, max: number) => Math.min(Math.max(value, 0), max)
+  return { x: clamp(point.x + direction.x * step, width), y: clamp(point.y + direction.y * step, height) }
 }

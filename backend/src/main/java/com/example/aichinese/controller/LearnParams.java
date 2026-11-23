@@ -9,7 +9,6 @@ import java.time.format.DateTimeParseException;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.example.aichinese.entity.enums.ContentStatus;
-import com.example.aichinese.entity.enums.LearningStage;
 import com.example.aichinese.entity.enums.MistakeSource;
 import com.example.aichinese.entity.enums.PracticeType;
 
@@ -25,9 +24,13 @@ final class LearnParams {
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Unknown practice type."));
     }
 
-    /** Optional filter: blank means every type. */
+    /** Optional query filter: blank means every type; an unknown slug is 400 like {@link #optionalStatus}. */
     static PracticeType optionalPracticeType(String value) {
-        return value == null || value.isBlank() ? null : practiceType(value);
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return PracticeType.tryFrom(value)
+                .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Unknown practice type."));
     }
 
     static ContentStatus optionalStatus(String value) {
@@ -35,18 +38,7 @@ final class LearnParams {
             return null;
         }
         return ContentStatus.tryFrom(value)
-                .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Unknown status: " + value));
-    }
-
-    static LearningStage optionalStage(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        try {
-            return LearningStage.fromValue(value);
-        } catch (IllegalArgumentException exception) {
-            throw new ResponseStatusException(BAD_REQUEST, "Unknown stage.");
-        }
+                .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Unknown status."));
     }
 
     /** {@code all} (or blank) means both sources. */

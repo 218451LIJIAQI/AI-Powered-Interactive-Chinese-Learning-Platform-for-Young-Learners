@@ -1,9 +1,8 @@
 import type { AiQuizGeneratorResponse } from '@/types/api'
 
-/** An AI quiz draft as the teacher AI endpoint returns it, for the teacher AI-draft tests. */
-export const teacherAiQuizDraft: AiQuizGeneratorResponse = {
+/** An AI quiz draft as the quiz-draft endpoint returns it (`/admin/ai/quiz-draft`), for the AI-draft tests. */
+export const adminAiQuizDraft: AiQuizGeneratorResponse = {
   title: 'Ordering Food at a Mamak Stall',
-  topic: 'Ordering food',
   questions: [
     {
       questionText: 'Which phrase means "I want one cup of tea"?',

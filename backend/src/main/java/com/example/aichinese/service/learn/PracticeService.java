@@ -3,215 +3,331 @@ package com.example.aichinese.service.learn;
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.example.aichinese.dto.learn.AnswerCheckResponse;
 import com.example.aichinese.dto.learn.ChoiceOption;
+import com.example.aichinese.dto.learn.HintDto;
 import com.example.aichinese.dto.learn.PracticeCompleteRequest;
 import com.example.aichinese.dto.learn.PracticeCompleteResponse;
 import com.example.aichinese.dto.learn.PracticeItemAnswer;
 import com.example.aichinese.dto.learn.PracticeItemData;
 import com.example.aichinese.dto.learn.PracticeSetResponse;
 import com.example.aichinese.dto.learn.PracticeSetsResponse;
+import com.example.aichinese.entity.PracticeAnswer;
 import com.example.aichinese.entity.PracticeCompletion;
 import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.entity.base.PracticeActivityContent;
+import com.example.aichinese.entity.enums.AnswerConfidence;
 import com.example.aichinese.entity.enums.ContentStatus;
 import com.example.aichinese.entity.enums.MistakeSource;
 import com.example.aichinese.entity.enums.PracticeType;
+import com.example.aichinese.repository.PracticeAnswerRepository;
 import com.example.aichinese.repository.PracticeCompletionRepository;
-import com.example.aichinese.service.RewardBadge;
-import com.example.aichinese.service.RewardRules;
+import com.example.aichinese.repository.ServedHintRepository;
+import com.example.aichinese.security.SecurityUserDetails;
+import com.example.aichinese.service.StudentLearningAccessService;
 import com.example.aichinese.service.learn.PracticeCatalog.Item;
 import com.example.aichinese.service.learn.PracticeCatalog.SetContent;
+import com.example.aichinese.util.TextUtils;
+
+import lombok.RequiredArgsConstructor;
 
 /**
  * Practice for students: the published sets per type, a set to play (no answers), instant checks (a wrong answer
- * becomes a mistake) and finished runs. A set's XP is paid the first time every item is right; a quiz also pays a
- * one-time bonus for 3 right answers in a row.
+ * becomes a mistake) and finished runs. A set's XP is paid the first time every item is right, a flashcard set's the
+ * first time it is reviewed; a flashcard marked "Still learning" becomes a mistake.
  */
 @Service
+@RequiredArgsConstructor
 public class PracticeService {
 
+    /** A flashcard's ratings, sent as its answer when the set is finished. */
+    private static final String GOT_IT = "GOT_IT";
+    private static final String STILL_LEARNING = "STILL_LEARNING";
+    /** What Practice's served hints are recorded under, before the item's mistake key. */
+    private static final String HINT_REF = "PRACTICE#";
+    /** Before every answer: the bound for an item never answered. */
+    private static final LocalDateTime NEVER = LocalDateTime.of(2000, 1, 1, 0, 0);
+
     private final PracticeCatalog catalog;
+    private final PracticeSetDirectory directory;
     private final PracticeCompletionRepository completionRepository;
+    private final PracticeAnswerRepository answerRepository;
+    private final ServedHintRepository servedHintRepository;
     private final MistakeService mistakeService;
     private final XpService xpService;
+    private final HintPolicyService hintPolicyService;
+    private final StudentLearningAccessService accessService;
 
-    public PracticeService(
-            PracticeCatalog catalog,
-            PracticeCompletionRepository completionRepository,
-            MistakeService mistakeService,
-            XpService xpService) {
-        this.catalog = catalog;
-        this.completionRepository = completionRepository;
-        this.mistakeService = mistakeService;
-        this.xpService = xpService;
+    /** In list order (by level), so the set the page opens first and the next set offered follow the list shown. */
+    @Transactional(readOnly = true)
+    public PracticeSetsResponse sets(SecurityUserDetails currentUser, PracticeType type) {
+        StudentProfile student = accessService.requireStudent(currentUser);
+        return new PracticeSetsResponse(directory.studentSets(type, student.getId()));
     }
 
     @Transactional(readOnly = true)
-    public PracticeSetsResponse sets(StudentProfile student, PracticeType type) {
-        List<PracticeActivityContent> sets = catalog.sets(type, ContentStatus.PUBLISHED);
-        Set<Long> done = doneSetIds(student, type, sets);
-        return new PracticeSetsResponse(type, sets.stream()
-                .map(set -> new PracticeSetsResponse.Summary(
-                        set.getId(),
-                        set.getTitle(),
-                        set.getLearningStage(),
-                        set.getHskLevel(),
-                        catalog.itemCount(type, set),
-                        xp(set),
-                        done.contains(set.getId())))
-                .toList());
+    public PracticeSetResponse set(SecurityUserDetails currentUser, PracticeType type, Long id) {
+        return set(accessService.requireStudent(currentUser), type, id);
     }
 
     @Transactional(readOnly = true)
     public PracticeSetResponse set(StudentProfile student, PracticeType type, Long id) {
         PracticeActivityContent set = published(type, id);
-        SetContent content = catalog.content(type, set);
+        SetContent content = playableContent(type, set);
         List<String> matchingChoices = type == PracticeType.MATCHING
                 ? PracticeCatalog.shuffled(content.items().stream().map(item -> item.data().meaning()).toList(), set.getId())
                 : List.of();
+        HintPolicyService.Run run = hintPolicyService.startRun(student, hintScope(type, set));
         return new PracticeSetResponse(
                 set.getId(),
                 type,
-                set.getTitle(),
                 set.getLearningStage(),
-                set.getHskLevel(),
-                xp(set),
-                doneSetIds(student, type, List.of(set)).contains(set.getId()),
+                set.getXpReward(),
+                completionRepository.hasSuccessfulRun(student.getId(), type, id),
                 content.items().stream().map(item -> view(type, item)).toList(),
-                content.storyLines(),
                 matchingChoices,
-                content.strokeCount());
+                content.strokeCount(),
+                content.characterStrokes(),
+                run.startedAt(),
+                run.signature());
     }
 
-    /** Instant feedback on one answer; a wrong answer is kept as a mistake. */
-    @Transactional
+    /**
+     * Instant feedback on one answer; a wrong answer is kept as a mistake, at the top of the list when the student
+     * said "Sure". Every check is logged with its confidence and hint steps for the Progress page. The hint steps are
+     * the ones the server gave for the item since its last checked answer (each appearance of an item is answered
+     * once), whatever the request says: an answer after a hint counts as a guess. A hint the student opened in a run
+     * left before answering still counts for the item's next answer. A Listening skip whose audio did not play
+     * ({@link #isUncountedSkip}) only shows the answer: no mistake and nothing logged, so it is like an
+     * item left unanswered (a hint opened for it counts for its next answer).
+     */
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public AnswerCheckResponse check(
+            SecurityUserDetails currentUser, PracticeType type, Long id, PracticeItemAnswer answer) {
+        return check(accessService.requireStudent(currentUser), type, id, answer);
+    }
+
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public AnswerCheckResponse check(StudentProfile student, PracticeType type, Long id, PracticeItemAnswer answer) {
         PracticeActivityContent set = published(type, id);
-        Item item = catalog.content(type, set).items().stream()
-                .filter(candidate -> candidate.key().equals(answer.itemKey()))
-                .findFirst()
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "This item is not part of the set."));
-        if (item.gradable() == null) {
+        if (type == PracticeType.FLASHCARDS || type == PracticeType.TRACING) {
             throw new ResponseStatusException(BAD_REQUEST, "This activity has no answers to check.");
         }
+        Item item = item(playableContent(type, set), answer.itemKey());
         AnswerCheckResponse result = item.gradable().check(answer.answer());
-        if (!result.correct()) {
-            mistakeService.record(student, MistakeSource.PRACTICE, mistakeRef(type, set, item), set.getTitle(),
-                    item.gradable(), answer.answer());
+        if (isUncountedSkip(type, answer)) {
+            return result;
         }
+        String itemRef = mistakeRef(type, set, item);
+        LocalDateTime lastAnswered = answerRepository.findLastAnsweredAt(student.getId(), itemRef);
+        int hintSteps = servedHintRepository.findHighestStepAfter(student.getId(), HINT_REF + itemRef,
+                lastAnswered == null ? NEVER : lastAnswered);
+        AnswerConfidence confidence = type.asksConfidence() ? confidenceAfter(answer, hintSteps) : null;
+        if (!result.correct()) {
+            mistakeService.record(student, MistakeSource.PRACTICE, itemRef, set.getTitle(),
+                    item.gradable(), answer.answer(), confidence == AnswerConfidence.SURE);
+        }
+        PracticeAnswer logged = new PracticeAnswer();
+        logged.setStudent(student);
+        logged.setPracticeType(type);
+        logged.setItemRef(itemRef);
+        logged.setCorrect(result.correct());
+        logged.setConfidence(confidence);
+        logged.setHintSteps(hintSteps);
+        answerRepository.save(logged);
         return result;
     }
 
-    /** Grades a finished run and records it; XP only the first time every item is right. */
-    @Transactional
+    /**
+     * The one hint for an item, as much as the student's level gives. Hints are refused when the student turned them
+     * off, and for one more item once the run has used its level's hints per set; a flashcard set has none. Every hint
+     * given is recorded ({@link HintPolicyService#hintInRun}), so the limit and the guess rule of {@link #check} count
+     * what the server served. A Matching board is one question with one hint: the pair of one word
+     * ({@link HintPolicyService#pairInRun}).
+     */
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public HintDto.Step hint(
+            SecurityUserDetails currentUser, PracticeType type, Long id, HintDto.Request request) {
+        return hint(accessService.requireStudent(currentUser), type, id, request);
+    }
+
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public HintDto.Step hint(StudentProfile student, PracticeType type, Long id, HintDto.Request request) {
+        hintPolicyService.requireHintsOn(student);
+        if (type == PracticeType.FLASHCARDS) {
+            throw new ResponseStatusException(BAD_REQUEST, "There is no further hint for this item.");
+        }
+        PracticeActivityContent set = published(type, id);
+        SetContent content = playableContent(type, set);
+        Item item = item(content, request.itemKey());
+        HintPolicyService.Run run = new HintPolicyService.Run(request.runStartedAt(), request.runSignature());
+        List<HintDto.Step> ladder = switch (type) {
+            case FLASHCARDS -> List.of();
+            case TRACING -> HintBuilder.tracingLadder(item.data().hanzi(), content.strokeCount());
+            case MATCHING -> HintBuilder.pairLadder(item.gradable());
+            case TYPING -> HintBuilder.typingLadder(item.gradable());
+            case LISTENING, DRAG_DROP -> HintBuilder.ladder(item.gradable());
+        };
+        String scope = hintScope(type, set);
+        String itemRef = scope + item.key();
+        if (type == PracticeType.MATCHING) {
+            return hintPolicyService.pairInRun(student, scope, itemRef, run, ladder);
+        }
+        // Scope duplicate-row suppression to after the item's last checked answer so retries ("Once more, to make sure")
+        // within the same run record a fresh post-answer hint for hintSteps and GUESS enforcement.
+        LocalDateTime lastAnswered = answerRepository.findLastAnsweredAt(student.getId(), mistakeRef(type, set, item));
+        return hintPolicyService.hintInRun(student, scope, itemRef, run, ladder, lastAnswered);
+    }
+
+    @Transactional(readOnly = true)
+    public HintDto.Candidates candidates(
+            SecurityUserDetails currentUser, Long id, HintDto.CandidatesRequest request) {
+        accessService.requireStudent(currentUser);
+        return candidates(id, request);
+    }
+
+    /**
+     * Typing: the words the typed pinyin spells. Like a keyboard, it offers words only once the pinyin of a word is
+     * complete; the answer is one of them, never marked.
+     */
+    @Transactional(readOnly = true)
+    public HintDto.Candidates candidates(Long id, HintDto.CandidatesRequest request) {
+        PracticeActivityContent set = published(PracticeType.TYPING, id);
+        Item item = item(playableContent(PracticeType.TYPING, set), request.itemKey());
+        String typed = Pinyin.typed(request.pinyin());
+        if (typed.isEmpty() || !typed.equals(Pinyin.typed(item.data().pinyin()))) {
+            return new HintDto.Candidates(List.of());
+        }
+        return new HintDto.Candidates(item.gradable().options().stream().map(ChoiceOption::text).toList());
+    }
+
+    /**
+     * Grades a finished run and records it; XP only the first time every item is right. A flashcard set is a review:
+     * each card's answer is the learner's rating, "Got it" counts as right, a card still being learned becomes a
+     * mistake (asked in the Mistakes review as what the word means), and the first finished review pays the set's XP
+     * whatever the ratings.
+     */
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public PracticeCompleteResponse complete(
+            SecurityUserDetails currentUser, PracticeType type, Long id, PracticeCompleteRequest request) {
+        return complete(accessService.requireStudent(currentUser), type, id, request);
+    }
+
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public PracticeCompleteResponse complete(
             StudentProfile student, PracticeType type, Long id, PracticeCompleteRequest request) {
         PracticeActivityContent set = published(type, id);
-        SetContent content = catalog.content(type, set);
-        Map<String, String> answers = new LinkedHashMap<>();
-        request.answers().forEach(answer -> answers.putIfAbsent(answer.itemKey(), answer.answer()));
+        SetContent content = playableContent(type, set);
+        Map<String, String> answers =
+                LearnAnswers.firstAnswers(request.answers(), PracticeItemAnswer::itemKey, PracticeItemAnswer::answer);
+        validateRunAnswers(type, content, answers, request.strokeCount());
 
-        List<PracticeCompleteResponse.ItemResult> results = new ArrayList<>();
-        for (Item item : content.items()) {
-            boolean correct = switch (type) {
-                case FLASHCARDS -> true;
-                case TRACING -> request.strokeCount() != null
-                        && request.strokeCount() >= Math.max(1, Objects.requireNonNullElse(content.strokeCount(), 1));
-                default -> item.gradable() != null && item.gradable().isCorrect(answers.get(item.key()));
-            };
-            results.add(new PracticeCompleteResponse.ItemResult(item.key(), correct));
-        }
-        if (type == PracticeType.TRACING && request.strokeCount() == null) {
-            throw new ResponseStatusException(BAD_REQUEST, "Draw the character before you finish.");
-        }
-        int correctCount = (int) results.stream().filter(PracticeCompleteResponse.ItemResult::correct).count();
-        boolean allCorrect = !results.isEmpty() && correctCount == results.size();
+        int itemCount = content.items().size();
+        int correctCount = countCorrect(type, content, answers, request.strokeCount());
+        boolean allCorrect = correctCount == itemCount;
 
         XpService.XpSession session = xpService.begin(student);
-        int setXp = allCorrect
-                ? session.award(XpService.practiceSource(type), set.getId(), xp(set), set.getTitle())
-                : 0;
-        int streakBonus = 0;
-        if (type == PracticeType.QUIZZES) {
-            Map<String, Boolean> byKey = results.stream()
-                    .collect(Collectors.toMap(PracticeCompleteResponse.ItemResult::key,
-                            PracticeCompleteResponse.ItemResult::correct));
-            List<Boolean> inAnswerOrder = answers.keySet().stream().filter(byKey::containsKey).map(byKey::get).toList();
-            if (RewardRules.longestRun(inAnswerOrder) >= RewardRules.QUIZ_STREAK_LENGTH) {
-                streakBonus = session.award(XpService.SOURCE_QUIZ_STREAK, set.getId(), RewardRules.QUIZ_STREAK_BONUS_XP,
-                        set.getTitle());
-            }
-            if (RewardRules.accuracyPercent(correctCount, results.size()) >= RewardRules.QUIZ_STAR_PERCENT) {
-                session.badge(RewardBadge.QUIZ_STAR);
-            }
+        boolean finishedSet = allCorrect || type == PracticeType.FLASHCARDS;
+        if (finishedSet) {
+            session.award(type.referenceType(), set.getId(), set.getXpReward(), set.getTitle());
+        }
+        if (type == PracticeType.FLASHCARDS) {
+            List<MistakeService.StillLearningEntry> stillLearning = content.items().stream()
+                    .filter(card -> STILL_LEARNING.equals(answers.get(card.key())))
+                    .map(card -> new MistakeService.StillLearningEntry(
+                            mistakeRef(type, set, card), PracticeCatalog.flashcardQuestion(content, card)))
+                    .toList();
+            mistakeService.recordStillLearningBatchLocked(session.student(), set.getTitle(), stillLearning);
         }
         PracticeCompletion completion = new PracticeCompletion();
         completion.setStudent(session.student());
         completion.setPracticeType(type);
         completion.setActivityId(set.getId());
         completion.setCorrectCount(correctCount);
-        completion.setItemCount(results.size());
-        completion.setXpAwarded(setXp + streakBonus);
+        completion.setItemCount(itemCount);
         completionRepository.saveAndFlush(completion);
-        session.finishedLessonOrSet();
+        if (finishedSet) {
+            session.finishedLessonOrSet();
+        }
 
-        return new PracticeCompleteResponse(
-                type,
-                set.getId(),
-                set.getTitle(),
-                correctCount,
-                results.size(),
-                allCorrect,
-                results,
-                nextSet(type, set),
-                session.finish());
+        PracticeCompleteResponse.NextSet nextSet = directory.nextSet(type, student.getId(), set).orElse(null);
+        return new PracticeCompleteResponse(type, correctCount, itemCount, allCorrect, nextSet, session.finish());
     }
 
-    // ===== Internals =====
+    private static void validateRunAnswers(
+            PracticeType type, SetContent content, Map<String, String> answers, Integer strokeCount) {
+        if (type == PracticeType.TRACING) {
+            if (strokeCount == null) {
+                throw new ResponseStatusException(BAD_REQUEST, "Draw the character before you finish.");
+            }
+            return;
+        }
+        boolean allPresent = content.items().stream().allMatch(item -> answers.containsKey(item.key()));
+        if (type == PracticeType.FLASHCARDS && (!allPresent || content.items().stream()
+                .map(item -> answers.get(item.key()))
+                .anyMatch(rating -> !GOT_IT.equals(rating) && !STILL_LEARNING.equals(rating)))) {
+            throw new ResponseStatusException(BAD_REQUEST, "Rate each card Got it or Still learning.");
+        }
+        if (!allPresent) {
+            throw new ResponseStatusException(BAD_REQUEST, "Answer or skip every item before you finish the set.");
+        }
+    }
+
+    private static int countCorrect(
+            PracticeType type, SetContent content, Map<String, String> answers, Integer strokeCount) {
+        int correctCount = 0;
+        for (Item item : content.items()) {
+            boolean correct = switch (type) {
+                case FLASHCARDS -> GOT_IT.equals(answers.get(item.key()));
+                case TRACING -> strokeCount >= content.strokeCount();
+                default -> item.gradable().isCorrect(answers.get(item.key()));
+            };
+            if (correct) {
+                correctCount++;
+            }
+        }
+        return correctCount;
+    }
+
+    private static AnswerConfidence confidenceAfter(PracticeItemAnswer answer, int hintSteps) {
+        if (TextUtils.isBlankOrSpaces(answer.answer())) {
+            return null;
+        }
+        return hintSteps > 0 ? AnswerConfidence.GUESS : answer.confidence();
+    }
+
+    private static boolean isUncountedSkip(PracticeType type, PracticeItemAnswer answer) {
+        return answer.audioFailed() && type == PracticeType.LISTENING && TextUtils.isBlankOrSpaces(answer.answer());
+    }
+
+    private static Item item(SetContent content, String itemKey) {
+        return content.items().stream()
+                .filter(candidate -> candidate.key().equals(itemKey))
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "This item is not part of the set."));
+    }
 
     private PracticeActivityContent published(PracticeType type, Long id) {
-        return catalog.find(type, id)
+        return directory.find(type, id)
                 .filter(set -> set.getContentStatus() == ContentStatus.PUBLISHED)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "This practice set is not available."));
     }
 
-    private Set<Long> doneSetIds(StudentProfile student, PracticeType type, List<PracticeActivityContent> sets) {
-        if (sets.isEmpty()) {
-            return Set.of();
+    private SetContent playableContent(PracticeType type, PracticeActivityContent set) {
+        SetContent content = catalog.content(type, set);
+        if (!catalog.isPlayable(type, content)) {
+            throw new ResponseStatusException(BAD_REQUEST, "This activity has no learning material yet.");
         }
-        return completionRepository.findByStudentIdAndPracticeTypeAndActivityIdIn(
-                        student.getId(), type, sets.stream().map(PracticeActivityContent::getId).toList()).stream()
-                .filter(PracticeCompletion::allCorrect)
-                .map(PracticeCompletion::getActivityId)
-                .collect(Collectors.toSet());
-    }
-
-    /** The set after this one in the list, or the first one when this was the last. */
-    private PracticeCompleteResponse.NextSet nextSet(PracticeType type, PracticeActivityContent current) {
-        List<PracticeActivityContent> sets = catalog.sets(type, ContentStatus.PUBLISHED);
-        if (sets.size() < 2) {
-            return null;
-        }
-        int index = sets.indexOf(current);
-        PracticeActivityContent next = sets.get(index < 0 ? 0 : (index + 1) % sets.size());
-        return new PracticeCompleteResponse.NextSet(next.getId(), next.getTitle());
-    }
-
-    private static int xp(PracticeActivityContent set) {
-        return set.getXpReward() == null ? 0 : set.getXpReward();
+        return content;
     }
 
     /** The key of a Practice item's waiting mistake (one row per item and student). */
@@ -219,23 +335,26 @@ public class PracticeService {
         return type.name() + "#" + set.getId() + "#" + item.key();
     }
 
+    /** What a run of a set is signed for, and its items' served hints start with ({@code PRACTICE#LISTENING#3#}). */
+    private static String hintScope(PracticeType type, PracticeActivityContent set) {
+        return HINT_REF + type.name() + "#" + set.getId() + "#";
+    }
+
     /** What a student may see of an item before answering it. */
     private static PracticeSetResponse.Item view(PracticeType type, Item item) {
         PracticeItemData data = item.data();
-        List<ChoiceOption> options = item.gradable() == null ? List.of() : item.gradable().options();
         return switch (type) {
             case FLASHCARDS, TRACING -> new PracticeSetResponse.Item(item.key(), null, data.hanzi(), data.pinyin(),
                     data.meaning(), null, data.example(), data.exampleMeaning(), List.of(), List.of());
-            case QUIZZES -> new PracticeSetResponse.Item(item.key(), data.prompt(), data.hanzi(), data.pinyin(), null,
-                    null, null, null, options, List.of());
             case LISTENING -> new PracticeSetResponse.Item(item.key(), data.prompt(), null, null, null,
-                    data.audioText(), null, null, options, List.of());
+                    data.audioText(), null, null, item.gradable().options(), List.of());
             case DRAG_DROP -> new PracticeSetResponse.Item(item.key(), null, null, null, data.meaning(), null, null,
                     null, List.of(), item.gradable().tiles());
             case MATCHING -> new PracticeSetResponse.Item(item.key(), null, data.hanzi(), data.pinyin(), null, null,
                     null, null, List.of(), List.of());
-            case STORY -> new PracticeSetResponse.Item(item.key(), data.prompt(), null, null, null, null, null, null,
-                    options, List.of());
+            // Only the meaning: the pinyin is what the student types, the characters what they choose.
+            case TYPING -> new PracticeSetResponse.Item(item.key(), null, null, null, data.meaning(), null, null, null,
+                    List.of(), List.of());
         };
     }
 }

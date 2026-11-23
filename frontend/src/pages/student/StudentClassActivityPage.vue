@@ -1,248 +1,264 @@
 <template>
-  <div class="class-focus-page">
+  <div class="class-focus-page class-activity-page">
     <FocusTopBar
-      :label="
-        play
-          ? t('classPlayer.activity.topLabel', {
-              lesson: play.lessonTitle,
-              number: play.number,
-              total: play.activityCount,
-            })
-          : t('classes.loading')
-      "
+      :label="play ? play.lessonTitle : t('classes.loading')"
       :close-label="t('classPlayer.activity.leaveLabel')"
-      :progress="play ? ratioPercent(play.number, play.activityCount) : null"
-      @close="requestLeave"
+      :close-disabled="closeDisabled"
+      :progress="progress"
+      @close="leave"
     />
 
-    <div class="class-focus-main page-stack">
+    <div class="focus-stage">
       <template v-if="play">
-        <header class="class-focus-header">
-          <span class="page-eyebrow">
-            {{
-              play.stage
-                ? t('classPlayer.activity.eyebrow', {
-                    number: play.number,
-                    total: play.activityCount,
-                    stage: t(STAGE_KEYS[play.stage]),
-                    lesson: play.lessonTitle,
-                  })
-                : t('classPlayer.activity.eyebrowNoStage', {
-                    number: play.number,
-                    total: play.activityCount,
-                    lesson: play.lessonTitle,
-                  })
-            }}
-          </span>
-          <h1 class="class-focus-title"><CjkText :text="play.title" /></h1>
-          <p v-if="play.done && !outcome" class="class-focus-note">
-            <IconGlyph name="check" :size="14" />{{ t('classPlayer.activity.doneBefore') }}
-          </p>
-        </header>
-
         <DataNotice :error="actionError" />
+        <ClassFlashcards
+          v-if="play.type === 'FLASHCARDS'"
+          :key="`f-${run}`"
+          :title="play.title"
+          :cards="play.cards"
+          :busy="saving"
+          :done="outcome !== null"
+          @finish="complete"
+        />
+        <ClassTracing
+          v-else-if="play.type === 'TRACING'"
+          :key="`t-${run}`"
+          :title="play.title"
+          :characters="play.characters"
+          :busy="saving"
+          :done="outcome !== null"
+          @finish="complete"
+        />
+        <ClassMatching
+          v-else
+          :key="`m-${run}`"
+          :title="play.title"
+          :activity-id="play.id"
+          :lesson-title="play.lessonTitle"
+          :words="play.words"
+          :meanings="play.meanings"
+          :hints-allowed="play.hintsAllowed"
+          :done="outcome !== null"
+          @outcome="finished"
+          @busy="matchingBusy = $event"
+          @error="actionError = $event"
+        />
 
-        <section v-if="outcome" class="class-activity-done" role="status" data-testid="activity-done">
-          <span class="seal class-activity-seal" aria-hidden="true">{{
-            outcome.lessonStatus === 'MASTERED' ? '棒' : '好'
-          }}</span>
-          <div class="class-activity-done-copy">
-            <h2 class="class-activity-done-title">{{ t('classPlayer.activity.saved') }}</h2>
-            <p>{{ outcomeText }}</p>
-          </div>
-          <RouterLink
-            v-if="lessonFinished || !play.next"
-            class="btn btn-primary"
-            :to="lessonRoute"
-            data-testid="finish-lesson"
-          >
-            {{ t('classPlayer.activity.finishLesson') }}
-          </RouterLink>
-        </section>
-
-        <section v-else class="class-activity-sheet">
-          <ClassFlashcards
-            v-if="play.type === 'FLASHCARDS'"
-            :key="`f-${play.id}`"
-            :cards="play.cards"
-            :stage="play.stage"
-            :busy="saving"
-            @finish="complete"
-          />
-          <ClassTracing
-            v-else-if="play.type === 'TRACING'"
-            :key="`t-${play.id}`"
-            :characters="play.characters"
-            :stage="play.stage"
-            :busy="saving"
-            @finish="complete"
-          />
-          <ClassMatching
-            v-else
-            :key="`m-${play.id}`"
-            :activity-id="play.id"
-            :words="play.words"
-            :meanings="play.meanings"
-            :stage="play.stage"
-            @outcome="outcome = $event"
-            @error="showError"
-          />
-        </section>
-
-        <nav
-          class="class-focus-nav"
-          :aria-label="t('classPlayer.activity.position', { number: play.number, total: play.activityCount })"
-        >
-          <RouterLink
-            v-if="play.previous"
-            class="btn btn-outline"
-            :to="activityRoute(play.previous.type, play.previous.id)"
-          >
-            <IconGlyph name="chevronLeft" :size="16" />{{ t('classPlayer.activity.previous') }}
-          </RouterLink>
-          <span v-else />
-          <span class="class-focus-nav-copy">
-            <strong>{{
-              t('classPlayer.activity.position', { number: play.number, total: play.activityCount })
-            }}</strong>
-            <span class="type-caption">{{ t('classPlayer.activity.counts') }}</span>
-          </span>
-          <RouterLink v-if="play.next" class="btn btn-outline" :to="activityRoute(play.next.type, play.next.id)">
-            {{ t('classPlayer.activity.next') }}<IconGlyph name="chevronRight" :size="16" />
-          </RouterLink>
-          <RouterLink v-else class="btn btn-outline" :to="lessonRoute">
-            {{ t('classPlayer.activity.backToLesson') }}<IconGlyph name="chevronRight" :size="16" />
-          </RouterLink>
-        </nav>
+        <FocusFooter v-if="outcome" tone="done">
+          <template #start>
+            <button type="button" class="btn btn-secondary btn-lg" @click="practiseAgain">
+              {{ t('common.practiseAgain') }}
+            </button>
+          </template>
+          <template #middle>
+            <div class="class-focus-band" role="status" data-testid="activity-done">
+              <span class="class-focus-band-mark" aria-hidden="true"><IconGlyph name="check" :size="24" /></span>
+              <div class="class-focus-band-copy">
+                <p class="class-focus-band-title">{{ t('classPlayer.activity.completed') }}</p>
+                <p class="class-focus-sub"><CjkText :text="doneText" /></p>
+              </div>
+            </div>
+          </template>
+          <template #end>
+            <RouterLink
+              v-if="play.next"
+              class="btn btn-primary btn-lg"
+              :to="classActivityRoute(classId, lessonId, play.next)"
+            >
+              {{ t('classPlayer.activity.next') }}
+            </RouterLink>
+            <RouterLink
+              v-else
+              class="btn btn-primary btn-lg"
+              :to="lessonRoute"
+              data-testid="finish-lesson"
+              @click="finishLesson"
+            >
+              {{ completesLesson ? t('classPlayer.finishLesson') : t('classPlayer.openLesson') }}
+            </RouterLink>
+          </template>
+        </FocusFooter>
       </template>
 
       <template v-else>
-        <h1 class="sr-only">{{ t('classPlayer.activity.loadErrorTitle') }}</h1>
+        <h1 class="sr-only">{{ t('nav.classes') }}</h1>
         <StatePanel
           v-if="resource.loading.value"
+          heading-tag="h2"
           tone="loading"
           spacious
           :title="t('classes.loading')"
-          :message="t('classPlayer.activity.counts')"
+          :message="t('classPlayer.activity.loadingMessage')"
         />
-        <StatePanel
+        <ClassLoadError
           v-else
-          tone="error"
-          icon="alert"
-          spacious
           :title="t('classPlayer.activity.loadErrorTitle')"
-          :message="resource.error.value ?? ''"
-        >
-          <template #actions>
-            <button class="btn btn-secondary" type="button" @click="resource.reload">{{ t('classes.retry') }}</button>
-            <RouterLink class="btn btn-primary" :to="lessonRoute">{{
-              t('classPlayer.activity.backToLesson')
-            }}</RouterLink>
-          </template>
-        </StatePanel>
+          :message="resource.error.value"
+          :back-to="lessonRoute"
+          :back-label="t('classPlayer.openLesson')"
+          @retry="resource.reload"
+        />
       </template>
     </div>
-
-    <ConfirmDialog
-      :open="leaveOpen"
-      :title="t('classPlayer.activity.leaveTitle')"
-      :message="t('classPlayer.activity.leaveMessage')"
-      tone="leave"
-      :confirm-label="t('classes.leave')"
-      :cancel-label="t('classes.keepGoing')"
-      @confirm="leave"
-      @cancel="leaveOpen = false"
-    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
-import { activitySlug, studentClassesApi } from '@/api/classes'
-import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
+import { studentClassesApi } from '@/api/classes'
+import ClassLoadError from '@/components/classes/ClassLoadError.vue'
 import ClassFlashcards from '@/components/classes/ClassFlashcards.vue'
 import ClassMatching from '@/components/classes/ClassMatching.vue'
 import ClassTracing from '@/components/classes/ClassTracing.vue'
 import DataNotice from '@/components/common/DataNotice.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
+import FocusFooter from '@/components/layout/FocusFooter.vue'
 import FocusTopBar from '@/components/layout/FocusTopBar.vue'
 import CjkText from '@/components/learning/CjkText.vue'
-import { useActionFeedback } from '@/composables/useActionFeedback'
+import { queueClassNotice } from '@/composables/useClassNotice'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { useResource } from '@/composables/useResource'
+import { usePageRedirect } from '@/composables/usePageNavigation'
 import { classPlayerMessages } from '@/plugins/classPlayerMessages'
 import { classesMessages } from '@/plugins/classesMessages'
 import type { ActivityOutcome, ClassActivityType } from '@/types/classes'
-import { STAGE_KEYS } from '@/utils/classes'
-import { ratioPercent } from '@/utils/format'
+import { resolveApiError } from '@/utils/apiError'
+import { classActivityRoute, classLessonRoute } from '@/utils/classes'
+import { formatList, ratioPercent } from '@/utils/format'
+import { parseRecordId } from '@/utils/recordId'
 import '@/styles/classes.css'
 
-const { t } = useLocalMessages({ classPlayer: classPlayerMessages, classes: classesMessages })
+const { t, locale } = useLocalMessages({
+  classPlayer: classPlayerMessages,
+  classes: classesMessages,
+})
 const route = useRoute()
 const router = useRouter()
-const { actionError, runAction, showError, clearFeedback } = useActionFeedback()
+const actionError = ref<string | null>(null)
 
-const classId = computed(() => Number(route.params.classId))
-const lessonId = computed(() => Number(route.params.lessonId))
-const activityId = computed(() => Number(route.params.activityId))
+const activityId = computed(() => parseRecordId(route.params.activityId))
 const activityType = computed(() => String(route.params.activityType).toUpperCase() as ClassActivityType)
-const lessonRoute = computed(() => ({
-  name: 'student-class-lesson',
-  params: { classId: classId.value, lessonId: lessonId.value },
-}))
+const resource = useResource(() =>
+  activityId.value === null ? Promise.resolve(null) : studentClassesApi.activity(activityType.value, activityId.value),
+)
+const play = resource.data
+const classId = computed(() => play.value?.classId ?? parseRecordId(route.params.classId) ?? 0)
+const lessonId = computed(() => play.value?.lessonId ?? parseRecordId(route.params.lessonId) ?? 0)
+const lessonRoute = computed(() => classLessonRoute(classId.value, lessonId.value))
 
-const resource = useResource(() => studentClassesApi.activity(activityType.value, activityId.value))
-const play = computed(() => resource.data.value)
+usePageRedirect(() => {
+  const current = play.value
+  if (!current || current.type !== activityType.value || current.id !== activityId.value) return null
+  if (
+    current.classId === parseRecordId(route.params.classId) &&
+    current.lessonId === parseRecordId(route.params.lessonId)
+  ) {
+    return null
+  }
+  return {
+    ...classActivityRoute(current.classId, current.lessonId, current),
+    query: route.query,
+    hash: route.hash,
+  }
+})
+
 const outcome = ref<ActivityOutcome | null>(null)
+/** Finished once on this visit: Practise again does not take the progress bar back. */
+const finishedOnce = ref(false)
+/** Once the lesson was already completed on this visit, replaying it won't claim "Finish lesson" again. */
+const replayedCompletedLesson = ref(false)
 const saving = ref(false)
-const leaveOpen = ref(false)
+const matchingBusy = ref(false)
+const closeDisabled = computed(() => saving.value || matchingBusy.value)
+/** Bumped by Practise again or switching activities, so the player starts over. */
+const run = ref(0)
+let activityVersion = 0
+onBeforeUnmount(() => {
+  activityVersion++
+})
 
 watch([activityType, activityId], () => {
+  activityVersion++
   outcome.value = null
-  clearFeedback()
+  finishedOnce.value = false
+  replayedCompletedLesson.value = false
+  saving.value = false
+  matchingBusy.value = false
+  actionError.value = null
+  run.value++
+  if (route.name !== 'student-class-activity' || activityId.value === null) {
+    resource.clear()
+    return
+  }
+  resource.data.value = null
   void resource.reload()
 })
 
-const lessonFinished = computed(
-  () => outcome.value?.lessonStatus === 'COMPLETED' || outcome.value?.lessonStatus === 'MASTERED',
-)
-
-const outcomeText = computed(() => {
-  const result = outcome.value
-  if (!result) return ''
-  if (result.lessonStatus === 'MASTERED') return t('classPlayer.activity.lessonMastered')
-  if (result.lessonStatus === 'COMPLETED') return t('classPlayer.activity.lessonCompleted')
-  return t('classPlayer.activity.stepsLeft', { done: result.stepsDone, total: result.stepsTotal })
+/** The activities of the lesson done so far: half an activity while on it, the whole one once finished. */
+const progress = computed(() => {
+  const current = play.value
+  if (!current) return null
+  return ratioPercent(current.number - (finishedOnce.value ? 0 : 0.5), current.activityCount)
 })
 
-function activityRoute(type: ClassActivityType, id: number) {
-  return {
-    name: 'student-class-activity',
-    params: { classId: classId.value, lessonId: lessonId.value, activityType: activitySlug(type), activityId: id },
-  }
+/** "All 5 cards reviewed.", "You traced 名 and 字.", "All 4 pairs are correct." */
+const doneText = computed(() => {
+  const current = play.value
+  if (!current) return ''
+  if (current.type === 'FLASHCARDS') return t('classPlayer.flashcards.done', { count: current.cards.length })
+  if (current.type === 'MATCHING') return t('classPlayer.matching.done', { count: current.words.length })
+  const characters = formatList(
+    current.characters.map((item) => item.character),
+    locale.value,
+  )
+  return t('classPlayer.tracing.doneResult', { characters })
+})
+
+function finished(result: ActivityOutcome): void {
+  outcome.value = result
+  finishedOnce.value = true
 }
 
 async function complete(): Promise<void> {
-  if (!play.value) return
+  const current = play.value
+  if (!current || saving.value) return
+  const version = activityVersion
   saving.value = true
-  await runAction(t('classPlayer.activity.saveError'), async () => {
-    outcome.value = await studentClassesApi.completeActivity(play.value!.type, play.value!.id)
-    return ''
-  })
-  saving.value = false
+  actionError.value = null
+  try {
+    const result = await studentClassesApi.completeActivity(current.type, current.id)
+    if (version !== activityVersion) return
+    finished(result)
+  } catch (reason) {
+    if (version === activityVersion) actionError.value = resolveApiError(reason, t('classPlayer.activity.saveError'))
+  } finally {
+    if (version === activityVersion) saving.value = false
+  }
 }
 
-function requestLeave(): void {
-  // Nothing is lost once the activity is finished, so there is nothing to confirm.
-  if (outcome.value || !play.value) void router.push(lessonRoute.value)
-  else leaveOpen.value = true
+/** True only when finishing this activity completed the lesson on this visit (not on replay or while earlier steps remain). */
+const completesLesson = computed(() => !replayedCompletedLesson.value && outcome.value?.lessonStatus === 'COMPLETED')
+
+function practiseAgain(): void {
+  if (outcome.value?.lessonStatus === 'COMPLETED') replayedCompletedLesson.value = true
+  outcome.value = null
+  run.value++
 }
 
+/** Finishing the last activity lands on the lesson, which confirms it if that completed the lesson. */
+function finishLesson(event: MouseEvent): void {
+  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+  if (completesLesson.value) {
+    queueClassNotice({ message: t('classes.lessonCompletedNotice'), targetRoute: 'student-class-lesson' })
+  }
+}
+
+/** Each finished activity is saved, so leaving one midway loses nothing worth a question. */
 function leave(): void {
-  leaveOpen.value = false
+  if (closeDisabled.value) return
   void router.push(lessonRoute.value)
 }
 </script>

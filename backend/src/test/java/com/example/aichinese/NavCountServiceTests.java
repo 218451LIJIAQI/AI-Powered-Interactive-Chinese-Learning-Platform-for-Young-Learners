@@ -1,64 +1,73 @@
 package com.example.aichinese;
 
 import static org.assertj.core.api.Assertions.assertThat;
-
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import org.junit.jupiter.api.Test;
 
+import com.example.aichinese.dto.account.NavCountsResponse;
 import com.example.aichinese.entity.Role;
 import com.example.aichinese.entity.User;
+import com.example.aichinese.entity.enums.AiResponseReportStatus;
 import com.example.aichinese.entity.enums.RoleName;
+import com.example.aichinese.repository.AiResponseReportRepository;
+import com.example.aichinese.repository.LearningMistakeRepository;
 import com.example.aichinese.security.SecurityUserDetails;
-import com.example.aichinese.service.navigation.NavCountContributor;
 import com.example.aichinese.service.navigation.NavCountService;
+import com.example.aichinese.service.support.SupportService;
 
+/** Each role sees only its own sidebar badges. */
 class NavCountServiceTests {
 
+    private static final Long USER_ID = 5L;
+    private final LearningMistakeRepository mistakeRepository = mock(LearningMistakeRepository.class);
+    private final AiResponseReportRepository aiResponseReportRepository = mock(AiResponseReportRepository.class);
+    private final SupportService supportService = mock(SupportService.class);
+    private final NavCountService service = new NavCountService(mistakeRepository, aiResponseReportRepository, supportService);
+
+    /** No review queue, teacher applications or support replies any more: AI reports and open support requests. */
     @Test
-    void mergesTheCountsOfEveryContributorForTheUsersRoleOnly() {
-        NavCountService service = new NavCountService(List.of(
-                contributor(RoleName.ADMIN, Map.of("reviewQueue", 2L)),
-                contributor(RoleName.ADMIN, Map.of("aiReports", 1L, "reviewQueue", 1L)),
-                contributor(RoleName.STUDENT, Map.of("mistakes", 6L))));
+    void adminsSeeTheAiReportsAndSupportRequestsWaitingForThem() {
+        when(aiResponseReportRepository.countByStatus(AiResponseReportStatus.PENDING_REVIEW)).thenReturn(1L);
+        when(supportService.countOpen()).thenReturn(4L);
 
-        assertThat(service.countsFor(user(RoleName.ADMIN))).containsExactly(
-                Map.entry("aiReports", 1L), Map.entry("reviewQueue", 3L));
-        assertThat(service.countsFor(user(RoleName.STUDENT))).containsExactly(Map.entry("mistakes", 6L));
-        assertThat(service.countsFor(user(RoleName.TEACHER))).isEmpty();
+        assertThat(service.countsFor(user(RoleName.ADMIN))).isEqualTo(new NavCountsResponse(null, 1L, 4L));
+        // The admins' daily summary e-mail reports the same numbers as these badges.
+        assertThat(service.adminQueueCounts()).isEqualTo(new NavCountService.AdminQueueCounts(1L, 4L));
     }
 
     @Test
-    void neverReportsANegativeCount() {
-        NavCountService service = new NavCountService(List.of(contributor(RoleName.STUDENT, Map.of("mistakes", -3L))));
-        assertThat(service.countsFor(user(RoleName.STUDENT))).containsEntry("mistakes", 0L);
+    void learnersSeeTheirMistakesOnly() {
+        when(mistakeRepository.countByStudentUserIdAndClearedAtIsNull(USER_ID)).thenReturn(6L);
+
+        assertThat(service.countsFor(user(RoleName.STUDENT))).isEqualTo(new NavCountsResponse(6L, null, null));
+        verify(supportService, never()).countOpen();
     }
 
-    private static NavCountContributor contributor(RoleName role, Map<String, Long> counts) {
-        return new NavCountContributor() {
-            @Override
-            public RoleName role() {
-                return role;
-            }
+    @Test
+    void anAccountWithBothRolesGetsBadgesForBothWorkspaces() {
+        when(mistakeRepository.countByStudentUserIdAndClearedAtIsNull(USER_ID)).thenReturn(6L);
+        when(aiResponseReportRepository.countByStatus(AiResponseReportStatus.PENDING_REVIEW)).thenReturn(1L);
+        when(supportService.countOpen()).thenReturn(4L);
 
-            @Override
-            public Map<String, Long> counts(Long userId) {
-                return counts;
-            }
-        };
+        assertThat(service.countsFor(user(RoleName.ADMIN, RoleName.STUDENT)))
+                .isEqualTo(new NavCountsResponse(6L, 1L, 4L));
     }
 
-    private static SecurityUserDetails user(RoleName roleName) {
-        Role role = new Role();
-        role.setName(roleName);
+    private static SecurityUserDetails user(RoleName... roles) {
         User user = new User();
-        user.setId(5L);
+        user.setId(USER_ID);
         user.setEmail("someone@example.com");
         user.setPasswordHash("hash");
         user.setDisplayName("Someone");
-        user.setRoles(Set.of(role));
+        for (RoleName name : roles) {
+            Role role = new Role();
+            role.setName(name);
+            user.getRoles().add(role);
+        }
         return new SecurityUserDetails(user);
     }
 }

@@ -1,29 +1,29 @@
 import { describe, expect, it } from 'vitest'
 
 import { adminClassesMessages } from './adminClassesMessages'
-import { classesMessages } from './classesMessages'
+import { i18n } from './i18n'
 import { lessonEditorMessages } from './lessonEditorMessages'
 
+const LOCALES = ['en', 'ms', 'zh-CN'] as const
+
 // Key parity and compilation are checked for every bundle in messageBundles.test.ts.
-describe('content review wording', () => {
-  it('never tells teachers or admins that content is published directly', () => {
-    const copy = [
-      ...Object.values(lessonEditorMessages.en.status),
-      ...Object.values(adminClassesMessages.en.review.approveMessage),
-    ].join(' ')
-    expect(copy).not.toMatch(/publish(es)? directly|goes live immediately/i)
-    expect(Object.keys(classesMessages.en.status)).not.toContain('APPROVED')
+describe('content governance wording', () => {
+  it('has no review step: admins publish classes and lessons themselves', () => {
+    for (const locale of LOCALES) {
+      const copy = JSON.stringify([adminClassesMessages[locale], lessonEditorMessages[locale]])
+      expect(copy, locale).not.toMatch(
+        /submit(ted)? for review|changes requested|in review|review queue|hantar(?:kan)? untuk semakan|dalam semakan|perubahan diminta|baris gilir semakan|提交审核|审核中|审核队列|要求修改/i,
+      )
+    }
   })
 
-  it('says that students keep the published lesson while a revision is open', () => {
-    expect(lessonEditorMessages.en.status.revisionSubmitted).toMatch(/published version/)
-    expect(lessonEditorMessages.en.submit.revisionMessage).toMatch(/published version/)
+  it('says that learners keep the published lesson until the changes are published', () => {
+    expect(lessonEditorMessages.en.status.publishedMeta).toMatch(/published version/)
   })
 
-  it('uses the agreed stage, unit and lesson terminology', () => {
-    expect(classesMessages.en.stage.SCAFFOLDED).toBe('Supported')
-    expect(classesMessages.en.stage.INDEPENDENT).toBe('Independent')
-    expect(adminClassesMessages['zh-CN'].review.typeLesson).toBe('课时')
-    expect(classesMessages['zh-CN'].units).toContain('单元')
+  it('uses the agreed class, unit and lesson terminology', () => {
+    expect(i18n.global.t('nav.classes', {}, { locale: 'zh-CN' })).toBe('课堂')
+    expect(adminClassesMessages['zh-CN'].types.LESSON).toBe('课时')
+    expect(adminClassesMessages['zh-CN'].publish.units).toContain('单元')
   })
 })

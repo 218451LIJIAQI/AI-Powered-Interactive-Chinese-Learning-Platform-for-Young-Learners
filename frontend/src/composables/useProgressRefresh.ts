@@ -1,15 +1,12 @@
 import { readonly, ref } from 'vue'
 
+const version = ref(0)
+export const progressVersion = readonly(version)
+
 /**
- * Signals that the learner earned points or finished something without changing page (a quiz result, a completed
- * activity), so views that show the reward summary, such as the dashboard sidebar, can load it again.
+ * Signals that something the shell shows changed without a change of page (a learner's XP or streak, an admin's queue
+ * counts), so the views that show it, such as the dashboard layout, can load it again.
  */
-const progressVersion = ref(0)
-
 export function notifyProgressChanged(): void {
-  progressVersion.value += 1
-}
-
-export function useProgressVersion() {
-  return readonly(progressVersion)
+  version.value += 1
 }

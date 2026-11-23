@@ -1,5 +1,6 @@
 package com.example.aichinese.dto.ai;
 
+import static com.example.aichinese.dto.DtoNormalization.redactLength;
 import static com.example.aichinese.dto.DtoNormalization.strip;
 
 import jakarta.validation.constraints.NotBlank;
@@ -15,11 +16,18 @@ public record XiaomeiTurn(
         Speaker speaker,
 
         @NotBlank(message = "Turn text is required.")
-        @Size(max = 300, message = "Turn text must not exceed 300 characters.")
+        @Size(max = XiaomeiTurn.MAX_TEXT_LENGTH, message = "Turn text must not exceed 300 characters.")
         String text) {
+
+    public static final int MAX_TEXT_LENGTH = 300;
 
     public XiaomeiTurn {
         text = strip(text);
+    }
+
+    @Override
+    public String toString() {
+        return "XiaomeiTurn[speaker=" + speaker + ", text=" + redactLength(text) + "]";
     }
 
     public enum Speaker {

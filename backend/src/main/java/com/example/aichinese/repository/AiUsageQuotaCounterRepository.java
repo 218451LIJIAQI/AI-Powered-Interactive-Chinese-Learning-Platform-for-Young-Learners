@@ -1,5 +1,6 @@
 package com.example.aichinese.repository;
 
+import java.time.LocalDate;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -17,5 +18,6 @@ public interface AiUsageQuotaCounterRepository extends JpaRepository<AiUsageQuot
     @Query("select counter from AiUsageQuotaCounter counter where counter.user.id = :userId")
     Optional<AiUsageQuotaCounter> findLockedByUserId(@Param("userId") Long userId);
 
-    Optional<AiUsageQuotaCounter> findByUserId(Long userId);
+    @Query("select c.dayCount from AiUsageQuotaCounter c where c.user.id = :userId and c.usageDay = :day")
+    Optional<Integer> findDayCount(@Param("userId") Long userId, @Param("day") LocalDate day);
 }

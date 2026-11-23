@@ -1,0 +1,436 @@
+/* Quick quiz and Story generator: topic form, result panels, choice questions, quiz hints, story lines and key words.
+   Shared shell rules live in ai.css. */
+
+.ai-maker {
+  display: grid;
+  gap: var(--space-4);
+}
+
+/* Topic, optional Questions and the button on one row, filling the card. */
+.ai-maker-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--space-3);
+}
+
+.ai-maker-form.has-count {
+  grid-template-columns: minmax(0, 1fr) 160px auto;
+}
+
+/* Wide enough for Making…, so the fields keep their width while the request runs. */
+.ai-maker-form .btn {
+  min-width: 128px;
+}
+
+.ai-panel {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+}
+
+.ai-panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+}
+
+.ai-panel-source {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* The AI notice and Report, at the right end of the panel's head. */
+.ai-panel-aside {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  min-width: 0;
+}
+
+.ai-panel .btn-ghost:not(:disabled):hover {
+  background: var(--color-ink-200);
+}
+
+/* A ghost button lined up with the right edge of the panel header. */
+.ai-result-report.btn-ghost {
+  margin-right: calc(-1 * var(--space-2));
+}
+
+.ai-result-title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-strong);
+  line-height: var(--line-height-normal);
+}
+
+.ai-questions,
+.ai-story-lines {
+  display: grid;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ai-questions.is-two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4) var(--space-6);
+}
+
+.ai-question {
+  min-width: 0;
+}
+
+.ai-question fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.ai-question-text {
+  width: 100%;
+  margin-bottom: var(--space-2);
+  padding: 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-strong);
+  line-height: var(--line-height-normal);
+}
+
+.ai-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 120px), 1fr));
+  gap: var(--space-2);
+}
+
+.ai-option {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--control-height-sm);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  box-shadow: inset 0 0 0 1px var(--border-default);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-strong);
+  line-height: var(--line-height-normal);
+  text-align: center;
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.ai-option:hover:where(:has(:enabled)) {
+  background: var(--color-primary-50);
+  box-shadow: inset 0 0 0 1px var(--border-interactive);
+}
+
+/* The radio inside is visually hidden: the option shows its keyboard focus, as every other control does. */
+.ai-option:has(:focus-visible) {
+  outline: var(--border-width-focus) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.ai-option.is-selected {
+  background: var(--color-primary-50);
+  box-shadow: inset 0 0 0 var(--border-width-thick) var(--color-primary-500);
+}
+
+/* After checking, the one marking of the whole product: the correct option is filled with a tick, the learner's wrong
+   pick is a quiet tint with a cross. */
+.ai-option.is-correct {
+  background: var(--color-success-text);
+  box-shadow: inset 0 0 0 var(--border-width-thick) var(--color-success-text);
+  color: var(--color-white);
+}
+
+.ai-option.is-incorrect {
+  background: var(--color-danger-soft);
+  box-shadow: inset 0 0 0 var(--border-width-thick) var(--color-danger);
+  color: var(--color-danger-text);
+}
+
+/* Checked answers can no longer change. */
+.ai-option:has(:disabled) {
+  cursor: default;
+}
+
+.ai-option.is-ruled-out {
+  background: var(--surface-sunken);
+  box-shadow: inset 0 0 0 1px var(--border-default);
+  color: var(--text-disabled);
+  text-decoration: line-through;
+}
+
+/* SparkBot's quiz hint offer and the card it opens. */
+.ai-hint-offer,
+.ai-hint-card {
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  box-shadow: inset 0 0 0 1px var(--border-default);
+}
+
+.ai-hint-offer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.ai-hint-offer > span {
+  flex: 1 1 auto;
+}
+
+.ai-hint-card {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+}
+
+.ai-hint-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-strong);
+  line-height: var(--line-height-normal);
+}
+
+.ai-hint-title .icon-glyph,
+.ai-hint-offer > .icon-glyph {
+  color: var(--text-brand);
+}
+
+.ai-hint-text {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+}
+
+.ai-question-note {
+  margin: var(--space-2) 0 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-normal);
+}
+
+.ai-result-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.ai-result-foot p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-normal);
+}
+
+.ai-result-foot p.is-checked {
+  color: var(--text-primary);
+  font-weight: var(--font-weight-strong);
+}
+
+.ai-story-title {
+  color: var(--text-primary);
+  font-family: var(--font-cjk);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-strong);
+  line-height: var(--line-height-normal);
+}
+
+.ai-story-title-gloss {
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-weight: var(--font-weight-regular);
+}
+
+.ai-story-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-6);
+}
+
+.ai-story-text {
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.ai-story-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+  min-height: var(--badge-height);
+}
+
+.ai-story-show {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.ai-story-show .choice {
+  align-items: center;
+  font-size: var(--font-size-xs);
+}
+
+.ai-story-show .choice input[type='checkbox'] {
+  margin: 0;
+}
+
+.ai-story-lines li {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.ai-story-lines li.is-reading .ai-story-line {
+  color: var(--text-link);
+}
+
+.ai-story-line {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-cjk);
+  font-size: var(--font-size-lg);
+  line-height: var(--line-height-snug);
+  transition: color var(--duration-fast) var(--ease-standard);
+}
+
+.ai-story-words {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.ai-story-words > .page-eyebrow {
+  display: flex;
+  align-items: center;
+  min-height: var(--badge-height);
+}
+
+/* The word list is one row of columns throughout, and a press reads the word aloud. */
+.ai-key-words > li {
+  padding: 0;
+}
+
+.ai-key-word {
+  display: grid;
+  grid-template-columns: minmax(56px, auto) minmax(80px, auto) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  width: 100%;
+  padding: var(--space-3) 0;
+  border: 0;
+  background: none;
+  color: var(--text-primary);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-normal);
+  text-align: left;
+}
+
+.ai-key-word strong {
+  font-family: var(--font-cjk);
+  font-size: var(--font-size-md);
+}
+
+.ai-key-word:disabled {
+  cursor: default;
+}
+
+.ai-key-word:hover:not(:disabled) {
+  color: var(--text-link-hover);
+}
+
+.ai-key-word-pinyin,
+.ai-key-word > .icon-glyph {
+  color: var(--text-secondary);
+}
+
+.ai-story-check {
+  display: grid;
+  gap: var(--space-2);
+}
+
+@media (max-width: 75rem) {
+  .ai-story-columns,
+  .ai-questions.is-two {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 40rem) {
+  .ai-maker-form,
+  .ai-maker-form.has-count {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ai-key-word {
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto;
+  }
+
+  .ai-key-word > .icon-glyph {
+    grid-row: 1;
+    grid-column: 3;
+  }
+
+  .ai-key-word-meaning {
+    grid-row: 2;
+    grid-column: 1 / -1;
+  }
+}
+
+@media (forced-colors: active) {
+  .ai-option {
+    border: 1px solid ButtonText;
+  }
+
+  .ai-option.is-selected {
+    border: var(--border-width-thick) solid Highlight;
+  }
+
+  .ai-option.is-correct {
+    border: var(--border-width-thick) solid Highlight;
+    background: Highlight;
+    color: HighlightText;
+    forced-color-adjust: none;
+  }
+
+  .ai-option.is-incorrect {
+    border: var(--border-width-thick) dashed Highlight;
+  }
+
+  .ai-hint-offer,
+  .ai-hint-card {
+    border: 1px solid CanvasText;
+  }
+}

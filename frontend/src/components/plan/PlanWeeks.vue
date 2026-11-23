@@ -1,13 +1,12 @@
 <template>
-  <section class="plan-side-block" aria-labelledby="plan-weeks-title">
-    <h3 id="plan-weeks-title" class="plan-side-title">{{ t('plan.side.yourWeeks') }}</h3>
-    <dl class="plan-weeks">
+  <section class="plan-rail-block" aria-labelledby="plan-weeks-title">
+    <h3 id="plan-weeks-title" class="card-title">{{ heading }}</h3>
+    <dl class="plan-rail-rows">
       <div v-for="row in rows" :key="row.key">
         <dt>{{ row.when }}</dt>
         <dd>{{ row.what }}</dd>
       </div>
     </dl>
-    <p v-for="row in optionalRows" :key="row" class="plan-side-note">{{ row }}</p>
   </section>
 </template>
 
@@ -15,45 +14,109 @@
 import { computed } from 'vue'
 
 import { useLocalMessages } from '@/composables/useLocalMessages'
-import { planMessages } from '@/plugins/planMessages'
-import type { LearningPlan } from '@/types/plan'
+import { planPathMessages } from '@/plugins/planPathMessages'
+import { planSetupMessages } from '@/plugins/planSetupMessages'
+import type { LearningPlan, PlanStep } from '@/types/plan'
+
+import { paceInSentence, unitsWord } from './planFormat'
+import { bestAfterUnit, optionalClassesInOrder } from './usePlanPick'
 
 /**
- * "Your weeks": the Learn steps by the weeks the pace gives them (steps sharing weeks share a row), the review weeks
- * left before the deadline, and the optional classes with their weeks.
+ * "Your 9 weeks": each Learn step with the calendar weeks it takes, the class that follows it (by name once the learner
+ * picked or joined it, else "your first class"), and the review weeks left before the date. A named class that is best
+ * taken after that row's unit comes after it ("Unit 4, then Shopping and Prices", as its card says "Best after Unit 4");
+ * other classes run alongside ("Unit 4 + Travel Mandarin"). Without a date the weeks follow the daily time ("Your weeks
+ * at 1–2 hours a day"); with a first milestone they count to it ("Your first 2 weeks") and what comes after it is
+ * "Later".
  */
-const props = defineProps<{ plan: LearningPlan }>()
+const props = defineProps<{ plan: LearningPlan; picked: number | null }>()
 
-const { t } = useLocalMessages({ plan: planMessages })
+const { t } = useLocalMessages({ plan: [planSetupMessages, planPathMessages] })
+
+const heading = computed(() => {
+  const { total } = props.plan.weeks
+  if (props.plan.milestone) return t('plan.side.firstWeeks', { count: total }, total)
+  if (!props.plan.goal.deadline) return t('plan.side.weeksAtPace', { pace: paceInSentence(t, props.plan.pace.key) })
+  return t('plan.side.yourWeeks', { count: total }, total)
+})
 
 function when(from: number, to: number): string {
   return from === to ? t('plan.side.wk', { week: from }) : t('plan.side.wkRange', { from, to })
 }
 
+function learnLabel(step: PlanStep): string {
+  const label =
+    step.unitNumber === null ? step.title : t('plan.side.unitRow', { number: step.unitNumber, title: step.title })
+  return step.quickReview ? t('plan.side.quickReviewRow', { title: label }) : label
+}
+
+const classOrder = computed(() => optionalClassesInOrder(props.plan, props.picked))
+
+/** The optional class a slot names once the learner picked the order; before that the slots are unnamed. */
+function namedOptional(step: PlanStep, slot: number): PlanStep | null {
+  if (step.joined || props.picked === null) return null
+  return classOrder.value[slot] ?? step
+}
+
+/**
+ * A row per Learn step within the plan's weeks, with the classes that follow it; the steps after the last week share
+ * one "Later" row. `slot` numbers the classes not joined yet.
+ */
 const rows = computed(() => {
-  const grouped = new Map<string, { from: number; to: number; titles: string[] }>()
-  for (const step of props.plan.steps) {
-    if (step.kind !== 'LEARN_UNIT') continue
-    const key = `${step.weekFrom}-${step.weekTo}`
-    const entry = grouped.get(key) ?? { from: step.weekFrom, to: step.weekTo, titles: [] }
-    entry.titles.push(step.quickReview ? t('plan.side.quickReviewRow', { title: step.title }) : step.title)
-    grouped.set(key, entry)
-  }
-  const list = [...grouped.entries()].map(([key, entry]) => ({
-    key,
-    when: when(entry.from, entry.to),
-    what: entry.titles.join(', '),
-  }))
   const { content, total } = props.plan.weeks
-  if (total > content) {
-    list.push({ key: 'review', when: when(content + 1, total), what: t('plan.side.reviewWeeks') })
+  const list: { key: string; when: string; what: string; unit: number | null }[] = []
+  const laterUnits: number[] = []
+  const laterClasses: string[] = []
+  let slot = 0
+  let inLater = false
+  for (const step of props.plan.steps) {
+    if (step.status === 'UNAVAILABLE') continue
+    if (step.kind === 'LEARN_UNIT') {
+      inLater = step.weekFrom > total
+      if (inLater) {
+        if (step.unitNumber !== null) laterUnits.push(step.unitNumber)
+        continue
+      }
+      list.push({
+        key: `step-${step.position}`,
+        when: when(step.weekFrom, Math.min(step.weekTo, total)),
+        what: learnLabel(step),
+        unit: step.unitNumber,
+      })
+      continue
+    }
+    const named = namedOptional(step, slot)
+    const label =
+      (step.joined ? step.title : named?.title) ?? t(slot === 0 ? 'plan.side.firstClass' : 'plan.side.nextClass')
+    if (!step.joined) slot += 1
+    const row = list.at(-1)
+    // Optional classes come after a first milestone, even when anchored to an in-window Learn unit.
+    if (inLater || step.weekFrom > total || (props.plan.milestone !== null && !step.joined)) {
+      laterClasses.push(label)
+    } else if (row) {
+      const after = named !== null && row.unit !== null && bestAfterUnit(props.plan, named) === row.unit
+      row.what = after ? t('plan.side.thenClass', { first: row.what, second: label }) : `${row.what} + ${label}`
+    } else {
+      // A plan with no Learn unit left is its classes alone.
+      list.push({
+        key: `class-${step.position}`,
+        when: when(step.weekFrom, Math.min(step.weekTo, total)),
+        what: label,
+        unit: null,
+      })
+    }
+  }
+  if (laterUnits.length || laterClasses.length) {
+    const units = laterUnits.length ? unitsWord(t, laterUnits) : ''
+    list.push({
+      key: 'later',
+      when: t('plan.side.later'),
+      what: [units, ...laterClasses].filter(Boolean).join(' + '),
+      unit: null,
+    })
+  } else if (total > content) {
+    list.push({ key: 'review', when: when(content + 1, total), what: t('plan.side.reviewWeeks'), unit: null })
   }
   return list
 })
-
-const optionalRows = computed(() =>
-  props.plan.steps
-    .filter((step) => step.kind === 'CLASS' && !step.joined && step.status !== 'UNAVAILABLE')
-    .map((step) => t('plan.side.optionalRow', { title: step.title, from: step.weekFrom, to: step.weekTo })),
-)
 </script>

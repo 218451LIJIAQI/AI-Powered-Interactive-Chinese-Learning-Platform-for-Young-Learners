@@ -1,8 +1,12 @@
 package com.example.aichinese;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.groups.Tuple.tuple;
 
-import java.util.Set;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,16 +15,30 @@ import org.springframework.test.context.ActiveProfiles;
 
 import com.example.aichinese.config.seed.DemoClassesSeeder;
 import com.example.aichinese.config.seed.DemoContentSeeder;
+import com.example.aichinese.config.seed.DemoPersonas;
+import com.example.aichinese.dto.classes.AdminClassViews;
+import com.example.aichinese.dto.classes.ClassViews;
+import com.example.aichinese.entity.ClassEnrolment;
+import com.example.aichinese.entity.Role;
+import com.example.aichinese.entity.StudentProfile;
+import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.ContentStatus;
+import com.example.aichinese.entity.enums.RoleName;
 import com.example.aichinese.repository.ClassEnrolmentRepository;
 import com.example.aichinese.repository.CoursePackageRepository;
 import com.example.aichinese.repository.LessonRepository;
+import com.example.aichinese.repository.RoleRepository;
+import com.example.aichinese.repository.StudentProfileRepository;
 import com.example.aichinese.repository.UserRepository;
+import com.example.aichinese.security.SecurityUserDetails;
+import com.example.aichinese.service.classes.AdminClassList;
+import com.example.aichinese.service.classes.ClassAuthoringService;
 import com.example.aichinese.service.classes.ClassCatalogueService;
-import com.example.aichinese.service.classes.ClassReviewService;
+import com.example.aichinese.service.classes.LessonEditorService;
+import com.example.aichinese.service.classes.StudentClassService;
 
 @SpringBootTest
-@ActiveProfiles("demo")
+@ActiveProfiles({"demo", "demo-test"})
 class DemoSeederTests {
 
     @Autowired
@@ -31,6 +49,9 @@ class DemoSeederTests {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private RoleRepository roleRepository;
 
     @Autowired
     private LessonRepository lessonRepository;
@@ -45,18 +66,29 @@ class DemoSeederTests {
     private ClassCatalogueService catalogue;
 
     @Autowired
-    private ClassReviewService reviews;
+    private ClassAuthoringService classAuthoring;
+
+    @Autowired
+    private AdminClassList classList;
+
+    @Autowired
+    private LessonEditorService lessonEditor;
+
+    @Autowired
+    private StudentClassService studentClasses;
+
+    @Autowired
+    private StudentProfileRepository studentProfileRepository;
 
     @Test
-    void seedsThePrototypeClassesOnceWithEightInTheCatalogue() throws Exception {
-        assertThat(userRepository.existsByEmailIgnoreCase("teacher@fyp.local")).isTrue();
+    void seedsThePrototypeClassesOnceWithEightInTheCatalogue() {
         assertThat(userRepository.existsByEmailIgnoreCase("student@fyp.local")).isTrue();
-        assertThat(catalogue.search(new ClassCatalogueService.Query(null, null, null, null, null), Set.of(), 0, 50)
-                .totalItems()).isEqualTo(8);
-        assertThat(coursePackageRepository.findByContentStatus(ContentStatus.SUBMITTED))
-                .extracting("title").containsExactly("Chinese Culture and Festivals");
-        // The new class with its lesson, and one lesson revision, wait for review; the other revision has changes requested.
-        assertThat(reviews.waitingCount()).isEqualTo(2);
+        assertThat(catalogue.search(null, 0, 50).totalItems()).isEqualTo(8);
+        var packages = coursePackageRepository.findAll();
+        assertThat(packages).filteredOn(pkg -> pkg.getContentStatus() == ContentStatus.DRAFT)
+                .extracting("title").containsExactlyInAnyOrder("Chinese Culture and Festivals", "Study Group Mandarin");
+        assertThat(packages).filteredOn(pkg -> pkg.getContentStatus() == ContentStatus.ARCHIVED)
+                .extracting("title").containsExactly("Mandarin Foundations");
         long lessons = lessonRepository.count();
         long classes = coursePackageRepository.count();
         long enrolments = enrolmentRepository.count();
@@ -67,5 +99,145 @@ class DemoSeederTests {
         assertThat(lessonRepository.count()).isEqualTo(lessons);
         assertThat(coursePackageRepository.count()).isEqualTo(classes);
         assertThat(enrolmentRepository.count()).isEqualTo(enrolments);
+    }
+
+    /** Learners and admins only: no teacher accounts, and no TEACHER role. */
+    @Test
+    void theDemoHasNoTeachers() {
+        assertThat(roleRepository.findAll()).extracting(Role::getName)
+                .containsExactlyInAnyOrder(RoleName.STUDENT, RoleName.ADMIN);
+        assertThat(userRepository.existsByEmailIgnoreCase("teacher@fyp.local")).isFalse();
+        assertThat(userRepository.findAllByRoleName(RoleName.STUDENT)).extracting(User::getEmail)
+                .containsExactlyInAnyOrder(DemoPersonas.STUDENT.email(), DemoPersonas.CHEN_HAO.email(),
+                        DemoPersonas.ZHANG_YI.email(), DemoPersonas.NUR_AISYAH.email(), DemoPersonas.ZHANG_YUXI.email());
+    }
+
+    @Test
+    void theCatalogueHasTheThemesAndBestAfterOfThePrototype() {
+        Map<String, ClassViews.ClassCard> cards = catalogue.search(null, 0, 50).items().stream()
+                .collect(Collectors.toMap(ClassViews.ClassCard::title, Function.identity()));
+        assertCard(cards, "Mandarin for Campus Life", "Study or exchange", 3, 5);
+        assertCard(cards, "Chinese Through Film", "Personal interest", 5, 6);
+        assertCard(cards, "Everyday Conversations", "Daily life", 3, 4);
+        assertCard(cards, "Travel Mandarin", "Travel", 3, 5);
+        assertCard(cards, "Shopping and Prices", "Travel", 4, 5);
+        assertCard(cards, "Study Abroad Survival", "Study or exchange", 3, 5);
+        assertCard(cards, "Basic Work Mandarin", "Work and career", 3, 5);
+        assertCard(cards, "Serving Customers", "Work and career", 4, 4);
+    }
+
+    /** Every published lesson is complete (video, key phrases, 3 activities, a quiz of exactly 5 questions). */
+    @Test
+    void theAdminsClassesAreInTheStatesOfThePrototype() {
+        Map<String, AdminClassViews.ContentRow> classes = classList.list(null, "CLASS", null, 0, 50).items().stream()
+                .collect(Collectors.toMap(AdminClassViews.ContentRow::title, Function.identity()));
+        assertThat(classes).hasSize(11);
+
+        AdminClassViews.ClassPage campusLife = classAuthoring.classPage(classes.get("Mandarin for Campus Life").id());
+        assertThat(campusLife.status()).isEqualTo("PUBLISHED");
+        assertThat(campusLife.category().name()).isEqualTo("Study or exchange");
+        assertThat(campusLife.lessonCount()).isEqualTo(5);
+        assertThat(campusLife.units()).extracting(AdminClassViews.Unit::title)
+                .containsExactly("First Conversations", "Campus Life");
+        List<AdminClassViews.LessonRow> lessons = campusLife.units().stream().flatMap(unit -> unit.lessons().stream()).toList();
+        assertThat(lessons).extracting(AdminClassViews.LessonRow::title).containsExactly(
+                "Meeting Classmates", "Room Numbers", "University Life", "Ordering Food at the Canteen", "Finding Places");
+        assertThat(lessons).allSatisfy(lesson -> {
+            assertThat(lesson.status()).isEqualTo("PUBLISHED");
+            assertThat(lesson.hasUnpublishedChanges()).isFalse();
+            AdminClassViews.LessonEditor editor = lessonEditor.editor(lesson.id());
+            assertThat(editor.checklist().missing()).as(lesson.title()).isEmpty();
+            assertThat(editor.quizzes().stream().mapToInt(quiz -> quiz.questions().size()).sum())
+                    .as(lesson.title()).isEqualTo(5);
+            assertThat(editor.quizzes()).allSatisfy(quiz -> assertThat(quiz.hintsAllowed()).isTrue());
+        });
+
+        AdminClassViews.ClassPage foundations = classAuthoring.classPage(classes.get("Mandarin Foundations").id());
+        assertThat(foundations.status()).isEqualTo("ARCHIVED");
+        assertThat(foundations.units()).extracting(AdminClassViews.Unit::title)
+                .containsExactly("Sounds and Tones", "First Words");
+        assertThat(foundations.units().stream().flatMap(unit -> unit.lessons().stream()))
+                .extracting(AdminClassViews.LessonRow::title)
+                .containsExactly("Tones in a Sentence", "Greetings", "Numbers 1–10", "Family Words", "Food and Drink");
+
+        AdminClassViews.ClassPage culture = classAuthoring.classPage(classes.get("Chinese Culture and Festivals").id());
+        assertThat(culture.status()).isEqualTo("DRAFT");
+        assertThat(culture.lessonCount()).isEqualTo(2);
+        assertThat(culture.canPublish()).isFalse();
+        assertThat(culture.bestAfterUnit()).isEqualTo(3);
+        AdminClassViews.ClassPage studyGroup = classAuthoring.classPage(classes.get("Study Group Mandarin").id());
+        assertThat(studyGroup.status()).isEqualTo("DRAFT");
+        assertThat(studyGroup.lessonCount()).isEqualTo(1);
+    }
+
+    @Test
+    void amiraChenHaoAndZhangYiHaveTheProgressOfThePrototype() {
+        SecurityUserDetails amira = signedIn(DemoPersonas.STUDENT);
+        ClassViews.MyClasses myClasses = studentClasses.myClasses(amira);
+        assertThat(myClasses.classes()).extracting(card -> card.summary().title())
+                .containsExactly("Mandarin for Campus Life", "Mandarin Foundations");
+        assertThat(myClasses.moreClassCount()).isEqualTo(7);
+
+        ClassViews.MyClassCard campusLife = myClasses.classes().get(0);
+        assertThat(campusLife.archived()).isFalse();
+        assertThat(campusLife.archivedAt()).isNull();
+        assertThat(campusLife.completedLessons()).isEqualTo(2);
+        assertThat(campusLife.progressPercent()).isEqualTo(40);
+        assertThat(campusLife.nextStep().lessonTitle()).isEqualTo("Meeting Classmates");
+        assertThat(campusLife.nextStep().stepsDone()).isEqualTo(3);
+        assertThat(campusLife.nextStep().stepsTotal()).isEqualTo(4);
+        List<ClassViews.LessonProgressRow> lessons = studentClasses
+                .classPage(amira, campusLife.summary().id())
+                .units().stream().flatMap(unit -> unit.lessons().stream()).toList();
+        assertThat(lessons).extracting(ClassViews.LessonProgressRow::title, ClassViews.LessonProgressRow::status)
+                .containsExactly(
+                        tuple("Meeting Classmates", "IN_PROGRESS"),
+                        tuple("Room Numbers", "COMPLETED"),
+                        tuple("University Life", "NOT_STARTED"),
+                        tuple("Ordering Food at the Canteen", "COMPLETED"),
+                        tuple("Finding Places", "NOT_STARTED"));
+
+        // Finished before an admin archived it: read-only, every lesson and result still there.
+        ClassViews.MyClassCard foundations = myClasses.classes().get(1);
+        assertThat(foundations.archived()).isTrue();
+        assertThat(foundations.archivedAt()).isNotNull();
+        assertThat(foundations.completedLessons()).isEqualTo(5);
+        assertThat(foundations.progressPercent()).isEqualTo(100);
+        assertThat(foundations.lessons()).filteredOn(row -> row.title().equals("Greetings"))
+                .extracting(ClassViews.LessonProgressRow::status).containsExactly("COMPLETED");
+
+        assertThat(studentClasses.myClasses(signedIn(DemoPersonas.CHEN_HAO)).classes().get(0).completedLessons())
+                .isEqualTo(3);
+        assertThat(studentClasses.myClasses(signedIn(DemoPersonas.ZHANG_YI)).classes().get(0).completedLessons())
+                .isEqualTo(1);
+    }
+
+    /** No seeded history comes before "Account created": a class joined, the streak calendar. */
+    @Test
+    void theDemoAccountsAreOlderThanTheirSeededHistory() {
+        List<ClassEnrolment> enrolments = enrolmentRepository.findAll();
+        for (DemoPersonas.Persona persona : List.of(DemoPersonas.STUDENT, DemoPersonas.CHEN_HAO,
+                DemoPersonas.ZHANG_YI, DemoPersonas.NUR_AISYAH)) {
+            User student = userRepository.findByEmailWithRoles(persona.email()).orElseThrow();
+            StudentProfile profile = studentProfileRepository.findByUserId(student.getId()).orElseThrow();
+            assertThat(profile.getCreatedAt()).as(persona.email()).isEqualTo(student.getCreatedAt());
+            assertThat(enrolments).as(persona.email())
+                    .filteredOn(enrolment -> profile.getId().equals(enrolment.getStudent().getId()))
+                    .isNotEmpty()
+                    .allSatisfy(enrolment -> assertThat(enrolment.getJoinedAt()).isAfter(student.getCreatedAt()));
+        }
+    }
+
+    private static void assertCard(Map<String, ClassViews.ClassCard> cards, String title, String theme, int bestAfter,
+            int lessons) {
+        ClassViews.ClassCard card = cards.get(title);
+        assertThat(card).as(title).isNotNull();
+        assertThat(card.topicName()).as(title).isEqualTo(theme);
+        assertThat(card.bestAfterUnit()).as(title).isEqualTo(bestAfter);
+        assertThat(card.lessonCount()).as(title).isEqualTo(lessons);
+    }
+
+    private SecurityUserDetails signedIn(DemoPersonas.Persona persona) {
+        return new SecurityUserDetails(userRepository.findByEmailWithRoles(persona.email()).orElseThrow());
     }
 }

@@ -30,7 +30,8 @@ import com.example.aichinese.entity.enums.MistakeSource;
 @Setter
 @Entity
 @Table(name = "learning_mistakes", indexes = {
-        @Index(name = "idx_learning_mistakes_student_waiting", columnList = "student_id,cleared_at,last_wrong_at")
+        @Index(name = "idx_learning_mistakes_student_review_order", columnList = "student_id,cleared_at,sure_wrong,last_wrong_at,id"),
+        @Index(name = "idx_learning_mistakes_cleared_student", columnList = "cleared_at,student_id")
 }, uniqueConstraints = {
         @UniqueConstraint(name = "uk_learning_mistakes_student_item", columnNames = { "student_id", "item_ref" })
 })
@@ -44,7 +45,7 @@ public class LearningMistake extends BaseEntity {
     @Column(name = "mistake_source", nullable = false, length = 20)
     private MistakeSource mistakeSource;
 
-    /** e.g. {@code LEARN#12} (a Learn question) or {@code QUIZZES#3#41} (an item of a Practice set). */
+    /** e.g. {@code LEARN#12} (a Learn question) or {@code LISTENING#3#2} (an item of a Practice set). */
     @Column(name = "item_ref", nullable = false, length = 120)
     private String itemRef;
 
@@ -96,6 +97,17 @@ public class LearningMistake extends BaseEntity {
 
     @Column(name = "last_wrong_at", nullable = false)
     private LocalDateTime lastWrongAt;
+
+    /** The last wrong answer was given as "Sure": the mistake leads the list and the review until it is cleared. */
+    @Column(name = "sure_wrong", nullable = false)
+    private boolean sureWrong;
+
+    /**
+     * A flashcard the learner marked "Still learning" (asked in the review as what the word means): nothing was
+     * answered. A wrong answer in the review makes it an ordinary mistake.
+     */
+    @Column(name = "still_learning", nullable = false)
+    private boolean stillLearning;
 
     @Column(name = "cleared_at")
     private LocalDateTime clearedAt;

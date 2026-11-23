@@ -3,6 +3,8 @@ package com.example.aichinese.service;
 import java.time.LocalDate;
 import java.util.List;
 
+import com.example.aichinese.entity.enums.PracticeType;
+
 /**
  * Pure XP, level and streak rules, kept side-effect free so they can be unit tested. Learn lessons, Practice sets,
  * the Mistakes review and the daily goal earn XP; classes and the AI Helper never do.
@@ -10,16 +12,12 @@ import java.util.List;
 public final class RewardRules {
 
     public static final int XP_PER_LEVEL = 100;
-    public static final List<Integer> DAILY_GOAL_OPTIONS = List.of(10, 20, 30);
-    public static final int DEFAULT_DAILY_GOAL_XP = 20;
+    private static final List<Integer> DAILY_GOAL_OPTIONS = List.of(10, 20, 30);
 
     /** Once a day, when today's XP first reaches the daily goal. */
     public static final int DAILY_GOAL_BONUS_XP = 5;
     /** Once a day, for a review that clears at least one mistake. */
     public static final int MISTAKES_REVIEW_XP = 10;
-    /** Once per quiz set, the first time a finished run has 3 right answers in a row. */
-    public static final int QUIZ_STREAK_BONUS_XP = 5;
-    public static final int QUIZ_STREAK_LENGTH = 3;
 
     public static final int STREAK_EXPLORER_DAYS = 3;
     public static final int TEN_DAY_STREAK_DAYS = 10;
@@ -38,8 +36,8 @@ public final class RewardRules {
         return Math.max(0, totalXp) / XP_PER_LEVEL + 1;
     }
 
-    /** Progress towards the next level, 0-99 (XP inside the current level). */
-    public static int progressToNextLevelPercent(int totalXp) {
+    /** XP earned inside the current level, 0 to {@link #XP_PER_LEVEL} - 1. */
+    public static int xpIntoLevel(int totalXp) {
         return Math.max(0, totalXp) % XP_PER_LEVEL;
     }
 
@@ -76,18 +74,26 @@ public final class RewardRules {
     }
 
     /** Percentage of right answers, rounded; 0 for no questions. */
-    public static int accuracyPercent(int correct, int total) {
+    public static int accuracyPercent(long correct, long total) {
         return total <= 0 ? 0 : (int) Math.round(correct * 100.0 / total);
     }
 
-    /** The longest run of consecutive right answers. */
-    public static int longestRun(List<Boolean> answersInOrder) {
-        int longest = 0;
-        int run = 0;
-        for (Boolean correct : answersInOrder) {
-            run = Boolean.TRUE.equals(correct) ? run + 1 : 0;
-            longest = Math.max(longest, run);
-        }
-        return longest;
+    /** The total XP rank {@code rank} opens at (Rank 1 at 0, Rank 2 at 100, ...). */
+    public static int rankXp(int rank) {
+        return (Math.max(1, rank) - 1) * XP_PER_LEVEL;
+    }
+
+    /**
+     * The XP a Practice set pays the first time it is done (UI rules): Flashcards and Tracing a fixed +10 at HSK 1 and
+     * +15 from HSK 2, Matching +15; Listening, Drag &amp; Drop and Typing per answer (3, 4 and 2 XP) times the items.
+     */
+    public static int practiceSetXp(PracticeType type, Integer hskLevel, int itemCount) {
+        return switch (type) {
+            case FLASHCARDS, TRACING -> hskLevel != null && hskLevel >= 2 ? 15 : 10;
+            case MATCHING -> 15;
+            case LISTENING -> 3 * itemCount;
+            case DRAG_DROP -> 4 * itemCount;
+            case TYPING -> 2 * itemCount;
+        };
     }
 }

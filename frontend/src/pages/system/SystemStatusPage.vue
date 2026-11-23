@@ -1,158 +1,247 @@
 <template>
   <div class="system-page">
-    <header class="system-top">
-      <AppBrand to="/" />
-      <!-- FRLANG01: the language can be changed on every page, these included. -->
-      <LanguageSwitcher show-label />
-    </header>
-
     <main id="main-content" class="system-card" tabindex="-1" aria-labelledby="system-title">
-      <!-- One character in its 田字格 square: 迷 "lost" for a missing page, 锁 "lock" for a page of another role. -->
-      <div class="system-visual" role="img" :aria-label="t(page.tileLabel)">
-        <span class="hanzi-tile system-tile" lang="zh-CN" aria-hidden="true">{{ page.hanzi }}</span>
-        <p class="system-word" aria-hidden="true">
-          <span class="system-pinyin" lang="zh-Latn-pinyin">{{ page.pinyin }}</span>
-          <span>{{ t(page.meaning) }}</span>
-        </p>
+      <div class="system-top">
+        <AppBrand :to="homeRoute" />
+        <!-- FRLANG01: the language can be changed on every page, these included. -->
+        <LanguageSwitcher />
       </div>
 
-      <div class="system-copy">
-        <p class="system-kicker">
-          <span class="system-code">{{ page.code }}</span>
-          <span>{{ t(page.kicker) }}</span>
-        </p>
-        <h1 id="system-title">{{ t(page.title) }}</h1>
-        <p class="system-message">{{ t(page.message) }}</p>
+      <h1 id="system-title" class="system-title">{{ t(texts.title) }}</h1>
+      <p class="system-copy" data-testid="system-copy">{{ t(texts.copy) }}</p>
 
-        <div class="system-actions">
-          <template v-if="kind === 'not-found'">
-            <RouterLink class="btn btn-primary btn-lg" :to="homeRoute" data-testid="system-home">
-              {{ t('system.returnHome') }}
-            </RouterLink>
-            <RouterLink class="btn btn-ghost btn-lg" to="/classes">{{ t('system.exploreClasses') }}</RouterLink>
-          </template>
-          <template v-else-if="auth.isAuthenticated">
-            <button
-              class="btn btn-primary btn-lg"
-              type="button"
-              :disabled="signingOut"
-              :aria-busy="signingOut"
-              data-testid="system-switch-account"
-              @click="useAnotherAccount"
-            >
-              {{ signingOut ? t('system.signingOut') : t('system.useAnotherAccount') }}
-            </button>
-            <RouterLink class="btn btn-ghost btn-lg" :to="homeRoute" data-testid="system-home">
-              {{ t('system.myHome') }}
-            </RouterLink>
-          </template>
-          <template v-else>
-            <RouterLink class="btn btn-primary btn-lg" to="/auth">{{ t('system.signIn') }}</RouterLink>
-            <RouterLink class="btn btn-ghost btn-lg" to="/" data-testid="system-home">
-              {{ t('system.returnHome') }}
-            </RouterLink>
-          </template>
-        </div>
-
-        <nav class="system-links-nav" :aria-label="t('system.quickLinks')">
-          <ul class="system-links">
-            <li v-for="link in links" :key="link.label">
-              <RouterLink class="system-link" :to="link.to">
-                <IconGlyph class="system-link-icon" :name="link.icon" :size="18" />
-                <span class="system-link-copy">
-                  <strong>{{ t(link.label) }}</strong>
-                  <span>{{ t(link.hint) }}</span>
-                </span>
-                <IconGlyph class="system-link-arrow" name="chevronRight" :size="18" />
-              </RouterLink>
-            </li>
-          </ul>
-        </nav>
+      <div class="btn-group">
+        <template v-if="kind === 'not-found'">
+          <RouterLink class="btn btn-primary btn-lg" :to="homeRoute" data-testid="system-home">
+            {{ homeLabel }}
+          </RouterLink>
+          <RouterLink class="btn btn-secondary btn-lg" :to="classesRoute" data-testid="system-classes">
+            {{ t('common.exploreClasses') }}
+          </RouterLink>
+        </template>
+        <button
+          v-else-if="kind === 'maintenance'"
+          class="btn btn-primary btn-lg"
+          type="button"
+          :disabled="busy"
+          :aria-busy="busy"
+          data-testid="system-retry"
+          @click="tryAgain"
+        >
+          {{ busy ? t('system.checking') : t('common.retry') }}
+        </button>
+        <!-- A lesson of a class the learner has not joined (P3.02): back to the class, or join it here and go on to the
+             lesson. -->
+        <template v-else-if="classRoute">
+          <RouterLink class="btn btn-secondary btn-lg" :to="classRoute" data-testid="system-class">
+            {{ t('system.backToClass') }}
+          </RouterLink>
+          <button
+            class="btn btn-primary btn-lg"
+            type="button"
+            :disabled="busy"
+            :aria-busy="busy"
+            data-testid="system-join"
+            @click="joinClass"
+          >
+            {{ busy ? t('system.joining') : t('system.joinClass') }}
+          </button>
+        </template>
+        <!-- A page of the other role (a link opened where another account is signed in). -->
+        <template v-else-if="auth.isAuthenticated">
+          <RouterLink class="btn btn-primary btn-lg" :to="homeRoute" data-testid="system-home">
+            {{ t('system.myHome') }}
+          </RouterLink>
+          <button
+            class="btn btn-secondary btn-lg"
+            type="button"
+            :disabled="busy"
+            :aria-busy="busy"
+            data-testid="system-switch-account"
+            @click="useAnotherAccount"
+          >
+            {{ busy ? t('system.signingOut') : t('system.useAnotherAccount') }}
+          </button>
+        </template>
+        <template v-else>
+          <RouterLink class="btn btn-primary btn-lg" :to="signInRoute" data-testid="system-sign-in">
+            {{ t('common.signIn') }}
+          </RouterLink>
+          <RouterLink class="btn btn-secondary btn-lg" :to="homeRoute" data-testid="system-home">
+            {{ t('system.returnHome') }}
+          </RouterLink>
+        </template>
       </div>
+
+      <p v-if="joinError" class="system-note is-error" role="alert" data-testid="system-join-error">
+        <IconGlyph name="alert" :size="16" />
+        <span>{{ joinError }}</span>
+      </p>
+
+      <!-- Always in the page, so the answer to "Try again" is announced when its text arrives. -->
+      <p v-if="kind === 'maintenance'" class="system-note" role="status" data-testid="system-still-down">
+        <template v-if="stillDown">
+          <IconGlyph name="info" :size="16" />
+          <span>{{ t('system.stillUnavailable') }}</span>
+        </template>
+      </p>
     </main>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { RouterLink, useRouter, type RouteLocationRaw } from 'vue-router'
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
+import { RouterLink, useRoute, useRouter, type RouteLocationRaw } from 'vue-router'
 
+import { studentClassesApi } from '@/api/classes'
+import { getAuthSessionVersion } from '@/api/http'
+import { systemApi } from '@/api/services'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import LanguageSwitcher from '@/components/common/LanguageSwitcher.vue'
 import AppBrand from '@/components/layout/AppBrand.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { systemMessages } from '@/plugins/systemMessages'
 import { useAuthStore } from '@/stores/auth'
+import { resolveApiError } from '@/utils/apiError'
+import { normalizeAppRoute } from '@/utils/appRoute'
+import { firstQueryText } from '@/utils/queryText'
 import { defaultRouteForRole } from '@/utils/role'
 import '@/styles/ops-public.css'
 
-interface QuickLink {
-  readonly to: RouteLocationRaw
-  readonly icon: string
-  readonly label: string
-  readonly hint: string
+type SystemPageKind = 'not-found' | 'unauthorized' | 'maintenance'
+
+/**
+ * The pages outside every layout: 404, 403 and "we're updating" (/maintenance, opened by hand or when the API answers
+ * 503 and its health check fails too: router/redirects.ts). They lead a signed-in user back into their own part of the
+ * app (the logo too), and a visitor to the public site.
+ */
+const props = defineProps<{ kind: SystemPageKind }>()
+
+/** The title and copy of each page; a refused lesson of a class not joined has its own. */
+const TEXTS: Record<SystemPageKind | 'lesson-locked', { readonly title: string; readonly copy: string }> = {
+  'not-found': { title: 'system.notFoundTitle', copy: 'system.notFoundCopy' },
+  unauthorized: { title: 'system.noAccessTitle', copy: 'system.noAccessCopy' },
+  maintenance: { title: 'system.maintenanceTitle', copy: 'system.maintenanceCopy' },
+  'lesson-locked': { title: 'system.lessonLockedTitle', copy: 'system.lessonLockedCopy' },
 }
 
-const props = defineProps<{ kind: 'not-found' | 'unauthorized' }>()
+/** A lesson of a learner's class (`/student/classes/7/lessons/12`): the refused page names the class to go back to. */
+const CLASS_LESSON_PATH = /^\/student\/classes\/(\d+)\/lessons\//
 
+const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const { t } = useLocalMessages({ system: systemMessages })
 
-const PAGES = {
-  'not-found': {
-    kicker: 'system.notFoundKicker',
-    title: 'system.notFoundTitle',
-    message: 'system.notFoundMessage',
-    code: '404',
-    hanzi: '迷',
-    pinyin: 'mí',
-    meaning: 'system.lost',
-    tileLabel: 'system.notFoundTile',
-  },
-  unauthorized: {
-    kicker: 'system.noAccessKicker',
-    title: 'system.noAccessTitle',
-    message: 'system.noAccessMessage',
-    code: '403',
-    hanzi: '锁',
-    pinyin: 'suǒ',
-    meaning: 'system.locked',
-    tileLabel: 'system.noAccessTile',
-  },
-} as const
+/** The role's home when signed in, else the landing page. */
+const homeRoute = computed(() => defaultRouteForRole(auth.activeRole))
+const homeLabel = computed(() => (auth.isAuthenticated ? t('system.myHome') : t('system.returnHome')))
+/** A learner explores their own Find classes; everyone else the public catalogue. */
+const classesRoute = computed<RouteLocationRaw>(() =>
+  auth.roles.includes('STUDENT') ? { name: 'student-classes-find' } : { name: 'classes' },
+)
 
-const page = computed(() => PAGES[props.kind])
-const homeRoute = computed(() => defaultRouteForRole(auth.isAuthenticated ? auth.activeRole : null))
-
-const links = computed<readonly QuickLink[]>(() => {
-  if (props.kind === 'unauthorized') {
-    return [
-      { to: '/classes', icon: 'classes', label: 'system.exploreClasses', hint: 'system.classesHint' },
-      {
-        to: { path: '/help', hash: '#getting-started' },
-        icon: 'students',
-        label: 'system.roles',
-        hint: 'system.rolesHint',
-      },
-    ]
-  }
-  const account: QuickLink = auth.isAuthenticated
-    ? { to: homeRoute.value, icon: 'learn', label: 'system.myHome', hint: 'system.myHomeHint' }
-    : { to: '/auth', icon: 'profile', label: 'system.signIn', hint: 'system.signInHint' }
-  return [account, { to: '/help', icon: 'info', label: 'system.help', hint: 'system.helpHint' }]
+/** The page the guard or a lesson refused (`?redirect=` on /unauthorized). */
+const refusedPath = computed(() => normalizeAppRoute(firstQueryText(route.query.redirect)))
+/** The class of a refused lesson, for a signed-in learner: lessons open once the class is joined (joining is free). */
+const lockedClassId = computed(() => {
+  if (props.kind !== 'unauthorized' || !auth.roles.includes('STUDENT') || !refusedPath.value) return null
+  return CLASS_LESSON_PATH.exec(refusedPath.value)?.[1] ?? null
 })
+const classRoute = computed<RouteLocationRaw | null>(() =>
+  lockedClassId.value ? { name: 'student-class', params: { classId: lockedClassId.value } } : null,
+)
+const texts = computed(() => TEXTS[classRoute.value ? 'lesson-locked' : props.kind])
 
-const signingOut = ref(false)
+/**
+ * Sign in, keeping the page the guard refused so another account can open it; the sign-in page checks the target
+ * before going there.
+ */
+const signInRoute = computed<RouteLocationRaw>(() =>
+  refusedPath.value ? { path: '/auth', query: { redirect: refusedPath.value } } : '/auth',
+)
+
+const busy = ref(false)
+const joinFailure = shallowRef<{ reason: unknown } | null>(null)
+const joinError = computed(() =>
+  joinFailure.value ? resolveApiError(joinFailure.value.reason, t('system.joinError')) : null,
+)
+const stillDown = ref(false)
+let visit = 0
+
+// Vue Router reuses this component between status pages and between different refused lessons.
+watch([() => props.kind, refusedPath, lockedClassId], () => {
+  visit++
+  busy.value = false
+  joinFailure.value = null
+  stillDown.value = false
+})
+onBeforeUnmount(() => {
+  visit++
+})
 
 /** Signs the current account out (on the server too) and opens the sign-in page for the other one. */
 async function useAnotherAccount(): Promise<void> {
-  signingOut.value = true
+  if (busy.value) return
+  const started = visit
+  busy.value = true
   try {
-    await auth.logout()
+    const signedOut = await auth.logout()
+    if (started !== visit) return
+    if (signedOut) await router.push(signInRoute.value)
   } finally {
-    signingOut.value = false
+    if (started === visit) busy.value = false
   }
-  await router.push('/auth')
+}
+
+/** "Join class": joins the refused lesson's class and opens the lesson; a refusal (an archived class) says why. */
+async function joinClass(): Promise<void> {
+  const classId = lockedClassId.value
+  const target = refusedPath.value
+  if (!classId || !target || busy.value) return
+  const started = visit
+  const version = getAuthSessionVersion()
+  const stillHere = () => started === visit && lockedClassId.value === classId && version === getAuthSessionVersion()
+  busy.value = true
+  joinFailure.value = null
+  try {
+    await studentClassesApi.join(Number(classId))
+    if (stillHere()) await router.replace(target)
+  } catch (reason) {
+    if (stillHere()) joinFailure.value = { reason }
+  } finally {
+    if (started === visit) busy.value = false
+  }
+}
+
+/**
+ * Maintenance: asks the health check. When the service is up again the user goes to their home (the landing page when
+ * signed out); otherwise the page stays and says that it is still unavailable.
+ */
+async function tryAgain(): Promise<void> {
+  if (busy.value) return
+  const started = visit
+  busy.value = true
+  stillDown.value = false
+  try {
+    const health = await systemApi.health().catch(() => null)
+    if (started !== visit) return
+    const up = health?.status === 'UP'
+    // A page that was loaded during the outage could not restore its session then: it can now.
+    if (up && !auth.isAuthenticated) await auth.restoreSession()
+    if (started !== visit) return
+    if (up) {
+      try {
+        await router.replace(defaultRouteForRole(auth.activeRole))
+      } catch {
+        // Lazy route chunk load can fail right after recovery; announce unavailability instead of rejecting silently.
+        if (started === visit) stillDown.value = true
+      }
+    } else {
+      stillDown.value = true
+    }
+  } finally {
+    if (started === visit) busy.value = false
+  }
 }
 </script>

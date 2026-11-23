@@ -1,11 +1,10 @@
 package com.example.aichinese.repository.projection;
 
-import org.springframework.lang.Nullable;
+import com.example.aichinese.entity.enums.ContentStatus;
 
 public interface StatusCountProjection {
 
-    @Nullable
-    String getStatus();
+    ContentStatus getStatus();
 
     long getCount();
 }

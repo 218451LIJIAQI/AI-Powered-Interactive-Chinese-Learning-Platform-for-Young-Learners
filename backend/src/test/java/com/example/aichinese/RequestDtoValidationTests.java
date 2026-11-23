@@ -1,77 +1,119 @@
 package com.example.aichinese;
 
+import static java.util.Collections.singletonList;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.junit.jupiter.params.provider.Arguments.arguments;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.IntStream;
-import java.util.stream.Stream;
+import java.util.stream.LongStream;
 
-import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AutoClose;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
 
-import com.example.aichinese.dto.admin.ApproveTeacherRequest;
 import com.example.aichinese.dto.ai.AdminAiSettingsUpdateRequest;
 import com.example.aichinese.dto.ai.AiChatRequest;
 import com.example.aichinese.dto.ai.AiQuizGeneratorRequest;
 import com.example.aichinese.dto.ai.AiStoryGeneratorRequest;
 import com.example.aichinese.dto.ai.CreateAiResponseReportRequest;
+import com.example.aichinese.dto.ai.QuizDraftRequest;
 import com.example.aichinese.dto.ai.ReviewAiResponseReportRequest;
 import com.example.aichinese.dto.ai.XiaomeiConversationRequest;
 import com.example.aichinese.dto.ai.XiaomeiReplyRequest;
 import com.example.aichinese.dto.ai.XiaomeiTurn;
-import com.example.aichinese.dto.auth.RegisterTeacherRequest;
+import com.example.aichinese.dto.auth.RegisterStudentRequest;
 import com.example.aichinese.dto.classes.ClassRequests;
-import com.example.aichinese.dto.learning.QuizOptionRequest;
-import com.example.aichinese.dto.learning.QuizQuestionRequest;
-import com.example.aichinese.dto.learning.QuizRequest;
-import com.example.aichinese.dto.learning.QuizSubmissionAnswerRequest;
-import com.example.aichinese.dto.review.RejectionReasonRequest;
-import com.example.aichinese.dto.teacher.UpdateTeacherProfileRequest;
+import com.example.aichinese.dto.classes.QuizOptionRequest;
+import com.example.aichinese.dto.classes.QuizQuestionRequest;
+import com.example.aichinese.dto.classes.QuizRequest;
+import com.example.aichinese.dto.classes.QuizSubmissionAnswerRequest;
+import com.example.aichinese.dto.communication.NotificationIdsRequest;
+import com.example.aichinese.dto.learn.HintPolicyDto;
+import com.example.aichinese.dto.learn.LevelCheckNextRequest;
+import com.example.aichinese.dto.learn.LevelCheckQuestionData;
+import com.example.aichinese.dto.learn.PracticeCompleteRequest;
+import com.example.aichinese.entity.enums.ActivityDifficulty;
+import com.example.aichinese.entity.enums.LevelCheckLevel;
+import com.example.aichinese.entity.enums.LevelCheckSkill;
+import com.example.aichinese.entity.enums.PublishStatus;
 import com.example.aichinese.entity.enums.XiaomeiScenario;
 
-import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import jakarta.validation.ValidatorFactory;
 
 /**
- * Pins the Jakarta Validation annotations declared on the content,
- * learning, AI, feedback, teacher-profile, teacher-registration, activity
- * and settings request DTOs. Acts as a contract guard so a future refactor that
- * loosens a {@code @NotBlank} / {@code @Size} / {@code @Email} /
- * {@code @Min} constraint trips an explicit unit failure rather than
+ * Pins the Jakarta Validation annotations declared on the class authoring,
+ * learning, AI, notification, activity and settings request DTOs. Acts as a contract guard so a future refactor that
+ * loosens a {@code @NotBlank} / {@code @Size} / {@code @Min} /
+ * {@code @Positive} constraint trips an explicit unit failure rather than
  * silently widening the API attack surface.
  */
 class RequestDtoValidationTests {
 
+    @AutoClose
     private static final ValidatorFactory VALIDATOR_FACTORY = Validation.buildDefaultValidatorFactory();
     private static final Validator VALIDATOR = VALIDATOR_FACTORY.getValidator();
 
     private static final String IDEOGRAPHIC_SPACE = "\u3000";
     private static final String MULTIPLE_CHOICE = "MULTIPLE_CHOICE";
     private static final String QUESTION_PROMPT = "Choose the correct answer.";
-    private static final String UNSAFE_MEETING_LINK = "javascript:alert(1)";
     private static final int TOO_MANY_ITEMS = 201;
-
-    @AfterAll
-    static void closeValidatorFactory() {
-        VALIDATOR_FACTORY.close();
-    }
 
     @Test
     void contentRequestIdsMustBePositive() {
-        ClassRequests.ClassDetails details = new ClassRequests.ClassDetails("Class", "Description", 0L, -3L, null);
+        ClassRequests.ClassDetails details = new ClassRequests.ClassDetails("Class", "Description", -3L, null);
         ClassRequests.LessonContent content = new ClassRequests.LessonContent("Lesson", -1L, 0, null, List.of());
+        QuizDraftRequest draft = new QuizDraftRequest(-1L, "Greetings", null, 3, null);
 
-        assertViolationPathsContain(details, "levelId", "topicId");
+        assertViolationPathsContain(details, "categoryId");
         assertViolationPathsContain(content, "unitId", "minutes");
+        assertViolationPathsContain(draft, "lessonId");
+        assertViolationPathsContain(new QuizDraftRequest(null, "Greetings", null, 3, null), "lessonId");
+    }
+
+    /** A lesson quiz has exactly 5 questions: an AI draft writes 1 to 5 of them, a new question goes at place 1 or later. */
+    @Test
+    void quizDraftsAndNewQuestionsStayWithinTheFiveQuestionsOfALessonQuiz() {
+        assertThat(VALIDATOR.validate(new QuizDraftRequest(1L, "Greetings", null, 5, null))).isEmpty();
+        assertViolationPathsContain(new QuizDraftRequest(1L, "Greetings", null, 6, null), "numberOfQuestions");
+        assertViolationPathsContain(new QuizDraftRequest(1L, "Greetings", null, 0, null), "numberOfQuestions");
+        assertViolationPathsContain(new QuizQuestionRequest(MULTIPLE_CHOICE, QUESTION_PROMPT, null, 5,
+                List.of(new QuizOptionRequest("A", true, null)), null, null, null, null, 0, true), "position");
+        assertViolationPathsContain(new ClassRequests.QuizSettings(null), "hintsAllowed");
+    }
+
+    /** The Undo of "Mark all as read" sends the ids it got back: a list is required, at most 1000 of them. */
+    @Test
+    void markingNotificationsUnreadNeedsAListOfIds() {
+        assertThat(VALIDATOR.validate(new NotificationIdsRequest(List.of()))).isEmpty();
+        assertViolationPathsContain(new NotificationIdsRequest(null), "ids");
+        assertViolationPathsContain(new NotificationIdsRequest(
+                LongStream.rangeClosed(1, 1001).boxed().toList()), "ids");
+        assertViolationPathStartsWith(new NotificationIdsRequest(singletonList(null)), "ids");
+        assertViolationPathStartsWith(new NotificationIdsRequest(List.of(0L)), "ids");
+        assertViolationPathStartsWith(new NotificationIdsRequest(List.of(-5L)), "ids");
+    }
+
+    /** BCrypt caps passwords at 72 UTF-8 bytes: 25 CJK characters (75 bytes) must fail even though length < 72. */
+    @Test
+    void maxUtf8BytesRejectsMultiBytePasswordsExceeding72Bytes() {
+        String multiByteOverLimit = "汉".repeat(25);
+        assertThat(multiByteOverLimit).hasSize(25);
+        var request = new RegisterStudentRequest(
+                "Amira", "amira@example.com", multiByteOverLimit, multiByteOverLimit, " ");
+
+        assertViolationPathsContain(request, "password", "confirmPassword");
+        assertThat(request.preferredLanguage()).isNull();
+    }
+
+    @Test
+    void bestAfterUnitIsOptionalAndOneToEight() {
+        assertThat(VALIDATOR.validate(new ClassRequests.ClassDetails("Class", null, null, null))).isEmpty();
+        assertThat(VALIDATOR.validate(new ClassRequests.ClassDetails("Class", null, null, 8))).isEmpty();
+        assertViolationPathsContain(new ClassRequests.ClassDetails("Class", null, null, 0), "bestAfterUnit");
+        assertViolationPathsContain(new ClassRequests.ClassDetails("Class", null, null, 9), "bestAfterUnit");
     }
 
     @Test
@@ -91,66 +133,56 @@ class RequestDtoValidationTests {
     }
 
     @Test
-    void feedbackShortFieldsAreBounded() {
-        ClassRequests.Feedback feedbackRequest = new ClassRequests.Feedback(
-                0L,
-                -3L,
-                -1L,
-                -2L,
-                "Z".repeat(51),
-                "Useful feedback message");
-
-        assertViolationPathsContain(feedbackRequest, "studentId", "classId", "lessonId", "quizAttemptId", "type");
+    void aiQuizGeneratorRejectsNonPositiveQuestionCountAndAllowsNullDefault() {
+        assertThat(VALIDATOR.validate(new AiQuizGeneratorRequest("Tones", null, null, null))).isEmpty();
+        assertThat(VALIDATOR.validate(new AiQuizGeneratorRequest("Tones", null, 1, null))).isEmpty();
+        assertViolationPathsContain(new AiQuizGeneratorRequest("Tones", null, 0, null), "numberOfQuestions");
+        assertViolationPathsContain(new AiQuizGeneratorRequest("Tones", null, -5, null), "numberOfQuestions");
     }
 
     @Test
-    void learningRequestsRejectUnsafeLinksAndOversizedAnswers() {
-        ClassRequests.LiveSession liveSession = new ClassRequests.LiveSession(
-                "Session",
-                -1L,
-                -2L,
-                LocalDateTime.now().plusDays(1),
-                LocalDateTime.now().plusDays(1).plusHours(1),
-                "X".repeat(65),
-                0,
-                UNSAFE_MEETING_LINK + "x".repeat(500),
-                "M".repeat(41));
+    void levelCheckQuestionRequestStripsUnicodeSpacesAndCopiesOptionsImmutably() {
+        List<LevelCheckQuestionData.Option> mutableOptions = new ArrayList<>(List.of(
+                new LevelCheckQuestionData.Option(ideographicWrapped("Hello"), true, ideographicWrapped("Greeting")),
+                new LevelCheckQuestionData.Option("Goodbye", false, IDEOGRAPHIC_SPACE)));
+        LevelCheckQuestionData.Request blankPrompt = new LevelCheckQuestionData.Request(
+                IDEOGRAPHIC_SPACE, IDEOGRAPHIC_SPACE, IDEOGRAPHIC_SPACE, IDEOGRAPHIC_SPACE,
+                LevelCheckSkill.VOCABULARY, ActivityDifficulty.EASY, LevelCheckLevel.BEGINNER_1,
+                PublishStatus.DRAFT, mutableOptions);
+        mutableOptions.clear();
+
+        assertViolationPathsContain(blankPrompt, "prompt");
+        assertThat(blankPrompt.hanzi()).isNull();
+        assertThat(blankPrompt.pinyin()).isNull();
+        assertThat(blankPrompt.audioText()).isNull();
+        assertThat(blankPrompt.options()).hasSize(2);
+        assertThat(blankPrompt.options().get(0).text()).isEqualTo("Hello");
+        assertThat(blankPrompt.options().get(0).explanation()).isEqualTo("Greeting");
+        assertThat(blankPrompt.options().get(1).explanation()).isNull();
+        assertThatThrownBy(() -> blankPrompt.options().add(null))
+                .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void quizAnswerRequestsBoundTheirFields() {
         QuizSubmissionAnswerRequest answerRequest = new QuizSubmissionAnswerRequest(0L, null, "A".repeat(2001));
 
-        assertViolationPathsContain(
-                liveSession,
-                "classId",
-                "lessonId",
-                "timeZone",
-                "capacity",
-                "meetingLink",
-                "meetingPlatform");
         assertViolationPathsContain(answerRequest, "questionId", "answerText");
     }
 
     @Test
     void quizAggregateRequestsRejectUnboundedNestedCollections() {
         List<QuizOptionRequest> options = IntStream.rangeClosed(1, TOO_MANY_ITEMS)
-                .mapToObj(index -> new QuizOptionRequest("Option " + index, index == 1))
+                .mapToObj(index -> new QuizOptionRequest("Option " + index, index == 1, null))
                 .toList();
 
         List<ClassRequests.ChosenPair> pairs = IntStream.rangeClosed(1, 51)
                 .mapToObj(index -> new ClassRequests.ChosenPair((long) index, "meaning " + index))
                 .toList();
         ClassRequests.MatchingAnswer matchingAnswer = new ClassRequests.MatchingAnswer(pairs);
-        QuizQuestionRequest questionRequest = new QuizQuestionRequest(
-                MULTIPLE_CHOICE,
-                QUESTION_PROMPT,
-                null,
-                5,
-                options,
-                null,
-                null,
-                null,
-                null);
 
         assertViolationPathsContain(matchingAnswer, "pairs");
-        assertViolationPathsContain(questionRequest, "options");
+        assertViolationPathsContain(questionWithOptions(options), "options");
     }
 
     @Test
@@ -159,19 +191,9 @@ class RequestDtoValidationTests {
                 ideographicWrapped("Class title"),
                 IDEOGRAPHIC_SPACE,
                 1L,
-                1L,
                 null);
         ClassRequests.KeyPhrase keyPhrase = new ClassRequests.KeyPhrase(
                 ideographicWrapped("你好"), ideographicWrapped("nǐ hǎo"), ideographicWrapped("hello"));
-        ClassRequests.Feedback feedbackRequest = new ClassRequests.Feedback(
-                1L,
-                2L,
-                null,
-                null,
-                ideographicWrapped("ENCOURAGING"),
-                ideographicWrapped("Thoughtful feedback"));
-        ApproveTeacherRequest approveTeacherRequest = new ApproveTeacherRequest(ideographicWrapped("Ready"));
-        RejectionReasonRequest rejectTeacherRequest = new RejectionReasonRequest(ideographicWrapped("Missing certificate"));
         AiChatRequest chatRequest = new AiChatRequest(
                 ideographicWrapped("你好"),
                 ideographicWrapped("zh"),
@@ -180,7 +202,7 @@ class RequestDtoValidationTests {
                 ideographicWrapped("food"),
                 ideographicWrapped("en"));
         XiaomeiReplyRequest xiaomeiRequest = new XiaomeiReplyRequest(
-                com.example.aichinese.entity.enums.XiaomeiScenario.CAFE,
+                XiaomeiScenario.CAFE,
                 List.of(new XiaomeiTurn(XiaomeiTurn.Speaker.XIAOMEI, ideographicWrapped("你好！"))),
                 ideographicWrapped("我要一杯咖啡"),
                 ideographicWrapped("en"));
@@ -195,39 +217,31 @@ class RequestDtoValidationTests {
         ReviewAiResponseReportRequest reportReviewRequest = new ReviewAiResponseReportRequest(
                 ideographicWrapped("RESOLVED"),
                 ideographicWrapped("Handled"));
-        ClassRequests.LiveSession liveSession = new ClassRequests.LiveSession(
-                ideographicWrapped("Tone practice"),
-                1L,
-                null,
-                LocalDateTime.now().plusDays(2),
-                LocalDateTime.now().plusDays(2).plusHours(1),
-                ideographicWrapped("Asia/Singapore"),
-                10,
-                ideographicWrapped("https://example.com/class"),
-                ideographicWrapped("zoom"));
-        QuizRequest quizRequest = new QuizRequest(ideographicWrapped("Quiz 1"), IDEOGRAPHIC_SPACE, 0, null);
-        QuizRequest describedQuizRequest = new QuizRequest(
-                ideographicWrapped("Quiz 2"),
-                ideographicWrapped("Updated"),
-                5,
-                null);
-        QuizOptionRequest optionRequest = new QuizOptionRequest(ideographicWrapped("Option A"), true);
+        QuizRequest quizRequest = new QuizRequest(ideographicWrapped("Quiz 1"), null);
+        QuizOptionRequest optionRequest = new QuizOptionRequest(ideographicWrapped("Option A"), true, null);
         QuizSubmissionAnswerRequest quizAnswerRequest =
                 new QuizSubmissionAnswerRequest(1L, null, ideographicWrapped("Answer A"));
         AdminAiSettingsUpdateRequest settingsRequest = new AdminAiSettingsUpdateRequest(
                 ideographicWrapped("AI can make mistakes"),
                 true,
                 true);
+        AiQuizGeneratorRequest quizGeneratorRequest = new AiQuizGeneratorRequest(
+                ideographicWrapped("tones"),
+                ideographicWrapped("beginner"),
+                3,
+                " en ");
+        QuizDraftRequest quizDraftRequest = new QuizDraftRequest(
+                1L,
+                ideographicWrapped("greetings"),
+                ideographicWrapped("beginner"),
+                2,
+                " en ");
 
         assertThat(classDetails.title()).isEqualTo("Class title");
         assertThat(classDetails.description()).isNull();
         assertThat(keyPhrase.chinese()).isEqualTo("你好");
         assertThat(keyPhrase.pinyin()).isEqualTo("nǐ hǎo");
         assertThat(keyPhrase.meaning()).isEqualTo("hello");
-        assertThat(feedbackRequest.type()).isEqualTo("ENCOURAGING");
-        assertThat(feedbackRequest.message()).isEqualTo("Thoughtful feedback");
-        assertThat(approveTeacherRequest.note()).isEqualTo("Ready");
-        assertThat(rejectTeacherRequest.reason()).isEqualTo("Missing certificate");
         assertThat(chatRequest.message()).isEqualTo("你好");
         assertThat(chatRequest.languagePreference()).isEqualTo("zh");
         assertThat(storyGeneratorRequest.topic()).isEqualTo("food");
@@ -236,39 +250,22 @@ class RequestDtoValidationTests {
         assertThat(xiaomeiRequest.turns().get(0).text()).isEqualTo("你好！");
         assertThat(xiaomeiRequest.languagePreference()).isEqualTo("en");
         assertThat(aiReportRequest.featureKey()).isEqualTo("CHAT_TUTOR");
+        assertThat(aiReportRequest.reasonCategory()).isEqualTo("OTHER");
+        assertThat(aiReportRequest.description()).isEqualTo("Description");
         assertThat(aiReportRequest.promptSnapshot()).isEqualTo("Prompt");
+        assertThat(aiReportRequest.aiResponseSnapshot()).isEqualTo("Response");
         assertThat(reportReviewRequest.status()).isEqualTo("RESOLVED");
         assertThat(reportReviewRequest.reviewerNote()).isEqualTo("Handled");
-        assertThat(liveSession.title()).isEqualTo("Tone practice");
-        assertThat(liveSession.timeZone()).isEqualTo("Asia/Singapore");
-        assertThat(liveSession.meetingLink()).isEqualTo("https://example.com/class");
-        assertThat(liveSession.meetingPlatform()).isEqualTo("zoom");
         assertThat(quizRequest.title()).isEqualTo("Quiz 1");
-        assertThat(quizRequest.description()).isNull();
-        assertThat(describedQuizRequest.title()).isEqualTo("Quiz 2");
-        assertThat(describedQuizRequest.description()).isEqualTo("Updated");
         assertThat(optionRequest.optionText()).isEqualTo("Option A");
         assertThat(quizAnswerRequest.answerText()).isEqualTo("Answer A");
         assertThat(settingsRequest.aiNoticeText()).isEqualTo("AI can make mistakes");
-    }
-
-    @Test
-    void requestDtosNormaliseTheirTextBeforeValidation() {
-        AiQuizGeneratorRequest quizGeneratorRequest = new AiQuizGeneratorRequest(
-                ideographicWrapped("tones"),
-                ideographicWrapped("beginner"),
-                3,
-                " en ");
-
         assertThat(quizGeneratorRequest.topic()).isEqualTo("tones");
         assertThat(quizGeneratorRequest.level()).isEqualTo("beginner");
         assertThat(quizGeneratorRequest.languagePreference()).isEqualTo("en");
-
-        UpdateTeacherProfileRequest teacherProfileRequest = new UpdateTeacherProfileRequest("  Teacher Example  ", "  ");
-
-        assertThat(teacherProfileRequest.fullName()).isEqualTo("Teacher Example");
-        assertThat(teacherProfileRequest.bio()).isNull();
-        assertViolationPathStartsWith(teacherProfileRequest, "bio");
+        assertThat(quizDraftRequest.topic()).isEqualTo("greetings");
+        assertThat(quizDraftRequest.level()).isEqualTo("beginner");
+        assertThat(quizDraftRequest.languagePreference()).isEqualTo("en");
     }
 
     @Test
@@ -289,69 +286,25 @@ class RequestDtoValidationTests {
 
     @Test
     void aggregateRequestsRejectNullNestedElementsThroughBeanValidation() {
-        ClassRequests.MatchingAnswer matchingAnswer = new ClassRequests.MatchingAnswer(nullElementList());
-        QuizQuestionRequest questionRequest = new QuizQuestionRequest(
-                MULTIPLE_CHOICE,
-                QUESTION_PROMPT,
-                null,
-                5,
-                nullElementList(),
-                null,
-                null,
-                null,
-                null);
+        List<HintPolicyDto.Level> hintLevels = new ArrayList<>(List.of(
+                new HintPolicyDto.Level("HSK1", 15, 0),
+                new HintPolicyDto.Level("HSK2", 30, 3)));
+        hintLevels.add(null);
+        ClassRequests.MatchingAnswer matchingAnswer = new ClassRequests.MatchingAnswer(singletonList(null));
 
+        assertViolationPathStartsWith(new HintPolicyDto.UpdateRequest(hintLevels), "levels");
+        assertViolationPathsContain(new ClassRequests.MatchingAnswer(null), "pairs");
         assertViolationPathStartsWith(matchingAnswer, "pairs");
-        assertViolationPathStartsWith(questionRequest, "options");
+        assertViolationPathStartsWith(questionWithOptions(singletonList(null)), "options");
+        assertViolationPathStartsWith(new LevelCheckNextRequest(null, singletonList(null)), "answers");
+        assertViolationPathStartsWith(new PracticeCompleteRequest(singletonList(null), null), "answers");
+        assertViolationPathStartsWith(
+                new XiaomeiConversationRequest(XiaomeiScenario.CAFE, singletonList(null), "en"), "turns");
     }
 
-    static Stream<Arguments> teacherBios() {
-        String required = "Teacher bio is required";
-        String length = "Teacher bio must be between 20 and 1000 characters";
-        return Stream.of(
-                arguments(null, List.of(required)),
-                arguments("   ", List.of(required)),
-                arguments("I teach Mandarin.", List.of(length)),
-                // The bio is trimmed before validation, so padding cannot reach the 20-character minimum.
-                arguments("  " + "a".repeat(19) + "  ", List.of(length)),
-                arguments("a".repeat(20), List.of()),
-                arguments("a".repeat(1000), List.of()),
-                arguments("a".repeat(1001), List.of(length)));
-    }
-
-    /** The teacher sign-up and the profile update share the bio rule: required, 20 to 1000 characters. */
-    @ParameterizedTest
-    @MethodSource("teacherBios")
-    void teacherRegistrationAndProfileUpdateRequireABioOf20To1000Characters(String bio, List<String> violations) {
-        assertThat(bioViolations(new RegisterTeacherRequest(
-                "Teacher One", "teacher@example.com", "Password123!", "Password123!", bio)))
-                .isEqualTo(violations);
-        assertThat(bioViolations(new UpdateTeacherProfileRequest("Teacher One", bio)))
-                .isEqualTo(violations);
-    }
-
-    /** "Starts in the future" is checked by the service in the class's own zone, not by the record. */
-    @Test
-    void liveSessionRequestLeavesTheFutureStartToTheService() {
-        ClassRequests.LiveSession pastStart = new ClassRequests.LiveSession(
-                "Session",
-                1L,
-                null,
-                LocalDateTime.now().minusHours(1),
-                LocalDateTime.now().plusHours(1),
-                "Pacific/Honolulu",
-                null,
-                "https://example.com/class",
-                "ZOOM");
-
-        assertThat(VALIDATOR.validate(pastStart)).isEmpty();
-    }
-
-    private static List<String> bioViolations(Object request) {
-        return VALIDATOR.validate(request).stream()
-                .filter(violation -> "bio".equals(violation.getPropertyPath().toString()))
-                .map(ConstraintViolation::getMessage)
-                .toList();
+    private static QuizQuestionRequest questionWithOptions(List<QuizOptionRequest> options) {
+        return new QuizQuestionRequest(MULTIPLE_CHOICE, QUESTION_PROMPT, null, 5, options,
+                null, null, null, null, null, null);
     }
 
     private static void assertViolationPathsContain(Object request, String... paths) {
@@ -363,16 +316,10 @@ class RequestDtoValidationTests {
     private static void assertViolationPathStartsWith(Object request, String prefix) {
         assertThat(VALIDATOR.validate(request))
                 .extracting(violation -> violation.getPropertyPath().toString())
-                .anyMatch(path -> path.startsWith(prefix));
+                .anyMatch(path -> path.startsWith(prefix + "["));
     }
 
     private static String ideographicWrapped(String value) {
         return IDEOGRAPHIC_SPACE + value + IDEOGRAPHIC_SPACE;
-    }
-
-    private static <T> List<T> nullElementList() {
-        List<T> values = new ArrayList<>();
-        values.add(null);
-        return values;
     }
 }

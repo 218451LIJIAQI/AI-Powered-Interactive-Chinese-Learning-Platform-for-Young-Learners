@@ -1,22 +1,9 @@
-# Dependencies, build output and test reports
-node_modules/
-backend/target/
-frontend/dist/
-frontend/test-results/
-
-# Runtime data
-backend/uploads/
-.local/
-*.log
-
-# Local secrets
-.env
-.env.*
-!backend/.env.example
-!frontend/.env.example
-
-# Editors and OS files
-.vscode/
-.idea/
-*.iml
-.DS_Store
+/backend/config/application-local.yml
+/backend/target/
+/backend/target-e2e/
+/backend/uploads/
+/frontend/.env.local
+/frontend/.env.*.local
+/frontend/node_modules/
+/frontend/dist/
+/frontend/test-results/

@@ -1,6 +1,6 @@
 package com.example.aichinese.entity.enums;
 
-/** Platform content an admin publishes directly (Learn units, level check questions): no review workflow. */
+/** Content published directly by admins without an archive step (Learn units and level check questions). */
 public enum PublishStatus {
 
     DRAFT,

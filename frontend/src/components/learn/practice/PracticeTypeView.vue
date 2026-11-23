@@ -1,158 +1,128 @@
 <template>
-  <div class="practice-type" :class="`practice-pigment-${info.pigment}`">
-    <PracticeHead :title="t(info.labelKey)" :lede="lede">
-      <template #mark><PracticeGlyph :type="type" size="lg" /></template>
-    </PracticeHead>
+  <div class="practice-workspace">
+    <PracticeSetList
+      v-if="setList.length || sets.loading.value"
+      :sets="setList"
+      :selected-id="selectedId"
+      :loading="sets.loading.value"
+      :type="type"
+    />
 
-    <div class="practice-run" :class="{ 'has-sets': setList.length > 0 }">
-      <section class="practice-stage" :aria-labelledby="selected ? `${baseId}-title` : undefined">
+    <section class="practice-stage" :aria-labelledby="selected ? `${baseId}-title` : undefined">
+      <StatePanel
+        v-if="sets.loading.value"
+        class="practice-stage-state"
+        heading-tag="h2"
+        tone="loading"
+        :title="t('practice.setsLoading')"
+        :message="t('practice.setsLoadingHint')"
+      />
+      <!-- Only without a list: a list read again after a finished set keeps the last one, its result and run. -->
+      <StatePanel
+        v-else-if="sets.error.value && !setList.length"
+        class="practice-stage-state"
+        heading-tag="h2"
+        tone="error"
+        icon="alert"
+        :title="t('practice.setsError')"
+        :message="sets.error.value"
+        @retry="sets.reload"
+      />
+      <StatePanel
+        v-else-if="!setList.length"
+        class="practice-stage-state"
+        heading-tag="h2"
+        tone="empty"
+        icon="practice"
+        :title="t('practice.noSets')"
+        :message="t('practice.noSetsHint')"
+      />
+
+      <template v-else-if="selected">
+        <!-- The set's name is in the list beside the stage; the heading stays for assistive technology. -->
+        <h2 :id="`${baseId}-title`" class="sr-only">{{ selected.title }} · {{ meta }}</h2>
+
         <StatePanel
-          v-if="sets.loading.value"
-          tone="loading"
-          :title="t('practice.setsLoading')"
-          :message="t('practice.setsLoadingHint')"
-        />
-        <StatePanel
-          v-else-if="sets.error.value"
+          v-if="detail.error.value"
+          class="practice-stage-state"
           tone="error"
           icon="alert"
-          :title="t('practice.setsError')"
-          :message="sets.error.value"
-        >
-          <template #actions>
-            <button class="btn btn-primary" type="button" @click="sets.reload">{{ t('practice.retry') }}</button>
-          </template>
-        </StatePanel>
+          :title="t('practice.setError')"
+          :message="detail.error.value"
+          @retry="retryDetail"
+        />
         <StatePanel
-          v-else-if="!setList.length"
-          tone="empty"
-          icon="practice"
-          :title="t('practice.noSets')"
-          :message="t('practice.noSetsHint')"
-        >
-          <template #actions>
-            <RouterLink class="btn btn-secondary" :to="{ name: 'student-practice' }">
-              {{ t('practice.allActivities') }}
-            </RouterLink>
-          </template>
-        </StatePanel>
+          v-else-if="detail.loading.value || detail.data.value?.id !== selected.id"
+          class="practice-stage-state"
+          tone="loading"
+          :title="t('practice.setLoading')"
+          :message="t('practice.setLoadingHint')"
+        />
+        <SetDoneCard
+          v-else-if="completion"
+          v-bind="completion"
+          :set="detail.data.value"
+          :busy="restarting"
+          @again="practiseAgain"
+        />
+        <!-- A set read again gets a new player: a run never goes on over a set replaced under it. -->
+        <component
+          :is="PLAYERS[type]"
+          v-else
+          :key="`${detail.data.value.id}-${detail.data.value.runSignature ?? ''}`"
+          :set="detail.data.value"
+          @finished="onFinished"
+        />
+      </template>
+    </section>
 
-        <template v-else-if="selected">
-          <header class="practice-stage-head">
-            <div class="practice-stage-copy">
-              <h2 :id="`${baseId}-title`" class="practice-stage-title">{{ selected.title }}</h2>
-              <p class="practice-stage-meta">{{ setMeta(selected) }}</p>
-            </div>
-            <StatusPill v-if="selected.done" :label="t('practice.done')" tone="success" icon="check" />
-          </header>
-
-          <StatePanel
-            v-if="detail.error.value"
-            tone="error"
-            icon="alert"
-            :title="t('practice.setError')"
-            :message="detail.error.value"
-          >
-            <template #actions>
-              <button class="btn btn-primary" type="button" @click="detail.reload">{{ t('practice.retry') }}</button>
-            </template>
-          </StatePanel>
-          <StatePanel
-            v-else-if="detail.loading.value || detail.data.value?.id !== selected.id"
-            tone="loading"
-            :title="t('practice.setLoading')"
-            :message="t('practice.setLoadingHint')"
-          />
-          <SetDoneCard
-            v-else-if="result"
-            :result="result"
-            :xp-reward="selected.xpReward"
-            @again="practiseAgain"
-            @next="openSet"
-          />
-          <component
-            :is="player"
-            v-else-if="detail.data.value"
-            :key="runKey"
-            :set="detail.data.value"
-            @finished="onFinished"
-          />
-        </template>
-      </section>
-
-      <div
-        v-if="setList.length"
-        class="practice-sets"
-        role="group"
-        :aria-label="t('practice.setsOfType', { count: setList.length })"
-      >
-        <p class="practice-sets-head">
-          <span class="page-eyebrow">{{ t('practice.setsTitle') }}</span>
-          <span class="practice-sets-count">{{
-            t('practice.setsDone', { done: doneCount, total: setList.length })
-          }}</span>
-        </p>
-        <ul class="practice-sets-list">
-          <li v-for="item in setList" :key="item.id">
-            <RouterLink
-              class="practice-set"
-              :class="{ 'is-current': item.id === selected?.id, 'is-done': item.done }"
-              :to="{ name: 'student-practice', params: { type: info.slug }, query: { set: item.id } }"
-              :aria-current="item.id === selected?.id ? 'true' : undefined"
-              :data-testid="`set-${item.id}`"
-            >
-              <span class="practice-set-mark" aria-hidden="true">
-                <IconGlyph v-if="item.done" name="check" :size="14" />
-              </span>
-              <span class="practice-set-title"
-                >{{ item.title }}<span v-if="item.done" class="sr-only"> ({{ t('practice.done') }})</span></span
-              >
-              <span class="practice-set-meta">{{ itemMeta(item) }}</span>
-            </RouterLink>
-          </li>
-        </ul>
-      </div>
-    </div>
+    <RankUpDialog
+      v-if="rankingUp && completion?.result.xp.rankUp"
+      :rank-up="completion.result.xp.rankUp"
+      :streak="completion.result.xp.currentStreak"
+      source="practice"
+      @close="dismissRankUp"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, useId, watch, type Component } from 'vue'
-import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { computed, onBeforeUnmount, ref, shallowRef, useId, watch, type Component } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 import { practiceApi } from '@/api/learn'
-import IconGlyph from '@/components/common/IconGlyph.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
-import StatusPill from '@/components/common/StatusPill.vue'
+import RankUpDialog from '@/components/learn/RankUpDialog.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
-import { useResource } from '@/composables/useResource'
+import { useRecordById, useResource } from '@/composables/useResource'
+import { PRACTICE_ACTIVITIES } from '@/config/practiceActivities'
 import { practiceMessages } from '@/plugins/practiceMessages'
 import type { PracticeResult, PracticeSetSummary, PracticeType } from '@/types/learn'
+import { parseRecordId } from '@/utils/recordId'
 
+import AnswerPlayer from './AnswerPlayer.vue'
 import FlashcardsPlayer from './FlashcardsPlayer.vue'
-import ItemsPlayer from './ItemsPlayer.vue'
 import MatchingPlayer from './MatchingPlayer.vue'
-import PracticeGlyph from './PracticeGlyph.vue'
-import PracticeHead from './PracticeHead.vue'
-import { practiceTypeInfo } from './practiceTypes'
+import PracticeSetList from './PracticeSetList.vue'
+import type { RunTally } from './practiceTypes'
 import SetDoneCard from './SetDoneCard.vue'
-import StoryPlayer from './StoryPlayer.vue'
 import TracingPlayer from './TracingPlayer.vue'
+import { useRankUpLater } from './useRankUpLater'
 
 /**
- * One Practice type: its header (glyph, name, what it trains), the stage with the chosen set's player (the first set
- * not done yet unless `?set=` names one) and its result, and the type's sets beside it.
+ * One activity: the type's sets in a list grouped by level (the first set not done yet is open unless `?set=` names
+ * one) beside the stage with the set's player and, once finished, its result in the same place. A finished set that
+ * takes the learner past a rank opens the rank-up dialog over its result.
  */
 const props = defineProps<{ type: PracticeType }>()
 
 const PLAYERS: Readonly<Record<PracticeType, Component>> = {
   FLASHCARDS: FlashcardsPlayer,
-  QUIZZES: ItemsPlayer,
-  LISTENING: ItemsPlayer,
+  LISTENING: AnswerPlayer,
   TRACING: TracingPlayer,
-  DRAG_DROP: ItemsPlayer,
+  DRAG_DROP: AnswerPlayer,
   MATCHING: MatchingPlayer,
-  STORY: StoryPlayer,
+  TYPING: AnswerPlayer,
 }
 
 const route = useRoute()
@@ -160,20 +130,11 @@ const router = useRouter()
 const { t } = useLocalMessages({ practice: practiceMessages })
 const baseId = useId()
 
-const info = computed(() => practiceTypeInfo(props.type))
-// The time ("about 3 min") never splits, and the separator stays with the text before it.
-const lede = computed(() =>
-  [t(info.value.trainsKey), t('practice.aboutMinutes', { minutes: info.value.minutes }).replaceAll(' ', '\u00a0')].join(
-    '\u00a0· ',
-  ),
-)
-
 const sets = useResource(() => practiceApi.sets(props.type))
 const setList = computed(() => sets.data.value ?? [])
-const doneCount = computed(() => setList.value.filter((item) => item.done).length)
 
 const selected = computed<PracticeSetSummary | null>(() => {
-  const wanted = Number(route.query.set)
+  const wanted = parseRecordId(route.query.set)
   return (
     setList.value.find((item) => item.id === wanted) ??
     setList.value.find((item) => !item.done) ??
@@ -182,51 +143,71 @@ const selected = computed<PracticeSetSummary | null>(() => {
   )
 })
 
-const detail = useResource(
-  () => (selected.value ? practiceApi.set(props.type, selected.value.id) : Promise.resolve(null)),
-  false,
-)
+const selectedId = computed(() => selected.value?.id ?? null)
+const detail = useRecordById(selectedId, (id) => practiceApi.set(props.type, id))
 
-const result = ref<PracticeResult | null>(null)
-const runKey = ref(0)
-const player = computed(() => PLAYERS[props.type])
+const completion = shallowRef<{ result: PracticeResult; recap: string; tally: RunTally | null } | null>(null)
+const { rankingUp, dismiss: dismissRankUp } = useRankUpLater(() => completion.value?.result.xp ?? null)
+/** Practise again is reading the set again. */
+const restarting = ref(false)
+let restartVersion = 0
+onBeforeUnmount(() => {
+  restartVersion += 1
+})
 
-watch(
-  () => selected.value?.id,
-  (id) => {
-    result.value = null
-    if (id !== undefined) void detail.reload()
-  },
-  { immediate: true },
-)
-
-function itemMeta(set: PracticeSetSummary): string {
-  const parts = [t(info.value.unitKey, { count: set.itemCount }, set.itemCount)]
-  if (set.hskLevel) parts.push(`HSK ${set.hskLevel}`)
+/** "Flashcards · 6 cards · HSK 1 · +10 XP"; a traced set counts strokes, which only the set itself knows. */
+const meta = computed(() => {
+  const set = selected.value
+  if (!set) return ''
+  const strokes = detail.data.value?.id === set.id ? detail.data.value.strokeCount : null
+  const units = props.type === 'TRACING' ? strokes : set.itemCount
+  const parts = [t(`practiceType.${props.type}`)]
+  if (units !== null) parts.push(t(PRACTICE_ACTIVITIES[props.type].unitKey, { count: units }, units))
+  if (set.hskLevel) parts.push(t('hsk.number', { level: set.hskLevel }))
+  parts.push(t('practice.xpTag', { xp: set.xpReward }))
   return parts.join(' · ')
-}
+})
 
-function setMeta(set: PracticeSetSummary): string {
-  return [t(info.value.labelKey), itemMeta(set), `+${set.xpReward} XP`].join(' · ')
-}
+watch(selectedId, () => {
+  restartVersion += 1
+  restarting.value = false
+  completion.value = null
+})
 
-async function onFinished(finished: PracticeResult): Promise<void> {
+/** A player sends its result with what only it saw: a recap (Matching, Tracing) or a tally (answered items). */
+async function onFinished(result: PracticeResult, recap = '', tally: RunTally | null = null): Promise<void> {
   // Keep the finished set on screen: the reloaded list marks it done, which would move the default choice on.
-  const finishedId = selected.value?.id
-  if (finishedId !== undefined && Number(route.query.set) !== finishedId) {
-    await router.replace({ query: { ...route.query, set: finishedId } })
+  const finishedId = selected.value!.id
+  if (parseRecordId(route.query.set) !== finishedId) {
+    const failure = await router.replace({ query: { ...route.query, set: finishedId } })
+    if (failure) return
   }
-  result.value = finished
+  if (selectedId.value !== finishedId) return
+  completion.value = { result, recap, tally }
   void sets.reload()
 }
 
-function practiseAgain(): void {
-  result.value = null
-  runKey.value += 1
-  void detail.reload()
+/**
+ * Practise again keeps the result on screen, its button busy, until the set is read again; the new run then starts in
+ * a new player on that copy, so nothing of the last run carries over.
+ */
+async function practiseAgain(): Promise<void> {
+  if (restarting.value) return
+  const setId = selected.value!.id
+  const version = ++restartVersion
+  dismissRankUp()
+  restarting.value = true
+  await detail.reload()
+  if (version !== restartVersion) return
+  restarting.value = false
+  // A failed read shows its panel (Try again comes back here); another set opened meanwhile has its own run.
+  if (selectedId.value !== setId || detail.error.value) return
+  completion.value = null
 }
 
-function openSet(setId: number): void {
-  void router.push({ name: 'student-practice', params: { type: info.value.slug }, query: { set: setId } })
+/** Try again after a failed read: a failed Practise again tries that again, so its run still starts on a fresh copy. */
+function retryDetail(): void {
+  if (completion.value) void practiseAgain()
+  else void detail.reload()
 }
 </script>

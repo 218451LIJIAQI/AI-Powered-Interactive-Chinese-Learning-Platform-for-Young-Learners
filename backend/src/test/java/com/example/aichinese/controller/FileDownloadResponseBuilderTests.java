@@ -1,7 +1,6 @@
 package com.example.aichinese.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 
 import java.nio.charset.StandardCharsets;
 
@@ -42,15 +41,8 @@ class FileDownloadResponseBuilderTests {
 
     @Test
     void missingStoredContentTypeIsSniffedFromTheResourceFileName() {
-        Resource video = new ByteArrayResource(bytes("demo")) {
-            @Override
-            public String getFilename() {
-                return "lesson.mp4";
-            }
-        };
-
         ResponseEntity<Resource> sniffed = FileDownloadResponseBuilder.buildInlineDownloadResponse(
-                new StoredFileDownload(video, "lesson.mp4", null));
+                new StoredFileDownload(namedResource("lesson.mp4"), "lesson.mp4", null));
         // A ByteArrayResource has no file name, so nothing can be sniffed and the octet-stream default applies.
         ResponseEntity<Resource> unknown = FileDownloadResponseBuilder.buildInlineDownloadResponse(
                 new StoredFileDownload(resource("demo"), "notes", " "));
@@ -62,13 +54,7 @@ class FileDownloadResponseBuilderTests {
 
     @Test
     void blankStoredFileNameUsesResourceFileNameFallback() {
-        Resource resource = new ByteArrayResource(bytes("demo")) {
-            @Override
-            public String getFilename() {
-                return "fallback.pdf";
-            }
-        };
-        StoredFileDownload download = new StoredFileDownload(resource, " ", "application/pdf");
+        StoredFileDownload download = new StoredFileDownload(namedResource("fallback.pdf"), " ", "application/pdf");
 
         ResponseEntity<Resource> response = FileDownloadResponseBuilder.buildInlineDownloadResponse(download);
 
@@ -116,13 +102,50 @@ class FileDownloadResponseBuilderTests {
                 .contains("preview.html");
         assertThat(response.getHeaders().getFirst(CROSS_ORIGIN_RESOURCE_POLICY)).isEqualTo(SAME_ORIGIN);
         assertThat(response.getHeaders().getExpires()).isZero();
+
+        for (String dangerous : new String[] { "image/x-svg+xml", "image/svg", "video/vnd.mpeg.dash.mpd+xml", "application/ecmascript" }) {
+            ResponseEntity<Resource> downgraded = FileDownloadResponseBuilder.buildInlineDownloadResponse(
+                    download("file.bin", dangerous));
+            assertThat(downgraded.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_OCTET_STREAM);
+            assertThat(downgraded.getHeaders().getFirst(CONTENT_DISPOSITION)).startsWith("attachment;");
+        }
     }
 
     @Test
-    void storedFileDownloadRequiresResource() {
-        assertThatNullPointerException()
-                .isThrownBy(() -> new StoredFileDownload(null, "file.pdf", "application/pdf"))
-                .withMessage("resource");
+    void wildcardStoredContentTypeFallsBackToOctetStream() {
+        for (String wildcard : new String[] { "*/*", "image/*", "video/*" }) {
+            ResponseEntity<Resource> response = FileDownloadResponseBuilder.buildInlineDownloadResponse(
+                    download("lesson.png", wildcard));
+            assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_OCTET_STREAM);
+            assertThat(response.getHeaders().getFirst(CONTENT_DISPOSITION)).startsWith("attachment;");
+        }
+    }
+
+    @Test
+    void nonAsciiFileNameUsesRfc5987Utf8PercentEncoding() {
+        StoredFileDownload download = download("汉语第一课.pdf", "application/pdf");
+
+        ResponseEntity<Resource> response = FileDownloadResponseBuilder.buildAttachmentDownloadResponse(download);
+
+        assertPrivateDownloadHeaders(response);
+        assertThat(response.getHeaders().getFirst(CONTENT_DISPOSITION))
+                .startsWith("attachment;")
+                .contains("filename*=UTF-8''%E6%B1%89%E8%AF%AD%E7%AC%AC%E4%B8%80%E8%AF%BE.pdf");
+    }
+
+    @Test
+    void csvAttachmentAppliesPrivateDownloadHeadersAndSanitizesFileName() {
+        ResponseEntity<byte[]> response = FileDownloadResponseBuilder.csvAttachment(
+                "../audit\r\nexport.csv", "a,b\n1,2\n");
+
+        assertPrivateDownloadHeaders(response);
+        assertThat(response.getHeaders().getContentType())
+                .isEqualTo(MediaType.parseMediaType("text/csv;charset=UTF-8"));
+        assertThat(response.getHeaders().getFirst(CONTENT_DISPOSITION))
+                .startsWith("attachment;")
+                .doesNotContain("\r", "\n", "..");
+        assertThat(new String(response.getBody(), StandardCharsets.UTF_8))
+                .startsWith("\uFEFFa,b\n1,2\n");
     }
 
     private static StoredFileDownload download(String filename, String contentType) {
@@ -130,17 +153,23 @@ class FileDownloadResponseBuilderTests {
     }
 
     private static ByteArrayResource resource(String content) {
-        return new ByteArrayResource(bytes(content));
+        return new ByteArrayResource(content.getBytes(StandardCharsets.UTF_8));
     }
 
-    private static byte[] bytes(String content) {
-        return content.getBytes(StandardCharsets.UTF_8);
+    private static Resource namedResource(String fileName) {
+        return new ByteArrayResource("demo".getBytes(StandardCharsets.UTF_8)) {
+            @Override
+            public String getFilename() {
+                return fileName;
+            }
+        };
     }
 
-    private static void assertPrivateDownloadHeaders(ResponseEntity<Resource> response) {
+    private static void assertPrivateDownloadHeaders(ResponseEntity<?> response) {
         assertThat(response.getHeaders().getCacheControl()).isNull();
         assertThat(response.getHeaders().getPragma()).isNull();
         assertThat(response.getHeaders().getExpires()).isZero();
         assertThat(response.getHeaders().getFirst(CONTENT_TYPE_OPTIONS)).isEqualTo(NO_SNIFF);
+        assertThat(response.getHeaders().getFirst(CROSS_ORIGIN_RESOURCE_POLICY)).isEqualTo(SAME_ORIGIN);
     }
 }

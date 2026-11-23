@@ -28,6 +28,40 @@ class EmailPropertiesTests {
 
         assertThat(properties.resolveFrom(FALLBACK_FROM)).isEqualTo(FROM_ADDRESS);
         assertThat(properties.resolvePasswordResetBaseUrl()).isEqualTo(PASSWORD_RESET_BASE_URL);
+        assertThat(properties("  ", null).resolveFrom("  " + FALLBACK_FROM + "  ")).isEqualTo(FALLBACK_FROM);
+        assertThat(properties(null, null).resolveFrom("  ")).isEqualTo("no-reply@example.com");
+    }
+
+    @Test
+    void normalizesTrailingAndDoubleSlashesWhenBuildingFrontendLinks() {
+        EmailProperties trailingSlash = properties(FROM_ADDRESS, "https://app.example.com/reset-password/");
+        assertThat(trailingSlash.resolveFrontendUrl("confirm-email"))
+                .isEqualTo("https://app.example.com/confirm-email");
+        assertThat(trailingSlash.resolveFrontendUrl("admin/ai"))
+                .isEqualTo("https://app.example.com/admin/ai");
+
+        EmailProperties doubleSlash = properties(FROM_ADDRESS, "https://app.example.com//reset-password");
+        assertThat(doubleSlash.passwordPageLink("token", "abc123"))
+                .isEqualTo("https://app.example.com/reset-password?token=abc123");
+        assertThat(doubleSlash.resolveFrontendUrl("confirm-email"))
+                .isEqualTo("https://app.example.com/confirm-email");
+
+        EmailProperties rootOrigin = properties(FROM_ADDRESS, "https://app.example.com");
+        assertThat(rootOrigin.resolveFrontendUrl("confirm-email"))
+                .isEqualTo("https://app.example.com/confirm-email");
+        assertThat(rootOrigin.resolveFrontendUrl("admin/ai"))
+                .isEqualTo("https://app.example.com/admin/ai");
+    }
+
+    @Test
+    void passwordPageLinksPreserveTheConfiguredRouteAndReplaceOnlyTheAccountTokens() {
+        EmailProperties properties = properties(FROM_ADDRESS,
+                "https://example.com/portal/password?campaign=spring%20term&invite=old&token=old#form");
+
+        assertThat(properties.passwordPageLink("token", "abc123"))
+                .isEqualTo("https://example.com/portal/password?campaign=spring%20term&token=abc123#form");
+        assertThat(properties.passwordPageLink("invite", "def456"))
+                .isEqualTo("https://example.com/portal/password?campaign=spring%20term&invite=def456#form");
     }
 
     @Test

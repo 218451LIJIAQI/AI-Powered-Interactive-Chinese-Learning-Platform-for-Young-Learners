@@ -11,14 +11,18 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.example.aichinese.entity.SupportMessage;
+import com.example.aichinese.entity.UploadedFile;
 
 public interface SupportMessageRepository extends JpaRepository<SupportMessage, Long> {
 
     @EntityGraph(attributePaths = { "author", "attachment" })
     List<SupportMessage> findByRequestIdOrderByCreatedAtAscIdAsc(Long requestId);
 
-    @EntityGraph(attributePaths = { "request", "request.requester", "attachment" })
-    Optional<SupportMessage> findDetailedById(Long id);
+    @Query("select attachment from SupportMessage m join m.attachment attachment where m.id = :messageId")
+    Optional<UploadedFile> findAttachmentByMessageId(@Param("messageId") Long messageId);
+
+    @Query("select attachment from SupportMessage m join m.attachment attachment where m.request.id in :requestIds")
+    List<UploadedFile> findAttachmentsByRequestIdIn(@Param("requestIds") Collection<Long> requestIds);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("delete from SupportMessage m where m.request.id in :requestIds")

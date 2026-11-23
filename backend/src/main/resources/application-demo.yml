@@ -3,12 +3,12 @@ spring:
     activate:
       on-profile: demo
   datasource:
-    url: jdbc:h2:mem:aichinese-demo;MODE=MYSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
-    username: sa
-    password:
+    # A MySQL database of its own (created if missing), never the main one: Hibernate rebuilds its tables on every
+    # start and the demo seeders fill them again.
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3307}/${DEMO_DB_NAME:ai_chinese_learning_demo}?createDatabaseIfNotExist=true&sslMode=DISABLED&allowPublicKeyRetrieval=true&connectionTimeZone=${APP_DEFAULT_TIME_ZONE:Asia/Singapore}&useUnicode=true&characterEncoding=utf8
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: create-only
   flyway:
     enabled: false
 
@@ -16,6 +16,10 @@ server:
   address: 127.0.0.1
 
 app:
+  # Every table of the demo database is dropped before Hibernate rebuilds it, so tables of an earlier version never
+  # block the rebuild (SchemaResetConfig: this database only).
+  schema-reset:
+    database: ${DEMO_DB_NAME:ai_chinese_learning_demo}
   security:
     jwt:
       # Same pattern as the local profile: JWT_SECRET overrides the built-in demo key when it is set.

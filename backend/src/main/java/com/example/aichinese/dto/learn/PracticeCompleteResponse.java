@@ -1,30 +1,20 @@
 package com.example.aichinese.dto.learn;
 
-import java.util.List;
-
 import com.example.aichinese.entity.enums.PracticeType;
 
 /**
- * A finished run: right answers per item, whether every item was right (the set's XP is paid the first time that
- * happens), the XP earned (a quiz's in-a-row bonus included) and the next set of the same type.
+ * A finished run: how many items were right (flashcards: rated "Got it"), whether every item was right (the set's XP
+ * is paid the first time that happens; a flashcard set's the first time it is reviewed), the XP earned and the set of
+ * the same type to offer next: one the student has not done yet when there is one, null when every set is done and
+ * this was the last in the list.
  */
 public record PracticeCompleteResponse(
         PracticeType type,
-        Long setId,
-        String title,
         int correctCount,
         int itemCount,
         boolean allCorrect,
-        List<ItemResult> results,
         NextSet nextSet,
         XpResult xp) {
-
-    public PracticeCompleteResponse {
-        results = results == null ? List.of() : List.copyOf(results);
-    }
-
-    public record ItemResult(String key, boolean correct) {
-    }
 
     public record NextSet(Long id, String title) {
     }

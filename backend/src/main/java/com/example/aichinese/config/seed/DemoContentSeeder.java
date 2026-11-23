@@ -13,95 +13,72 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.example.aichinese.entity.Role;
 import com.example.aichinese.entity.StudentProfile;
-import com.example.aichinese.entity.TeacherProfile;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.RoleName;
-import com.example.aichinese.entity.enums.TeacherStatus;
 import com.example.aichinese.repository.RoleRepository;
 import com.example.aichinese.repository.StudentProfileRepository;
-import com.example.aichinese.repository.TeacherProfileRepository;
 import com.example.aichinese.repository.UserRepository;
+import com.example.aichinese.util.LanguageCodes;
+
+import lombok.RequiredArgsConstructor;
 
 /**
- * The demo accounts (see {@link DemoPersonas}). Each module seeds its own demo content afterwards (classes in
- * DemoClassesSeeder).
+ * The demo learner accounts (see {@link DemoPersonas}); the admin is the default admin. Each module seeds its own demo
+ * content afterwards (classes in DemoClassesSeeder; the notifications and audit log entries about these accounts in
+ * DemoOpsSeeder).
  */
 @Component
 @Order(1)
 @Profile("demo & !prod & !production")
+@RequiredArgsConstructor
 public class DemoContentSeeder implements CommandLineRunner {
+
+    /** When the learners' accounts were created: before their oldest seeded activity (a class joined 40 days ago). */
+    private static final int STUDENTS_JOINED_DAYS_AGO = 45;
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
-    private final TeacherProfileRepository teacherProfileRepository;
     private final StudentProfileRepository studentProfileRepository;
     private final PasswordEncoder passwordEncoder;
+    private final DemoClock demoClock;
 
-    @Value("${DEMO_TEACHER_PASSWORD:DemoTeacher123!}")
-    private String teacherPassword;
-
-    @Value("${DEMO_STUDENT_PASSWORD:DemoStudent123!}")
+    @Value("${app.demo.student-password:${DEMO_STUDENT_PASSWORD:DemoStudent123!}}")
     private String studentPassword;
-
-    public DemoContentSeeder(
-            UserRepository userRepository,
-            RoleRepository roleRepository,
-            TeacherProfileRepository teacherProfileRepository,
-            StudentProfileRepository studentProfileRepository,
-            PasswordEncoder passwordEncoder) {
-        this.userRepository = userRepository;
-        this.roleRepository = roleRepository;
-        this.teacherProfileRepository = teacherProfileRepository;
-        this.studentProfileRepository = studentProfileRepository;
-        this.passwordEncoder = passwordEncoder;
-    }
 
     @Override
     @Transactional
     public void run(String... args) {
-        if (userRepository.existsByEmailIgnoreCase(DemoPersonas.TEACHER.email())) {
+        Role studentRole = roleRepository.findByName(RoleName.STUDENT).orElseThrow();
+        LocalDateTime studentsJoinedAt = demoClock.daysAgo(STUDENTS_JOINED_DAYS_AGO, 19, 0);
+        createStudentIfAbsent(DemoPersonas.STUDENT, studentsJoinedAt, studentRole, true);
+        DemoPersonas.OTHER_STUDENTS.forEach(persona -> createStudentIfAbsent(persona, studentsJoinedAt, studentRole, true));
+        // Deactivated later by an admin (DemoOpsSeeder audits it).
+        createStudentIfAbsent(DemoPersonas.ZHANG_YUXI, demoClock.daysAgo(20, 11, 0), studentRole, false);
+    }
+
+    /**
+     * An account as sign-up makes it (AuthService.createAccount), created on {@code joinedAt}: the creation time is set
+     * before the first save, because it cannot change afterwards, so the account is older than its seeded history.
+     */
+    private void createStudentIfAbsent(
+            DemoPersonas.Persona persona, LocalDateTime joinedAt, Role studentRole, boolean active) {
+        if (userRepository.existsByEmailIgnoreCase(persona.email())) {
             return;
         }
-
-        createTeacher(DemoPersonas.TEACHER,
-                "A Mandarin tutor helping university students and young professionals build everyday communication skills.",
-                TeacherStatus.APPROVED);
-        DemoPersonas.OTHER_TEACHERS.forEach(persona -> createTeacher(persona,
-                "Mandarin teacher for young adult beginners in Malaysia, focusing on everyday speaking.",
-                TeacherStatus.APPROVED));
-        createTeacher(DemoPersonas.APPLICANT,
-                "Mandarin teacher for adult beginners. I help university students and working adults build everyday speaking confidence.",
-                TeacherStatus.PENDING);
-        createStudent(DemoPersonas.STUDENT);
-        DemoPersonas.CLASSMATES.forEach(this::createStudent);
-    }
-
-    private void createTeacher(DemoPersonas.Persona persona, String bio, TeacherStatus status) {
-        TeacherProfile profile = new TeacherProfile();
-        profile.setUser(createUser(persona.email(), teacherPassword, persona.displayName(), RoleName.TEACHER));
-        profile.setTeacherStatus(status);
-        profile.setBio(bio);
-        if (status == TeacherStatus.APPROVED) {
-            profile.setVerifiedAt(LocalDateTime.now());
-        }
-        teacherProfileRepository.save(profile);
-    }
-
-    private void createStudent(DemoPersonas.Persona persona) {
-        StudentProfile profile = new StudentProfile();
-        profile.setUser(createUser(persona.email(), studentPassword, persona.displayName(), RoleName.STUDENT));
-        studentProfileRepository.save(profile);
-    }
-
-    private User createUser(String email, String password, String displayName, RoleName roleName) {
-        Role role = roleRepository.findByName(roleName)
-                .orElseThrow(() -> new IllegalStateException(roleName + " role must be seeded first."));
         User user = new User();
-        user.setEmail(email);
-        user.setPasswordHash(passwordEncoder.encode(password));
-        user.setDisplayName(displayName);
-        user.setPreferredLanguage("en");
-        user.setRoles(Set.of(role));
-        return userRepository.save(user);
+        user.setDisplayName(persona.displayName());
+        user.setEmail(persona.email());
+        user.setPasswordHash(passwordEncoder.encode(studentPassword));
+        user.setPreferredLanguage(LanguageCodes.ENGLISH);
+        user.setActive(active);
+        user.setRoles(Set.of(studentRole));
+        user.setCreatedAt(joinedAt);
+        // A demo address has no inbox to open a confirmation link in, so it counts as confirmed at sign-up.
+        user.setEmailVerifiedAt(joinedAt.plusMinutes(5));
+        StudentProfile profile = new StudentProfile();
+        profile.setUser(userRepository.save(user));
+        // The streak calendar of Progress starts at the month the learner joined.
+        profile.setCreatedAt(joinedAt);
+        studentProfileRepository.save(profile);
     }
 }

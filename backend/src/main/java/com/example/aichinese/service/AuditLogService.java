@@ -6,8 +6,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import com.example.aichinese.entity.AuditLog;
@@ -15,12 +13,16 @@ import com.example.aichinese.entity.User;
 import com.example.aichinese.repository.AuditLogRepository;
 import com.example.aichinese.repository.UserRepository;
 import com.example.aichinese.security.SecurityUserDetails;
+import com.example.aichinese.util.AfterCommit;
 import com.example.aichinese.util.ExceptionLogUtils;
 import com.example.aichinese.util.RequestIdHolder;
 import com.example.aichinese.util.SensitiveDataRedactor;
 import com.example.aichinese.util.TextUtils;
 
-/** Writes audit log entries; entries are never edited or deleted (the admin audit log reads them). */
+/**
+ * Writes audit log entries; entries are never deleted, and the only edit they get is losing a deleted account's
+ * e-mail and name (AccountDeletionService), so the admin audit log keeps what happened.
+ */
 @Service
 public class AuditLogService {
 
@@ -52,26 +54,28 @@ public class AuditLogService {
         }
     }
 
+    /** Who made an entry: the account's current name, or the e-mail recorded with it when no account is linked. */
+    public static String actorName(AuditLog entry) {
+        return entry.getActorUser() != null ? entry.getActorUser().getDisplayName() : entry.getActorEmail();
+    }
+
     @Transactional
-    public void record(User actor, String actionType, String targetType, Long targetId, String description) {
-        record(actor, actionType, AuditTarget.of(targetType, targetId), null, description);
+    public AuditLog record(User actor, String actionType, String targetType, Long targetId, String description) {
+        return record(actor, actionType, AuditTarget.of(targetType, targetId), null, description);
     }
 
     /** An entry with the target's name and, for an admin decision, the reason the admin gave. */
     @Transactional
-    public void record(User actor, String actionType, AuditTarget target, String reason, String description) {
-        auditLogRepository.save(newAuditLog(
+    public AuditLog record(User actor, String actionType, AuditTarget target, String reason, String description) {
+        return auditLogRepository.save(newAuditLog(
                 actor, actor == null ? null : actor.getEmail(), actionType, target, reason, description));
     }
 
     @Transactional
     public void record(SecurityUserDetails actor, String actionType, String targetType, Long targetId, String description) {
-        User actorReference = actor == null || actor.getUserId() == null
-                ? null
-                : userRepository.getReferenceById(actor.getUserId());
         auditLogRepository.save(newAuditLog(
-                actorReference,
-                actor == null ? null : actor.getUsername(),
+                userRepository.getReferenceById(actor.getUserId()),
+                actor.getUsername(),
                 actionType,
                 AuditTarget.of(targetType, targetId),
                 null,
@@ -89,11 +93,9 @@ public class AuditLogService {
         auditLog.setActorUser(actor);
         auditLog.setActorEmail(actorEmail);
         auditLog.setActionType(actionType);
-        if (target != null) {
-            auditLog.setTargetType(target.type());
-            auditLog.setTargetId(target.id());
-            auditLog.setTargetLabel(TextUtils.safeTruncate(TextUtils.trimToNull(target.label()), MAX_TARGET_LABEL_LENGTH));
-        }
+        auditLog.setTargetType(target.type());
+        auditLog.setTargetId(target.id());
+        auditLog.setTargetLabel(TextUtils.safeTruncate(TextUtils.trimToNull(target.label()), MAX_TARGET_LABEL_LENGTH));
         auditLog.setReason(TextUtils.safeTruncate(
                 SensitiveDataRedactor.redactText(TextUtils.trimToNull(reason)), MAX_REASON_LENGTH));
         auditLog.setDescription(
@@ -110,59 +112,40 @@ public class AuditLogService {
      * transaction rolls back.
      */
     public void safeRecord(User actor, String actionType, String targetType, Long targetId, String description) {
-        safeRecord(actor, actionType, AuditTarget.of(targetType, targetId), description);
-    }
-
-    public void safeRecord(User actor, String actionType, AuditTarget target, String description) {
-        try {
-            AuditLog auditLog = newAuditLog(
-                    actor, actor == null ? null : actor.getEmail(), actionType, target, null, description);
-            if (TransactionSynchronizationManager.isActualTransactionActive()
-                    && TransactionSynchronizationManager.isSynchronizationActive()) {
-                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                    @Override
-                    public void afterCommit() {
-                        try {
-                            independentAuditTransaction.executeWithoutResult(status -> auditLogRepository.save(auditLog));
-                        } catch (Exception exception) {
-                            logSafeRecordFailure(actionType, target, exception);
-                        }
-                    }
-                });
-                return;
-            }
-            auditLogRepository.save(auditLog);
-        } catch (Exception exception) {
-            logSafeRecordFailure(actionType, target, exception);
-        }
+        AuditLog auditLog = newAuditLog(actor, actor == null ? null : actor.getEmail(), actionType,
+                AuditTarget.of(targetType, targetId), null, description);
+        AfterCommit.run(() -> saveInNewTransaction(auditLog));
     }
 
     /**
-     * Best-effort audit written at once in a REQUIRES_NEW transaction of its own, so it is kept even when the
-     * caller then fails and rolls back (a lockout engaged by a wrong current password in a password change, before
-     * its 400 response rolls the transaction back). Only for callers that
-     * hold no lock on a row the audit row references, such as the actor's user row.
+     * Best-effort audit of an anonymous event, written at once in a REQUIRES_NEW transaction of its own, so it is kept
+     * even when the caller then fails and rolls back (a lockout engaged by a wrong current password in a password
+     * change, before its 400 response rolls the transaction back).
      */
-    public void safeRecordInNewTransaction(
-            User actor, String actionType, String targetType, Long targetId, String description) {
-        AuditTarget target = AuditTarget.of(targetType, targetId);
-        try {
-            AuditLog auditLog = newAuditLog(
-                    actor, actor == null ? null : actor.getEmail(), actionType, target, null, description);
-            independentAuditTransaction.executeWithoutResult(status -> auditLogRepository.save(auditLog));
-        } catch (Exception exception) {
-            logSafeRecordFailure(actionType, target, exception);
-        }
+    public void safeRecordInNewTransaction(String actionType, String targetType, String description) {
+        saveInNewTransaction(newAuditLog(null, null, actionType, AuditTarget.of(targetType, null), null, description));
     }
 
-    private static void logSafeRecordFailure(String actionType, AuditTarget target, Exception exception) {
-        String targetType = target == null ? null : target.type();
-        Long targetId = target == null ? null : target.id();
-        log.warn("Audit log creation failed for action {} on {}:{}: {}",
-                actionType,
-                targetType,
-                targetId,
-                ExceptionLogUtils.safeSummary(exception));
-        log.debug("Audit log creation stack trace for action {} on {}:{}.", actionType, targetType, targetId, exception);
+    private void saveInNewTransaction(AuditLog auditLog) {
+        try {
+            independentAuditTransaction.executeWithoutResult(status -> {
+                if (auditLog.getActorUser() != null) {
+                    // Deletion and this deferred insert must agree about the actor's anonymised address.
+                    User actor = userRepository.findWithReadLockById(auditLog.getActorUser().getId()).orElseThrow();
+                    auditLog.setActorUser(actor);
+                    if (actor.getDeletedAt() != null) {
+                        auditLog.setActorEmail(actor.getEmail());
+                    }
+                }
+                auditLogRepository.save(auditLog);
+            });
+        } catch (Exception exception) {
+            log.warn("Audit log creation failed for action {} on {}:{}: {}",
+                    auditLog.getActionType(),
+                    auditLog.getTargetType(),
+                    auditLog.getTargetId(),
+                    ExceptionLogUtils.safeSummary(exception));
+            ExceptionLogUtils.debugOrigin(log, exception);
+        }
     }
 }

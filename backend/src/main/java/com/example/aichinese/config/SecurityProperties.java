@@ -1,6 +1,7 @@
 package com.example.aichinese.config;
 
 import java.util.Locale;
+import java.util.regex.Pattern;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -13,15 +14,18 @@ public record SecurityProperties(
         boolean refreshTokenCookieSecure,
         String refreshTokenSameSite) {
 
-    private static final String SAME_SITE_ERROR = "Refresh token SameSite policy must be Strict, Lax, or None.";
+    /** An RFC 6265 cookie-name token: letters, digits and {@code ! # $ % & ' * + - . ^ _ ` | ~}. */
+    private static final Pattern COOKIE_NAME = Pattern.compile("[A-Za-z0-9!#$%&'*+\\-.^_`|~]+");
+    /** Cap TTLs at 10 years so epoch-millisecond additions in JWT/cookie builders can never overflow. */
+    private static final long MAX_TTL_MILLIS = 3650L * 24 * 60 * 60 * 1000;
 
     public SecurityProperties {
         secret = normalizeSecret(secret);
-        if (expiration <= 0) {
-            throw new IllegalArgumentException("JWT expiration must be greater than zero.");
+        if (expiration <= 0 || expiration > MAX_TTL_MILLIS) {
+            throw new IllegalArgumentException("JWT expiration must be between 1 ms and 10 years.");
         }
-        if (refreshTokenExpiration <= 0) {
-            throw new IllegalArgumentException("Refresh token expiration must be greater than zero.");
+        if (refreshTokenExpiration <= 0 || refreshTokenExpiration > MAX_TTL_MILLIS) {
+            throw new IllegalArgumentException("Refresh token expiration must be between 1 ms and 10 years.");
         }
         refreshTokenCookieName = requireCookieName(refreshTokenCookieName);
         refreshTokenSameSite = normalizeSameSite(refreshTokenSameSite);
@@ -32,19 +36,12 @@ public record SecurityProperties(
 
     @Override
     public String toString() {
-        return "SecurityProperties[secret=" + maskedSecret()
+        return "SecurityProperties[secret=[set]"
                 + ", expiration=" + expiration + "ms"
                 + ", refreshTokenExpiration=" + refreshTokenExpiration + "ms"
                 + ", refreshTokenCookieName=" + refreshTokenCookieName
                 + ", refreshTokenCookieSecure=" + refreshTokenCookieSecure
                 + ", refreshTokenSameSite=" + refreshTokenSameSite + "]";
-    }
-
-    private String maskedSecret() {
-        if (secret.startsWith("base64:")) {
-            return "[set:base64]";
-        }
-        return "[set]";
     }
 
     private static String normalizeSecret(String value) {
@@ -59,22 +56,10 @@ public record SecurityProperties(
             throw new IllegalArgumentException("Refresh token cookie name must not be blank.");
         }
         String normalized = value.strip();
-        for (int i = 0; i < normalized.length(); i++) {
-            char ch = normalized.charAt(i);
-            if (!isCookieTokenCharacter(ch)) {
-                throw new IllegalArgumentException("Refresh token cookie name contains an invalid character.");
-            }
+        if (!COOKIE_NAME.matcher(normalized).matches()) {
+            throw new IllegalArgumentException("Refresh token cookie name contains an invalid character.");
         }
         return normalized;
-    }
-
-    private static boolean isCookieTokenCharacter(char ch) {
-        return ch == '!' || ch == '#' || ch == '$' || ch == '%' || ch == '&' || ch == '\''
-                || ch == '*' || ch == '+' || ch == '-' || ch == '.' || ch == '^' || ch == '_'
-                || ch == '`' || ch == '|' || ch == '~'
-                || (ch >= '0' && ch <= '9')
-                || (ch >= 'A' && ch <= 'Z')
-                || (ch >= 'a' && ch <= 'z');
     }
 
     private static String normalizeSameSite(String value) {
@@ -85,7 +70,7 @@ public record SecurityProperties(
             case "strict" -> "Strict";
             case "lax" -> "Lax";
             case "none" -> "None";
-            default -> throw new IllegalArgumentException(SAME_SITE_ERROR);
+            default -> throw new IllegalArgumentException("Refresh token SameSite policy must be Strict, Lax, or None.");
         };
     }
 }

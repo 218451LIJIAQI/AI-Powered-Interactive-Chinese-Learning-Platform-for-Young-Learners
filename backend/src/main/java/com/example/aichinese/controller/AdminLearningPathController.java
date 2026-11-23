@@ -20,16 +20,15 @@ import com.example.aichinese.entity.enums.PublishStatus;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.learn.LearningPathAdminService;
 
+import lombok.RequiredArgsConstructor;
+
 /** The platform's own Learn path (units) and the level check question bank, for admins. */
 @RestController
 @RequestMapping("/api/v1/admin/learning-path")
+@RequiredArgsConstructor
 public class AdminLearningPathController {
 
     private final LearningPathAdminService learningPathAdminService;
-
-    public AdminLearningPathController(LearningPathAdminService learningPathAdminService) {
-        this.learningPathAdminService = learningPathAdminService;
-    }
 
     @GetMapping
     public ApiResponse<AdminLearningPathResponse> overview() {
@@ -85,5 +84,23 @@ public class AdminLearningPathController {
             @Valid @RequestBody LevelCheckQuestionData.Request request) {
         return ApiResponse.success("Question saved.",
                 learningPathAdminService.updateQuestion(currentUser, questionId, request));
+    }
+
+    /** Publishes the question as it is saved, without sending (and so overwriting) its content. */
+    @PostMapping("/level-check-questions/{questionId}/publish")
+    public ApiResponse<LevelCheckQuestionData.Detail> publishQuestion(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long questionId) {
+        return ApiResponse.success("Question published.",
+                learningPathAdminService.publishQuestion(currentUser, questionId));
+    }
+
+    /** Back to a draft, as it is saved: the Undo of Publish. */
+    @PostMapping("/level-check-questions/{questionId}/unpublish")
+    public ApiResponse<LevelCheckQuestionData.Detail> unpublishQuestion(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long questionId) {
+        return ApiResponse.success("Question unpublished.",
+                learningPathAdminService.unpublishQuestion(currentUser, questionId));
     }
 }

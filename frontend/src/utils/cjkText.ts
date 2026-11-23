@@ -10,43 +10,29 @@ interface TextRun {
 }
 
 /**
- * Han characters plus the CJK punctuation / full-width forms that usually sit next to them (，。？！（）：).
- * Kept as one character class so a sentence such as `你好吗？` stays a single run.
+ * A Chinese run: Han characters and the CJK punctuation / full-width forms that sit next to them (，。？！（）：), so
+ * `你好吗？` stays one run. Punctuation with no Han character beside it reads better in the surrounding font.
  */
-const CJK_CHARACTER = /[\p{Script=Han}\u{3000}-\u{303f}\u{ff00}-\u{ffef}]/u
-const HAN_CHARACTER = /\p{Script=Han}/u
+const CJK_RUN = /[\p{Script=Han}\u{3000}-\u{303f}\u{ff00}-\u{ffef}]+/gu
+
+/** True for text with at least one Chinese character: it is then set in the Chinese font and marked `lang="zh-CN"`. */
+export function hasHan(text: string): boolean {
+  return /\p{Script=Han}/u.test(text)
+}
 
 /** Splits text into alternating CJK / non-CJK runs; empty input gives an empty list. */
 export function splitCjkRuns(text: string | null | undefined): TextRun[] {
   const source = text ?? ''
   const runs: TextRun[] = []
-  let current = ''
-  let currentCjk = false
+  let end = 0
 
-  for (const character of source) {
-    const cjk = CJK_CHARACTER.test(character)
-    if (current && cjk !== currentCjk) {
-      runs.push({ text: current, cjk: currentCjk })
-      current = ''
-    }
-    current += character
-    currentCjk = cjk
+  for (const match of source.matchAll(CJK_RUN)) {
+    if (!hasHan(match[0])) continue
+    if (match.index > end) runs.push({ text: source.slice(end, match.index), cjk: false })
+    runs.push({ text: match[0], cjk: true })
+    end = match.index + match[0].length
   }
 
-  if (current) runs.push({ text: current, cjk: currentCjk })
-
-  // A run made only of full-width punctuation (no Han character) reads better in the surrounding font.
-  return mergeAdjacentRuns(runs.map((run) => (run.cjk && !HAN_CHARACTER.test(run.text) ? { ...run, cjk: false } : run)))
-}
-
-function mergeAdjacentRuns(runs: TextRun[]): TextRun[] {
-  return runs.reduce<TextRun[]>((merged, run) => {
-    const previous = merged[merged.length - 1]
-    if (previous && previous.cjk === run.cjk) {
-      previous.text += run.text
-    } else {
-      merged.push({ ...run })
-    }
-    return merged
-  }, [])
+  if (end < source.length) runs.push({ text: source.slice(end), cjk: false })
+  return runs
 }

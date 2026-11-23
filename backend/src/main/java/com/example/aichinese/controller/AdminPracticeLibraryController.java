@@ -1,6 +1,7 @@
 package com.example.aichinese.controller;
 
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Size;
 
 import com.example.aichinese.dto.ApiResponse;
 import com.example.aichinese.dto.PageResponse;
@@ -19,32 +21,32 @@ import com.example.aichinese.dto.learn.AdminPracticeSetRow;
 import com.example.aichinese.dto.learn.PracticeSetRequest;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.learn.PracticeLibraryService;
+import com.example.aichinese.service.learn.PracticeSetDirectory;
+
+import lombok.RequiredArgsConstructor;
 
 /** The admin Practice library: practice sets of every type, made by the MandarinSpark team. */
+@Validated
 @RestController
 @RequestMapping("/api/v1/admin/practice-sets")
+@RequiredArgsConstructor
 public class AdminPracticeLibraryController {
 
     private final PracticeLibraryService practiceLibraryService;
-
-    public AdminPracticeLibraryController(PracticeLibraryService practiceLibraryService) {
-        this.practiceLibraryService = practiceLibraryService;
-    }
+    private final PracticeSetDirectory directory;
 
     @GetMapping
     public ApiResponse<PageResponse<AdminPracticeSetRow>> list(
-            @RequestParam(value = "q", required = false) String keyword,
+            @Size(max = 200, message = "Keyword must not exceed 200 characters.")
+            @RequestParam(value = "q", required = false) String q,
+            @Size(max = 40, message = "Practice type filter must not exceed 40 characters.")
             @RequestParam(value = "type", required = false) String type,
+            @Size(max = 40, message = "Status must not exceed 40 characters.")
             @RequestParam(value = "status", required = false) String status,
-            @RequestParam(value = "stage", required = false) String stage,
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "10") int size) {
-        PracticeLibraryService.Filter filter = new PracticeLibraryService.Filter(
-                keyword,
-                LearnParams.optionalPracticeType(type),
-                LearnParams.optionalStatus(status),
-                LearnParams.optionalStage(stage));
-        return ApiResponse.success("Practice sets retrieved successfully.", practiceLibraryService.list(filter, page, size));
+        return ApiResponse.success("Practice sets retrieved successfully.", directory.adminSets(q,
+                LearnParams.optionalPracticeType(type), LearnParams.optionalStatus(status), page, size));
     }
 
     @GetMapping("/{type}/{setId}")
@@ -99,6 +101,7 @@ public class AdminPracticeLibraryController {
                 practiceLibraryService.archive(currentUser, LearnParams.practiceType(type), setId));
     }
 
+    /** Restore (from the list): the set comes back as a draft. */
     @PostMapping("/{type}/{setId}/restore")
     public ApiResponse<AdminPracticeSetDetail> restore(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
@@ -106,5 +109,15 @@ public class AdminPracticeLibraryController {
             @PathVariable Long setId) {
         return ApiResponse.success("Practice set restored.",
                 practiceLibraryService.restore(currentUser, LearnParams.practiceType(type), setId));
+    }
+
+    /** The Undo of Archive: the set goes back to the status it had before. */
+    @PostMapping("/{type}/{setId}/unarchive")
+    public ApiResponse<AdminPracticeSetDetail> unarchive(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable String type,
+            @PathVariable Long setId) {
+        return ApiResponse.success("Practice set restored.",
+                practiceLibraryService.unarchive(currentUser, LearnParams.practiceType(type), setId));
     }
 }

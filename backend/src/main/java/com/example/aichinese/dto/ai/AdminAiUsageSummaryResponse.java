@@ -2,7 +2,12 @@ package com.example.aichinese.dto.ai;
 
 import java.util.List;
 
-/** All-time AI request totals by result, and the requests of every feature (in AiFeatureKey order, zeros included). */
+import com.example.aichinese.entity.enums.AiFeatureKey;
+
+/**
+ * All-time AI provider request totals by result, and per-feature request counts in {@link AiFeatureKey} order
+ * (zeros included; rule-based {@code HINT} is omitted because it does not invoke a provider).
+ */
 public record AdminAiUsageSummaryResponse(
         long totalRequests,
         long successful,
@@ -10,10 +15,6 @@ public record AdminAiUsageSummaryResponse(
         long failed,
         List<FeatureCount> byFeature) {
 
-    public AdminAiUsageSummaryResponse {
-        byFeature = byFeature == null ? List.of() : List.copyOf(byFeature);
-    }
-
-    public record FeatureCount(String featureKey, long requests) {
+    public record FeatureCount(AiFeatureKey featureKey, long requests) {
     }
 }

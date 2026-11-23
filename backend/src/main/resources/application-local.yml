@@ -14,8 +14,7 @@ server:
 app:
   security:
     jwt:
-      # Development-only fallback used by `mvnw spring-boot:run` so the
-      # repository's documented local workflow can boot against docker-compose
-      # without requiring an extra shell export step. Override JWT_SECRET to
+      # Development-only fallback so `mvnw spring-boot:run` can boot against a
+      # local MySQL without an extra shell export step. Override JWT_SECRET to
       # test custom secrets or token-rotation behavior locally.
       secret: ${JWT_SECRET:LocalComposeOnlyJwtSecret1234567890AB}

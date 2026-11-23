@@ -1,8 +1,10 @@
 <template>
-  <div class="learn-player learn-lesson-page">
+  <div class="learn-lesson-page">
+    <AppToast :message="toast" />
     <FocusTopBar
-      :label="lesson.data.value?.title ?? t('learn.lesson')"
+      :label="topLabel"
       :close-label="t('learn.leaveLesson')"
+      :close-disabled="savingResult"
       :progress="progress"
       :progress-label="t('learn.lessonProgress')"
       @close="requestLeave"
@@ -10,9 +12,10 @@
 
     <h1 class="sr-only">{{ lesson.data.value?.title ?? t('learn.lesson') }}</h1>
 
-    <div class="learn-player-body" :class="{ 'is-done': result !== null }">
+    <div class="focus-stage" :class="{ 'learn-done-stage': result !== null }">
       <StatePanel
         v-if="lesson.loading.value"
+        heading-tag="h2"
         tone="loading"
         :title="t('learn.lessonLoading')"
         :message="t('learn.lessonLoadingHint')"
@@ -20,6 +23,7 @@
       />
       <StatePanel
         v-else-if="lesson.error.value"
+        heading-tag="h2"
         tone="error"
         icon="lock"
         :title="t('learn.lessonUnavailable')"
@@ -31,99 +35,110 @@
         </template>
       </StatePanel>
 
-      <section v-else-if="result" class="learn-done" data-testid="lesson-complete" aria-live="polite">
-        <StampSeal
-          :character="result.passed ? '棒' : '加'"
-          :caption="result.passed ? t('learn.bangCaption') : t('learn.jiayouCaption')"
-        />
-        <div class="learn-done-copy">
-          <h2 class="learn-done-title">{{ completeTitle }}</h2>
-          <p class="learn-done-sub">
-            {{ t('learn.completeSub', { title: result.title, unit: result.unitNumber, position: result.position }) }}
-          </p>
-        </div>
-        <dl class="learn-done-stats">
-          <div class="is-xp">
-            <dt>{{ t('learn.xpEarned') }}</dt>
-            <dd>+{{ result.xp.xpEarned + result.xp.bonusXp }}</dd>
-          </div>
-          <div>
-            <dt>{{ t('learn.accuracy') }}</dt>
-            <dd>{{ result.accuracy }}%</dd>
-          </div>
-          <div>
-            <dt>{{ t('learn.time') }}</dt>
-            <dd>{{ formatClock(result.durationSeconds) }}</dd>
-          </div>
-        </dl>
-        <p v-if="!result.passed" class="learn-done-note">
-          {{ t('learn.checkpointNotPassed', { need: result.passPercent ?? 70, got: result.accuracy }) }}
-        </p>
-        <p v-else-if="result.xp.xpEarned === 0" class="learn-done-note">{{ t('learn.alreadyEarned') }}</p>
-        <ul class="learn-done-after">
-          <li>
-            <IconGlyph name="streak" :size="18" />
-            <span>{{ streakLine }}</span>
-          </li>
-          <li v-if="result.nextLesson && result.passed" class="is-next">
-            <IconGlyph :name="result.nextLesson.unlockedNow ? 'unlock' : 'route'" :size="18" />
-            <span class="learn-done-next">
-              <span class="learn-done-label">{{
-                result.nextLesson.unlockedNow ? t('learn.unlocked') : t('learn.upNext')
-              }}</span>
-              <span>{{ t('learn.nextUp', { title: result.nextLesson.title }) }}</span>
-            </span>
-          </li>
-          <li v-for="badge in newBadges" :key="badge">
-            <IconGlyph :name="BADGES[badge].icon" :size="18" />
-            <span>{{ t('learn.newBadge', { badge: t(BADGES[badge].nameKey) }) }}</span>
-          </li>
-        </ul>
-      </section>
+      <LessonDone v-else-if="result" :result="result" />
+
+      <SayStep v-else-if="saying && sayPhrase" v-bind="sayPhrase" />
 
       <QuestionStage
         v-else-if="question"
         v-model="answer"
         :question="question"
-        :locked="check !== null"
+        :locked="checking || check !== null"
         :check="check"
+        :ruled-out="hint.ruledOut.value"
       />
+      <StatePanel
+        v-else
+        heading-tag="h2"
+        tone="error"
+        icon="lock"
+        :title="t('learn.lessonUnavailable')"
+        :message="t('learn.lessonUnavailable')"
+        spacious
+      >
+        <template #actions>
+          <RouterLink class="btn btn-primary" :to="{ name: 'student-learn' }">{{ t('learn.backToPath') }}</RouterLink>
+        </template>
+      </StatePanel>
+
+      <p v-if="actionError" class="alert alert-danger" role="alert">{{ actionError }}</p>
     </div>
 
-    <div v-if="result" class="learn-player-footer">
-      <RouterLink
-        v-if="wrongCount > 0"
-        class="btn btn-outline btn-lg"
-        :to="{ name: 'student-practice', params: { type: 'mistakes' } }"
-      >
-        {{ t('learn.seeMistakesShort') }}
-      </RouterLink>
-      <button v-if="!result.passed" class="btn btn-outline btn-lg" type="button" @click="restart">
-        {{ t('learn.tryAgain') }}
-      </button>
-      <button class="btn btn-primary btn-lg" type="button" data-testid="lesson-continue" @click="finish">
-        {{ t('learn.continue') }}
-      </button>
-    </div>
+    <FocusFooter v-if="result">
+      <template #start>
+        <RouterLink
+          v-if="result.accuracy < 100"
+          class="btn btn-secondary btn-lg"
+          :to="{ name: 'student-practice', params: { type: 'mistakes' } }"
+        >
+          {{ t('common.reviewMistakes') }}
+        </RouterLink>
+      </template>
+      <template #end>
+        <button
+          class="btn btn-lg"
+          :class="result.passed ? 'btn-primary' : 'btn-secondary'"
+          type="button"
+          data-testid="lesson-continue"
+          @click="finish"
+        >
+          {{ t('learn.continue') }}
+        </button>
+        <button v-if="!result.passed" class="btn btn-primary btn-lg" type="button" @click="restart">
+          {{ t('learn.tryAgain') }}
+        </button>
+      </template>
+    </FocusFooter>
+    <!-- Saying it is not graded: Continue moves on whether or not anything was recorded. -->
+    <FocusFooter v-else-if="saying">
+      <template #end>
+        <button
+          class="btn btn-primary btn-lg"
+          type="button"
+          :disabled="checking"
+          :aria-busy="checking"
+          data-testid="say-done"
+          @click="complete"
+        >
+          {{ t('learn.continue') }}
+        </button>
+      </template>
+    </FocusFooter>
     <CheckBar
       v-else-if="question"
       :check="check"
       :can-check="answer !== null"
       :checking="checking"
-      :hint="
-        lesson.data.value?.kind === 'CHECKPOINT'
-          ? t('learn.checkpointHint', { percent: lesson.data.value.passPercent ?? 70 })
-          : t('learn.questionCounter', { current: index + 1, total: questions.length })
-      "
-      :continue-label="isLast && check ? t('learn.finishLesson') : ''"
+      :skipped="check !== null && answer === null"
+      :answer-line="question.answerKind === 'BUILD'"
+      :hint="isCheckpoint ? t('learn.checkpointHint', { percent: lesson.data.value?.passPercent }) : ''"
+      :continue-label="isLast && check && !sayPhrase ? t('common.seeResult') : ''"
       @check="submit(answer)"
       @skip="submit(null)"
       @continue="next"
+    >
+      <!-- The hint of a stuck learner sits in the footer, so the question above it never moves; until then the footer
+           names the keys. Checkpoints have no hints. -->
+      <template v-if="!isCheckpoint" #middle>
+        <QuestionHint
+          :question="question"
+          :hint="hint"
+          :report-context="`LEARN #${lessonId} / ${question.id}`"
+          :own-toast="false"
+          @reported="showToast(t('aiSafety.reportSent'))"
+        />
+      </template>
+    </CheckBar>
+
+    <RankUpDialog
+      v-if="rankingUp && result?.xp.rankUp"
+      :rank-up="result.xp.rankUp"
+      :streak="result.xp.currentStreak"
+      source="lesson"
+      @close="goToPath"
     />
-    <p v-if="actionError" class="alert alert-danger learn-player-error" role="alert">{{ actionError }}</p>
 
     <ConfirmDialog
-      tone="leave"
       :open="leaving"
       :title="t('learn.leaveLessonTitle')"
       :message="t('learn.leaveLessonMessage')"
@@ -136,159 +151,173 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { learnApi } from '@/api/learn'
+import AppToast from '@/components/common/AppToast.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
-import IconGlyph from '@/components/common/IconGlyph.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
+import FocusFooter from '@/components/layout/FocusFooter.vue'
 import FocusTopBar from '@/components/layout/FocusTopBar.vue'
 import CheckBar from '@/components/learn/CheckBar.vue'
+import LessonDone from '@/components/learn/LessonDone.vue'
+import QuestionHint from '@/components/learn/QuestionHint.vue'
 import QuestionStage from '@/components/learn/QuestionStage.vue'
-import StampSeal from '@/components/learn/StampSeal.vue'
+import RankUpDialog from '@/components/learn/RankUpDialog.vue'
+import SayStep from '@/components/learn/SayStep.vue'
+import { useQuestionRun } from '@/components/learn/useQuestionRun'
 import { useLocalMessages } from '@/composables/useLocalMessages'
-import { notifyProgressChanged } from '@/composables/useProgressRefresh'
-import { useResource } from '@/composables/useResource'
+import { useRecordById } from '@/composables/useResource'
+import { useToast } from '@/composables/useToast'
 import { learnMessages } from '@/plugins/learnMessages'
-import type { AnswerCheck, LessonResult, QuestionAnswer } from '@/types/learn'
-import { resolveApiError } from '@/utils/apiError'
-import { formatClock, stepProgress } from '@/utils/format'
-import { BADGES } from '@/utils/learnBadges'
-import '@/styles/learn.css'
+import { learnSharedMessages } from '@/plugins/learnSharedMessages'
+import type { AnswerCheck, LessonResult, QuestionView } from '@/types/learn'
+import { hasHan } from '@/utils/cjkText'
+import { stepProgress } from '@/utils/format'
+import { parseRecordId } from '@/utils/recordId'
+import '@/styles/learn-shared.css'
+import '@/styles/learn-lesson.css'
+import { finishedLessonState } from './finishedLesson'
 
 /**
- * A Learn lesson in focus mode: one question at a time on a quiet stage, the check bar pinned at the bottom with the
- * verdict straight after each answer (checked on the server), and at the end the completion moment: the seal is
- * stamped, the XP earned, accuracy and time, the streak, what unlocked and any new badge, then back to the path.
+ * A Learn lesson in focus mode: one question at a time (the footer names the keys, and offers SparkBot's hint once the
+ * learner is stuck), the verdict straight after each answer (checked on the server), a last ungraded step to say a
+ * phrase from the lesson aloud, and then the completion moment: the seal, the XP earned and accuracy, the streak, what
+ * unlocked and any new badge. Continue goes back to the map, through the rank-up dialog when the lesson passed a rank.
  */
 const route = useRoute()
 const router = useRouter()
-const { t } = useLocalMessages({ learn: learnMessages })
+const { t } = useLocalMessages({ learn: [learnSharedMessages, learnMessages] })
+const { toast, showToast } = useToast()
 
-const lessonId = computed(() => Number(route.params.lessonId))
-const lesson = useResource(() => learnApi.lesson(lessonId.value))
+const lessonId = computed(() => parseRecordId(route.params.lessonId))
+const lesson = useRecordById(lessonId, learnApi.lesson)
 
-const index = ref(0)
-const answer = ref<string | null>(null)
-const check = ref<AnswerCheck | null>(null)
-const checking = ref(false)
-const actionError = ref<string | null>(null)
-const answers = ref<QuestionAnswer[]>([])
-const wrongCount = ref(0)
 const result = ref<LessonResult | null>(null)
 const leaving = ref(false)
-let startedAt = Date.now()
 
 const questions = computed(() => lesson.data.value?.questions ?? [])
-const question = computed(() => questions.value[index.value] ?? null)
-const isLast = computed(() => index.value >= questions.value.length - 1)
-const progress = computed(() =>
-  result.value && questions.value.length
-    ? 100
-    : stepProgress(index.value, questions.value.length, check.value !== null),
-)
+const isCheckpoint = computed(() => lesson.data.value?.kind === 'CHECKPOINT')
 
-async function submit(given: string | null): Promise<void> {
-  const current = question.value
-  if (!current || checking.value) return
-  checking.value = true
-  actionError.value = null
-  try {
-    check.value = await learnApi.checkLesson(lessonId.value, { questionId: current.id, answer: given })
-    answer.value = given
-    answers.value.push({ questionId: current.id, answer: given })
-    if (!check.value.correct) wrongCount.value += 1
-  } catch (reason) {
-    actionError.value = resolveApiError(reason, t('learn.checkFailed'))
-  } finally {
-    checking.value = false
-  }
+/** The top bar's fixed column names the lesson by the part of its title before " · ". */
+const topLabel = computed(() => lesson.data.value?.title.split(' · ')[0] ?? t('learn.lesson'))
+
+// Saying a phrase from the lesson: not graded; a checkpoint is a test and has no such step.
+
+interface SayPhrase {
+  hanzi: string
+  pinyin: string | null
+  meaning: string | null
 }
 
-async function next(): Promise<void> {
-  if (!isLast.value) {
-    index.value += 1
-    answer.value = null
-    check.value = null
-    return
-  }
-  checking.value = true
-  actionError.value = null
-  try {
-    const seconds = Math.round((Date.now() - startedAt) / 1000)
-    result.value = await learnApi.completeLesson(lessonId.value, answers.value, seconds)
-    notifyProgressChanged()
-  } catch (reason) {
-    actionError.value = resolveApiError(reason, t('learn.completeFailed'))
-  } finally {
-    checking.value = false
-  }
+const saying = ref(false)
+const sayPhrase = ref<SayPhrase | null>(null)
+
+/** The Chinese of an answered question: shown on the question, or else revealed by the answer. */
+function phraseOf(asked: QuestionView, verdict: AnswerCheck): SayPhrase | null {
+  const hanzi = asked.hanzi ?? (hasHan(verdict.correctAnswer) ? verdict.correctAnswer : null)
+  if (!hanzi) return null
+  return { hanzi, pinyin: asked.pinyin ?? verdict.pinyin, meaning: asked.meaning ?? verdict.meaning }
 }
+
+const {
+  index,
+  answer,
+  check,
+  busy: checking,
+  savingResult,
+  actionError,
+  answers,
+  question,
+  isLast,
+  hint,
+  submit,
+  next,
+  complete,
+  reset,
+} = useQuestionRun({
+  questions,
+  grade: (sent) => learnApi.checkLesson(lessonId.value!, sent),
+  saveResult: async (sent) => {
+    const id = lessonId.value
+    if (id === null) return
+    const version = attemptVersion
+    const saved = await learnApi.completeLesson(id, sent)
+    if (lessonId.value === id && version === attemptVersion) result.value = saved
+  },
+  t,
+  onChecked: (current, verdict) => {
+    if (!isCheckpoint.value) sayPhrase.value = phraseOf(current, verdict) ?? sayPhrase.value
+  },
+  onLastQuestion: async () => {
+    if (sayPhrase.value) saying.value = true
+    else await complete()
+  },
+  keysBlocked: () => leaving.value || result.value !== null || saying.value,
+  hintsAllowed: () => !isCheckpoint.value,
+  loadHint: (id) => learnApi.hint(lessonId.value!, id, lesson.data.value),
+})
+
+const progress = computed(() => {
+  if (result.value) return 100
+  const total = questions.value.length + (isCheckpoint.value ? 0 : 1)
+  return stepProgress(index.value, total, check.value !== null)
+})
+
+/** Try again: only a checkpoint can fail, and a checkpoint has no step to say a phrase. */
+let attemptVersion = 0
+onBeforeUnmount(() => {
+  attemptVersion += 1
+})
 
 function restart(): void {
-  index.value = 0
-  answer.value = null
-  check.value = null
-  answers.value = []
-  wrongCount.value = 0
+  attemptVersion += 1
+  reset()
   result.value = null
-  startedAt = Date.now()
 }
 
-const completeTitle = computed(() => {
-  const value = result.value
-  if (!value) return ''
-  if (value.kind === 'CHECKPOINT') return value.passed ? t('learn.checkpointPassed') : t('learn.checkpointFailed')
-  return t('learn.lessonComplete')
+// The result screen
+
+/** The rank-up dialog is open: the lesson took the learner past a rank, and Keep going goes on to the map. */
+const rankingUp = ref(false)
+
+watch(lessonId, () => {
+  attemptVersion += 1
+  reset()
+  result.value = null
+  saying.value = false
+  sayPhrase.value = null
+  leaving.value = false
+  rankingUp.value = false
 })
 
-const streakLine = computed(() => {
-  const xp = result.value?.xp
-  if (!xp) return ''
-  const goal = t('learn.goalProgress', { xp: xp.todayXp, goal: xp.dailyGoalXp })
-  if (xp.goalReached) return t('learn.streakGoalReached', { days: xp.currentStreak, goal }, xp.currentStreak)
-  return t('learn.streakGoalPending', { xp: Math.max(0, xp.dailyGoalXp - xp.todayXp), goal })
-})
-
-const newBadges = computed(() => result.value?.xp.newBadges ?? [])
-
+/** Continue: back to the map, which says what the lesson earned and unlocked; first the rank-up when there is one. */
 function finish(): void {
-  void router.push({ name: 'student-learn', state: { lessonResult: JSON.parse(JSON.stringify(result.value)) } })
-}
-
-// ----- leaving -----
-
-function requestLeave(): void {
-  if (result.value || !answers.value.length) {
-    void router.push({ name: 'student-learn' })
+  if (result.value?.xp.rankUp && !rankingUp.value) {
+    rankingUp.value = true
     return
   }
-  leaving.value = true
+  goToPath()
+}
+
+function goToPath(): void {
+  rankingUp.value = false
+  void router.push({ name: 'student-learn', state: finishedLessonState(result.value) })
+}
+
+// Leaving
+
+function requestLeave(): void {
+  if (savingResult.value) return
+  // A finished lesson is saved: closing is the same as Continue, so the map still says what unlocked.
+  if (result.value) finish()
+  else if (!answers.value.length && answer.value === null) leave()
+  else leaving.value = true
 }
 
 function leave(): void {
   leaving.value = false
   void router.push({ name: 'student-learn' })
 }
-
-/** Enter checks or continues; 1–9 picks an option. */
-function onKeydown(event: KeyboardEvent): void {
-  const target = event.target as HTMLElement | null
-  if (leaving.value || result.value || !question.value) return
-  if (target && ['INPUT', 'TEXTAREA', 'BUTTON', 'A'].includes(target.tagName) && event.key === 'Enter') return
-  if (event.key === 'Enter') {
-    if (check.value) void next()
-    else if (answer.value !== null) void submit(answer.value)
-    return
-  }
-  const number = Number(event.key)
-  const options = question.value.options
-  if (!check.value && question.value.answerKind === 'CHOICE' && number >= 1 && number <= options.length) {
-    answer.value = options[number - 1]!.text
-  }
-}
-
-onMounted(() => document.addEventListener('keydown', onKeydown))
-onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
 </script>

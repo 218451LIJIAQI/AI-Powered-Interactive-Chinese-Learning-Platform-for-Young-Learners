@@ -1,48 +1,62 @@
 /**
- * Shared axios instance used by every API service module.
- *
- * Access tokens stay in memory only. The first trusted API 401 attempts
- * a refresh-cookie rotation and retries once; failed refreshes notify
- * the UI so it can clear its in-memory session. Refreshes are taken in
- * turn across the browser's tabs, which share one refresh cookie.
+ * Access tokens stay in memory. A protected request can retry once with a fresh token.
+ * Rejected credentials end the session. Service failures leave it available for retry.
+ * Browser tabs share the refresh cookie and use Web Locks, when available, to take turns rotating it.
  */
-import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
+import axios, { CanceledError, type AxiosError, type InternalAxiosRequestConfig } from 'axios'
 
-import { appEnv } from '@/config/env'
-import { getSessionStorage, safeRemoveItem, safeSetItem, storageKeys } from '@/utils/storage'
+import { apiClientMessage } from '@/plugins/apiClientMessages'
+import { ApiEnvelopeError } from '@/utils/apiError'
+import { safeSetItem, sessionOwner, storageKeys } from '@/utils/storage'
 import type { ApiResponse, AuthResponse } from '@/types/api'
 
-export const AUTH_INVALIDATED_EVENT = 'mandarin-spark:auth-invalidated'
+/** Build-time `VITE_API_BASE_URL` (`.env`); the API is same-origin unless set otherwise. */
+const API_BASE_URL: string = import.meta.env.VITE_API_BASE_URL || '/api/v1'
 
-const API_TIMEOUT_MS = 20_000
+export const AUTH_INVALIDATED_EVENT = 'mandarin-spark:auth-invalidated'
+/**
+ * The API answered 503 (or a proxy 502/504). The UI then asks the health endpoint and opens the maintenance page only
+ * when that fails too (router/redirects.ts): a 503 about one feature leaves the user on their page.
+ */
+export const SERVICE_UNAVAILABLE_EVENT = 'mandarin-spark:service-unavailable'
+
 export const AUTHORIZATION_HEADER = 'Authorization'
-const AUTH_SESSION_ENDPOINTS = new Set(['/auth/login', '/auth/refresh'])
 const REFRESH_ENDPOINT = '/auth/refresh'
+/** Their 401 is the answer itself (wrong password, rejected sign-in hydration, expired refresh cookie, already-signed-out logout), not a reason to refresh or invalidate a concurrent sign-in. */
+const AUTH_SESSION_ENDPOINTS = new Set(['/auth/login', '/auth/logout', '/auth/me', REFRESH_ENDPOINT])
+/** The check behind the maintenance page: its own 503 is never reported, so the check cannot start itself again. */
+const HEALTH_ENDPOINT = '/health'
 const REFRESH_LOCK_NAME = 'mandarin-spark.auth-refresh'
 /** A 401 this soon after another tab started a refresh may come from that tab rotating the shared cookie. */
 const RECENT_OTHER_TAB_REFRESH_MS = 10_000
 /** Time for the other tab's response to store the new refresh cookie before the one retry. */
 const OTHER_TAB_COOKIE_SETTLE_MS = 300
-const ABSOLUTE_OR_PROTOCOL_RELATIVE_URL_PATTERN = /^(?:[a-z][a-z\d+.-]*:)?\/\//i
-const LEADING_SLASHES_PATTERN = /^\/+/
-const REQUEST_PATH_SPLIT_PATTERN = /[?#]/
-const TRAILING_SLASHES_PATTERN = /\/+$/
 
 export const http = axios.create({
-  baseURL: appEnv.apiBaseUrl,
-  timeout: API_TIMEOUT_MS,
+  baseURL: API_BASE_URL,
+  timeout: 20_000,
   withCredentials: true,
 })
 
 let accessToken: string | null = null
 let refreshPromise: Promise<string | null> | null = null
+// Explicit sign-in, sign-out and password-token replacement end ownership of older requests.
+// A routine refresh rotates the token within the same session and does not advance this version.
+let authSessionVersion = 0
+/** When another tab last started a refresh, learnt from the marker it writes to localStorage (see postRefresh). */
+let otherTabRefreshAt = Number.NEGATIVE_INFINITY
 
-type RetriableRequestConfig = InternalAxiosRequestConfig & { _refreshRetried?: boolean }
+type RetriableRequestConfig = InternalAxiosRequestConfig & { _refreshRetried?: boolean; _authSessionVersion?: number }
 
 export function setAccessToken(token: string | null): void {
+  authSessionVersion += 1
+  refreshPromise = null
+  otherTabRefreshAt = Number.NEGATIVE_INFINITY
   accessToken = token
-  safeRemoveItem(storageKeys.token)
-  safeRemoveItem(storageKeys.token, getSessionStorage())
+}
+
+export function getAuthSessionVersion(): number {
+  return authSessionVersion
 }
 
 export function getAccessToken(): string | null {
@@ -53,74 +67,46 @@ export function bearer(token: string): string {
   return `Bearer ${token}`
 }
 
-/** Joins a request path onto a base URL with exactly one slash between them. */
-export function joinUrl(baseUrl: string, path: string): string {
-  return `${baseUrl.replace(TRAILING_SLASHES_PATTERN, '')}/${path.replace(LEADING_SLASHES_PATTERN, '')}`
-}
-
-/* Interceptors always receive AxiosHeaders, whose names are case-insensitive. */
-function setAuthorizationHeader(config: InternalAxiosRequestConfig, token: string): void {
-  config.headers.set(AUTHORIZATION_HEADER, bearer(token))
-}
-
-/** Every request goes out with a path relative to the API base, e.g. /auth/refresh or /students/dashboard?page=1. */
-function isAuthSessionEndpoint(config: InternalAxiosRequestConfig): boolean {
-  return AUTH_SESSION_ENDPOINTS.has((config.url ?? '').split(REQUEST_PATH_SPLIT_PATTERN, 1)[0])
-}
-
-function resolveAxiosRequestUrl(config: InternalAxiosRequestConfig): string {
-  const requestUrl = config.url ?? ''
-  const baseUrl = config.baseURL ?? appEnv.apiBaseUrl
-  return ABSOLUTE_OR_PROTOCOL_RELATIVE_URL_PATTERN.test(requestUrl) || !baseUrl
-    ? requestUrl
-    : joinUrl(baseUrl, requestUrl)
-}
-
-function isTrustedApiTarget(config: InternalAxiosRequestConfig): boolean {
+/** The resolved path within this API, or null when the request goes elsewhere. */
+function trustedApiPath(config: InternalAxiosRequestConfig): string | null {
   try {
-    const trustedApiBase = new URL(appEnv.apiBaseUrl, window.location.origin)
-    const target = new URL(resolveAxiosRequestUrl(config), window.location.origin)
-    const basePath = trustedApiBase.pathname.replace(TRAILING_SLASHES_PATTERN, '')
-    return (
-      target.origin === trustedApiBase.origin &&
-      (!basePath || target.pathname === basePath || target.pathname.startsWith(`${basePath}/`))
-    )
+    const trustedApiBase = new URL(API_BASE_URL, window.location.origin)
+    // The URL axios sends the request to (its baseURL and url, either of which a request may override).
+    const target = new URL(http.getUri(config), window.location.origin)
+    const basePath = trustedApiBase.pathname.replace(/\/+$/, '')
+    if (target.origin !== trustedApiBase.origin) return null
+    if (target.pathname === basePath) return '/'
+    return target.pathname.startsWith(`${basePath}/`) ? target.pathname.slice(basePath.length) : null
   } catch {
-    return false
+    return null
   }
 }
 
-export function invalidateAuthSession(): void {
+export function requireCurrentSession(version: number): void {
+  if (version !== authSessionVersion) throw new CanceledError('The request session has ended.')
+}
+
+export function invalidateAuthSession(expectedVersion: number): void {
+  if (expectedVersion !== authSessionVersion) return
   setAccessToken(null)
   window.dispatchEvent(new CustomEvent(AUTH_INVALIDATED_EVENT))
 }
 
-/** When another tab last started a refresh (module memory; learnt from its localStorage marker, see below). */
-let otherTabRefreshAt = Number.NEGATIVE_INFINITY
-
-function noteOtherTabRefresh(event: StorageEvent): void {
-  if (event.key === storageKeys.refreshMarker && event.newValue) {
-    otherTabRefreshAt = Date.now()
-  }
-}
-
 // A storage event reaches every tab except the one that wrote the marker.
-window.addEventListener('storage', noteOtherTabRefresh)
-
-function announceRefresh(): void {
-  safeSetItem(storageKeys.refreshMarker, `${Date.now()}-${Math.random()}`)
-}
-
-function otherTabRefreshedRecently(): boolean {
-  return Date.now() - otherTabRefreshAt <= RECENT_OTHER_TAB_REFRESH_MS
-}
+window.addEventListener('storage', (event) => {
+  if (event.key === storageKeys.refreshMarker && event.newValue) otherTabRefreshAt = Date.now()
+})
 
 async function postRefresh(): Promise<string | null> {
-  announceRefresh()
-  const { data } = await http.post<ApiResponse<AuthResponse>>(REFRESH_ENDPOINT, undefined, {
-    _refreshRetried: true,
-  } as RetriableRequestConfig)
-  return data.data?.token ?? null
+  // A sign-out ends local access even if its request could not clear the HttpOnly cookie.
+  if (sessionOwner() === null) return null
+  safeSetItem(storageKeys.refreshMarker, `${Date.now()}-${Math.random()}`)
+  const { data } = await http.post<ApiResponse<AuthResponse>>(REFRESH_ENDPOINT)
+  const token = data?.data?.token
+  if (data?.success !== true || typeof token !== 'string' || !token.trim()) {
+    throw new ApiEnvelopeError(apiClientMessage('unexpectedFormat'))
+  }
+  return token
 }
 
 /**
@@ -128,78 +114,149 @@ async function postRefresh(): Promise<string | null> {
  * just-rotated cookie with a plain 401, and the browser holds the new cookie once that tab's response has arrived.
  * Only then is the refresh sent once more.
  */
-async function refreshOnce(): Promise<string | null> {
+async function refreshOnce(version: number): Promise<string | null> {
+  // A refresh can spend time waiting for another tab's Web Lock.
+  if (version !== authSessionVersion) return null
   try {
     return await postRefresh()
   } catch (error) {
-    if (!axios.isAxiosError(error) || error.response?.status !== 401 || !otherTabRefreshedRecently()) throw error
+    if (version !== authSessionVersion) return null
+    const otherTabRefreshedRecently = Date.now() - otherTabRefreshAt <= RECENT_OTHER_TAB_REFRESH_MS
+    if (!axios.isAxiosError(error) || error.response?.status !== 401 || !otherTabRefreshedRecently) throw error
     await new Promise((resolve) => setTimeout(resolve, OTHER_TAB_COOKIE_SETTLE_MS))
-    return postRefresh()
+    return version === authSessionVersion ? postRefresh() : null
   }
 }
 
-/** Runs one refresh at a time across every tab of this origin; without Web Locks each tab still sends only one. */
-function withRefreshLock(task: () => Promise<string | null>): Promise<string | null> {
-  // Web Locks exist only in a secure context (HTTPS or localhost), not on a plain-HTTP LAN address.
-  const locks = navigator.locks as LockManager | undefined
-  return locks ? locks.request(REFRESH_LOCK_NAME, task) : task()
+async function withRefreshLock<T>(task: () => Promise<T>): Promise<T> {
+  // Web Locks exist only in a secure context (HTTPS or localhost), and browsers with restricted site-storage
+  // permissions can throw or reject with SecurityError or NotSupportedError; fall back to single-tab refresh in both cases.
+  let locks: LockManager | undefined
+  try {
+    locks = navigator.locks as LockManager | undefined
+  } catch {
+    return task()
+  }
+  if (!locks?.request) return task()
+  let invoked = false
+  const run = () => {
+    invoked = true
+    return task()
+  }
+  try {
+    return await locks.request(REFRESH_LOCK_NAME, run)
+  } catch (error: unknown) {
+    const name = (error as { name?: unknown } | null)?.name
+    if (!invoked && (name === 'SecurityError' || name === 'NotSupportedError')) {
+      return task()
+    }
+    throw error
+  }
 }
 
 /**
- * Trades the refresh cookie for a new access token. Calls in one tab share a single request, and tabs take turns
- * (Web Locks), so the next tab presents the cookie the previous one has just received instead of the rotated one.
+ * Trades the refresh cookie for a new access token. A 401 caller supplies the Authorization it sent so a late
+ * rejection can reuse a token already rotated in this session. Calls in one tab share a request, and tabs take turns
+ * (Web Locks), so the next tab presents the cookie the previous one has just received. An ended session returns null.
+ * A transport or service failure rejects, leaving the session available for retry.
  */
-export async function refreshAccessToken(): Promise<string | null> {
-  refreshPromise ??= withRefreshLock(refreshOnce)
+export async function refreshAccessToken(rejectedAuthorization?: string | null): Promise<string | null> {
+  if (refreshPromise) return refreshPromise
+  if (rejectedAuthorization !== undefined && accessToken && rejectedAuthorization !== bearer(accessToken)) {
+    return sessionOwner() === null ? null : accessToken
+  }
+  const version = authSessionVersion
+  const pending = withRefreshLock(() => refreshOnce(version))
     .then((token) => {
-      setAccessToken(token)
-      return token
+      if (version !== authSessionVersion) return null
+      accessToken = sessionOwner() === null ? null : token
+      return accessToken
     })
-    .catch(() => {
-      setAccessToken(null)
+    .catch((error: unknown) => {
+      if (version !== authSessionVersion) return null
+      if (!axios.isAxiosError(error) || error.response?.status !== 401) throw error
+      accessToken = null
       return null
     })
     .finally(() => {
-      refreshPromise = null
+      if (refreshPromise === pending) refreshPromise = null
     })
 
-  return refreshPromise
+  refreshPromise = pending
+  return pending
 }
 
-http.interceptors.request.use((config) => {
-  if (!isTrustedApiTarget(config)) {
-    config.withCredentials = false
-    config.headers.delete(AUTHORIZATION_HEADER)
-  } else if (accessToken) {
-    setAuthorizationHeader(config, accessToken)
+http.interceptors.request.use(
+  (config: RetriableRequestConfig) => {
+    const path = trustedApiPath(config)
+    // Public health probes span sign-ins and report the state of the service to every account.
+    if (path === null || path === HEALTH_ENDPOINT) {
+      config.withCredentials = false
+      config.headers.delete(AUTHORIZATION_HEADER)
+    } else {
+      config._authSessionVersion ??= authSessionVersion
+      requireCurrentSession(config._authSessionVersion)
+      // Refresh authenticates via the HttpOnly cookie; skip sending an expired or stale bearer header.
+      if (path === REFRESH_ENDPOINT) {
+        config.headers.delete(AUTHORIZATION_HEADER)
+      } else if (accessToken) {
+        config.headers.set(AUTHORIZATION_HEADER, bearer(accessToken))
+      }
+    }
+    return config
+  },
+  (error: unknown) => {
+    throw error
+  },
+  // Capture the session when the caller starts the request, before any subsequent sign-in.
+  { synchronous: true },
+)
+
+/**
+ * Answers that can mean the whole service is down: 503 from the backend, and 502/504 from a proxy in front of a backend
+ * that is not answering. They only start the health check; the maintenance page opens when that check fails too.
+ */
+const SERVICE_DOWN_STATUSES: ReadonlySet<number> = new Set([502, 503, 504])
+
+/**
+ * Ask the UI to check service health after a possible outage on an API request.
+ */
+export function reportServiceDown(status: number): void {
+  if (SERVICE_DOWN_STATUSES.has(status)) {
+    window.dispatchEvent(new CustomEvent(SERVICE_UNAVAILABLE_EVENT))
   }
-  return config
-})
+}
 
 http.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const { _authSessionVersion: version } = response.config as RetriableRequestConfig
+    if (version !== undefined) requireCurrentSession(version)
+    return response
+  },
   async (error: AxiosError) => {
     const request = error.config as RetriableRequestConfig | undefined
-    // Only a 401 from this app's API concerns the session; another origin's 401 is passed on untouched.
-    if (!axios.isAxiosError(error) || error.response?.status !== 401 || !request || !isTrustedApiTarget(request)) {
-      return Promise.reject(error)
-    }
+    const status = error.response?.status
+    // Only answers from this app's API are handled here; anything else is passed on untouched.
+    if (status === undefined || !request) throw error
+    const path = trustedApiPath(request)
+    if (path === null || path === HEALTH_ENDPOINT) throw error
+    reportServiceDown(status)
+    if (status !== 401 || AUTH_SESSION_ENDPOINTS.has(path)) throw error
 
-    if (isAuthSessionEndpoint(request)) {
-      setAccessToken(null)
-      return Promise.reject(error)
-    }
+    const version = request._authSessionVersion
+    if (version !== authSessionVersion) throw error
 
     if (!request._refreshRetried) {
-      const refreshedToken = await refreshAccessToken()
+      const authorization = request.headers.get(AUTHORIZATION_HEADER)?.toString() ?? null
+      const refreshedToken = await refreshAccessToken(authorization)
+      if (version !== authSessionVersion) throw error
       if (refreshedToken) {
         request._refreshRetried = true
-        setAuthorizationHeader(request, refreshedToken)
         return http(request)
       }
     }
 
-    invalidateAuthSession()
-    return Promise.reject(error)
+    invalidateAuthSession(version)
+    throw error
   },
 )

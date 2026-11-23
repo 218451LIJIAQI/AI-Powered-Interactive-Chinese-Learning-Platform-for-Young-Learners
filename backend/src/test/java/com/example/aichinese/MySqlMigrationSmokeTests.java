@@ -1,5 +1,6 @@
 package com.example.aichinese;
 
+import static com.example.aichinese.support.FlywayMigrationFiles.EXPECTED_VERSIONS;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.Arrays;
@@ -11,10 +12,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-/** Runs against an actual MySQL service in CI with Flyway and Hibernate validation enabled. */
+/**
+ * Runs against a real MySQL server: Flyway builds the schema from the migrations and Hibernate validates the
+ * entities against it (the context only starts when both succeed).
+ */
 // MOCK (not NONE): the security configuration needs the servlet web-security auto-configuration,
 // which is skipped in a non-web context, so a NONE context fails before Flyway/Hibernate are checked.
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+@SpringBootTest(
+        webEnvironment = SpringBootTest.WebEnvironment.MOCK,
+        properties = "app.security.jwt.secret=mysql-migration-smoke-test-secret-0123456789")
 @EnabledIfEnvironmentVariable(named = "RUN_MYSQL_MIGRATION_TEST", matches = "true")
 class MySqlMigrationSmokeTests {
 
@@ -25,178 +31,166 @@ class MySqlMigrationSmokeTests {
     private JdbcTemplate jdbcTemplate;
 
     @Test
-    void appliesAllMigrationsAndStartsWithValidatedSchema() {
-        assertThat(flyway.info().current()).isNotNull();
-        assertThat(Arrays.stream(flyway.info().applied())
-                .map(migration -> migration.getVersion().getVersion()))
-                .contains("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16");
-        assertThat(count("select count(*) from roles")).isGreaterThanOrEqualTo(3);
-        // V15: the learning plan and the sign-up e-mail confirmation.
-        assertThat(count("""
-                select count(*) from information_schema.tables
-                where table_schema = database()
-                  and table_name in ('learning_plans', 'learning_plan_steps', 'email_confirmation_tokens')
-                """)).isEqualTo(3L);
-        assertThat(count("""
-                select count(*) from information_schema.columns
-                where table_schema = database() and table_name = 'student_profiles' and column_name = 'plan_setup_state'
-                """)).isEqualTo(1L);
-    }
-
-    @Test
-    void badgeAlignmentMigrationLeavesOnlyAwardedBadgesActive() {
-        assertThat(jdbcTemplate.queryForList(
-                "select name from badges where active = 1 order by name", String.class))
+    void buildsTheBaselineWithItsReferenceData() {
+        assertThat(Arrays.stream(flyway.info().applied()).map(migration -> migration.getVersion().getVersion()))
+                .containsExactlyElementsOf(EXPECTED_VERSIONS);
+        assertThat(count("select next_number from support_request_numbers where id = 1"))
+                .isGreaterThanOrEqualTo(1000L);
+        // Learners and admins: there are no teachers any more.
+        assertThat(jdbcTemplate.queryForList("select name from roles order by name", String.class))
+                .containsExactly("ADMIN", "STUDENT");
+        assertThat(jdbcTemplate.queryForList("select name from learning_categories order by sort_order", String.class))
+                .containsExactly("Travel", "Work and career", "Study or exchange", "Daily life", "Personal interest");
+        assertThat(jdbcTemplate.queryForList("select name from badges where active = 1 order by name", String.class))
                 .containsExactlyInAnyOrder(
                         "10-day Streak", "300 XP", "First Steps", "Lesson Finisher", "Quiz Star", "Streak Explorer",
                         "Unit Champion", "XP Starter");
     }
 
     @Test
-    void learnerExperienceAndAiHelperMigrationsLeaveTheExpectedSchema() {
-        // V5 added practice_submissions for teacher review; V13 replaced it with student-only practice checks.
-        assertThat(count("""
-                select count(*) from information_schema.tables
-                where table_schema = database() and table_name in ('practice_submissions', 'ai_feedback_records')
-                """)).isZero();
-        assertThat(count("""
-                select count(*) from information_schema.tables
-                where table_schema = database() and table_name = 'ai_practice_checks'
-                """)).isEqualTo(1L);
-        assertThat(count("""
-                select count(*) from information_schema.columns
-                where table_schema = database() and table_name = 'teacher_feedback'
-                  and column_name = 'practice_submission_id'
-                """)).isZero();
-        assertThat(count("""
-                select count(*) from information_schema.tables
-                where table_schema = database() and table_name = 'student_progress'
-                """)).isZero();
-        assertThat(count("""
-                select count(*) from information_schema.referential_constraints
-                where constraint_schema = database()
-                  and constraint_name = 'fk_ai_practice_checks_student_user'
-                """)).isEqualTo(1L);
-        assertThat(count("""
-                select count(*) from information_schema.tables
-                where table_schema = database()
-                  and table_name in ('content_moderation_records', 'student_quiz_progress')
-                """)).isZero();
-        assertThat(count("""
-                select count(*) from information_schema.table_constraints
-                where table_schema = database() and table_name = 'quiz_attempt_answers'
-                  and constraint_name = 'uk_quiz_attempt_answers_attempt_question'
-                """)).isEqualTo(1L);
-        assertThat(count("""
-                select count(*) from information_schema.statistics
-                where table_schema = database() and table_name = 'live_class_enrolments'
-                  and index_name = 'uk_live_class_enrolments_live_class_student'
-                """)).isZero();
+    void storesChineseAndPinyinInUtf8mb4() {
         assertThat(count("""
                 select count(*) from information_schema.tables
                 where table_schema = database() and table_type = 'BASE TABLE'
                   and table_name <> 'flyway_schema_history'
                   and (table_collation is null or table_collation <> 'utf8mb4_0900_ai_ci')
                 """)).isZero();
-        // The JDBC connection transfers Chinese characters and tone-marked Pinyin without loss (utf8mb4).
+        // The JDBC connection transfers Chinese characters and tone-marked Pinyin without loss.
         assertThat(jdbcTemplate.queryForObject("select convert('你好 nǐ hǎo' using utf8mb4)", String.class))
                 .isEqualTo("你好 nǐ hǎo");
     }
 
+    /**
+     * Constraints the data depends on and indexes of the hot paths: Hibernate validation does not read them, so the
+     * built schema is checked directly.
+     */
     @Test
-    void removeCommerceMigrationLeavesNoCommerceTablesOrColumns() {
+    void keepsIntegrityConstraintsAndHotPathIndexes() {
+        assertThat(jdbcTemplate.queryForList(
+                "select constraint_name from information_schema.table_constraints where table_schema = database()",
+                String.class))
+                .contains(
+                        "uk_lesson_progress_student_lesson",
+                        "uk_daily_streaks_student",
+                        "uk_points_transactions_student_source",
+                        "uk_password_reset_tokens_active_user",
+                        "uk_refresh_tokens_token_hash",
+                        "uk_ai_usage_quota_counters_user",
+                        "uk_quiz_attempt_answers_attempt_question",
+                        "uk_admin_invites_unaccepted_email",
+                        "fk_package_items_module",
+                        "uk_package_items_package_item",
+                        "chk_admin_invites_not_accepted_and_cancelled",
+                        "chk_quiz_questions_question_type",
+                        "chk_ai_chat_messages_sender_role",
+                        "chk_ai_usage_logs_status",
+                        "chk_ai_response_reports_review_consistency",
+                        "chk_ai_response_reports_snapshot_source");
+        assertThat(jdbcTemplate.queryForList(
+                "select index_name from information_schema.statistics where table_schema = database()",
+                String.class))
+                .contains(
+                        "idx_audit_logs_target_created",
+                        "idx_ai_chat_messages_session_role_id",
+                        "idx_ai_response_reports_student_created",
+                        "idx_notifications_user_created_id",
+                        "idx_notifications_user_status_created_id",
+                        // The status lists of each content table.
+                        "idx_course_packages_status_updated",
+                        "idx_learning_modules_status_updated",
+                        "idx_lessons_status_updated",
+                        "idx_quizzes_status_updated",
+                        "idx_flashcards_status_updated",
+                        "idx_matching_games_status_updated",
+                        "idx_listening_exercises_status_updated",
+                        "idx_tracing_exercises_status_updated",
+                        "idx_drag_drop_activities_status_updated",
+                        // V10 hot-path indexes.
+                        "idx_notifications_target",
+                        "idx_practice_answers_student_item_created",
+                        "idx_practice_completions_student_type_activity",
+                        "idx_practice_completions_created_at",
+                        "idx_lesson_progress_completed_at",
+                        "idx_lesson_progress_last_accessed",
+                        "idx_points_transactions_student_source_pair",
+                        "idx_package_items_item_package",
+                        "idx_typing_exercises_status_updated",
+                        "idx_typing_exercises_hsk_level",
+                        "idx_learning_mistakes_student_review_order",
+                        "idx_learning_mistakes_cleared_student",
+                        // V11 hot-path indexes.
+                        "idx_learn_lesson_completions_first_completed",
+                        "idx_learn_lesson_completions_last_completed",
+                        "idx_learn_lesson_completions_student_first",
+                        "idx_quiz_attempts_student_quiz_submitted",
+                        "idx_ai_practice_checks_student_deleted_created",
+                        "idx_admin_invites_pending")
+                .doesNotContain(
+                        "idx_ai_usage_quota_counters_user_id",
+                        "idx_daily_streaks_student_id",
+                        "idx_package_items_package_id",
+                        "idx_quiz_attempts_student_id",
+                        "idx_ai_practice_checks_student_deleted",
+                        "idx_ai_practice_checks_student_created",
+                        "idx_ai_practice_checks_deleted",
+                        "idx_learning_mistakes_student_waiting",
+                        "idx_xiaomei_memory_notes_forgotten",
+                        "idx_course_packages_status",
+                        "idx_typing_exercises_status");
+        // V2 drops the columns no code uses where they are empty, as on a new database.
+        assertThat(count("""
+                select count(*) from information_schema.columns
+                where table_schema = database()
+                  and ((table_name = 'ai_practice_checks' and column_name in ('shape_score', 'tone_detail'))
+                    or (table_name = 'student_profiles' and column_name = 'school_name'))
+                """)).isZero();
+        // A quiz always has its lesson.
+        assertThat(count("""
+                select count(*) from information_schema.columns
+                where table_schema = database() and is_nullable = 'YES'
+                  and table_name = 'quizzes' and column_name = 'lesson_id'
+                """)).isZero();
+        // V3: no teacher anywhere; the admins' classes keep when they were archived, quizzes their hint switch and
+        // questions their AI draft mark.
+        assertThat(count("""
+                select count(*) from information_schema.columns
+                where table_schema = database() and column_name = 'teacher_id'
+                """)).isZero();
         assertThat(count("""
                 select count(*) from information_schema.tables
-                where table_schema = database()
-                  and table_name in ('carts', 'cart_items', 'orders', 'order_items', 'payment_records',
-                                     'payment_entitlements', 'refund_requests', 'payout_requests',
-                                     'teacher_earnings')
+                where table_schema = database() and table_name like 'teacher%'
                 """)).isZero();
         assertThat(count("""
                 select count(*) from information_schema.columns
                 where table_schema = database()
-                  and table_name in ('learning_modules', 'lessons', 'course_packages')
-                  and column_name in ('price', 'access_type')
-                """)).isZero();
-        assertThat(count(
-                "select count(*) from system_settings where setting_key in ('default_currency', 'platform_commission_rate')"))
-                .isZero();
-    }
-
-    @Test
-    void contentReviewMigrationAddsLearningStageAndRetiresApprovedStatus() {
+                  and ((table_name = 'course_packages' and column_name = 'archived_at')
+                    or (table_name = 'quizzes' and column_name = 'hints_allowed')
+                    or (table_name = 'quiz_questions' and column_name = 'ai_draft'))
+                """)).isEqualTo(3L);
+        // V4: Practice has no quizzes; plans can be drafts, flashcards "Still learning" mistakes, tracing sets the
+        // strokes of each character and quiz answers their feedback.
         assertThat(count("""
-                select count(*) from information_schema.columns
-                where table_schema = database() and column_name = 'learning_stage'
-                  and table_name in ('quizzes', 'flashcards', 'matching_games', 'listening_exercises',
-                                     'tracing_exercises', 'drag_drop_activities', 'story_activities')
-                """)).isEqualTo(7L);
-        assertThat(count("select count(*) from lessons where content_status = 'APPROVED'")).isZero();
-    }
-
-    @Test
-    void youngAdultAlignmentMigrationRemovesAgeBandsAndUnusedSettings() {
-        assertThat(count("""
-                select count(*) from information_schema.columns
-                where table_schema = database() and column_name = 'age_band'
+                select count(*) from information_schema.tables
+                where table_schema = database() and table_name like 'practice_quiz%'
                 """)).isZero();
-        assertThat(count("select count(*) from ai_response_reports where reason_category = 'AGE_INAPPROPRIATE'"))
-                .isZero();
-        assertThat(count("""
-                select count(*) from system_settings
-                where setting_key in ('admin_email_notifications_enabled', 'admin_in_app_notifications_enabled',
-                                      'admin_daily_summary_enabled', 'strict_content_filtering_enabled')
-                   or setting_value like '%Young Learners%'
-                """)).isZero();
-    }
-
-    @Test
-    void schemaCleanupMigrationDropsUnusedColumnsIndexesAndEnumValues() {
         assertThat(count("""
                 select count(*) from information_schema.columns
                 where table_schema = database()
-                  and ((table_name = 'student_profiles' and column_name in ('display_name', 'country', 'avatar_url'))
-                    or (table_name = 'ai_feedback_records' and column_name = 'input_file_url')
-                    or (table_name = 'ai_chat_sessions' and column_name = 'related_lesson_id'))
-                """)).isZero();
-        // SDD Table 4.2 lists student_profiles.school_name, so V9 keeps it.
+                  and ((table_name = 'learning_plans' and column_name = 'confirmed')
+                    or (table_name = 'learning_mistakes' and column_name = 'still_learning')
+                    or (table_name = 'tracing_exercises' and column_name = 'character_strokes')
+                    or (table_name = 'quiz_options' and column_name = 'feedback'))
+                """)).isEqualTo(4L);
+        // V5: what Xiaomei remembers, and the Undo of a deleted practice check.
         assertThat(count("""
                 select count(*) from information_schema.columns
-                where table_schema = database() and table_name = 'student_profiles' and column_name = 'school_name'
-                """)).isEqualTo(1L);
-        assertThat(count("""
-                select count(*) from information_schema.table_constraints
-                where table_schema = database() and table_name = 'ai_chat_sessions'
-                  and constraint_name = 'fk_ai_chat_sessions_related_lesson'
-                """)).isZero();
-        assertThat(count("""
-                select count(*) from information_schema.statistics
                 where table_schema = database()
-                  and (index_name in ('idx_ai_chat_sessions_related_lesson_id', 'ft_lessons_title_summary_content',
-                                      'ft_course_packages_title_description', 'ft_flashcards_learning_text')
-                       or index_type = 'FULLTEXT')
-                """)).isZero();
-
-        assertThat(columnType("notifications", "notification_type"))
-                .contains("'SYSTEM'")
-                .doesNotContain("'QUIZ_RESULT'", "'REWARD_EARNED'");
-        assertThat(columnType("live_class_enrolments", "enrolment_status"))
-                .contains("'CANCELLED'")
-                .doesNotContain("'MISSED'");
+                  and ((table_name = 'xiaomei_memory_notes' and column_name in ('note_text', 'plan_reason', 'forgotten_at'))
+                    or (table_name = 'ai_practice_checks' and column_name = 'deleted_at'))
+                """)).isEqualTo(4L);
     }
 
     private Long count(String countQuery) {
         return jdbcTemplate.queryForObject(countQuery, Long.class);
-    }
-
-    private String columnType(String table, String column) {
-        return jdbcTemplate.queryForObject(
-                """
-                select column_type from information_schema.columns
-                where table_schema = database() and table_name = ? and column_name = ?
-                """,
-                String.class,
-                table,
-                column);
     }
 }

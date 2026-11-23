@@ -45,21 +45,138 @@
       />
       <ellipse class="ai-xiaomei-mouth" cx="100" cy="119" rx="8" ry="5" fill="#b5485a" />
     </svg>
-    <span v-if="state === 'thinking'" class="ai-xiaomei-thinking">
-      <span />
-      <span />
-      <span />
-    </span>
   </div>
 </template>
 
 <script setup lang="ts">
 /**
  * Xiaomei, drawn as a friendly illustrated student (not a photo). She smiles at rest, moves her mouth while she
- * speaks, is ringed in plum while she listens, shows thinking dots while SparkBot writes her reply and rests with her
- * eyes closed while the AI is away. Decorative only: the page announces her state in text. Size it with CSS.
+ * speaks, is ringed in purple while she listens and rests with her eyes closed while the AI is away. Decorative only:
+ * the page announces her state in text. Size it with CSS.
  */
 export type XiaomeiState = 'idle' | 'speaking' | 'listening' | 'thinking' | 'away'
 
-withDefaults(defineProps<{ state?: XiaomeiState }>(), { state: 'idle' })
+defineProps<{ state: XiaomeiState }>()
 </script>
+
+<style scoped>
+.ai-xiaomei-avatar {
+  width: var(--ai-avatar-size, 168px);
+  height: var(--ai-avatar-size, 168px);
+}
+
+.ai-xiaomei-avatar svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.ai-xiaomei-halo {
+  fill: var(--color-primary-200);
+  stroke: transparent;
+  stroke-width: 4;
+}
+
+.ai-xiaomei-avatar.is-listening .ai-xiaomei-halo {
+  stroke: var(--color-primary-500);
+  animation: ai-pulse 1.4s var(--ease-standard) infinite;
+}
+
+.ai-xiaomei-avatar.is-away .ai-xiaomei-halo {
+  fill: var(--color-ink-200);
+}
+
+.ai-xiaomei-top {
+  fill: var(--color-primary-500);
+}
+
+.ai-xiaomei-collar {
+  fill: var(--color-white);
+}
+
+.ai-xiaomei-clip {
+  fill: var(--color-accent-500);
+}
+
+.ai-xiaomei-eyes {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: ai-blink 4.8s var(--ease-standard) infinite;
+}
+
+.ai-xiaomei-eyes-closed,
+.ai-xiaomei-avatar.is-away .ai-xiaomei-eyes {
+  display: none;
+}
+
+.ai-xiaomei-avatar.is-away .ai-xiaomei-eyes-closed {
+  display: inline;
+}
+
+.ai-xiaomei-mouth {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.ai-xiaomei-avatar.is-speaking .ai-xiaomei-mouth {
+  opacity: 1;
+  animation: ai-talk 0.32s var(--ease-standard) infinite alternate;
+}
+
+.ai-xiaomei-avatar.is-speaking .ai-xiaomei-smile {
+  opacity: 0;
+}
+
+.ai-xiaomei-ponytail {
+  transform-box: fill-box;
+  transform-origin: top left;
+}
+
+.ai-xiaomei-avatar.is-speaking .ai-xiaomei-ponytail {
+  animation: ai-sway 1.6s var(--ease-standard) infinite alternate;
+}
+
+@keyframes ai-blink {
+  0%,
+  92%,
+  100% {
+    transform: scaleY(1);
+  }
+
+  95% {
+    transform: scaleY(0.1);
+  }
+}
+
+@keyframes ai-talk {
+  from {
+    transform: scaleY(0.35);
+  }
+
+  to {
+    transform: scaleY(1.1);
+  }
+}
+
+@keyframes ai-sway {
+  from {
+    transform: rotate(-2deg);
+  }
+
+  to {
+    transform: rotate(3deg);
+  }
+}
+
+@keyframes ai-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.45;
+  }
+}
+</style>

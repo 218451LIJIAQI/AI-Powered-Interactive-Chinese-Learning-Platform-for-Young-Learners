@@ -29,16 +29,24 @@ public final class PersonalDataRedactor {
 
     public static final String ID_NUMBER_PLACEHOLDER = "[ID_NUMBER]";
 
-    // ASCII-only character classes on purpose: Chinese text written directly next to an
-    // identifier (for example "我的电话是0123456789") must stay intact and must not stop the match.
-    private static final Pattern EMAIL = Pattern.compile(
-            "(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\\.[A-Za-z0-9-]+)*\\.[A-Za-z]{2,}");
+    // Keep adjacent Chinese characters and directly-following phone numbers/suffixes intact: possessive local part,
+    // label repetition capped to RFC limits, and possessive TLD avoid both backtracking/recursion overflow and \b
+    // mismatches when an email is glued directly to digits or underscores.
+    static final Pattern EMAIL_PATTERN = Pattern.compile(
+            "(?i)(?<![A-Z0-9._%+-])[A-Z0-9._%+-]++@[A-Z0-9-]++(?:\\.[A-Z0-9-]++){0,63}\\.[A-Z]{2,}+");
+
+    private static final String SEP = "[ \\u00A0\\u202F\\u3000\\u2011\\u2013－-]";
 
     private static final Pattern NRIC = Pattern.compile(
-            "(?<![0-9-])(?:[0-9]{6}-[0-9]{2}-[0-9]{4}|[0-9]{12})(?![0-9-])");
+            "(?<![\\d+＋\\u2011\\u2013－-])(?:\\d{6}" + SEP + "\\d{2}" + SEP + "\\d{4}|\\d{12})(?![\\d\\u2011\\u2013－-])",
+            Pattern.UNICODE_CHARACTER_CLASS);
 
     private static final Pattern PHONE = Pattern.compile(
-            "(?<![A-Za-z0-9+])(?:\\+[0-9]{1,3}[ -]?)?(?:\\([0-9]{2,4}\\)|[0-9]{2,4})(?:[ -]?[0-9]{3,4}){2}(?![A-Za-z0-9])");
+            "(?<![A-Za-z\\d+＋])(?:"
+                    + "[+＋]\\d{1,3}" + SEP + "?(?:(?:[(（]\\d{1,4}[)）]|\\d{1,4})(?:" + SEP + "?\\d{3,4}){2}|\\d{4}" + SEP + "?\\d{4})"
+                    + "|(?:[(（]\\d{2,4}[)）]|\\d{2,4})(?:" + SEP + "?\\d{3,4}){2}"
+                    + ")(?![A-Za-z\\d])",
+            Pattern.UNICODE_CHARACTER_CLASS);
 
     private PersonalDataRedactor() {
     }
@@ -53,7 +61,7 @@ public final class PersonalDataRedactor {
         if (text == null || text.isEmpty()) {
             return text;
         }
-        String withoutEmails = EMAIL.matcher(text).replaceAll(EMAIL_PLACEHOLDER);
+        String withoutEmails = EMAIL_PATTERN.matcher(text).replaceAll(EMAIL_PLACEHOLDER);
         String withoutIdNumbers = NRIC.matcher(withoutEmails).replaceAll(ID_NUMBER_PLACEHOLDER);
         return PHONE.matcher(withoutIdNumbers).replaceAll(PHONE_PLACEHOLDER);
     }

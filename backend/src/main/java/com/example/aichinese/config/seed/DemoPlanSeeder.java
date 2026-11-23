@@ -1,9 +1,6 @@
 package com.example.aichinese.config.seed;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -13,11 +10,9 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.example.aichinese.entity.AiUsageLog;
+import com.example.aichinese.entity.CoursePackage;
+import com.example.aichinese.entity.LearnUnit;
 import com.example.aichinese.entity.StudentProfile;
-import com.example.aichinese.entity.User;
-import com.example.aichinese.entity.enums.AiFeatureKey;
-import com.example.aichinese.entity.enums.AiRequestStatus;
 import com.example.aichinese.entity.enums.LevelCheckSkill;
 import com.example.aichinese.entity.enums.MandarinLevel;
 import com.example.aichinese.entity.enums.PlanFocus;
@@ -27,57 +22,47 @@ import com.example.aichinese.entity.enums.PlanReason;
 import com.example.aichinese.entity.enums.PlanSelfLevel;
 import com.example.aichinese.entity.enums.PlanSetupState;
 import com.example.aichinese.entity.enums.PlanStepKind;
-import com.example.aichinese.repository.AiUsageLogRepository;
 import com.example.aichinese.repository.CoursePackageRepository;
 import com.example.aichinese.repository.LearnUnitRepository;
 import com.example.aichinese.repository.LearningPlanRepository;
 import com.example.aichinese.repository.StudentProfileRepository;
-import com.example.aichinese.repository.UserRepository;
-import com.example.aichinese.service.learn.LearnClock;
 import com.example.aichinese.service.plan.LearningPlanService;
 import com.example.aichinese.service.plan.PlanComposer;
 
+import lombok.RequiredArgsConstructor;
+
 /**
- * Demo learning plans as in the prototype. Amira built "Travel to Shanghai" with SparkBot a week ago (week 2 of 8,
- * Regular pace, Beginner 1 with a head start, focus listening and conversation): Unit 1 (in progress), her class
- * Mandarin for Beginners, Unit 2, the optional Everyday Conversations and Unit 3. Chen Hao's plan was built from
- * rules while SparkBot was unavailable; Zhang Yi and Nur Aisyah set the plan up later. Every seeded account counts as
- * having a confirmed e-mail address.
+ * Demo learning plans as in the prototype. Amira built "Travel to Shanghai" with SparkBot 8 days ago, the goal date 70
+ * days after that (10 calendar weeks, now week 2 of 10; 1–2 hours a day, HSK 1 with a head start towards HSK 2, focus
+ * listening and speaking): Unit 1 (in progress), her class Mandarin for Campus Life, Units 2 and 3, the optional Travel
+ * Mandarin, Unit 4, the optional Shopping and Prices and Unit 5, the first of HSK 2. Chen Hao's plan was built from
+ * rules while SparkBot was unavailable; Zhang Yi and Nur Aisyah set the plan up later. The usage-log rows of the two
+ * SparkBot requests are written with the rest of the log in {@link DemoAiSeeder}.
  */
 @Component
 @Order(6)
 @Profile("demo & !prod & !production")
+@RequiredArgsConstructor
 public class DemoPlanSeeder implements CommandLineRunner {
 
-    private static final String DEMO_PROVIDER = "openai-compatible";
-    private static final String DEMO_MODEL = "gpt-4o-mini";
+    /** Amira's goal date, in days after the plan's first day: 70 days, 10 calendar weeks. */
+    private static final int AMIRA_GOAL_DAYS = 70;
 
-    private final UserRepository userRepository;
     private final StudentProfileRepository studentProfileRepository;
     private final LearningPlanRepository planRepository;
     private final LearnUnitRepository unitRepository;
     private final CoursePackageRepository coursePackageRepository;
-    private final AiUsageLogRepository usageLogRepository;
     private final LearningPlanService planService;
-    private final LearnClock clock;
+    private final DemoClock clock;
 
-    public DemoPlanSeeder(
-            UserRepository userRepository,
-            StudentProfileRepository studentProfileRepository,
-            LearningPlanRepository planRepository,
-            LearnUnitRepository unitRepository,
-            CoursePackageRepository coursePackageRepository,
-            AiUsageLogRepository usageLogRepository,
-            LearningPlanService planService,
-            LearnClock clock) {
-        this.userRepository = userRepository;
-        this.studentProfileRepository = studentProfileRepository;
-        this.planRepository = planRepository;
-        this.unitRepository = unitRepository;
-        this.coursePackageRepository = coursePackageRepository;
-        this.usageLogRepository = usageLogRepository;
-        this.planService = planService;
-        this.clock = clock;
+    /** Amira built her plan with SparkBot 8 days ago at 20:15 (platform clock); DemoAiSeeder logs the request then. */
+    static LocalDateTime amiraBuiltAt(DemoClock clock) {
+        return clock.daysAgo(8, 20, 15);
+    }
+
+    /** Chen Hao's plan was built from rules, SparkBot being unavailable, 3 days ago at 18:40 (logged likewise). */
+    static LocalDateTime chenHaoBuiltAt(DemoClock clock) {
+        return clock.daysAgo(3, 18, 40);
     }
 
     @Override
@@ -87,45 +72,35 @@ public class DemoPlanSeeder implements CommandLineRunner {
         if (amira.isEmpty() || planRepository.findFirstByStudentIdAndActiveTrueOrderByVersionDesc(amira.get().getId()).isPresent()) {
             return;
         }
-        confirmSeededAddresses();
-        LocalDate today = clock.today();
-        seedAmira(amira.get(), today);
-        student(DemoPersonas.CHEN_HAO).ifPresent(chen -> seedChenHao(chen, today));
+        seedAmira(amira.get());
+        student(DemoPersonas.CHEN_HAO).ifPresent(this::seedChenHao);
         student(DemoPersonas.ZHANG_YI).ifPresent(this::setUpLater);
         student(DemoPersonas.NUR_AISYAH).ifPresent(this::setUpLater);
     }
 
-    private void confirmSeededAddresses() {
-        userRepository.findAll().stream()
-                .filter(user -> user.getEmailVerifiedAt() == null)
-                .forEach(user -> {
-                    user.setEmailVerifiedAt(user.getCreatedAt());
-                    userRepository.save(user);
-                });
-    }
-
-    private void seedAmira(StudentProfile student, LocalDate today) {
-        LocalDateTime builtAt = today.minusDays(7).atTime(LocalTime.of(20, 15));
+    private void seedAmira(StudentProfile student) {
+        LocalDateTime builtAt = amiraBuiltAt(clock);
         PlanComposer.Goal goal = new PlanComposer.Goal(PlanReason.TRAVEL, null,
                 List.of(PlanGoal.INTRODUCE_MYSELF, PlanGoal.ORDER_FOOD, PlanGoal.ASK_DIRECTIONS, PlanGoal.GET_AROUND,
-                        PlanGoal.SHORT_CHATS),
+                        PlanGoal.SHORT_CHATS, PlanGoal.UNDERSTAND_PRICES, PlanGoal.GO_SHOPPING),
                 "I'm going to Shanghai with friends. I want to order food, ask for directions and chat a little.",
-                builtAt.toLocalDate().plusWeeks(8).minusDays(1), PlanPace.REGULAR,
-                List.of(PlanFocus.LISTENING, PlanFocus.CONVERSATION));
+                clock.dayOf(builtAt).plusDays(AMIRA_GOAL_DAYS), PlanPace.HOURS_1_TO_2,
+                List.of(PlanFocus.LISTENING, PlanFocus.SPEAKING));
         PlanComposer.Placement placement = new PlanComposer.Placement(PlanSelfLevel.A_LITTLE, MandarinLevel.BEGINNER_1,
-                true, List.of(LevelCheckSkill.VOCABULARY, LevelCheckSkill.CHARACTERS),
-                List.of(LevelCheckSkill.LISTENING, LevelCheckSkill.PINYIN), 3, true);
-        List<PlanComposer.DraftStep> steps = new ArrayList<>();
-        unit(1).ifPresent(id -> steps.add(new PlanComposer.DraftStep(PlanStepKind.LEARN_UNIT, id,
-                "You know the greetings already, so finish numbers and polite phrases.")));
-        classId("Mandarin for Beginners").ifPresent(id -> steps.add(new PlanComposer.DraftStep(PlanStepKind.CLASS, id,
-                "You already have this class. Its Greetings and Numbers lessons back up Unit 1.")));
-        unit(2).ifPresent(id -> steps.add(new PlanComposer.DraftStep(PlanStepKind.LEARN_UNIT, id,
-                "Ordering food is the first thing you'll need in Shanghai.")));
-        classId("Everyday Conversations").ifPresent(id -> steps.add(new PlanComposer.DraftStep(PlanStepKind.CLASS, id,
-                "Live practice for short chats with people you meet. You can also Talk with Xiaomei.")));
-        unit(3).ifPresent(id -> steps.add(new PlanComposer.DraftStep(PlanStepKind.LEARN_UNIT, id,
-                "Asking for directions and taking the metro on your trip.")));
+                true, List.of(LevelCheckSkill.VOCABULARY, LevelCheckSkill.CHARACTERS, LevelCheckSkill.PINYIN,
+                        LevelCheckSkill.NUMBERS, LevelCheckSkill.SENTENCES),
+                List.of(LevelCheckSkill.LISTENING, LevelCheckSkill.GRAMMAR, LevelCheckSkill.IDIOMS), 8, true);
+        List<LearnUnit> units = unitRepository.findAll();
+        List<CoursePackage> classes = coursePackageRepository.findAll();
+        List<PlanComposer.DraftStep> steps = List.of(
+                unitStep(units, 1, "You know a few words already, so a quick review of the sounds comes first."),
+                classStep(classes, "Mandarin for Campus Life", "You already have this class. It puts what you learn to use in real conversations."),
+                unitStep(units, 2, "First words, people and numbers: you'll use them from your first day in Shanghai."),
+                unitStep(units, 3, "First sentences let you say who you are and order what you want."),
+                classStep(classes, "Travel Mandarin", "Airport, hotel, metro and restaurant scenes for your trip. Best after Unit 3."),
+                unitStep(units, 4, "Asking where things are and how much they cost, for getting around Shanghai."),
+                classStep(classes, "Shopping and Prices", "Bargain and pay at the market. Best after Unit 4."),
+                unitStep(units, 5, "Talking about what you did and when, to share your trip: your first step into HSK 2."));
         PlanComposer.AiDraft draft = new PlanComposer.AiDraft(
                 "Travel to Shanghai",
                 "You want enough Mandarin for your trip: order food, ask for directions, get around on the metro and"
@@ -138,58 +113,40 @@ public class DemoPlanSeeder implements CommandLineRunner {
                 false,
                 null);
         planService.seed(student, goal, placement, Optional.of(draft), builtAt);
-        log(student.getUser(), AiRequestStatus.SUCCESS, builtAt, null);
     }
 
-    private void seedChenHao(StudentProfile student, LocalDate today) {
-        LocalDateTime builtAt = today.minusDays(3).atTime(LocalTime.of(18, 40));
+    private void seedChenHao(StudentProfile student) {
         PlanComposer.Goal goal = new PlanComposer.Goal(PlanReason.EVERYDAY, null,
                 List.of(PlanGoal.ORDER_FOOD, PlanGoal.GO_SHOPPING, PlanGoal.UNDERSTAND_PRICES), null, null,
-                PlanPace.LIGHT, List.of(PlanFocus.VOCABULARY));
+                PlanPace.UNDER_30_MIN, List.of(PlanFocus.READING));
         PlanComposer.Placement placement = new PlanComposer.Placement(PlanSelfLevel.NEW_TO_MANDARIN,
                 MandarinLevel.NEW_TO_MANDARIN, false, List.of(), List.of(), 0, false);
-        planService.seed(student, goal, placement, Optional.empty(), builtAt);
-        log(student.getUser(), AiRequestStatus.UNAVAILABLE, builtAt, "AI provider is disabled in the current backend configuration.");
+        planService.seed(student, goal, placement, Optional.empty(), chenHaoBuiltAt(clock));
     }
 
     private void setUpLater(StudentProfile student) {
-        StudentProfile fresh = studentProfileRepository.findById(student.getId()).orElseThrow();
-        fresh.setPlanSetupState(PlanSetupState.SKIPPED);
-        studentProfileRepository.save(fresh);
+        student.setPlanSetupState(PlanSetupState.SKIPPED);
     }
 
-    private void log(User user, AiRequestStatus status, LocalDateTime when, String error) {
-        AiUsageLog entry = new AiUsageLog();
-        entry.setUser(user);
-        entry.setUserRole("STUDENT");
-        entry.setFeatureKey(AiFeatureKey.LEARNING_PLAN);
-        entry.setLanguagePreference("en");
-        entry.setStatus(status.name());
-        entry.setProviderName(DEMO_PROVIDER);
-        entry.setModelName(DEMO_MODEL);
-        entry.setErrorSummary(error);
-        entry.setRelatedEntityType("LEARNING_PLAN");
-        entry.setCreatedAt(when);
-        entry.setUpdatedAt(when);
-        usageLogRepository.save(entry);
-    }
-
-    private Optional<Long> unit(int position) {
-        return unitRepository.findAll().stream()
+    private static PlanComposer.DraftStep unitStep(List<LearnUnit> units, int position, String reason) {
+        Long unitId = units.stream()
                 .filter(unit -> unit.getPosition() == position)
-                .map(unit -> unit.getId())
-                .findFirst();
+                .map(LearnUnit::getId)
+                .findFirst()
+                .orElseThrow();
+        return new PlanComposer.DraftStep(PlanStepKind.LEARN_UNIT, unitId, reason);
     }
 
-    private Optional<Long> classId(String title) {
-        return coursePackageRepository.findAll().stream()
+    private static PlanComposer.DraftStep classStep(List<CoursePackage> classes, String title, String reason) {
+        Long classId = classes.stream()
                 .filter(coursePackage -> title.equals(coursePackage.getTitle()))
-                .map(coursePackage -> coursePackage.getId())
-                .findFirst();
+                .map(CoursePackage::getId)
+                .findFirst()
+                .orElseThrow();
+        return new PlanComposer.DraftStep(PlanStepKind.CLASS, classId, reason);
     }
 
     private Optional<StudentProfile> student(DemoPersonas.Persona persona) {
-        return userRepository.findByEmailWithRoles(persona.email())
-                .flatMap(user -> studentProfileRepository.findByUserId(user.getId()));
+        return studentProfileRepository.findByUserEmail(persona.email());
     }
 }

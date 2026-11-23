@@ -1,5 +1,12 @@
 <template>
-  <svg class="mini-chart" :viewBox="viewBox" preserveAspectRatio="none" role="img" :aria-label="ariaLabel">
+  <svg
+    class="mini-chart"
+    style="overflow: visible"
+    :viewBox="viewBox"
+    preserveAspectRatio="none"
+    role="img"
+    :aria-label="ariaLabel"
+  >
     <!-- The chart stretches to its card (preserveAspectRatio="none"); non-scaling strokes keep line widths even and
          the points round (each point is a zero-length round-capped segment, not a circle that would stretch). -->
     <!-- The baseline (the series minimum) as a hairline: the only guide the chart draws. -->
@@ -14,6 +21,7 @@
       vector-effect="non-scaling-stroke"
     />
     <polyline
+      v-if="points.length > 1"
       :points="polylinePoints"
       fill="none"
       stroke="currentColor"
@@ -37,10 +45,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-import type { AnalyticsTrendPoint } from '@/types/api'
+export interface TrendPoint {
+  readonly label: string
+  readonly value: number
+}
 
 interface Props {
-  values: AnalyticsTrendPoint[]
+  values: readonly TrendPoint[]
   label: string
 }
 
@@ -49,29 +60,33 @@ const props = defineProps<Props>()
 const POINT_DIAMETER = 7
 const SVG_HEIGHT = 160
 const SVG_WIDTH = 320
+/** Where the series maximum and minimum are drawn (SVG y grows downwards, so the maximum has the smaller y). */
 const Y_MAX = 50
 const Y_MIN = 130
 
 const viewBox = `0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`
 
 const points = computed(() => {
-  const numericValues = props.values.map((item) => (Number.isFinite(item.value) ? item.value : 0))
-  const max = Math.max(1, ...numericValues)
-  const min = Math.min(...numericValues)
-  const spread = Math.max(max - min, 1)
-  const count = props.values.length
+  if (!props.values.length) return []
+  const values = props.values.map((item) => item.value)
+  const min = Math.min(...values)
+  const span = Math.max(...values) - min
+  const spread = span > 0 ? span : 1
+  const count = values.length
 
   return props.values.map((item, index) => {
     const x = count === 1 ? SVG_WIDTH / 2 : (SVG_WIDTH / (count - 1)) * index
-    const normalized = (numericValues[index] - min) / spread
+    const normalized = (item.value - min) / spread
     const y = Y_MIN - normalized * (Y_MIN - Y_MAX)
     return { key: `${item.label}-${index}`, x, y }
   })
 })
 
 // Language-neutral and carries the data, so screen readers get the values in every locale.
-const ariaLabel = computed<string>(
-  () => `${props.label}: ${props.values.map((point) => `${point.label} ${point.value}`).join(', ')}`,
+const ariaLabel = computed<string>(() =>
+  props.values.length
+    ? `${props.label}: ${props.values.map((point) => `${point.label} ${point.value}`).join(', ')}`
+    : props.label,
 )
 const polylinePoints = computed<string>(() => points.value.map((p) => `${p.x},${p.y}`).join(' '))
 </script>

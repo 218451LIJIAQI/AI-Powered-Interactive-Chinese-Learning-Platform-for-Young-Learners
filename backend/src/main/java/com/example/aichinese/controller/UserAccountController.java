@@ -3,6 +3,7 @@ package com.example.aichinese.controller;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -10,17 +11,19 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.example.aichinese.config.SecurityProperties;
 import com.example.aichinese.dto.ApiResponse;
 import com.example.aichinese.dto.account.AccountSettingsResponse;
 import com.example.aichinese.dto.account.DeleteAccountRequest;
-import com.example.aichinese.dto.auth.EmailChangeRequest;
 import com.example.aichinese.dto.account.EmailChangeResponse;
+import com.example.aichinese.dto.account.EmailConfirmationView;
+import com.example.aichinese.dto.account.NavCountsResponse;
 import com.example.aichinese.dto.account.NotificationPreferences;
 import com.example.aichinese.dto.auth.AuthResponse;
 import com.example.aichinese.dto.auth.AuthSessionResponse;
 import com.example.aichinese.dto.auth.ChangePasswordRequest;
 import com.example.aichinese.dto.auth.CurrentUserResponse;
+import com.example.aichinese.dto.auth.EmailChangeRequest;
+import com.example.aichinese.dto.auth.SessionResponse;
 import com.example.aichinese.dto.auth.UpdateProfileRequest;
 import com.example.aichinese.security.ClientIpResolver;
 import com.example.aichinese.security.SecurityUserDetails;
@@ -28,43 +31,42 @@ import com.example.aichinese.service.AuthService;
 import com.example.aichinese.service.account.AccountDeletionService;
 import com.example.aichinese.service.account.AccountEmailService;
 import com.example.aichinese.service.account.AccountService;
+import com.example.aichinese.service.navigation.NavCountService;
+import com.example.aichinese.service.account.EmailConfirmationService;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 
+import lombok.RequiredArgsConstructor;
+
 /**
- * The Account page for every signed-in role: profile, e-mail change, e-mail notification preferences, password change
- * and account deletion (FRAUTH07, FRAUTH08).
+ * The Account page for every signed-in role: profile, e-mail change (with "Resend link" and "Cancel change" while it
+ * waits), e-mail notification preferences, password change and account deletion (FRAUTH07, FRAUTH08); "Send the link
+ * again" for a new account's e-mail confirmation; and the signed-in user's sidebar badge counts.
  */
 @RestController
 @RequestMapping("/api/v1/users/me")
+@RequiredArgsConstructor
 public class UserAccountController {
 
     private final AuthService authService;
     private final AccountService accountService;
     private final AccountEmailService accountEmailService;
+    private final EmailConfirmationService emailConfirmationService;
     private final AccountDeletionService accountDeletionService;
+    private final NavCountService navCountService;
     private final ClientIpResolver clientIpResolver;
-    private final SecurityProperties securityProperties;
-
-    public UserAccountController(
-            AuthService authService,
-            AccountService accountService,
-            AccountEmailService accountEmailService,
-            AccountDeletionService accountDeletionService,
-            ClientIpResolver clientIpResolver,
-            SecurityProperties securityProperties) {
-        this.authService = authService;
-        this.accountService = accountService;
-        this.accountEmailService = accountEmailService;
-        this.accountDeletionService = accountDeletionService;
-        this.clientIpResolver = clientIpResolver;
-        this.securityProperties = securityProperties;
-    }
+    private final RefreshCookieWriter refreshCookies;
 
     @GetMapping("/account")
     public ApiResponse<AccountSettingsResponse> getAccount(@AuthenticationPrincipal SecurityUserDetails currentUser) {
         return ApiResponse.success("Account settings retrieved successfully.", accountService.settings(currentUser));
+    }
+
+    /** Account › This device: when this browser signed in ("signed in since 12 May"). */
+    @GetMapping("/session")
+    public ApiResponse<SessionResponse> session(@AuthenticationPrincipal SecurityUserDetails currentUser) {
+        return ApiResponse.success("Session retrieved successfully.", authService.currentSession(currentUser));
     }
 
     @PutMapping("/profile")
@@ -95,6 +97,29 @@ public class UserAccountController {
                         currentUser, request.newEmail(), request.currentPassword(), clientIpResolver.resolve(httpRequest)));
     }
 
+    /** "Resend link": a new link to the address that waits for confirmation; the link sent before stops working. */
+    @PostMapping("/email-change/resend")
+    public ApiResponse<EmailChangeResponse> resendEmailChangeLink(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            HttpServletRequest httpRequest) {
+        return ApiResponse.success(
+                "Confirmation link sent again.",
+                accountEmailService.resendLink(currentUser, clientIpResolver.resolve(httpRequest)));
+    }
+
+    /** "Cancel change": the waiting e-mail change ends and its link stops working. */
+    @DeleteMapping("/email-change")
+    public ApiResponse<Void> cancelEmailChange(@AuthenticationPrincipal SecurityUserDetails currentUser) {
+        accountEmailService.cancel(currentUser);
+        return ApiResponse.success("Email change cancelled.", null);
+    }
+
+    @PostMapping("/email-confirmation")
+    public ApiResponse<EmailConfirmationView> resendEmailConfirmation(
+            @AuthenticationPrincipal SecurityUserDetails currentUser) {
+        return ApiResponse.success("We sent a new confirmation link.", emailConfirmationService.resend(currentUser));
+    }
+
     @PostMapping("/password")
     public ResponseEntity<ApiResponse<AuthResponse>> changePassword(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
@@ -105,20 +130,25 @@ public class UserAccountController {
                 request,
                 clientIpResolver.resolve(httpRequest),
                 httpRequest.getHeader(HttpHeaders.USER_AGENT));
-        return RefreshCookieWriter.sessionResponse(
-                securityProperties,
+        return refreshCookies.sessionResponse(
+                httpRequest,
                 "Password changed successfully. Other sessions have been signed out.",
                 session);
     }
 
-    /** Deletes the signed-in student's or teacher's account and signs it out (the refresh cookie is cleared). */
+    /** Deletes the signed-in learner's account and signs it out (the refresh cookie is cleared). */
     @PostMapping("/delete")
     public ResponseEntity<ApiResponse<Void>> deleteAccount(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
-            @Valid @RequestBody DeleteAccountRequest request) {
+            @Valid @RequestBody DeleteAccountRequest request,
+            HttpServletRequest httpRequest) {
         accountDeletionService.delete(currentUser, request.confirmEmail());
-        return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, RefreshCookieWriter.clearedCookieHeaders(securityProperties))
-                .body(ApiResponse.success("Account deleted.", null));
+        return refreshCookies.clearedCookieResponse(httpRequest, "Account deleted.");
+    }
+
+    /** Sidebar badge counts: a learner's mistakes to review, an admin's AI reports and open support requests. */
+    @GetMapping("/nav-counts")
+    public ApiResponse<NavCountsResponse> navCounts(@AuthenticationPrincipal SecurityUserDetails currentUser) {
+        return ApiResponse.success("Navigation counts retrieved successfully.", navCountService.countsFor(currentUser));
     }
 }

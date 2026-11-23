@@ -5,19 +5,21 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 
 import com.example.aichinese.dto.classes.ClassViews;
-import com.example.aichinese.dto.classes.LiveSessionViews;
 import com.example.aichinese.dto.learn.LearnPathResponse;
-import com.example.aichinese.dto.learn.PracticeSetsResponse;
+import com.example.aichinese.dto.learn.StopState;
+import com.example.aichinese.dto.learn.UnitState;
 import com.example.aichinese.dto.plan.PlanViews;
 import com.example.aichinese.entity.LearnLessonCompletion;
 import com.example.aichinese.entity.LearningPlan;
@@ -34,279 +36,323 @@ import com.example.aichinese.repository.AiUsageLogRepository;
 import com.example.aichinese.repository.LearnLessonCompletionRepository;
 import com.example.aichinese.repository.LearningPlanStepRepository;
 import com.example.aichinese.repository.PracticeCompletionRepository;
-import com.example.aichinese.security.SecurityUserDetails;
+import com.example.aichinese.service.RewardRules;
 import com.example.aichinese.service.classes.StudentClassService;
 import com.example.aichinese.service.learn.LearnClock;
-import com.example.aichinese.service.learn.LearnPathModel.StopState;
-import com.example.aichinese.service.learn.LearnPathModel.UnitState;
-import com.example.aichinese.service.learn.PracticeService;
+import com.example.aichinese.service.learn.PracticeSetDirectory;
 import com.example.aichinese.service.learn.XpService;
+
+import lombok.RequiredArgsConstructor;
 
 /**
  * Turns a stored plan into what the pages show, with live progress: each step's state from the Learn path and the
  * joined classes, the plan's percentage, the plan week, the days of this week with the daily goal reached, this
- * week's to-dos, goal coverage and the first milestone.
+ * week's to-dos and the first milestone.
  */
 @Component
+@RequiredArgsConstructor
 public class PlanViewAssembler {
 
     /** Progress may trail the time passed by this many points and still be "on track". */
-    static final int ON_TRACK_TOLERANCE = 10;
+    private static final int ON_TRACK_TOLERANCE = 10;
     private static final int DONE_TASKS = 2;
 
     private final LearningPlanStepRepository stepRepository;
     private final PlanCatalogue planCatalogue;
     private final StudentClassService studentClassService;
-    private final PracticeService practiceService;
+    private final PracticeSetDirectory practiceSets;
     private final XpService xpService;
     private final LearnLessonCompletionRepository completionRepository;
     private final PracticeCompletionRepository practiceCompletionRepository;
     private final AiUsageLogRepository aiUsageLogRepository;
     private final LearnClock clock;
 
-    public PlanViewAssembler(
-            LearningPlanStepRepository stepRepository,
-            PlanCatalogue planCatalogue,
-            StudentClassService studentClassService,
-            PracticeService practiceService,
-            XpService xpService,
-            LearnLessonCompletionRepository completionRepository,
-            PracticeCompletionRepository practiceCompletionRepository,
-            AiUsageLogRepository aiUsageLogRepository,
-            LearnClock clock) {
-        this.stepRepository = stepRepository;
-        this.planCatalogue = planCatalogue;
-        this.studentClassService = studentClassService;
-        this.practiceService = practiceService;
-        this.xpService = xpService;
-        this.completionRepository = completionRepository;
-        this.practiceCompletionRepository = practiceCompletionRepository;
-        this.aiUsageLogRepository = aiUsageLogRepository;
-        this.clock = clock;
-    }
-
-    /** The student's catalogue and joined classes (with progress and today's booked session), read once per request. */
+    /** The stored steps, catalogue and progress for the learner's plan, read once per request. */
     public record Live(
+            List<LearningPlanStep> planSteps,
             PlanCatalogue.Catalogue catalogue,
             Map<Long, ClassViews.MyClassCard> joined,
-            LiveSessionViews.SessionBrief liveToday,
             LocalDate today) {
     }
 
-    public Live live(StudentProfile student, SecurityUserDetails currentUser) {
-        ClassViews.MyClasses classes = studentClassService.myClasses(currentUser);
-        Map<Long, ClassViews.MyClassCard> joined = new LinkedHashMap<>();
-        classes.classes().forEach(card -> joined.put(card.summary().id(), card));
-        return new Live(planCatalogue.of(student), joined, classes.liveToday(), clock.today());
+    public Live live(StudentProfile student, LearningPlan plan) {
+        List<LearningPlanStep> planSteps = plan == null ? List.of() : stepRepository.findByPlanIdOrderByPositionAsc(plan.getId());
+        Set<Long> classIds = planSteps.stream().filter(step -> step.getStepKind() == PlanStepKind.CLASS)
+                .map(LearningPlanStep::getRefId).collect(Collectors.toSet());
+        Map<Long, ClassViews.MyClassCard> joined = studentClassService.joinedCards(student, classIds).stream()
+                .collect(Collectors.toMap(card -> card.summary().id(), Function.identity()));
+        Set<Long> optionalClassIds = classIds.stream()
+                .filter(id -> !joined.containsKey(id))
+                .collect(Collectors.toSet());
+        return new Live(planSteps, planCatalogue.forStoredPlan(student, optionalClassIds), joined, clock.today());
     }
 
-    // ===== Whole plan =====
+    // Whole plan
 
-    public PlanViews.Plan plan(StudentProfile student, LearningPlan plan, Live live) {
-        List<LearningPlanStep> stored = stepRepository.findByPlanIdOrderByPositionAsc(plan.getId());
-        List<PlanViews.Step> steps = steps(stored, live);
-        PlanViews.Weeks weeks = weeks(plan, live.today());
-        PlanViews.Progress progress = progress(student, plan, steps, weeks, live.today());
+    public PlanViews.Plan plan(StudentProfile student, LearningPlan plan) {
+        Live live = live(student, plan);
+        List<PlanViews.Step> steps = steps(live);
         PlanComposer.Goal goal = PlanCodec.goal(plan);
         return new PlanViews.Plan(
                 plan.isAiAssisted(),
-                new PlanViews.Goal(plan.getGoalTitle(), plan.getGoalSummary(), plan.getReason(), plan.getReasonText(),
-                        PlanCodec.picks(plan), goal.effectiveGoals(), plan.getGoalText(), plan.getDeadline(),
-                        PlanCodec.focus(plan), PlanCodec.lines(plan.getWorkOn())),
-                level(plan),
-                weeks,
-                progress,
-                new PlanViews.Pace(plan.getPace(), plan.getPace().minutesPerDay(), plan.getPace().daysPerWeek(),
-                        student.getDailyGoalXp()),
+                new PlanViews.Goal(plan.getGoalTitle(), plan.getGoalSummary(), goal.reason(), goal.reasonText(),
+                        goal.picks(), goal.effectiveGoals(), goal.ownWords(), goal.deadline(), goal.focus(),
+                        PlanCodec.lines(plan.getWorkOn())),
+                new PlanViews.Level(plan.getPlacedLevel(), plan.getTargetLevel(),
+                        PlanCodec.skills(plan.getKnownSkills()), PlanCodec.skills(plan.getNewSkills())),
+                weeks(plan, live.today()),
+                progress(student, plan, steps, live.today()),
+                PlanViews.PaceBand.of(plan.getPace()),
                 steps,
                 PlanCodec.lines(plan.getOutcomes()),
-                coverage(goal, stored),
                 milestone(plan, steps),
-                thisWeek(student, plan, weeks, live),
+                thisWeek(student, plan, live),
+                // Lessons as the path counts them: a bonus chest or a passed checkpoint is not a lesson.
                 new PlanViews.Kept(
-                        (int) completionRepository.countByStudentId(student.getId()),
-                        practiceCompletionRepository.findFinishedSets(student.getId()).size(),
-                        live.joined().size()));
+                        (int) completionRepository.countByStudentIdAndLessonKinds(
+                                student.getId(), LearnLessonKind.COUNTED_AS_LESSONS),
+                        (int) practiceCompletionRepository.countFinishedSets(student.getId())),
+                live.today(),
+                pickedClass(plan, steps));
     }
 
-    private static PlanViews.Level level(LearningPlan plan) {
-        return new PlanViews.Level(plan.getPlacedLevel(), plan.getTargetLevel(), plan.isHeadStart(),
-                PlanCodec.skills(plan.getKnownSkills()), PlanCodec.skills(plan.getNewSkills()), plan.getLevelCheckedAt());
+    /**
+     * The optional class the learner picked to take first, while the pick still means something: the class is one of
+     * the plan's optional classes (not joined, still in the catalogue) and there is another to choose from.
+     */
+    static Long pickedClass(LearningPlan plan, List<PlanViews.Step> steps) {
+        Long picked = plan.getPickedClassId();
+        if (picked == null) {
+            return null;
+        }
+        List<PlanViews.Step> optional = steps.stream()
+                .filter(step -> step.status() == PlanViews.StepStatus.OPTIONAL)
+                .toList();
+        return optional.size() > 1 && optional.stream().anyMatch(step -> picked.equals(step.refId())) ? picked : null;
     }
 
-    // ===== At a glance =====
+    // At a glance
 
     public PlanViews.Summary summary(StudentProfile student, LearningPlan plan, Live live) {
-        List<LearningPlanStep> stored = stepRepository.findByPlanIdOrderByPositionAsc(plan.getId());
-        List<PlanViews.Step> steps = steps(stored, live);
+        List<PlanViews.Step> steps = steps(live);
         PlanViews.Weeks weeks = weeks(plan, live.today());
-        PlanViews.Progress progress = progress(student, plan, steps, weeks, live.today());
-        PlanViews.GoalUnit goalUnit = steps.stream()
-                .filter(step -> step.kind() == PlanStepKind.LEARN_UNIT && step.unitNumber() != null)
-                .reduce((first, second) -> second)
-                .map(step -> new PlanViews.GoalUnit(step.unitNumber(), step.title(), step.titleZh()))
-                .orElse(null);
-        List<PlanViews.ClassStep> classSteps = steps.stream()
-                .filter(step -> step.kind() == PlanStepKind.CLASS)
-                .map(step -> new PlanViews.ClassStep(step.refId(), step.position()))
-                .toList();
+        PlanViews.Progress progress = progress(student, plan, steps, live.today());
+        // The class the learner picked comes first (S3.19/S3.20); the others keep the plan's order.
+        Long picked = plan.getPickedClassId();
         PlanViews.OptionalClass optionalClass = steps.stream()
                 .filter(step -> step.status() == PlanViews.StepStatus.OPTIONAL)
-                .findFirst()
-                .map(step -> new PlanViews.OptionalClass(step.refId(), step.title(), step.weekFrom()))
+                .min(Comparator.comparing(step -> !Objects.equals(step.refId(), picked)))
+                .map(step -> new PlanViews.OptionalClass(step.title(), step.weekFrom(), step.bestAfterUnit()))
                 .orElse(null);
-        PlanViews.FirstStep firstStep = steps.stream()
-                .filter(step -> step.kind() == PlanStepKind.LEARN_UNIT && step.status() != PlanViews.StepStatus.DONE
-                        && step.unitNumber() != null)
-                .findFirst()
-                .map(step -> new PlanViews.FirstStep(step.title(), Math.max(0, step.lessonCount() - step.completedCount()),
-                        live.catalogue().unit(step.refId()).map(PlanCatalogue.Unit::remainingMinutes).orElse(0),
-                        step.quickReview()))
-                .orElse(null);
+        PlanViews.Milestone milestone = milestone(plan, steps);
         return new PlanViews.Summary(
                 plan.getGoalTitle(),
                 plan.getReason(),
                 plan.getDeadline(),
+                milestone == null ? null : milestone.date(),
                 weeks.current(),
                 weeks.total(),
                 progress.percent(),
                 progress.status(),
+                progress.daysBehind(),
                 plan.getPlacedLevel(),
                 plan.getTargetLevel(),
-                goalUnit,
-                classSteps,
                 optionalClass,
-                firstStep,
-                practice(student, plan));
+                practice(student, plan),
+                live.today());
     }
 
-    // ===== Steps =====
+    // Steps
 
-    List<PlanViews.Step> steps(List<LearningPlanStep> stored, Live live) {
-        Long nextLessonId = live.catalogue().path().nextLesson() == null ? null : live.catalogue().path().nextLesson().id();
+    /**
+     * A level checkpoint that is the path's next stop: every lesson of its level is done (so are its units), and the
+     * path has no next lesson (a checkpoint is not one). It is the gate of its level: the next level opens once it is
+     * passed, so it is the next step of whatever comes after it.
+     */
+    record OpenCheckpoint(LearnPathResponse.Level level, LearnPathResponse.Checkpoint checkpoint) {
+
+        /** About a minute a question, five at least. */
+        int minutes() {
+            return Math.max(5, checkpoint.questionCount());
+        }
+
+        /** The last unit of the level, which the checkpoint follows on the path. */
+        LearnPathResponse.Unit lastUnit() {
+            return level.units().get(level.units().size() - 1);
+        }
+    }
+
+    static Optional<OpenCheckpoint> openCheckpoint(LearnPathResponse path) {
+        if (path.nextLesson() != null) {
+            return Optional.empty();
+        }
+        return path.levels().stream()
+                .filter(level -> level.checkpoint() != null && level.checkpoint().state() == StopState.AVAILABLE
+                        && !level.units().isEmpty())
+                .findFirst()
+                .map(level -> new OpenCheckpoint(level, level.checkpoint()));
+    }
+
+    /**
+     * Whether the plan leads through an open checkpoint: one of its Learn units (still on the path) is not done yet.
+     * Every unit before an open checkpoint is done, so such a unit lies behind it, and the plan's current step offers
+     * the checkpoint first ({@link #steps}).
+     */
+    static boolean hasUnitNotDone(List<LearningPlanStep> stored, PlanCatalogue.Catalogue catalogue) {
+        return stored.stream()
+                .filter(step -> step.getStepKind() == PlanStepKind.LEARN_UNIT)
+                .map(step -> catalogue.unit(step.getRefId()))
+                .flatMap(Optional::stream)
+                .anyMatch(unit -> unit.state() != UnitState.DONE);
+    }
+
+    private static List<PlanViews.Step> steps(Live live) {
+        Optional<OpenCheckpoint> checkpoint = openCheckpoint(live.catalogue().path());
         List<PlanViews.Step> steps = new ArrayList<>();
-        boolean currentSeen = false;
-        boolean currentStarted = false;
-        boolean nextGiven = false;
-        for (LearningPlanStep step : stored) {
+        // The status of the next unit not done; null until the current unit (the first not done) is found. A started
+        // current unit is in progress and the unit after it next; otherwise the current unit is next itself.
+        PlanViews.StepStatus following = null;
+        for (LearningPlanStep step : live.planSteps()) {
             List<PlanGoal> goals = PlanCodec.goals(step);
-            if (step.getStepKind() == PlanStepKind.LEARN_UNIT) {
-                Optional<PlanCatalogue.Unit> found = live.catalogue().unit(step.getRefId());
-                if (found.isEmpty()) {
-                    steps.add(new PlanViews.Step(step.getPosition(), step.getStepKind(), step.getRefId(), step.getTitle(),
-                            null, null, null, null, 0, 0, 0, PlanViews.StepStatus.UNAVAILABLE, false,
-                            step.isQuickReview(), step.getWeekFrom(), step.getWeekTo(), step.getReason(), goals, null,
-                            null, null));
-                    continue;
-                }
-                PlanCatalogue.Unit unit = found.get();
-                PlanViews.StepStatus status;
-                if (unit.state() == UnitState.DONE) {
-                    status = PlanViews.StepStatus.DONE;
-                } else if (!currentSeen) {
-                    currentSeen = true;
-                    currentStarted = unit.completedCount() > 0;
-                    status = currentStarted ? PlanViews.StepStatus.IN_PROGRESS : PlanViews.StepStatus.NEXT;
-                } else if (currentStarted && !nextGiven) {
-                    nextGiven = true;
-                    status = PlanViews.StepStatus.NEXT;
-                } else {
-                    status = PlanViews.StepStatus.LATER;
-                }
-                steps.add(new PlanViews.Step(step.getPosition(), step.getStepKind(), unit.id(), unit.title(),
-                        unit.titleZh(), unit.number(), unit.hskLevel(), unit.iconKey(), unit.lessonCount(),
-                        unit.completedCount(), percent(unit.completedCount(), unit.lessonCount()), status, false,
-                        step.isQuickReview(), step.getWeekFrom(), step.getWeekTo(), step.getReason(), goals, null,
-                        nextLesson(unit, nextLessonId), null));
-            } else {
-                ClassViews.MyClassCard joined = live.joined().get(step.getRefId());
-                Optional<PlanCatalogue.ClassOption> option = live.catalogue().classOption(step.getRefId());
-                if (joined != null) {
-                    int lessons = joined.summary().lessonCount();
-                    PlanViews.StepStatus status = lessons > 0 && joined.completedLessons() >= lessons
-                            ? PlanViews.StepStatus.DONE
-                            : PlanViews.StepStatus.IN_MY_CLASSES;
-                    steps.add(new PlanViews.Step(step.getPosition(), step.getStepKind(), step.getRefId(),
-                            joined.summary().title(), null, null, null, null, lessons, joined.completedLessons(),
-                            joined.progressPercent(), status, true, false, step.getWeekFrom(), step.getWeekTo(),
-                            step.getReason(), goals, joined.summary().teacher() == null ? null : joined.summary().teacher().name(),
-                            null, joined.nextLiveSession() == null ? null : joined.nextLiveSession().startsAt()));
-                } else if (option.isPresent()) {
-                    steps.add(new PlanViews.Step(step.getPosition(), step.getStepKind(), step.getRefId(),
-                            option.get().title(), null, null, null, null, 0, 0, 0, PlanViews.StepStatus.OPTIONAL, false,
-                            false, step.getWeekFrom(), step.getWeekTo(), step.getReason(), goals,
-                            option.get().teacherName(), null, null));
-                } else {
-                    steps.add(new PlanViews.Step(step.getPosition(), step.getStepKind(), step.getRefId(), step.getTitle(),
-                            null, null, null, null, 0, 0, 0, PlanViews.StepStatus.UNAVAILABLE, false, false,
-                            step.getWeekFrom(), step.getWeekTo(), step.getReason(), goals, null, null, null));
-                }
+            if (step.getStepKind() == PlanStepKind.CLASS) {
+                steps.add(classStep(step, goals, live));
+                continue;
             }
+            Optional<PlanCatalogue.Unit> found = live.catalogue().unit(step.getRefId());
+            if (found.isEmpty()) {
+                steps.add(unavailable(step, goals));
+                continue;
+            }
+            PlanCatalogue.Unit unit = found.get();
+            PlanViews.StepStatus status;
+            boolean current = false;
+            if (unit.state() == UnitState.DONE) {
+                status = PlanViews.StepStatus.DONE;
+            } else if (following == null) {
+                current = true;
+                boolean started = unit.completedCount() > 0;
+                status = started ? PlanViews.StepStatus.IN_PROGRESS : PlanViews.StepStatus.NEXT;
+                following = started ? PlanViews.StepStatus.NEXT : PlanViews.StepStatus.LATER;
+            } else {
+                status = following;
+                following = PlanViews.StepStatus.LATER;
+            }
+            steps.add(new PlanViews.Step(step.getPosition(), step.getStepKind(), unit.id(), unit.title(),
+                    unit.titleZh(), unit.number(), unit.lessonCount(), unit.completedCount(),
+                    percent(unit.completedCount(), unit.lessonCount()), status, false, step.isQuickReview(),
+                    step.getWeekFrom(), step.getWeekTo(), null, step.getReason(), goals,
+                    nextLesson(unit, current ? checkpoint : Optional.empty())));
         }
         return steps;
     }
 
-    private static PlanViews.NextLesson nextLesson(PlanCatalogue.Unit unit, Long nextLessonId) {
+    /**
+     * A joined class with its progress and next lesson (as My classes shows it), an optional class still in the
+     * catalogue, or one that left it.
+     */
+    private static PlanViews.Step classStep(LearningPlanStep step, List<PlanGoal> goals, Live live) {
+        ClassViews.MyClassCard joined = live.joined().get(step.getRefId());
+        if (joined == null) {
+            return live.catalogue().classOption(step.getRefId())
+                    .map(option -> new PlanViews.Step(step.getPosition(), step.getStepKind(), step.getRefId(),
+                            option.title(), null, null, 0, 0, 0, PlanViews.StepStatus.OPTIONAL, false,
+                            false, step.getWeekFrom(), step.getWeekTo(), option.bestAfterUnit(), step.getReason(),
+                            goals, null))
+                    .orElseGet(() -> unavailable(step, goals));
+        }
+        int lessons = joined.summary().lessonCount();
+        PlanViews.StepStatus status = lessons > 0 && joined.completedLessons() >= lessons
+                ? PlanViews.StepStatus.DONE
+                : PlanViews.StepStatus.IN_MY_CLASSES;
+        ClassViews.NextStep next = joined.nextStep();
+        return new PlanViews.Step(step.getPosition(), step.getStepKind(), step.getRefId(),
+                joined.summary().title(), null, null, lessons, joined.completedLessons(),
+                joined.progressPercent(), status, true, false, step.getWeekFrom(), step.getWeekTo(),
+                joined.summary().bestAfterUnit(), step.getReason(), goals,
+                next == null ? null : new PlanViews.NextLesson(next.lessonId(), next.lessonTitle(),
+                        LearnLessonKind.LESSON));
+    }
+
+    /** A unit or class that left the catalogue since the plan was built. */
+    private static PlanViews.Step unavailable(LearningPlanStep step, List<PlanGoal> goals) {
+        return new PlanViews.Step(step.getPosition(), step.getStepKind(), step.getRefId(), step.getTitle(), null, null,
+                0, 0, 0, PlanViews.StepStatus.UNAVAILABLE, false, step.isQuickReview(), step.getWeekFrom(),
+                step.getWeekTo(), null, step.getReason(), goals, null);
+    }
+
+    /**
+     * The first open lesson in road order, or the open level checkpoint for the plan's current unit behind it.
+     */
+    private static PlanViews.NextLesson nextLesson(
+            PlanCatalogue.Unit unit, Optional<OpenCheckpoint> checkpoint) {
         return unit.lessons().stream()
-                .filter(stop -> stop.id().equals(nextLessonId))
+                .filter(stop -> stop.state() == StopState.AVAILABLE && stop.kind() != LearnLessonKind.BONUS)
                 .findFirst()
-                .or(() -> unit.lessons().stream()
-                        .filter(stop -> stop.state() == StopState.AVAILABLE && stop.kind() != LearnLessonKind.BONUS)
-                        .findFirst())
-                .map(stop -> new PlanViews.NextLesson(stop.id(), stop.title()))
+                .map(stop -> new PlanViews.NextLesson(stop.id(), stop.title(), stop.kind()))
+                .or(() -> checkpoint.map(open -> new PlanViews.NextLesson(
+                        open.checkpoint().id(), open.checkpoint().title(), LearnLessonKind.CHECKPOINT)))
                 .orElse(null);
     }
 
-    // ===== Progress =====
+    // Progress
 
-    static PlanViews.Weeks weeks(LearningPlan plan, LocalDate today) {
-        long days = Math.max(0, ChronoUnit.DAYS.between(plan.getStartsOn(), today));
-        int current = (int) Math.min(plan.getTotalWeeks(), days / 7 + 1);
-        return new PlanViews.Weeks(Math.max(1, current), plan.getTotalWeeks(), plan.getContentWeeks());
+    private static PlanViews.Weeks weeks(LearningPlan plan, LocalDate today) {
+        return new PlanViews.Weeks(PlanComposer.weekOf(plan.getStartsOn(), today, plan.getTotalWeeks()),
+                plan.getTotalWeeks(), plan.getContentWeeks());
     }
 
-    private PlanViews.Progress progress(
-            StudentProfile student, LearningPlan plan, List<PlanViews.Step> steps, PlanViews.Weeks weeks, LocalDate today) {
+    /** The first day of the 7-day plan week {@code today} is in; these go on after the plan's last week. */
+    private static LocalDate weekStart(LearningPlan plan, LocalDate today) {
+        long elapsed = Math.max(0, ChronoUnit.DAYS.between(plan.getStartsOn(), today));
+        return plan.getStartsOn().plusWeeks(elapsed / 7);
+    }
+
+    private PlanViews.Progress progress(StudentProfile student, LearningPlan plan, List<PlanViews.Step> steps, LocalDate today) {
         int done = 0;
         int total = 0;
         for (PlanViews.Step step : steps) {
             if (step.kind() == PlanStepKind.LEARN_UNIT || step.joined()) {
-                done += step.completedCount();
+                // A finished unit counts in full: its bonus chest is optional, so nothing waits for it.
+                done += step.status() == PlanViews.StepStatus.DONE ? step.lessonCount() : step.completedCount();
                 total += step.lessonCount();
             }
         }
         int percent = percent(done, total);
-        LocalDate weekStart = plan.getStartsOn().plusWeeks(weeks.current() - 1L);
-        int daysThisWeek = weekStart.isAfter(today) ? 0 : xpService.goalDays(student, weekStart, today).size();
+        LocalDate weekStart = weekStart(plan, today);
+        Set<LocalDate> goalDays = xpService.goalDays(student, weekStart, today);
+        int daysThisWeek = goalDays.size();
+        // The learner gives the plan time each day: a day of this plan week before today without the daily goal is a
+        // study day behind (today can still be made up).
+        int daysBehind = weekStart.isBefore(today)
+                ? (int) weekStart.datesUntil(today).filter(day -> !goalDays.contains(day)).count()
+                : 0;
         long elapsed = Math.max(0, ChronoUnit.DAYS.between(plan.getStartsOn(), today));
-        int expected = (int) Math.min(100, elapsed * 100 / Math.max(1, weeks.total() * 7L));
+        int expected = (int) Math.min(100, elapsed * 100 / (plan.getTotalWeeks() * 7L));
         PlanViews.PlanStatus status;
         if (total > 0 && done >= total) {
             status = PlanViews.PlanStatus.COMPLETE;
-        } else if (weeks.current() == 1 && daysThisWeek == 0) {
+        } else if (daysBehind > 0) {
+            status = PlanViews.PlanStatus.BEHIND;
+        } else if (elapsed == 0 && daysThisWeek == 0) {
             status = PlanViews.PlanStatus.STARTS_TODAY;
         } else {
-            status = percent + ON_TRACK_TOLERANCE >= expected ? PlanViews.PlanStatus.ON_TRACK : PlanViews.PlanStatus.BEHIND;
+            status = total == 0 || percent + ON_TRACK_TOLERANCE >= expected
+                    ? PlanViews.PlanStatus.ON_TRACK
+                    : PlanViews.PlanStatus.BEHIND;
         }
-        return new PlanViews.Progress(percent, status, daysThisWeek, plan.getPace().daysPerWeek());
-    }
-
-    private static List<PlanViews.CoverageItem> coverage(PlanComposer.Goal goal, List<LearningPlanStep> stored) {
-        List<PlanComposer.StepGoals> stepGoals = stored.stream()
-                .map(step -> new PlanComposer.StepGoals(step.getStepKind(), step.getRefId(), step.getTitle(),
-                        Set.copyOf(PlanCodec.goals(step))))
-                .toList();
-        return PlanComposer.coverage(goal.effectiveGoals(), stepGoals).stream()
-                .map(item -> new PlanViews.CoverageItem(item.goal(), item.learn(), item.classId(), item.classTitle()))
-                .toList();
+        return new PlanViews.Progress(percent, status, daysThisWeek, daysBehind);
     }
 
     private static PlanViews.Milestone milestone(LearningPlan plan, List<PlanViews.Step> steps) {
-        if (!plan.isAmbitious() || plan.getMilestoneWeek() == null) {
+        if (plan.getMilestoneWeek() == null) {
             return null;
         }
         int week = plan.getMilestoneWeek();
-        LocalDate date = plan.getDeadline() != null ? plan.getDeadline() : plan.getStartsOn().plusWeeks(week).minusDays(1);
+        // A goal date too close for the path (it falls in the milestone's last week) is the milestone's date; otherwise
+        // the milestone ends its week.
+        LocalDate date = plan.getDeadline() != null && !plan.getDeadline().isAfter(plan.getStartsOn().plusWeeks(week))
+                ? plan.getDeadline()
+                : plan.getStartsOn().plusWeeks(week).minusDays(1);
         List<Integer> positions = steps.stream()
                 .filter(step -> step.kind() == PlanStepKind.LEARN_UNIT && step.weekTo() <= week)
                 .map(PlanViews.Step::position)
@@ -318,56 +364,52 @@ public class PlanViewAssembler {
         return new PlanViews.Milestone(date, plan.getMilestoneText(), positions);
     }
 
-    // ===== This week =====
+    // This week
 
-    private List<PlanViews.WeekTask> thisWeek(StudentProfile student, LearningPlan plan, PlanViews.Weeks weeks, Live live) {
-        LocalDate weekStart = plan.getStartsOn().plusWeeks(weeks.current() - 1L);
-        LocalDateTime since = clock.startOf(weekStart);
+    private List<PlanViews.WeekTask> thisWeek(StudentProfile student, LearningPlan plan, Live live) {
+        LocalDateTime since = clock.startOf(weekStart(plan, live.today()));
         List<PlanViews.WeekTask> tasks = new ArrayList<>();
-        completionRepository.findByStudentIdWithLesson(student.getId()).stream()
-                .filter(completion -> !completion.getFirstCompletedAt().isBefore(since))
-                .filter(completion -> completion.getLesson().getLessonKind() != LearnLessonKind.CHECKPOINT)
-                .sorted(Comparator.comparing(LearnLessonCompletion::getFirstCompletedAt).reversed())
-                .limit(DONE_TASKS)
+        // Lessons and reviews, as the plan's progress counts them: an opened bonus chest or a passed checkpoint is
+        // not one.
+        completionRepository.findRecentCompletions(student.getId(), since, LearnLessonKind.COUNTED_AS_LESSONS,
+                Pageable.ofSize(DONE_TASKS)).stream()
                 .sorted(Comparator.comparing(LearnLessonCompletion::getFirstCompletedAt))
-                .forEach(completion -> tasks.add(new PlanViews.WeekTask(PlanViews.TaskKind.LEARN_DONE,
-                        completion.getLesson().getTitle(), true, clock.dayOf(completion.getFirstCompletedAt()),
-                        completion.getLesson().getMinutes(), completion.getLesson().getId(), null, null)));
+                .forEach(completion -> tasks.add(new PlanViews.WeekTask.LearnDone(
+                        completion.getLesson().getTitle(), clock.dayOf(completion.getFirstCompletedAt()))));
         LearnPathResponse.NextLesson next = live.catalogue().path().nextLesson();
         if (next != null) {
-            tasks.add(new PlanViews.WeekTask(PlanViews.TaskKind.LEARN_NEXT, next.title(), false, null, next.minutes(),
-                    next.id(), null, null));
+            tasks.add(new PlanViews.WeekTask.LearnNext(next.title(), next.minutes(), next.id()));
+        } else {
+            openCheckpoint(live.catalogue().path()).ifPresent(open -> tasks.add(new PlanViews.WeekTask.LearnNext(
+                    open.checkpoint().title(), open.minutes(), open.checkpoint().id())));
         }
         PlanViews.PracticeSuggestion practice = practice(student, plan);
         if (practice != null) {
-            tasks.add(new PlanViews.WeekTask(PlanViews.TaskKind.PRACTICE, practice.title(), false, null, null, null,
-                    practice.type(), practice.setId()));
+            tasks.add(new PlanViews.WeekTask.Practice(practice.title(), practice.type(), practice.setId()));
         }
-        boolean talked = aiUsageLogRepository.countByUserIdAndFeatureKeyAndStatusAndCreatedAtGreaterThanEqual(
-                student.getUser().getId(), AiFeatureKey.XIAOMEI_CONVERSATION, AiRequestStatus.SUCCESS.name(), since) > 0;
-        tasks.add(new PlanViews.WeekTask(PlanViews.TaskKind.XIAOMEI, null, talked, null, null, null, null, null));
+        boolean talked = aiUsageLogRepository.existsByUserIdAndFeatureKeyAndStatusAndCreatedAtGreaterThanEqual(
+                student.getUser().getId(), AiFeatureKey.XIAOMEI_CONVERSATION, AiRequestStatus.SUCCESS, since);
+        tasks.add(new PlanViews.WeekTask.Xiaomei(talked));
         return tasks;
     }
 
-    /** The first Practice set of the student's focus not done yet (none for speaking or conversation). */
-    PlanViews.PracticeSuggestion practice(StudentProfile student, LearningPlan plan) {
-        PracticeType type = PlanCodec.focus(plan).stream()
-                .map(PlanFocus::practiceType)
-                .filter(Objects::nonNull)
-                .findFirst()
-                .orElse(null);
-        if (type == null) {
-            return null;
+    /** The first Practice set of the student's focus skills not done yet (none for speaking). */
+    private PlanViews.PracticeSuggestion practice(StudentProfile student, LearningPlan plan) {
+        for (PlanFocus focus : PlanCodec.focus(plan)) {
+            PracticeType type = focus.practiceType();
+            if (type == null) {
+                continue;
+            }
+            Optional<PlanViews.PracticeSuggestion> found = practiceSets.firstUnfinished(type, student.getId())
+                    .map(set -> new PlanViews.PracticeSuggestion(type, set.id(), set.title()));
+            if (found.isPresent()) {
+                return found.get();
+            }
         }
-        PracticeSetsResponse sets = practiceService.sets(student, type);
-        return sets.sets().stream()
-                .filter(set -> !set.done())
-                .findFirst()
-                .map(set -> new PlanViews.PracticeSuggestion(type, set.id(), set.title()))
-                .orElse(null);
+        return null;
     }
 
-    static int percent(int done, int total) {
-        return total <= 0 ? 0 : (int) Math.min(100, Math.round(done * 100.0 / total));
+    private static int percent(int done, int total) {
+        return Math.min(100, RewardRules.accuracyPercent(done, total));
     }
 }

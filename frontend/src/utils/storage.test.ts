@@ -39,12 +39,4 @@ describe('safe storage helpers', () => {
     window.localStorage.setItem(storageKeys.language, 'fr')
     expect(readPersistedLocale()).toBe('en')
   })
-
-  it('maps the legacy Chinese locale code from earlier builds to zh-CN and rewrites it', () => {
-    // Legacy value written by earlier builds, before the interface switched to the BCP-47 tag zh-CN.
-    window.localStorage.setItem(storageKeys.language, 'zh')
-
-    expect(readPersistedLocale()).toBe('zh-CN')
-    expect(window.localStorage.getItem(storageKeys.language)).toBe('zh-CN')
-  })
 })

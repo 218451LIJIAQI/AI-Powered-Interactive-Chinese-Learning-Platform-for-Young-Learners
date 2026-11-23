@@ -1,266 +1,163 @@
 <template>
-  <div class="student-lesson-page page-stack">
+  <div class="page-stack">
+    <AppToast :message="toast" />
     <template v-if="lesson && lesson.available">
-      <PageHeaderBlock :eyebrow="eyebrow" :title="lesson.title" :description="stateLine">
-        <template #before>
-          <AppBreadcrumb
-            :items="[
-              { label: t('classes.classes'), to: { name: 'student-classes' } },
-              { label: lesson.classTitle, to: { name: 'student-class', params: { classId: lesson.classId } } },
-              { label: lesson.title },
-            ]"
-          />
-        </template>
-        <template #meta>
-          <span class="student-lesson-byline">
-            <PortraitAvatar :size="28" :name="lesson.teacherName" />
-            {{ t('studentClasses.lesson.byTeacher', { teacher: lesson.teacherName }) }}
-          </span>
-        </template>
-        <template v-if="nextActivity || quizToTake" #actions>
+      <ClassPageHeader
+        :crumbs="[
+          { label: t('nav.classes'), to: { name: 'student-classes' } },
+          { label: lesson.classTitle, to: classRoute },
+          { label: lesson.title },
+        ]"
+        :class-title="lesson.classTitle"
+        :title="lesson.title"
+        :meta="stateLine"
+      >
+        <template #actions>
           <RouterLink
-            v-if="nextActivity"
-            class="btn btn-primary"
-            :to="activityRoute(nextActivity.type, nextActivity.id)"
+            class="btn"
+            :class="lesson.archived ? 'btn-secondary' : 'btn-primary'"
+            :to="nextAction.to"
+            data-testid="lesson-next"
           >
-            {{ t('studentClasses.lesson.continueActivity', { title: nextActivity.title }) }}
-            <IconGlyph name="chevronRight" :size="16" />
-          </RouterLink>
-          <RouterLink v-else-if="quizToTake" class="btn btn-primary" :to="quizRoute(quizToTake.id)">
-            {{ t('studentClasses.lesson.takeQuiz') }}<IconGlyph name="chevronRight" :size="16" />
+            {{ nextAction.label }}
+            <IconGlyph v-if="!lesson.archived" name="chevronRight" :size="16" />
           </RouterLink>
         </template>
-      </PageHeaderBlock>
-      <DataNotice :error="actionError" :success="actionSuccess" />
+      </ClassPageHeader>
 
       <div class="student-lesson-layout">
-        <div class="student-lesson-main">
-          <p v-if="lesson.summary" class="student-lesson-summary"><CjkText :text="lesson.summary" /></p>
+        <section class="panel student-lesson-content" aria-labelledby="lesson-content-title">
+          <h2 id="lesson-content-title" class="card-title">{{ t('studentClasses.lesson.content') }}</h2>
 
-          <!-- Watch -->
-          <section v-if="lesson.video" class="student-lesson-section" aria-labelledby="lesson-video-title">
-            <div class="student-lesson-section-head">
-              <h2 id="lesson-video-title" class="student-lesson-heading">{{ t('studentClasses.lesson.video') }}</h2>
-            </div>
-            <div class="student-lesson-video" :class="{ 'is-playing': videoUrl }">
-              <video
-                v-if="videoUrl"
-                class="student-lesson-player"
-                :src="videoUrl"
-                controls
-                preload="metadata"
-                @ended="markWatched"
-              />
-              <!-- A still, not a control (the Open video button below plays it): a neutral video mark, no play button. -->
-              <div v-else class="student-lesson-screen" aria-hidden="true">
-                <IconGlyph name="video" :size="32" />
-              </div>
-              <div class="student-lesson-video-bar">
-                <span class="student-lesson-video-copy">
-                  <strong>{{ lesson.video.title }}</strong>
-                  <span class="type-caption">
-                    <template v-if="lesson.video.watched">{{ t('studentClasses.lesson.videoWatched') }}</template>
-                    <template v-else>{{
-                      t('studentClasses.lesson.videoFacts', {
-                        length: formatClock(lesson.video.durationSeconds),
-                        percent: lesson.video.percentWatched,
-                      })
-                    }}</template>
-                  </span>
-                  <span v-if="videoLoading" class="type-caption" role="status">
-                    {{ t('studentClasses.lesson.videoLoading') }}
-                  </span>
-                </span>
-                <span class="student-lesson-video-actions">
-                  <button
-                    v-if="lesson.video.streamPath && !videoUrl"
-                    type="button"
-                    class="btn btn-secondary btn-sm"
-                    :disabled="videoLoading"
-                    :aria-busy="videoLoading"
-                    @click="loadVideo"
-                  >
-                    <IconGlyph name="play" :size="16" />{{ t('studentClasses.lesson.playVideo') }}
-                  </button>
-                  <a
-                    v-else-if="lesson.video.externalUrl && isWebLink(lesson.video.externalUrl)"
-                    class="btn btn-secondary btn-sm"
-                    :href="lesson.video.externalUrl"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <IconGlyph name="external" :size="16" />{{ t('studentClasses.lesson.openVideo') }}
-                    <span class="sr-only">{{ t('classes.opensInNewTab') }}</span>
-                  </a>
-                  <button
-                    v-if="!lesson.video.watched"
-                    type="button"
-                    class="btn btn-ghost btn-sm"
-                    :disabled="marking"
-                    :aria-busy="marking"
-                    @click="markWatched"
-                  >
-                    <IconGlyph name="check" :size="16" />{{ t('studentClasses.lesson.markWatched') }}
-                  </button>
-                </span>
-              </div>
-            </div>
-          </section>
+          <p v-if="!lesson.video && !lesson.keyPhrases.length" class="type-caption">
+            {{ t('studentClasses.lesson.noContent') }}
+          </p>
 
-          <!-- Key phrases -->
-          <section
-            v-if="lesson.keyPhrases.length"
-            class="student-lesson-section"
-            aria-labelledby="lesson-phrases-title"
-          >
-            <div class="student-lesson-section-head">
-              <h2 id="lesson-phrases-title" class="student-lesson-heading">
-                {{ t('studentClasses.lesson.keyPhrases') }}
-              </h2>
-              <span class="type-caption">{{ t('studentClasses.lesson.phrases', lesson.keyPhrases.length) }}</span>
-            </div>
+          <div v-if="lesson.video" class="student-lesson-block">
+            <h3 class="page-eyebrow">{{ t('studentClasses.lesson.video') }}</h3>
+            <LessonVideo
+              :key="lessonId ?? undefined"
+              :video="lesson.video"
+              @watched="markWatched"
+              @report="reporting = true"
+            />
+            <DataNotice :error="videoProgressError">
+              <template #actions>
+                <button class="btn btn-secondary btn-sm" type="button" @click="markWatched">
+                  {{ t('common.retry') }}
+                </button>
+              </template>
+            </DataNotice>
+          </div>
+
+          <div v-if="lesson.keyPhrases.length" class="student-lesson-block">
+            <h3 class="page-eyebrow">{{ t('studentClasses.lesson.keyPhrases') }}</h3>
             <KeyPhraseCards :phrases="lesson.keyPhrases" />
-          </section>
+          </div>
+        </section>
 
-          <!-- Activities, best done in order -->
+        <div class="student-lesson-side">
           <section
             v-if="lesson.activities.length"
-            class="student-lesson-section"
+            class="panel student-lesson-activities-card"
             aria-labelledby="lesson-activities-title"
           >
-            <div class="student-lesson-section-head">
-              <h2 id="lesson-activities-title" class="student-lesson-heading">
-                {{ t('studentClasses.lesson.activities') }}
-              </h2>
-              <span class="type-caption">
-                {{
-                  t('studentClasses.lesson.activitiesFacts', { done: activitiesDone, total: lesson.activities.length })
-                }}
-              </span>
-            </div>
-            <ol class="student-lesson-activities">
+            <h2 id="lesson-activities-title" class="card-title">{{ t('studentClasses.lesson.activities') }}</h2>
+            <!-- Each row is one link: Start on an activity to do, a chevron on a done one. An archived class's rows only
+                 show what was done. -->
+            <ol class="row-list student-lesson-activities">
               <li
                 v-for="activity in lesson.activities"
                 :key="`${activity.type}-${activity.id}`"
-                class="student-lesson-activity"
-                :class="{ 'is-done': activity.done, 'is-next': isNext(activity) }"
+                class="student-lesson-activity-row"
               >
-                <span
-                  class="student-lesson-step"
-                  :class="{ 'is-done': activity.done, 'is-next': isNext(activity) }"
-                  aria-hidden="true"
+                <component
+                  :is="lesson.archived ? 'div' : RouterLink"
+                  class="student-lesson-activity"
+                  v-bind="lesson.archived ? {} : activityLink(activity)"
                 >
-                  <IconGlyph v-if="activity.done" name="check" :size="16" />
-                  <template v-else>{{ activity.number }}</template>
-                </span>
-                <span class="student-lesson-activity-copy">
-                  <strong>{{ activity.title }}</strong>
-                  <span class="type-caption">{{ activityFacts(activity) }}</span>
-                </span>
-                <span v-if="activity.done" class="student-lesson-activity-done">
-                  <IconGlyph name="check" :size="14" />{{ t('studentClasses.lesson.done') }}
-                </span>
-                <RouterLink
-                  class="btn btn-sm"
-                  :class="activity.done ? 'btn-ghost' : 'btn-secondary'"
-                  :to="activityRoute(activity.type, activity.id)"
-                  :aria-label="t('studentClasses.lesson.startActivity', { title: activity.title })"
-                >
-                  <template v-if="activity.done">
-                    <IconGlyph name="retry" :size="16" />{{ t('studentClasses.lesson.practiseAgain') }}
+                  <span class="student-lesson-step" :class="{ 'is-done': activity.done }">
+                    <IconGlyph v-if="activity.done" name="check" :size="16" />
+                    <template v-else>{{ activity.number }}</template>
+                  </span>
+                  <span class="row-list-copy">
+                    <strong class="row-list-title"><CjkText :text="activity.title" /></strong>
+                    <span class="row-list-meta">
+                      {{ t(`practiceType.${activity.type}`) }}
+                      <span v-if="activity.done" class="sr-only"> · {{ t('studentClasses.lesson.done') }}</span>
+                    </span>
+                  </span>
+                  <template v-if="!lesson.archived">
+                    <IconGlyph v-if="activity.done" class="class-row-chevron" name="chevronRight" :size="16" />
+                    <span v-else class="btn btn-secondary btn-sm">
+                      {{ t('studentClasses.lesson.start') }}
+                    </span>
                   </template>
-                  <template v-else>{{ t('studentClasses.lesson.start') }}</template>
-                </RouterLink>
+                </component>
               </li>
             </ol>
-            <p class="student-lesson-note"><IconGlyph name="info" :size="14" />{{ t('classes.stageHint') }}</p>
           </section>
 
-          <!-- The lesson quiz -->
-          <section class="student-lesson-section" aria-labelledby="lesson-quiz-title">
-            <div class="student-lesson-section-head">
-              <h2 id="lesson-quiz-title" class="student-lesson-heading">{{ t('studentClasses.lesson.quiz') }}</h2>
-            </div>
-            <p v-if="!lesson.quizzes.length" class="student-lesson-note">{{ t('studentClasses.lesson.noQuiz') }}</p>
-            <div v-for="quiz in lesson.quizzes" :key="quiz.id" class="student-lesson-quiz">
-              <div class="student-lesson-quiz-copy">
-                <strong class="student-lesson-quiz-title">{{ quiz.title }}</strong>
-                <span class="type-caption">{{ quizFacts(quiz) }}</span>
-                <span class="type-caption">
-                  {{ t('studentClasses.lesson.attemptsSubmitted', quiz.attemptCount) }}
-                  <RouterLink
-                    v-if="quiz.attemptCount"
-                    :to="{ name: 'student-class', params: { classId: lesson.classId, tab: 'results' } }"
-                  >
-                    · {{ t('studentClasses.lesson.seeAttempts') }}
-                  </RouterLink>
+          <section class="panel student-lesson-quiz" aria-labelledby="lesson-quiz-title">
+            <h2 id="lesson-quiz-title" class="card-title">{{ t('classes.lessonQuiz') }}</h2>
+            <p v-if="!quiz" class="type-caption">{{ t('studentClasses.lesson.noQuiz') }}</p>
+            <template v-else>
+              <div class="student-lesson-quiz-row">
+                <span class="row-list-meta">{{ t('classes.questions', quiz.questionCount) }}</span>
+                <span v-if="quiz.bestPercent !== null" class="student-lesson-best">
+                  <span class="type-caption">{{ t('classes.bestScore') }}</span>
+                  <strong class="student-lesson-best-figure">{{ quiz.bestPercent }}%</strong>
                 </span>
-              </div>
-              <div v-if="quiz.bestPercent !== null" class="student-lesson-best">
-                <strong class="stat-figure">{{ quiz.bestPercent }}%</strong>
-                <span class="type-caption">{{ t('studentClasses.lesson.bestScore') }}</span>
+                <button
+                  v-if="lesson.archived"
+                  type="button"
+                  class="btn btn-secondary"
+                  disabled
+                  data-testid="quiz-start"
+                >
+                  <IconGlyph v-if="quiz.attemptCount" name="retry" :size="16" />
+                  {{ quiz.attemptCount ? t('classes.retakeQuiz') : t('studentClasses.lesson.startQuiz') }}
+                </button>
+                <RouterLink v-else class="btn btn-secondary" :to="quizRoute(quiz.id)" data-testid="quiz-start">
+                  <IconGlyph v-if="quiz.attemptCount && !quiz.inProgress" name="retry" :size="16" />
+                  {{
+                    quiz.inProgress
+                      ? t('studentClasses.lesson.resumeQuiz')
+                      : quiz.attemptCount
+                        ? t('classes.retakeQuiz')
+                        : t('studentClasses.lesson.startQuiz')
+                  }}
+                </RouterLink>
               </div>
               <RouterLink
-                class="btn"
-                :class="quiz.attemptCount ? 'btn-secondary' : 'btn-primary'"
-                :to="quizRoute(quiz.id)"
+                v-if="bestAttempt"
+                class="btn btn-link student-lesson-best-link"
+                :to="bestAttempt"
+                data-testid="quiz-best"
               >
-                <IconGlyph v-if="quiz.attemptCount && !quiz.inProgress" name="retry" :size="16" />
-                {{
-                  quiz.inProgress
-                    ? t('studentClasses.lesson.resumeQuiz')
-                    : quiz.attemptCount
-                      ? t('studentClasses.lesson.retakeQuiz')
-                      : t('studentClasses.lesson.startQuiz')
-                }}
+                <IconGlyph name="history" :size="16" />{{ t('studentClasses.lesson.bestResult') }}
+                <IconGlyph name="chevronRight" :size="16" />
               </RouterLink>
-            </div>
-            <p class="callout is-compact">
-              <IconGlyph name="target" :size="16" /><span>{{ t('studentClasses.lesson.completeHint') }}</span>
-            </p>
+            </template>
           </section>
         </div>
-
-        <aside class="student-lesson-side">
-          <section class="student-lesson-progress" aria-labelledby="lesson-progress-title">
-            <div class="class-sessions-head">
-              <h2 id="lesson-progress-title" class="class-sessions-title">{{ t('studentClasses.lesson.progress') }}</h2>
-            </div>
-            <ProgressRing
-              :progress="lesson.percent"
-              :title="statusLabel('mastery', lesson.status)"
-              :subtitle="t('studentClasses.lesson.steps', { done: lesson.stepsDone, total: lesson.stepsTotal })"
-            />
-            <dl class="kv-list">
-              <dt>{{ t('studentClasses.lesson.activities') }}</dt>
-              <dd>
-                {{
-                  t('studentClasses.lesson.activitiesDone', { done: activitiesDone, total: lesson.activities.length })
-                }}
-              </dd>
-              <dt>{{ t('studentClasses.lesson.quiz') }}</dt>
-              <dd>
-                {{
-                  lesson.bestQuizPercent !== null
-                    ? t('studentClasses.lesson.quizState', { percent: lesson.bestQuizPercent })
-                    : t('studentClasses.lesson.quizNotTaken')
-                }}
-              </dd>
-            </dl>
-          </section>
-          <ClassSessionsPanel
-            :sessions="lesson.liveSessions"
-            :title="t('studentClasses.lesson.sessionsTitle')"
-            :empty="t('studentClasses.lesson.noSessions')"
-          />
-        </aside>
       </div>
+
+      <ReportProblemDialog
+        v-if="reporting && lesson.video"
+        :lesson-title="lesson.title"
+        :class-title="lesson.classTitle"
+        :video-title="lesson.video.title"
+        @close="reporting = false"
+        @sent="onReportSent"
+      />
     </template>
 
     <template v-else>
-      <h1 class="sr-only">{{ lesson?.title ?? t('classes.classes') }}</h1>
+      <h1 class="sr-only">{{ lesson?.title ?? t('nav.classes') }}</h1>
       <StatePanel
-        v-if="resource.loading.value"
+        v-if="loading"
+        heading-tag="h2"
         tone="loading"
         spacious
         :title="t('classes.loading')"
@@ -268,6 +165,7 @@
       />
       <StatePanel
         v-else-if="lesson && !lesson.available"
+        heading-tag="h2"
         tone="empty"
         icon="archive"
         spacious
@@ -275,114 +173,162 @@
         :message="t('studentClasses.lesson.unavailableMessage')"
       >
         <template #actions>
-          <RouterLink class="btn btn-primary" :to="classRoute">{{ t('studentClasses.lesson.backToClass') }}</RouterLink>
+          <RouterLink class="btn btn-primary" :to="classRoute">{{ t('classes.openClass') }}</RouterLink>
         </template>
       </StatePanel>
-      <StatePanel
-        v-else
-        tone="error"
-        icon="alert"
-        spacious
-        :title="t('studentClasses.lesson.loadErrorTitle')"
-        :message="resource.error.value ?? ''"
-      >
-        <template #actions>
-          <button class="btn btn-secondary" type="button" @click="resource.reload">{{ t('classes.retry') }}</button>
-          <RouterLink class="btn btn-primary" :to="classRoute">{{ t('studentClasses.lesson.openClass') }}</RouterLink>
-        </template>
-      </StatePanel>
+      <ClassLoadError
+        v-else-if="loadError"
+        :title="t('classes.lessonLoadError')"
+        :message="loadError"
+        :back-to="classRoute"
+        :back-label="t('classes.openClass')"
+        @retry="load"
+      />
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
-import { activitySlug, studentClassesApi, videoBlob } from '@/api/classes'
-import AppBreadcrumb from '@/components/common/AppBreadcrumb.vue'
-import ClassSessionsPanel from '@/components/classes/ClassSessionsPanel.vue'
+import { studentClassesApi } from '@/api/classes'
+import ClassLoadError from '@/components/classes/ClassLoadError.vue'
+import ClassPageHeader from '@/components/classes/ClassPageHeader.vue'
 import KeyPhraseCards from '@/components/classes/KeyPhraseCards.vue'
+import LessonVideo from '@/components/classes/LessonVideo.vue'
+import ReportProblemDialog from '@/components/classes/ReportProblemDialog.vue'
+import AppToast from '@/components/common/AppToast.vue'
 import DataNotice from '@/components/common/DataNotice.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
-import PortraitAvatar from '@/components/common/PortraitAvatar.vue'
-import ProgressRing from '@/components/common/ProgressRing.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
 import CjkText from '@/components/learning/CjkText.vue'
-import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
-import { useActionFeedback } from '@/composables/useActionFeedback'
+import { usePageRedirect } from '@/composables/usePageNavigation'
+import { useClassNotice } from '@/composables/useClassNotice'
 import { useLocalMessages } from '@/composables/useLocalMessages'
-import { useResource } from '@/composables/useResource'
-import { useStatusLabels } from '@/composables/useStatusLabels'
 import { classesMessages } from '@/plugins/classesMessages'
 import { studentClassesMessages } from '@/plugins/studentClassesMessages'
-import type { ActivityStep, ClassActivityType, QuizCard } from '@/types/classes'
-import { resolveApiError } from '@/utils/apiError'
-import { ACTIVITY_TYPE_KEYS, STAGE_KEYS, isWebLink } from '@/utils/classes'
-import { formatClock } from '@/utils/format'
+import type { StudentLesson } from '@/types/classes'
+import { apiErrorStatus, resolveApiError } from '@/utils/apiError'
+import { classActivityRoute, classLessonRoute } from '@/utils/classes'
+import { parseRecordId } from '@/utils/recordId'
 import '@/styles/classes.css'
 
 const { t } = useLocalMessages({ studentClasses: studentClassesMessages, classes: classesMessages })
-const { statusLabel } = useStatusLabels()
 const route = useRoute()
-const { actionError, actionSuccess, runAction, showError } = useActionFeedback()
+const { toast, showToast } = useClassNotice(undefined, 'student-class-lesson')
 
-const classId = computed(() => Number(route.params.classId))
-const lessonId = computed(() => Number(route.params.lessonId))
-const classRoute = computed(() => ({ name: 'student-class', params: { classId: classId.value } }))
+const routeClassId = computed(() => parseRecordId(route.params.classId))
+const lessonId = computed(() => parseRecordId(route.params.lessonId))
+const lesson = ref<StudentLesson | null>(null)
+const classId = computed(() => lesson.value?.classId ?? routeClassId.value)
+const classRoute = computed(() =>
+  classId.value !== null ? { name: 'student-class', params: { classId: classId.value } } : { name: 'student-classes' },
+)
 
-const resource = useResource(() => studentClassesApi.lesson(lessonId.value))
-const lesson = computed(() => resource.data.value)
+const loadFailure = shallowRef<{ reason: unknown } | null>(null)
+const needsEnrollment = computed(() => apiErrorStatus(loadFailure.value?.reason) === 409)
+const loadError = computed(() =>
+  loadFailure.value && !needsEnrollment.value
+    ? resolveApiError(loadFailure.value.reason, t('classes.lessonLoadError'))
+    : null,
+)
+/** Neither the lesson nor the reason it could not be read is in yet. */
+const loading = computed(() => lesson.value === null && loadError.value === null)
+const reporting = ref(false)
+const videoProgressError = ref<string | null>(null)
+let markingVideo: StudentLesson['video'] = null
+let request = 0
+
+/**
+ * Reads the lesson; only the newest request counts. A lesson of a class the learner has not joined is refused (409):
+ * the 403 page says so and, from the lesson's address in `redirect`, offers its class.
+ */
+async function load(): Promise<void> {
+  const id = lessonId.value
+  const mine = ++request
+  loadFailure.value = null
+  if (id === null) {
+    loadFailure.value = { reason: null }
+    return
+  }
+  try {
+    const loaded = await studentClassesApi.lesson(id)
+    if (mine === request) lesson.value = loaded
+  } catch (reason) {
+    if (mine === request) loadFailure.value = { reason }
+  }
+}
+
+onMounted(load)
+onBeforeUnmount(() => {
+  request += 1
+})
+
+// Another lesson in this same page; leaving the page (to the refused page, say) loads nothing more.
 watch(lessonId, () => {
-  releaseVideo()
-  void resource.reload()
+  if (route.name !== 'student-class-lesson') return
+  reporting.value = false
+  videoProgressError.value = null
+  lesson.value = null
+  void load()
 })
 
-/** "Lesson 1 · First Conversations · about 18 min" above the title. */
-const eyebrow = computed(() => {
+// The lesson id is global; a bookmarked URL may carry a different class in its parent segment.
+usePageRedirect(() => {
+  if (needsEnrollment.value) return { name: 'unauthorized', query: { redirect: route.fullPath } }
   const current = lesson.value
-  if (!current) return ''
-  return current.minutes
-    ? t('studentClasses.lesson.eyebrow', { number: current.number, unit: current.unitTitle, minutes: current.minutes })
-    : t('studentClasses.lesson.eyebrowNoTime', { number: current.number, unit: current.unitTitle })
+  const id = lessonId.value
+  if (!current || id === null || current.classId === routeClassId.value) return null
+  return { ...classLessonRoute(current.classId, id), query: route.query, hash: route.hash }
 })
 
-/** "In progress · 3 of 4 steps" under the title. */
+/** "In progress · 3 of 4 steps", or "Completed · archived class". */
 const stateLine = computed(() => {
   const current = lesson.value
   if (!current) return ''
-  return t('studentClasses.lesson.stateLine', {
-    status: statusLabel('mastery', current.status),
-    done: current.stepsDone,
-    total: current.stepsTotal,
-  })
+  const status = t(`studentClasses.lessonState.${current.status}`)
+  return current.archived
+    ? t('studentClasses.lesson.archivedLine', { status })
+    : t('studentClasses.lesson.stateLine', { status, done: current.stepsDone, total: current.stepsTotal })
 })
 
-const activitiesDone = computed(() => lesson.value?.activities.filter((activity) => activity.done).length ?? 0)
-const nextActivity = computed(() => lesson.value?.activities.find((activity) => !activity.done) ?? null)
-const quizToTake = computed(
-  () =>
-    lesson.value?.quizzes.find((quiz) => quiz.inProgress) ??
-    lesson.value?.quizzes.find((quiz) => !quiz.attemptCount) ??
-    null,
+/** A lesson has one quiz. */
+const quiz = computed(() => lesson.value?.quizzes[0] ?? null)
+
+const nextAction = computed(() => {
+  if (lesson.value?.archived) return { to: classRoute.value, label: t('studentClasses.lesson.backToClass') }
+  const activity = lesson.value?.activities.find((item) => !item.done)
+  if (activity && classId.value !== null && lessonId.value !== null) {
+    return {
+      to: classActivityRoute(classId.value, lessonId.value, activity),
+      label: t('classes.continueNamed', { title: activity.title }),
+    }
+  }
+  const currentQuiz = quiz.value
+  if (currentQuiz && (currentQuiz.inProgress || !currentQuiz.attemptCount)) {
+    return { to: quizRoute(currentQuiz.id), label: t('studentClasses.lesson.continueQuiz') }
+  }
+  return { to: classRoute.value, label: t('classes.openClass') }
+})
+
+/** The attempt with the best score: "See best result" (a later, lower retake does not replace it). */
+const bestAttempt = computed(() =>
+  quiz.value?.bestAttemptId
+    ? { name: 'student-quiz-attempt', params: { quizId: quiz.value.id, attemptId: quiz.value.bestAttemptId } }
+    : null,
 )
 
-function isNext(activity: ActivityStep): boolean {
-  return nextActivity.value?.id === activity.id && nextActivity.value?.type === activity.type
-}
-
-/** "Flashcards · Guided" */
-function activityFacts(activity: ActivityStep): string {
-  const type = t(ACTIVITY_TYPE_KEYS[activity.type])
-  return activity.stage
-    ? t('studentClasses.lesson.activityFacts', { type, stage: t(STAGE_KEYS[activity.stage]) })
-    : type
-}
-
-function activityRoute(type: ClassActivityType, activityId: number) {
+/** The row itself supplies the activity name, type and status. Its tooltip describes the action. */
+function activityLink(activity: StudentLesson['activities'][number]) {
   return {
-    name: 'student-class-activity',
-    params: { classId: classId.value, lessonId: lessonId.value, activityType: activitySlug(type), activityId },
+    to:
+      classId.value !== null && lessonId.value !== null
+        ? classActivityRoute(classId.value, lessonId.value, activity)
+        : classRoute.value,
+    title: t(activity.done ? 'studentClasses.lesson.openActivity' : 'studentClasses.lesson.startActivity', {
+      title: activity.title,
+    }),
   }
 }
 
@@ -390,57 +336,29 @@ function quizRoute(quizId: number) {
   return { name: 'student-quiz', params: { quizId } }
 }
 
-function quizFacts(quiz: QuizCard): string {
-  const counts = { questions: t('classes.questions', quiz.questionCount), marks: t('classes.marks', quiz.marks) }
-  const parts = [
-    quiz.stage
-      ? t('studentClasses.lesson.quizFacts', { stage: t(STAGE_KEYS[quiz.stage]), ...counts })
-      : t('studentClasses.lesson.quizFactsNoStage', counts),
-  ]
-  if (quiz.timeLimitMinutes) parts.push(t('studentClasses.lesson.timeLimit', { minutes: quiz.timeLimitMinutes }))
-  if (quiz.hintsAvailable) parts.push(t('studentClasses.lesson.hintsAvailable'))
-  return parts.join(' · ')
-}
-
-// ----- video -----
-
-const videoUrl = ref<string | null>(null)
-const videoLoading = ref(false)
-let videoAbort: AbortController | null = null
-
-function releaseVideo(): void {
-  videoAbort?.abort()
-  videoAbort = null
-  if (videoUrl.value) URL.revokeObjectURL(videoUrl.value)
-  videoUrl.value = null
-}
-
-async function loadVideo(): Promise<void> {
-  const path = lesson.value?.video?.streamPath
-  if (!path) return
-  releaseVideo()
-  videoLoading.value = true
-  videoAbort = new AbortController()
+/** Watching starts the lesson without adding a completed activity or quiz. */
+async function markWatched(): Promise<void> {
+  const id = lessonId.value
+  const current = lesson.value
+  const video = current?.video
+  if (id === null || !current || !video || video.watched || markingVideo === video) return
+  markingVideo = video
+  videoProgressError.value = null
   try {
-    videoUrl.value = URL.createObjectURL(await videoBlob(path, videoAbort.signal))
+    await studentClassesApi.markVideoWatched(id)
+    if (lesson.value !== current) return
+    video.watched = true
+    if (current.status === 'NOT_STARTED') current.status = 'IN_PROGRESS'
   } catch (reason) {
-    if (!videoAbort?.signal.aborted) showError(resolveApiError(reason, t('studentClasses.lesson.videoError')))
+    if (lesson.value === current)
+      videoProgressError.value = resolveApiError(reason, t('studentClasses.lesson.videoProgressError'))
   } finally {
-    videoLoading.value = false
+    if (markingVideo === video) markingVideo = null
   }
 }
 
-onBeforeUnmount(releaseVideo)
-
-const marking = ref(false)
-
-async function markWatched(): Promise<void> {
-  if (marking.value || lesson.value?.video?.watched) return
-  marking.value = true
-  await runAction(t('studentClasses.lesson.videoError'), async () => {
-    resource.data.value = await studentClassesApi.markVideoWatched(lessonId.value)
-    return t('studentClasses.lesson.watchedSaved')
-  })
-  marking.value = false
+function onReportSent(): void {
+  reporting.value = false
+  showToast(t('studentClasses.report.sent'))
 }
 </script>

@@ -10,9 +10,7 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 
 import com.example.aichinese.config.EmailProperties;
-import com.example.aichinese.entity.User;
 import com.example.aichinese.util.ExceptionLogUtils;
-import com.example.aichinese.util.TextUtils;
 
 @Service
 @ConditionalOnProperty(prefix = "app.email", name = "enabled", havingValue = "true")
@@ -35,13 +33,7 @@ public class SmtpEmailService implements EmailService {
     }
 
     @Override
-    public void sendEmail(User recipient, String subject, String body) {
-        String recipientEmail = recipient == null ? null : TextUtils.trimToNull(recipient.getEmail());
-        if (recipientEmail == null) {
-            log.info("Email sending skipped because the recipient email address is missing.");
-            return;
-        }
-
+    public void sendEmail(String recipientEmail, String subject, String body) {
         try {
             SimpleMailMessage message = new SimpleMailMessage();
             message.setTo(recipientEmail);
@@ -50,10 +42,8 @@ public class SmtpEmailService implements EmailService {
             message.setText(body);
             mailSender.send(message);
         } catch (Exception exception) {
-            log.warn("Email sending failed for user id {}; falling back to in-app notifications only: {}",
-                    recipient.getId(),
-                    ExceptionLogUtils.safeSummary(exception));
-            log.debug("Email sending stack trace for user id {}.", recipient.getId(), exception);
+            log.warn("Email sending failed ({})", ExceptionLogUtils.safeSummary(exception));
+            ExceptionLogUtils.debugOrigin(log, exception);
         }
     }
 }

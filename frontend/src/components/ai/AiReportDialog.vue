@@ -1,90 +1,52 @@
 <template>
-  <AppOverlay :title="t(target.titleKey)" :subtitle="t('aiHelper.reportLead')" @close="emit('close')">
-    <form class="ai-dialog-form" data-testid="ai-report-form" @submit.prevent="send">
-      <div class="field">
-        <label class="field-label" :for="`${baseId}-reason`">
-          {{ t('aiHelper.reportReason') }}<span class="required-mark" aria-hidden="true">*</span>
-        </label>
-        <select :id="`${baseId}-reason`" v-model="reason" class="select" required>
-          <option v-for="option in reasons" :key="option" :value="option">{{ t(reportReasonKey(option)) }}</option>
-        </select>
-      </div>
-      <div class="field">
-        <label class="field-label" :for="`${baseId}-note`">{{ t('aiHelper.reportNote') }}</label>
-        <textarea
-          :id="`${baseId}-note`"
-          v-model="note"
-          class="textarea"
-          rows="3"
-          :maxlength="MAX_NOTE"
-          :placeholder="t('aiHelper.reportNotePlaceholder')"
-        />
-      </div>
-      <p class="callout is-compact">
-        <IconGlyph name="attach" :size="16" />
-        {{ t(target.attachedKey) }}
-      </p>
-      <p v-if="error" class="field-error" role="alert">{{ error }}</p>
-      <div class="form-actions">
-        <button class="btn btn-ghost" type="button" @click="emit('close')">{{ t('aiHelper.cancel') }}</button>
-        <button class="btn btn-primary" type="submit" :disabled="sending" :aria-busy="sending">
-          <IconGlyph v-if="!sending" name="flag" :size="16" />
-          {{ t('aiHelper.sendReport') }}
-        </button>
-      </div>
-    </form>
-  </AppOverlay>
+  <AiReportForm
+    :title="title"
+    :subtitle="subtitle"
+    :attached="attached"
+    :initial-reason="defaultReason ?? reasons[0]!"
+    :submit-report="submit"
+    @close="emit('close')"
+    @sent="emit('sent')"
+  >
+    <option v-for="option in reasons" :key="option" :value="option">{{ t(reportReasonKey(option)) }}</option>
+  </AiReportForm>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, useId } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import { aiHelperApi } from '@/api/ai'
-import IconGlyph from '@/components/common/IconGlyph.vue'
-import { useLocalMessages } from '@/composables/useLocalMessages'
-import { aiHelperMessages } from '@/plugins/aiHelperMessages'
-import { aiSafetyMessages } from '@/plugins/aiSafetyMessages'
-import { resolveApiError } from '@/utils/apiError'
+import type { AiReportPayload } from '@/types/ai'
+import type { AiResponseReportReason } from '@/types/api'
 
-import AppOverlay from '@/components/common/AppOverlay.vue'
-import { reportReasonKey, reportReasons, type AiReportTarget } from './aiHelper'
+import { reportReasonKey } from './aiHelper'
+import AiReportForm from './AiReportForm.vue'
 
-/** "Report this answer": the student picks a reason and may add a note; what was reported is attached for the admin. */
-const props = defineProps<{ target: AiReportTarget }>()
+/**
+ * "Report this answer": the learner picks a reason and may add a note; what was reported is attached for the admin.
+ * `defaultReason` preselects the reason a screen expects most (it leads the list when the feature's list lacks it).
+ */
+const props = defineProps<{
+  payload: Omit<AiReportPayload, 'reasonCategory' | 'description'>
+  title: string
+  attached: string
+  subtitle?: string
+  defaultReason?: AiResponseReportReason
+}>()
 const emit = defineEmits<{ close: []; sent: [] }>()
 
-const MAX_NOTE = 1000
-const { t } = useLocalMessages({ aiHelper: aiHelperMessages, aiSafety: aiSafetyMessages })
-const baseId = useId()
-const reasons = computed(() => reportReasons(props.target.payload.featureKey))
-const reason = ref<string>(reasons.value[0])
-const note = ref('')
-const sending = ref(false)
-const error = ref<string | null>(null)
+const { t } = useI18n()
+/** A score has its own reason. The dialog opens anew for each target. */
+const featureReasons: readonly AiResponseReportReason[] =
+  props.payload.featureKey === 'PRACTICE_CHECK'
+    ? ['SCORE_SEEMS_WRONG', 'INCORRECT_CONTENT', 'INAPPROPRIATE_CONTENT', 'OTHER']
+    : ['INCORRECT_CONTENT', 'UNCLEAR_EXPLANATION', 'INAPPROPRIATE_CONTENT', 'OTHER']
+const reasons: readonly AiResponseReportReason[] =
+  props.defaultReason && !featureReasons.includes(props.defaultReason)
+    ? [props.defaultReason, ...featureReasons]
+    : featureReasons
 
-async function send(): Promise<void> {
-  if (sending.value) return
-  sending.value = true
-  error.value = null
-  try {
-    await aiHelperApi.report({
-      ...props.target.payload,
-      reasonCategory: reason.value,
-      description: note.value.trim() || undefined,
-    })
-    emit('sent')
-  } catch (reasonForFailure) {
-    error.value = resolveApiError(reasonForFailure, t('aiHelper.reportError'))
-  } finally {
-    sending.value = false
-  }
+function submit(reasonCategory: AiResponseReportReason, note: string) {
+  return aiHelperApi.report({ ...props.payload, reasonCategory, description: note || undefined })
 }
 </script>
-
-<style scoped>
-/* Scoped: the dialog also opens from My learning plan, which does not load ai.css. */
-.ai-dialog-form {
-  display: grid;
-  gap: var(--space-4);
-}
-</style>

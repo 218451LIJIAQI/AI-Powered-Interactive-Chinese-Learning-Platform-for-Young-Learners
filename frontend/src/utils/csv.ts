@@ -1,11 +1,11 @@
-export type CsvCell = string | number | null | undefined
+type CsvCell = string | number | null
 
-/** Cells a spreadsheet would read as a formula start with one of these; they get a leading apostrophe. */
-const FORMULA_START = /^[=+\-@\t\r]/
+/** Cells a spreadsheet would read as a formula start with one of these (even after leading spaces); prefix `'`. */
+const FORMULA_START = /^(?:[\t\r\n]|\s*[=+\-@])/
 
 /** One CSV cell (RFC 4180): quoted when it holds a comma, a quote or a line break; formulas are neutralised. */
 function csvCell(value: CsvCell): string {
-  if (value === null || value === undefined) return ''
+  if (value === null) return ''
   let text = String(value)
   if (typeof value === 'string' && FORMULA_START.test(text)) text = `'${text}`
   return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
@@ -17,6 +17,6 @@ export function toCsv(rows: readonly (readonly CsvCell[])[]): string {
 }
 
 /** A CSV download: a byte-order mark lets spreadsheet programs read the UTF-8 text (Malay and Chinese). */
-export function csvBlob(text: string): Blob {
-  return new Blob(['\uFEFF', text], { type: 'text/csv;charset=utf-8' })
+export function csvBlob(rows: readonly (readonly CsvCell[])[]): Blob {
+  return new Blob(['\uFEFF', toCsv(rows)], { type: 'text/csv;charset=utf-8' })
 }

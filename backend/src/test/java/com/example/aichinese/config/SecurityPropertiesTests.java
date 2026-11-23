@@ -17,7 +17,6 @@ class SecurityPropertiesTests {
         SecurityProperties properties = securityProperties(
                 "  " + SECRET + "  ",
                 "  " + REFRESH_COOKIE_NAME + "  ",
-                false,
                 "strict");
 
         assertThat(properties.secret()).isEqualTo(SECRET);
@@ -28,41 +27,33 @@ class SecurityPropertiesTests {
 
     @Test
     void rejectsInvalidRefreshCookieSettings() {
-        assertInvalidRefreshCookieSettings("refresh cookie", false, "Strict", "cookie name");
+        assertInvalidRefreshCookieSettings("refresh cookie", "Strict", "cookie name");
 
-        assertInvalidRefreshCookieSettings(REFRESH_COOKIE_NAME, false, "Loose", "SameSite");
+        assertInvalidRefreshCookieSettings(REFRESH_COOKIE_NAME, "Loose", "SameSite");
 
-        assertInvalidRefreshCookieSettings(REFRESH_COOKIE_NAME, false, "None", "Secure=true");
+        assertInvalidRefreshCookieSettings(REFRESH_COOKIE_NAME, "None", "Secure=true");
     }
 
     private static void assertInvalidRefreshCookieSettings(
             String refreshCookieName,
-            boolean refreshCookieSecure,
             String refreshTokenSameSite,
             String expectedMessage) {
-        assertThatThrownBy(() -> securityProperties(refreshCookieName, refreshCookieSecure, refreshTokenSameSite))
+        assertThatThrownBy(() -> securityProperties(SECRET, refreshCookieName, refreshTokenSameSite))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining(expectedMessage);
     }
 
-    private static SecurityProperties securityProperties(
-            String refreshCookieName,
-            boolean refreshCookieSecure,
-            String refreshTokenSameSite) {
-        return securityProperties(SECRET, refreshCookieName, refreshCookieSecure, refreshTokenSameSite);
-    }
-
+    /** Settings with an insecure refresh cookie, so {@code SameSite=None} is refused for lack of Secure. */
     private static SecurityProperties securityProperties(
             String secret,
             String refreshCookieName,
-            boolean refreshCookieSecure,
             String refreshTokenSameSite) {
         return new SecurityProperties(
                 secret,
                 ACCESS_TOKEN_EXPIRATION_MS,
                 REFRESH_TOKEN_EXPIRATION_MS,
                 refreshCookieName,
-                refreshCookieSecure,
+                false,
                 refreshTokenSameSite);
     }
 }

@@ -1,20 +1,18 @@
 package com.example.aichinese.config;
 
 import java.io.IOException;
-import java.util.Locale;
 import java.util.Set;
 
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.Ordered;
-import org.springframework.core.annotation.Order;
-import org.springframework.core.env.Environment;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.lang.NonNull;
-import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.util.UrlPathHelper;
 
 import com.example.aichinese.exception.FriendlyErrorMessageResolver;
+import com.example.aichinese.util.RequestIdHolder;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import jakarta.servlet.FilterChain;
@@ -32,26 +30,25 @@ import jakarta.servlet.http.HttpServletResponse;
  * {@code Origin}/{@code Referer} is neither the API's own origin nor a
  * configured frontend CORS origin. Non-browser clients that send no browser
  * origin metadata remain supported.</p>
+ *
+ * <p>Registered inside {@link SecurityConfig} after {@code HeaderWriterFilter} and before {@code CorsFilter},
+ * so 403 refusals carry full browser security headers and the API's JSON error body.</p>
  */
-@Component
-@Order(Ordered.HIGHEST_PRECEDENCE + 10)
 public class RefreshCookieOriginFilter extends OncePerRequestFilter {
 
-    private static final String REFRESH_PATH = "/api/v1/auth/refresh";
+    private static final Logger log = LoggerFactory.getLogger(RefreshCookieOriginFilter.class);
+
+    /** The refresh endpoint, which is also the path of the refresh cookie. */
+    public static final String REFRESH_PATH = "/api/v1/auth/refresh";
     private static final String SEC_FETCH_SITE = "Sec-Fetch-Site";
     private static final String SAME_ORIGIN_FETCH = "same-origin";
 
     private final ObjectMapper objectMapper;
     private final Set<String> trustedOrigins;
 
-    public RefreshCookieOriginFilter(
-            ObjectMapper objectMapper,
-            Environment environment,
-            @Value("${app.cors.allowed-origins:#{T(com.example.aichinese.config.CorsConfig).defaultLocalDevOriginsCsv()}}")
-            String allowedOrigins) {
+    public RefreshCookieOriginFilter(ObjectMapper objectMapper, Set<String> trustedOrigins) {
         this.objectMapper = objectMapper;
-        this.trustedOrigins = Set.copyOf(
-                CorsConfig.resolveExactOrigins(allowedOrigins, ProductionProfiles.isActive(environment)));
+        this.trustedOrigins = Set.copyOf(trustedOrigins);
     }
 
     @Override
@@ -60,6 +57,11 @@ public class RefreshCookieOriginFilter extends OncePerRequestFilter {
             @NonNull HttpServletResponse response,
             @NonNull FilterChain filterChain) throws ServletException, IOException {
         if (requiresOriginCheck(request) && !hasTrustedBrowserOrigin(request)) {
+            log.warn("Rejected refresh request with untrusted browser origin [requestId={}, hasOrigin={}, hasReferer={}, hasFetchSite={}]",
+                    RequestIdHolder.currentOrDash(),
+                    request.getHeader(HttpHeaders.ORIGIN) != null,
+                    request.getHeader(HttpHeaders.REFERER) != null,
+                    request.getHeader(SEC_FETCH_SITE) != null);
             ApiErrorResponseWriter.write(
                     objectMapper, response, HttpStatus.FORBIDDEN, FriendlyErrorMessageResolver.permissionDeniedMessage());
             return;
@@ -70,7 +72,7 @@ public class RefreshCookieOriginFilter extends OncePerRequestFilter {
 
     private boolean requiresOriginCheck(HttpServletRequest request) {
         return "POST".equalsIgnoreCase(request.getMethod())
-                && REFRESH_PATH.equals(RequestPaths.applicationPath(request));
+                && REFRESH_PATH.equals(UrlPathHelper.defaultInstance.getPathWithinApplication(request));
     }
 
     private boolean hasTrustedBrowserOrigin(HttpServletRequest request) {
@@ -95,20 +97,8 @@ public class RefreshCookieOriginFilter extends OncePerRequestFilter {
     }
 
     private boolean isTrustedOrigin(HttpServletRequest request, String origin) {
-        return origin.equals(requestOrigin(request)) || trustedOrigins.contains(origin);
-    }
-
-    private static String requestOrigin(HttpServletRequest request) {
-        String scheme = request.getScheme() == null
-                ? ""
-                : request.getScheme().toLowerCase(Locale.ROOT);
-        String host = request.getServerName() == null
-                ? ""
-                : request.getServerName().toLowerCase(Locale.ROOT);
-        int port = request.getServerPort();
-        boolean defaultPort = ("http".equals(scheme) && port == 80) || ("https".equals(scheme) && port == 443);
-        String hostPart = host.contains(":") && !host.startsWith("[") ? "[" + host + "]" : host;
-        return scheme + "://" + hostPart + (defaultPort || port < 0 ? "" : ":" + port);
+        String requestOrigin = HttpUrlValidation.originOf(request.getScheme(), request.getServerName(), request.getServerPort());
+        return origin.equals(requestOrigin) || trustedOrigins.contains(origin);
     }
 
     /** Normalised like a configured CORS origin, so the two compare equal; {@code null} when it is not an origin. */

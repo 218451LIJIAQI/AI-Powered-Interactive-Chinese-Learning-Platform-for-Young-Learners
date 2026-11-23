@@ -1,174 +1,190 @@
 /* Admin Learning path and Practice library pages, and their drawers. Page-prefixed classes (`.admin-path-*`,
-   `.admin-learning-*`). The sheet, table, reader and timeline patterns are in the Admin console block of main.css. */
+   `.admin-learning-*`, `.admin-library-*`, `.admin-questions-*`). Shared admin patterns live in admin-shared.css. */
 
-/* ----- Learning path: the units on the left, the chosen unit on the right ----- */
+/* Learning path: one card, the units under their level headings */
+
+/* A numbered step in a unit's lesson list. */
+.admin-step {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: var(--space-6);
+  height: var(--space-6);
+  border-radius: var(--radius-round);
+  background: var(--surface-sunken);
+  color: var(--text-primary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-strong);
+}
 
 .admin-path {
   display: grid;
-  grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1.1fr);
-  gap: var(--grid-gap);
-  align-items: start;
+  gap: var(--space-4);
+}
+
+.admin-path-level {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
 }
 
 .admin-path-level + .admin-path-level {
+  padding-top: var(--space-4);
   border-top: 1px solid var(--border-subtle);
 }
 
-.admin-path-level-title {
-  margin: 0;
-  padding: var(--space-3) var(--space-5) var(--space-2);
-  color: var(--text-secondary);
-  font-size: var(--type-overline-size);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: var(--letter-spacing-wide);
-  text-transform: uppercase;
+.admin-path-level .row-list > li:first-child {
+  padding-top: var(--space-2);
 }
 
-.admin-path-unit {
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
+.admin-path-level .row-list > li:last-child {
+  padding-bottom: 0;
 }
 
-/* The unit number: a solid ink square when students see the unit, a dashed outline while it is a draft. */
-.admin-path-mark {
-  display: grid;
-  place-items: center;
-  width: var(--space-8);
-  height: var(--space-8);
-  border: 1px solid var(--color-ink-900);
-  border-radius: var(--radius-xs);
-  background: var(--surface-card);
-  color: var(--text-primary);
-  font-family: var(--font-display);
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-semibold);
-  font-variant-numeric: tabular-nums;
-}
-
-.admin-path-mark.is-draft {
-  border-style: dashed;
-  border-color: var(--border-interactive);
-  color: var(--text-secondary);
-}
-
-.admin-path-zh {
-  font-family: var(--font-cjk);
-  font-weight: var(--font-weight-semibold);
-}
-
-.admin-path-detail {
-  position: sticky;
-  top: calc(var(--topbar-height) + var(--space-4));
-  min-width: 0;
-  scroll-margin-top: calc(var(--topbar-height) + var(--space-4));
-}
-
-.admin-path-detail:focus {
-  outline: none;
-}
-
-/* Published / draft, said in words next to the pill. */
-.admin-path-state {
+.admin-path-unit,
+.admin-path-stop {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1) var(--space-2);
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
+  gap: var(--space-3);
+  min-width: 0;
 }
 
-.admin-timeline-mark.is-numbered {
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-bold);
-  font-variant-numeric: tabular-nums;
-}
-
-.admin-learning-question-cell {
-  min-width: 260px;
-  white-space: normal;
-}
-
-/* ----- Practice library ----- */
-
-/* "Supported · HSK 2" stays on one line. */
-.admin-learning-stage-cell {
+.admin-path-tag {
+  flex: 0 0 auto;
+  text-transform: uppercase;
   white-space: nowrap;
 }
 
-.admin-learning-title-cell {
-  min-width: 160px;
-  font-weight: var(--font-weight-semibold);
-  white-space: normal;
+.admin-questions-col-skill {
+  width: 120px;
 }
 
-/* The preview of a set in its drawer: the first items on the page colour, the way a student meets them. */
-.admin-learning-preview {
-  display: grid;
+.admin-questions-col-difficulty {
+  width: 96px;
+}
+
+.admin-questions-col-level {
+  width: 104px;
+}
+
+.admin-questions-col-status {
+  width: 120px;
+}
+
+/* A draft question's row has Publish before Open; the main one, Open, is rightmost. */
+.admin-questions-table .admin-questions-col-actions {
+  width: 184px;
+}
+
+.admin-questions-actions {
+  display: inline-flex;
+  justify-content: flex-end;
   gap: var(--space-2);
-  padding: var(--space-4);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  background: var(--surface-page);
 }
 
-.admin-learning-preview p {
-  margin: 0;
+/* Practice library */
+
+.admin-library-history > li:first-child {
+  padding-top: 0;
 }
 
-.admin-learning-preview ul {
-  display: grid;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+.admin-library-history > li:last-child {
+  padding-bottom: 0;
 }
 
-.admin-learning-preview li {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--space-1) var(--space-3);
-  padding: var(--space-2) 0;
-  border-bottom: 1px solid var(--border-subtle);
+.admin-library-col-type {
+  width: 132px;
 }
 
-.admin-learning-preview li:last-child {
-  border-bottom: 0;
+.admin-library-col-level {
+  width: 72px;
 }
 
-.admin-learning-preview-hanzi {
-  font-family: var(--font-hanzi);
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-semibold);
+.admin-library-col-status {
+  width: 120px;
 }
 
-.admin-learning-preview-meaning {
-  color: var(--text-secondary);
-  font-size: var(--font-size-md);
+.admin-library-col-updated {
+  width: 88px;
 }
 
-/* ----- Editor forms (practice set and level check question drawers) ----- */
+/* An archived row offers Restore, a longer word than Open. */
+.admin-library-table .admin-library-col-open {
+  width: 104px;
+}
+
+/* Editor forms (practice set and level check question drawers) */
 
 .admin-learning-form {
-  gap: var(--space-5);
+  container-type: inline-size;
 }
 
-.admin-learning-chips {
+/* A card, pair or sentence: its fields in one row. */
+.admin-learning-words {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.admin-learning-words + .admin-learning-words {
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.admin-learning-word-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  align-items: end;
+  gap: var(--space-2);
+}
+
+/* A sentence: its tiles need the whole row, pinyin and meaning go under them. */
+.admin-learning-word-row.is-sentence {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+}
+
+.admin-learning-word-row.is-sentence > :first-child {
+  grid-column: 1 / 3;
+}
+
+.admin-learning-word-row.is-sentence > :nth-child(2) {
+  grid-area: 2 / 1;
+}
+
+.admin-learning-word-row.is-sentence > :nth-child(3) {
+  grid-area: 2 / 2;
+}
+
+.admin-learning-word-row.is-sentence > .btn {
+  grid-area: 1 / 3;
+}
+
+.admin-learning-word-row > .btn {
+  margin-bottom: calc((var(--control-height-md) - var(--control-height-sm)) / 2);
+}
+
+/* Tracing a word: one small number field under each of its characters. */
+.admin-learning-strokes {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2) var(--space-3);
+  gap: var(--space-2);
 }
 
-/* One item of a set: a numbered sheet with its fields. */
+.admin-learning-stroke {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+  width: 72px;
+  font-size: var(--font-size-lg);
+}
+
+/* A question with its answers: a sunken sheet with its fields. */
 .admin-learning-item {
   display: grid;
   gap: var(--space-2);
-  margin-bottom: var(--space-3);
   padding: var(--space-3) var(--space-4) var(--space-4);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  background: var(--surface-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
 }
 
 .admin-learning-item-head {
@@ -176,53 +192,124 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  color: var(--text-secondary);
   font-size: var(--font-size-sm);
-}
-
-.admin-learning-item-head strong {
-  color: var(--text-primary);
 }
 
 .admin-learning-item-row {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-2);
 }
 
-.admin-learning-item-row.is-two {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.admin-learning-options,
-.admin-learning-answers {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
+.admin-learning-options {
+  display: grid;
   gap: var(--space-2);
 }
 
 .admin-learning-options > .btn,
-.admin-learning-answers > .btn {
-  align-self: flex-start;
+.admin-learning-form .field-set > .btn {
+  justify-self: start;
+  width: fit-content;
 }
 
-.admin-learning-answer {
-  display: flex;
+.admin-learning-option {
+  display: grid;
+  grid-template-columns: auto repeat(2, minmax(0, 1fr)) auto;
   align-items: center;
   gap: var(--space-2);
 }
 
-.admin-learning-answer .input {
-  flex: 1 1 0;
-}
-
-.admin-learning-answer .choice {
+.admin-learning-option .choice {
   align-items: center;
 }
 
-@media (max-width: 1200px) {
-  .admin-path {
-    grid-template-columns: minmax(260px, 0.9fr) minmax(0, 1.1fr);
+/* A level check answer: its text, the right / wrong mark and why. */
+.admin-learning-answer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 128px minmax(0, 1fr) var(--control-height-sm);
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.admin-learning-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  min-height: var(--control-height-md);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-md);
+  box-shadow: inset 0 0 0 1px var(--border-default);
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-strong);
+  cursor: pointer;
+}
+
+.admin-learning-right.is-right {
+  background: var(--color-primary-50);
+  box-shadow: inset 0 0 0 var(--border-width-thick) var(--color-primary-500);
+  color: var(--text-primary);
+}
+
+.admin-learning-right input {
+  accent-color: var(--color-primary-600);
+}
+
+.admin-learning-right input:focus-visible {
+  outline: none;
+}
+
+.admin-learning-right:has(input:disabled) {
+  cursor: not-allowed;
+}
+
+.admin-learning-right:has(input:focus-visible) {
+  outline: var(--border-width-focus) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
+}
+
+@container (max-width: 34rem) {
+  .admin-learning-word-row,
+  .admin-learning-word-row.is-sentence,
+  .admin-learning-item-row,
+  .admin-learning-option,
+  .admin-learning-answer {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .admin-learning-word-row.is-sentence > :first-child,
+  .admin-learning-word-row.is-sentence > :nth-child(2),
+  .admin-learning-word-row.is-sentence > :nth-child(3),
+  .admin-learning-word-row.is-sentence > .btn {
+    grid-area: auto;
+    grid-column: auto;
+  }
+
+  .admin-learning-option + .admin-learning-option,
+  .admin-learning-answer:not(.type-caption) + .admin-learning-answer {
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .admin-learning-word-row > .btn,
+  .admin-learning-option > .btn,
+  .admin-learning-answer > .btn {
+    justify-self: end;
+    margin-bottom: 0;
+  }
+
+  .admin-learning-answer.type-caption {
+    display: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .admin-learning-right {
+    border: 1px solid ButtonText;
+  }
+
+  .admin-learning-right.is-right {
+    border: var(--border-width-thick) solid Highlight;
   }
 }

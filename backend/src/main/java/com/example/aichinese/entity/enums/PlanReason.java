@@ -17,12 +17,6 @@ public enum PlanReason {
     EVERYDAY(List.of(PlanGoal.INTRODUCE_MYSELF, PlanGoal.ORDER_FOOD, PlanGoal.GO_SHOPPING, PlanGoal.UNDERSTAND_PRICES,
             PlanGoal.GET_AROUND, PlanGoal.SHORT_CHATS, PlanGoal.TELL_TIME)),
 
-    FRIENDS_FAMILY(List.of(PlanGoal.INTRODUCE_MYSELF, PlanGoal.TALK_ABOUT_FAMILY, PlanGoal.SHORT_CHATS,
-            PlanGoal.SMALL_TALK, PlanGoal.TELL_TIME, PlanGoal.WRITE_MESSAGES)),
-
-    CULTURE(List.of(PlanGoal.INTRODUCE_MYSELF, PlanGoal.ENJOY_MEDIA, PlanGoal.READ_SIGNS, PlanGoal.SHORT_CHATS,
-            PlanGoal.ORDER_FOOD)),
-
     JUST_FOR_ME(List.of(PlanGoal.INTRODUCE_MYSELF, PlanGoal.SHORT_CHATS, PlanGoal.ORDER_FOOD, PlanGoal.READ_SIGNS,
             PlanGoal.ENJOY_MEDIA, PlanGoal.WRITE_MESSAGES)),
 
@@ -35,7 +29,7 @@ public enum PlanReason {
     private final List<PlanGoal> suggestedGoals;
 
     PlanReason(List<PlanGoal> suggestedGoals) {
-        this.suggestedGoals = List.copyOf(suggestedGoals);
+        this.suggestedGoals = suggestedGoals;
     }
 
     /** The goals the setup offers for this reason (any goal may still be picked). */

@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.stereotype.Component;
 
 import com.example.aichinese.config.AiProperties;
 
@@ -14,15 +13,12 @@ import com.example.aichinese.config.AiProperties;
  * Default AI provider client for the prototype. It calls the OpenAI Responses API
  * ({@code POST /v1/responses}) with the configured model (GPT-5.6 Luna by default),
  * as specified in the project proposal. Bounded-AI instructions are sent through the
- * {@code instructions} field, responses are not stored by the provider ({@code store=false}),
+ * {@code instructions} field, response storage for later retrieval is disabled ({@code store=false}),
  * and any provider error is converted into a controlled failure result.
  */
-@Component
 public class OpenAiResponsesAiProviderClient extends HttpAiProviderClient {
 
     private static final String ROLE_USER = "user";
-    private static final String STATUS_COMPLETED = "completed";
-    private static final String STATUS_INCOMPLETE = "incomplete";
     /** Low detail keeps image token usage bounded; a single handwritten character does not need more. */
     private static final String IMAGE_DETAIL = "low";
 
@@ -31,13 +27,13 @@ public class OpenAiResponsesAiProviderClient extends HttpAiProviderClient {
     }
 
     @Override
-    Map<String, Object> buildRequestBody(String modelName, AiProviderPrompt prompt) {
+    Map<String, Object> buildRequestBody(String modelName, int maxOutputTokens, AiProviderPrompt prompt) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("model", modelName);
         body.put("instructions", prompt.systemInstruction());
         body.put("input", buildInput(prompt));
-        body.put("max_output_tokens", prompt.maxOutputTokens());
-        // Learner prompts are already persisted locally where needed; the provider does not need to keep them.
+        body.put("max_output_tokens", maxOutputTokens);
+        // Disable response retrieval storage; provider safety retention is governed separately.
         body.put("store", false);
         if (prompt.expectJson()) {
             body.put("text", Map.of("format", Map.of("type", "json_object")));
@@ -46,11 +42,15 @@ public class OpenAiResponsesAiProviderClient extends HttpAiProviderClient {
     }
 
     private static List<Map<String, Object>> buildInput(AiProviderPrompt prompt) {
-        List<Map<String, Object>> input = new ArrayList<>(prompt.messageHistory().size() + 1);
+        List<Map<String, Object>> input = new ArrayList<>(prompt.messageHistory().size() + 2);
+        if (prompt.expectJson()) {
+            // Responses JSON mode requires an explicit JSON instruction inside the input messages.
+            input.add(Map.of("role", "developer", "content", "Return a JSON object."));
+        }
         for (AiProviderPrompt.AiMessage message : prompt.messageHistory()) {
             input.add(Map.of("role", message.role(), "content", message.content()));
         }
-        if (prompt.hasImage()) {
+        if (prompt.image() != null) {
             // Multimodal turn: bounded text instruction plus the learner image as a data URL.
             List<Map<String, Object>> content = List.of(
                     Map.of("type", "input_text", "text", prompt.userPrompt()),
@@ -65,23 +65,25 @@ public class OpenAiResponsesAiProviderClient extends HttpAiProviderClient {
     @Override
     AiProviderResult parseResponse(Map<String, Object> responseBody, AiProviderPrompt prompt) {
         Object status = responseBody.get("status");
-        boolean completed = status == null || STATUS_COMPLETED.equals(status);
-        boolean incomplete = STATUS_INCOMPLETE.equals(status);
+        Integer tokens = extractTokenCount(responseBody.get("usage"));
+        boolean completed = status == null || "completed".equals(status);
+        boolean incomplete = "incomplete".equals(status);
         if (!completed && !incomplete) {
-            return AiProviderResult.failure("Provider response status was not completed.");
+            return AiProviderResult.failure("Provider response status was not completed.", tokens);
         }
-        // A truncated JSON document cannot be parsed safely, so incomplete JSON output is rejected.
-        if (incomplete && prompt.expectJson()) {
-            return AiProviderResult.failure("Provider response was incomplete.");
+        if (incomplete) {
+            Object reason = responseBody.get("incomplete_details") instanceof Map<?, ?> details
+                    ? details.get("reason")
+                    : null;
+            if ("content_filter".equals(reason)) {
+                return AiProviderResult.failure("Provider response was filtered.", tokens);
+            }
+            // A truncated JSON document cannot be parsed safely, so incomplete JSON output is rejected.
+            if (prompt.expectJson()) {
+                return AiProviderResult.failure("Provider response was incomplete.", tokens);
+            }
         }
-
-        String text = extractOutputText(responseBody.get("output"));
-        if (text == null || text.isBlank()) {
-            return AiProviderResult.failure("Provider response text was empty.");
-        }
-
-        Integer tokenCount = AiProviderSupport.extractTokenCount(responseBody.get("usage"));
-        return AiProviderResult.success(text.trim(), tokenCount);
+        return textResult(extractOutputText(responseBody.get("output")), responseBody);
     }
 
     private static String extractOutputText(Object outputObject) {

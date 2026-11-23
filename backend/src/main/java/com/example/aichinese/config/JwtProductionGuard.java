@@ -1,5 +1,7 @@
 package com.example.aichinese.config;
 
+import java.util.Set;
+
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
@@ -16,13 +18,18 @@ import org.springframework.stereotype.Component;
 @Component
 public class JwtProductionGuard {
 
+    private static final Set<String> DEVELOPMENT_SECRETS = Set.of(
+            "LocalComposeOnlyJwtSecret1234567890AB",
+            "DemoProfileJwtSecretForFypLocalRun1234567890AB");
+
     public JwtProductionGuard(Environment environment, SecurityProperties securityProperties) {
         if (!ProductionProfiles.isActive(environment)) {
             return;
         }
-        if (ProductionProfiles.isPlaceholder(securityProperties.secret())) {
+        String secret = securityProperties.secret();
+        if (ProductionProfiles.isPlaceholder(secret) || DEVELOPMENT_SECRETS.contains(secret)) {
             throw new IllegalStateException(
-                    "JWT_SECRET must not use a placeholder value when the prod profile is active.");
+                    "JWT_SECRET must use a deployment-specific signing key when the prod profile is active.");
         }
         if (!securityProperties.refreshTokenCookieSecure()) {
             throw new IllegalStateException(

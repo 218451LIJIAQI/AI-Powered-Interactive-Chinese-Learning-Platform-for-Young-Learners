@@ -27,7 +27,8 @@ import com.example.aichinese.entity.enums.PlanSelfLevel;
  * One version of a student's learning plan: the goal in the student's words and picks, the pace, the level the
  * level check placed them at, and what SparkBot wrote (goal title and summary, skills to work on, outcomes, a first
  * milestone), null when the plan was built from rules. A new goal or a changed level makes a new version; earlier
- * versions are kept inactive, and progress is never stored here (it is read from the student's real completions).
+ * versions are kept inactive, and progress is never stored here (it is read from the student's real completions). The
+ * setup's plan is a draft ({@code confirmed} false) until the learner starts it.
  * Lists are stored as text: goals, focus and skills comma-separated, AI lists one item per line.
  */
 @Getter
@@ -49,6 +50,12 @@ public class LearningPlan extends BaseEntity {
 
     @Column(name = "active", nullable = false)
     private boolean active = true;
+
+    /**
+     * False while the plan is a setup draft. Starting it activates it, and skipping or rebuilding removes the draft.
+     */
+    @Column(name = "confirmed", nullable = false)
+    private boolean confirmed = true;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "plan_reason", nullable = false, length = 20)
@@ -121,10 +128,7 @@ public class LearningPlan extends BaseEntity {
     @Column(name = "outcomes", columnDefinition = "TEXT")
     private String outcomes;
 
-    /** The timeline is shorter than the path needs, so the plan names a first milestone. */
-    @Column(name = "ambitious", nullable = false)
-    private boolean ambitious;
-
+    /** Set when the timeline is shorter than the path needs, so the plan names a first milestone. */
     @Column(name = "milestone_week")
     private Integer milestoneWeek;
 
@@ -140,4 +144,11 @@ public class LearningPlan extends BaseEntity {
     /** The week the last Learn step should end; the weeks after it are for review and practice. */
     @Column(name = "content_weeks", nullable = false)
     private Integer contentWeeks;
+
+    /**
+     * The optional class the learner wants first ("Pick this first"), null for the plan's own order. It counts only
+     * while that class is one of the plan's optional classes and there is another to choose from.
+     */
+    @Column(name = "picked_class_id")
+    private Long pickedClassId;
 }

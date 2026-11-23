@@ -1,5 +1,9 @@
 package com.example.aichinese.dto.learn;
 
+import static com.example.aichinese.dto.DtoNormalization.immutableListOrNull;
+import static com.example.aichinese.dto.DtoNormalization.strip;
+import static com.example.aichinese.dto.DtoNormalization.stripToNull;
+
 import java.util.List;
 
 import jakarta.validation.Valid;
@@ -12,6 +16,8 @@ import com.example.aichinese.entity.enums.LevelCheckLevel;
 import com.example.aichinese.entity.enums.LevelCheckSkill;
 import com.example.aichinese.entity.enums.PublishStatus;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 /**
  * Level check questions for admins: the list row, the edit form's request and its detail (with answer statistics).
  */
@@ -20,19 +26,17 @@ public final class LevelCheckQuestionData {
     private LevelCheckQuestionData() {
     }
 
-    /** {@code correctPercent} is null while nobody answered the question. */
+    @Schema(name = "LevelCheckQuestionRow")
     public record Row(
             Long id,
             String prompt,
-            String hanzi,
             LevelCheckSkill skill,
             ActivityDifficulty difficulty,
             LevelCheckLevel level,
-            PublishStatus status,
-            int answeredCount,
-            Integer correctPercent) {
+            PublishStatus status) {
     }
 
+    /** {@code correctPercent} is null while nobody answered the question. */
     public record Detail(
             Long id,
             String prompt,
@@ -46,16 +50,10 @@ public final class LevelCheckQuestionData {
             int answeredCount,
             Integer correctPercent,
             List<Option> options) {
-
-        public Detail {
-            options = options == null ? List.of() : List.copyOf(options);
-        }
     }
 
     /** One answer: its text, whether it is the right one, and why (or what it means instead). */
     public record Option(
-            Long id,
-
             @NotBlank(message = "Every answer needs text.")
             @Size(max = 200, message = "An answer must not exceed 200 characters.")
             String text,
@@ -64,6 +62,11 @@ public final class LevelCheckQuestionData {
 
             @Size(max = 300, message = "Explanation must not exceed 300 characters.")
             String explanation) {
+
+        public Option {
+            text = strip(text);
+            explanation = stripToNull(explanation);
+        }
     }
 
     public record Request(
@@ -94,6 +97,14 @@ public final class LevelCheckQuestionData {
 
             @NotNull(message = "Add at least 2 answers.")
             @Size(min = 2, max = 6, message = "A question needs 2 to 6 answers.")
-            List<@Valid Option> options) {
+            List<@NotNull(message = "Every answer needs text.") @Valid Option> options) {
+
+        public Request {
+            prompt = strip(prompt);
+            hanzi = stripToNull(hanzi);
+            pinyin = stripToNull(pinyin);
+            audioText = stripToNull(audioText);
+            options = immutableListOrNull(options);
+        }
     }
 }

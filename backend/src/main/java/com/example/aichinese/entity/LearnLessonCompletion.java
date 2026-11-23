@@ -20,7 +20,9 @@ import com.example.aichinese.entity.base.BaseEntity;
 @Setter
 @Entity
 @Table(name = "learn_lesson_completions", indexes = {
-        @Index(name = "idx_learn_lesson_completions_lesson", columnList = "lesson_id")
+        @Index(name = "idx_learn_lesson_completions_first_completed", columnList = "first_completed_at"),
+        @Index(name = "idx_learn_lesson_completions_last_completed", columnList = "last_completed_at"),
+        @Index(name = "idx_learn_lesson_completions_student_first", columnList = "student_id,first_completed_at")
 }, uniqueConstraints = {
         @UniqueConstraint(name = "uk_learn_lesson_completions_student_lesson", columnNames = { "student_id", "lesson_id" })
 })
@@ -39,9 +41,6 @@ public class LearnLessonCompletion extends BaseEntity {
 
     @Column(name = "attempts", nullable = false)
     private Integer attempts = 0;
-
-    @Column(name = "xp_awarded", nullable = false)
-    private Integer xpAwarded = 0;
 
     @Column(name = "first_completed_at", nullable = false)
     private LocalDateTime firstCompletedAt;

@@ -3,17 +3,21 @@ package com.example.aichinese.service.ai;
 import org.springframework.stereotype.Component;
 
 import com.example.aichinese.service.ContentSafetyService;
-import com.example.aichinese.service.ContentSafetySettingsReader;
+import com.example.aichinese.service.PlatformSettingsService;
+
+import lombok.RequiredArgsConstructor;
 
 /**
- * Enforces the admin "AI safety check" platform setting.
+ * Enforces the two admin safety toggles on AI requests, as the AI Settings page and the Responsible AI page describe
+ * them: the "Sensitive-word filter" blocks unsafe words in class content and AI requests, and the "AI safety check"
+ * screens AI requests and replies before they are shown. Both use the platform's sensitive-word list.
  *
- * <p>When the setting is enabled (the default), learner text is screened with the platform's
- * sensitive-word list before it is sent to the AI provider, and the provider's reply is
- * screened before it is shown. A blocked request never reaches the provider and does not use
- * the learner's AI quota; a blocked reply is withheld and logged as a failed request.</p>
+ * <p>Either toggle enables input screening. The gateway screens text and conversation history, and a recording's
+ * target, before reserving quota. The AI safety check also screens provider replies, logging a withheld reply as a
+ * failure.</p>
  */
 @Component
+@RequiredArgsConstructor
 public class AiSafetyGuard {
 
     public static final String BLOCKED_INPUT_MESSAGE =
@@ -27,15 +31,17 @@ public class AiSafetyGuard {
 
     public static final String BLOCKED_OUTPUT_LOG = "AI reply withheld by the AI safety check.";
 
-    private final ContentSafetySettingsReader settingsReader;
+    private final PlatformSettingsService platformSettingsService;
     private final ContentSafetyService contentSafetyService;
 
-    public AiSafetyGuard(ContentSafetySettingsReader settingsReader, ContentSafetyService contentSafetyService) {
-        this.settingsReader = settingsReader;
-        this.contentSafetyService = contentSafetyService;
+    /** Text that would be sent to the provider: screened while the word filter or the AI safety check is on. */
+    public boolean blocksRequest(String text) {
+        return contentSafetyService.containsSensitiveContent(text)
+                && (platformSettingsService.aiSafetyCheckEnabled() || platformSettingsService.sensitiveWordFilterEnabled());
     }
 
-    public boolean blocks(String text) {
-        return settingsReader.aiSafetyCheckEnabled() && contentSafetyService.containsSensitiveContent(text);
+    /** A provider reply: screened while the AI safety check is on. */
+    public boolean blocksReply(String text) {
+        return contentSafetyService.containsSensitiveContent(text) && platformSettingsService.aiSafetyCheckEnabled();
     }
 }

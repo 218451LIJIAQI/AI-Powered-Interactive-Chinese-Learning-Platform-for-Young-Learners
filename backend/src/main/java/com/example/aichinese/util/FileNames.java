@@ -15,6 +15,9 @@ public final class FileNames {
      * whitespace. The result may be empty.
      */
     public static String sanitize(String value) {
+        if (value == null || value.isEmpty()) {
+            return "";
+        }
         StringBuilder sanitized = new StringBuilder(value.length());
         boolean previousWasWhitespace = false;
 
@@ -28,7 +31,7 @@ public final class FileNames {
                 continue;
             }
 
-            if (Character.isWhitespace(codePoint)) {
+            if (TextUtils.isSpace(codePoint)) {
                 if (!previousWasWhitespace && !sanitized.isEmpty()) {
                     sanitized.append(' ');
                     previousWasWhitespace = true;
@@ -40,11 +43,16 @@ public final class FileNames {
             previousWasWhitespace = false;
         }
 
-        String cleaned = sanitized.toString().trim();
-        while (cleaned.startsWith(".")) {
-            cleaned = cleaned.substring(1).trim();
+        // Drop leading dots/spaces and any trailing space left before the end of the name.
+        int start = 0;
+        while (start < sanitized.length() && (sanitized.charAt(start) == '.' || sanitized.charAt(start) == ' ')) {
+            start++;
         }
-        return cleaned;
+        int end = sanitized.length();
+        while (end > start && sanitized.charAt(end - 1) == ' ') {
+            end--;
+        }
+        return sanitized.substring(start, end);
     }
 
     private static boolean isUnsafeCodePoint(int codePoint) {

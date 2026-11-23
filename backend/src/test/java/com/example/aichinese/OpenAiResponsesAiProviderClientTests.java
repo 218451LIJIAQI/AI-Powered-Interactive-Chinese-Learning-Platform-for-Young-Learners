@@ -8,16 +8,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.io.IOException;
 import java.util.Base64;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 
 import com.example.aichinese.config.AiProperties;
-import com.example.aichinese.dto.ai.AiAvailabilityResponse;
 import com.example.aichinese.service.ai.AiAvailabilityService;
 import com.example.aichinese.service.ai.AiProviderPrompt;
 import com.example.aichinese.service.ai.AiProviderResult;
@@ -25,6 +26,7 @@ import com.example.aichinese.service.ai.OpenAiResponsesAiProviderClient;
 import com.example.aichinese.support.StubHttpServer;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.BooleanNode;
 
 /**
  * Unit coverage for {@code OpenAiResponsesAiProviderClient}, the default provider named in the
@@ -36,6 +38,7 @@ class OpenAiResponsesAiProviderClientTests {
     private static final String RESPONSES_PATH = "/responses";
     private static final String API_KEY = "test-api-key";
     private static final String MODEL_NAME = "gpt-5.6-luna";
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     private static final String COMPLETED_RESPONSE = """
             {"id":"resp_1","status":"completed","output":[
@@ -47,8 +50,9 @@ class OpenAiResponsesAiProviderClientTests {
 
     private final RestTemplateBuilder restTemplateBuilder = new RestTemplateBuilder();
 
-    @Test
-    void completedResponseBuildsResponsesPayloadAndExtractsOutputText() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void completedResponseBuildsResponsesPayloadAndExtractsOutputText(boolean expectJson) throws Exception {
         AtomicReference<String> sentBody = new AtomicReference<>();
         AtomicReference<String> authorization = new AtomicReference<>();
         try (StubHttpServer server = StubHttpServer.start(RESPONSES_PATH, exchange -> {
@@ -56,20 +60,28 @@ class OpenAiResponsesAiProviderClientTests {
             sentBody.set(requestBody(exchange));
             respondJson(exchange, COMPLETED_RESPONSE);
         })) {
-            AiProviderResult result = client(properties(server)).generateText(prompt(true));
+            AiProviderResult result = client(properties(server)).generateText(prompt(expectJson));
 
             assertThat(result.success()).isTrue();
             assertThat(result.text()).isEqualTo("你好 (nǐ hǎo) means hello.");
             assertThat(result.tokenCount()).isEqualTo(32);
             assertThat(authorization.get()).isEqualTo("Bearer " + API_KEY);
-            assertThat(sentBody.get())
-                    .contains("\"model\":\"" + MODEL_NAME + "\"")
-                    .contains("\"instructions\":\"Bounded beginner tutor instruction\"")
-                    .contains("\"max_output_tokens\":64")
-                    .contains("\"store\":false")
-                    .contains("\"role\":\"assistant\"")
-                    .contains("\"text\":{\"format\":{\"type\":\"json_object\"}}")
-                    .doesNotContain("\"messages\"");
+            JsonNode body = JSON.readTree(sentBody.get());
+            assertThat(body.path("model").textValue()).isEqualTo(MODEL_NAME);
+            assertThat(body.path("instructions").textValue()).isEqualTo("Bounded beginner tutor instruction");
+            assertThat(body.path("max_output_tokens").numberValue()).isEqualTo(64);
+            assertThat(body.path("store")).isEqualTo(BooleanNode.FALSE);
+            var expectedInput = JSON.createArrayNode();
+            if (expectJson) {
+                expectedInput.addObject().put("role", "developer").put("content", "Return a JSON object.");
+                assertThat(body.at("/text/format/type").asText()).isEqualTo("json_object");
+            } else {
+                assertThat(body.has("text")).isFalse();
+            }
+            expectedInput.addObject().put("role", "assistant").put("content", "Previous answer");
+            expectedInput.addObject().put("role", "user").put("content", "What does ni hao mean?");
+            assertThat(body.path("input")).isEqualTo(expectedInput);
+            assertThat(body.has("messages")).isFalse();
         }
     }
 
@@ -94,11 +106,53 @@ class OpenAiResponsesAiProviderClientTests {
 
     @Test
     void slowProviderTimesOutWithAControlledFailureWithinTheConfiguredTimeout() throws Exception {
-        // Proposal Table 6.2 "AI - timeouts": the stub answers after the 1 s client timeout.
+        // Proposal Table 6.2 "AI - timeouts": the stub never answers so the client must give up at its 1 s timeout.
+        CountDownLatch hang = new CountDownLatch(1);
         try (StubHttpServer server = StubHttpServer.start(RESPONSES_PATH, exchange -> {
             try {
-                Thread.sleep(2_500L);
-                respondJson(exchange, COMPLETED_RESPONSE);
+                hang.await();
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        })) {
+            AiProperties properties = properties(server);
+            properties.setTimeoutSeconds(1);
+            long started = System.nanoTime();
+
+            AiProviderResult result = client(properties).generateText(prompt(false));
+
+            long elapsedMillis = (System.nanoTime() - started) / 1_000_000L;
+            assertThat(result.success()).isFalse();
+            assertThat(result.text()).isNull();
+            assertThat(result.errorSummary()).isEqualTo("Provider request failed or timed out.");
+            // A connection failure has the same summary, so the lower bound shows the call waited for the timeout.
+            assertThat(elapsedMillis).as("the call waits for the timeout").isGreaterThanOrEqualTo(900L);
+        } finally {
+            hang.countDown();
+        }
+    }
+
+    /**
+     * A reply that trickles in (each piece well within the timeout) must still end at the configured deadline: the
+     * chat stream and the browser stop waiting soon after it. {@code HttpAiProviderClientTests} covers the deadline itself.
+     */
+    @Test
+    void aReplyThatTricklesInIsCutOffAtTheTotalDeadline() throws Exception {
+        AtomicInteger chunksSent = new AtomicInteger();
+        try (StubHttpServer server = StubHttpServer.start(RESPONSES_PATH, exchange -> {
+            byte[] filler = " ".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            try (exchange) {
+                exchange.sendResponseHeaders(200, 0);
+                exchange.getResponseBody().write('{');
+                exchange.getResponseBody().flush();
+                chunksSent.incrementAndGet();
+                while (!Thread.currentThread().isInterrupted()) {
+                    Thread.sleep(200L);
+                    exchange.getResponseBody().write(filler);
+                    exchange.getResponseBody().flush();
+                    chunksSent.incrementAndGet();
+                }
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
             } catch (IOException ignored) {
@@ -113,39 +167,33 @@ class OpenAiResponsesAiProviderClientTests {
 
             long elapsedMillis = (System.nanoTime() - started) / 1_000_000L;
             assertThat(result.success()).isFalse();
-            assertThat(result.text()).isNull();
-            assertThat(result.errorSummary()).isNotBlank();
-            // Every failure has the same summary, so the timing shows that the timeout (not an early error) ended it.
-            assertThat(elapsedMillis).as("the call waits for the timeout").isGreaterThanOrEqualTo(900L);
-            assertThat(elapsedMillis).as("the call is bounded by the timeout").isLessThan(2_400L);
+            assertThat(result.errorSummary()).isEqualTo("Provider request failed or timed out.");
+            assertThat(chunksSent.get()).as("server actually started trickling chunks").isGreaterThanOrEqualTo(2);
+            assertThat(elapsedMillis).as("waits until the 1 s deadline rather than failing immediately")
+                    .isGreaterThanOrEqualTo(900L);
         }
     }
 
-    @Test
-    void serverErrorAndRateLimitResponsesBecomeControlledFailures() throws Exception {
-        for (int statusCode : new int[] {500, 503, 429}) {
-            AtomicInteger calls = new AtomicInteger();
-            try (StubHttpServer server = StubHttpServer.start(RESPONSES_PATH, exchange -> {
-                calls.incrementAndGet();
-                respond(exchange, statusCode,
-                        "{\"error\":{\"message\":\"provider unavailable\",\"code\":\"" + statusCode + "\"}}");
-            })) {
-                AiProperties properties = properties(server);
-                properties.setTimeoutSeconds(3);
-                long started = System.nanoTime();
+    @ParameterizedTest(name = "HTTP {0}")
+    @ValueSource(ints = {500, 503, 429, 401})
+    void errorStatusesBecomeControlledFailuresThatNameTheStatus(int statusCode) throws Exception {
+        AtomicInteger calls = new AtomicInteger();
+        try (StubHttpServer server = StubHttpServer.start(RESPONSES_PATH, exchange -> {
+            calls.incrementAndGet();
+            // Like OpenAI's own errors, the body may echo the key it was sent.
+            respond(exchange, statusCode, "{\"error\":{\"message\":\"Provider unavailable for key " + API_KEY
+                    + "\",\"code\":\"" + statusCode + "\"}}");
+        })) {
+            AiProperties properties = properties(server);
+            properties.setTimeoutSeconds(3);
 
-                AiProviderResult result = client(properties).generateText(prompt(true));
+            AiProviderResult result = client(properties).generateText(prompt(true));
 
-                long elapsedMillis = (System.nanoTime() - started) / 1_000_000L;
-                assertThat(calls.get()).as("HTTP " + statusCode + " reached the provider stub once").isEqualTo(1);
-                // A timeout gives the same summary, so the timing shows that the status itself ended the call.
-                assertThat(elapsedMillis).as("HTTP " + statusCode + " fails fast instead of timing out")
-                        .isLessThan(1_500L);
-                assertThat(result.success()).as("HTTP " + statusCode + " is not a success").isFalse();
-                assertThat(result.text()).isNull();
-                assertThat(result.errorSummary()).as("HTTP " + statusCode + " has a safe error summary").isNotBlank();
-                assertThat(result.errorSummary()).doesNotContain(API_KEY);
-            }
+            assertThat(calls.get()).as("calls to the provider stub").isEqualTo(1);
+            assertThat(result.success()).isFalse();
+            assertThat(result.text()).isNull();
+            // The admin's usage log names the status (a wrong key, the provider's own limit), never the body.
+            assertThat(result.errorSummary()).isEqualTo("Provider answered with HTTP " + statusCode + ".");
         }
     }
 
@@ -161,7 +209,6 @@ class OpenAiResponsesAiProviderClientTests {
                     "WRITING_FEEDBACK",
                     "Bounded handwriting instruction",
                     "Give short handwriting practice feedback in JSON.",
-                    64,
                     true,
                     List.of(),
                     new AiProviderPrompt.AiImageInput(imageBytes, "image/png"));
@@ -170,9 +217,12 @@ class OpenAiResponsesAiProviderClientTests {
 
             assertThat(result.success()).isTrue();
             String expectedDataUrl = "data:image/png;base64," + Base64.getEncoder().encodeToString(imageBytes);
-            JsonNode body = new ObjectMapper().readTree(sentBody.get());
-            JsonNode content = body.path("input").get(0).path("content");
-            assertThat(body.path("store").asBoolean(true)).isFalse();
+            JsonNode body = JSON.readTree(sentBody.get());
+            assertThat(body.at("/input/0/role").asText()).isEqualTo("developer");
+            assertThat(body.at("/input/0/content").asText()).contains("JSON");
+            assertThat(body.at("/input/1/role").asText()).isEqualTo("user");
+            JsonNode content = body.at("/input/1/content");
+            assertThat(body.path("store")).isEqualTo(BooleanNode.FALSE);
             assertThat(content.isArray()).isTrue();
             assertThat(content.get(0).path("type").asText()).isEqualTo("input_text");
             assertThat(content.get(0).path("text").asText()).isEqualTo("Give short handwriting practice feedback in JSON.");
@@ -195,13 +245,13 @@ class OpenAiResponsesAiProviderClientTests {
         AiProperties disabledOpenAi = new AiProperties();
         disabledOpenAi.setApiKey(API_KEY);
 
-        AiAvailabilityResponse openAiAvailability = new AiAvailabilityService(openAi).getAvailability();
-        AiAvailabilityResponse deepseekAvailability = new AiAvailabilityService(deepseek).getAvailability();
-        AiAvailabilityResponse disabledAvailability = new AiAvailabilityService(disabledOpenAi).getAvailability();
+        AiAvailabilityService.Availability openAiAvailability = new AiAvailabilityService(openAi).getAvailability();
+        AiAvailabilityService.Availability deepseekAvailability = new AiAvailabilityService(deepseek).getAvailability();
+        AiAvailabilityService.Availability disabledAvailability = new AiAvailabilityService(disabledOpenAi).getAvailability();
 
         assertThat(openAiAvailability.available()).isTrue();
         assertThat(openAiAvailability.imageAnalysisAvailable()).isTrue();
-        // SDD T26: the availability response sent to the browser never carries the API key.
+        // SDD T26: what the server knows about availability never carries the API key.
         assertThat(openAiAvailability.toString()).doesNotContain(API_KEY);
         assertThat(deepseekAvailability.available()).isTrue();
         assertThat(deepseekAvailability.imageAnalysisAvailable()).isFalse();
@@ -232,6 +282,7 @@ class OpenAiResponsesAiProviderClientTests {
         properties.setApiKey(API_KEY);
         properties.setModelName(MODEL_NAME);
         properties.setTimeoutSeconds(2);
+        properties.setMaxOutputTokens(64);
         return properties;
     }
 
@@ -240,7 +291,6 @@ class OpenAiResponsesAiProviderClientTests {
                 "CHAT_TUTOR",
                 "Bounded beginner tutor instruction",
                 "What does ni hao mean?",
-                64,
                 expectJson,
                 List.of(new AiProviderPrompt.AiMessage("assistant", "Previous answer")),
                 null);

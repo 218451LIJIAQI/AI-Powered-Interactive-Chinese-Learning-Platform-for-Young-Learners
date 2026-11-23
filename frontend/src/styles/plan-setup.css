@@ -1,0 +1,453 @@
+/* Setup wizard and Level Check focus mode (StudentSetupPage, StudentLevelCheckPage, PlanBuilding, PlanResult,
+   LevelLadder, LevelCheckRunner). Shared form/road/rail rules live in plan.css; exercise primitives in learn-shared.css. */
+
+/* Focus-mode shell geometry */
+.plan-setup {
+  --focus-label-width: 176px;
+  --focus-stage-top: clamp(var(--space-6), 12vh, 110px);
+}
+
+/* A question: the headline, a line under it, then the choices, in one column of 780. */
+.plan-question {
+  --focus-column: 780px;
+  gap: var(--space-6);
+  container-type: inline-size;
+}
+
+.plan-question-head {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.plan-question-head p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--type-body-size);
+  line-height: var(--line-height-normal);
+}
+
+/* The plan itself takes the width of the top bar. */
+.plan-wide {
+  --focus-column: var(--focus-bar-width);
+  --focus-stage-top: var(--space-3);
+}
+
+/* Welcome, building and done sit in the middle of the window. */
+.plan-center {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: var(--space-6);
+  max-width: var(--focus-bar-width);
+  min-height: calc(
+    100vh - var(--focus-bar-top) - var(--control-height-md) - var(--space-3) - var(--focus-footer-height) -
+      var(--space-6)
+  );
+  margin: 0 auto;
+  text-align: center;
+}
+
+.plan-center-lead {
+  margin: calc(-1 * var(--space-2)) 0 0;
+  color: var(--text-secondary);
+  font-size: var(--type-body-size);
+  line-height: var(--line-height-normal);
+}
+
+.plan-welcome-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.plan-welcome-steps li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  text-align: left;
+}
+
+.plan-welcome-number {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: var(--control-height-sm);
+  height: var(--control-height-sm);
+  border-radius: var(--radius-round);
+  background: var(--surface-sunken);
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-heading);
+}
+
+.plan-welcome-copy {
+  display: grid;
+  gap: var(--space-0-5);
+  min-width: 0;
+}
+
+.plan-welcome-copy strong {
+  font-size: var(--type-body-size);
+  font-weight: var(--font-weight-heading);
+  line-height: var(--line-height-normal);
+}
+
+.plan-welcome-copy span {
+  color: var(--text-secondary);
+  font-size: var(--type-caption-size);
+  line-height: 1.5;
+}
+
+.plan-setup-error {
+  max-width: var(--focus-bar-width);
+  margin: var(--space-4) auto 0;
+}
+
+/* A failed "Start my path": the reason, and "Build it again" for a plan that is too old to start. */
+.plan-start-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+/* The level check: the skill over the question, and answers laid out for what they are. */
+.plan-check {
+  gap: var(--space-2);
+}
+
+.plan-check.has-pairs .learn-options {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.plan-check.has-tiles .learn-options {
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+}
+
+.plan-check.has-tiles .option-row {
+  position: relative;
+  justify-content: center;
+  min-height: 136px;
+}
+
+.plan-check.has-tiles .option-keycap {
+  position: absolute;
+  top: var(--space-2);
+  left: var(--space-2);
+}
+
+.plan-check.has-tiles .learn-option-mark {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+}
+
+.plan-check.has-tiles .learn-option-text {
+  justify-content: center;
+}
+
+.plan-check.has-tiles .learn-option-hanzi {
+  font-size: var(--font-size-5xl);
+  line-height: 1.2;
+}
+
+/* Building: what happens while the server builds the plan. */
+.plan-building-icon {
+  display: grid;
+  place-items: center;
+  width: 88px;
+  height: 88px;
+  border-radius: var(--radius-2xl);
+  background: var(--color-primary-500);
+  color: var(--text-on-primary);
+}
+
+.plan-building-steps {
+  display: grid;
+  gap: var(--space-4);
+  width: 100%;
+  max-width: 420px;
+  margin: 0;
+  padding: var(--space-4) var(--space-6);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  list-style: none;
+  text-align: left;
+}
+
+.plan-building-steps li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--text-secondary);
+  font-size: var(--type-body-size);
+  line-height: var(--line-height-normal);
+}
+
+.plan-building-steps li.is-done,
+.plan-building-steps li.is-current {
+  color: var(--text-primary);
+  font-weight: var(--font-weight-strong);
+}
+
+.plan-building-mark {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: var(--space-6);
+  height: var(--space-6);
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius-round);
+}
+
+.plan-building-steps li.is-done .plan-building-mark {
+  border: 0;
+  background: var(--color-primary-500);
+  color: var(--text-on-primary);
+}
+
+.plan-building-steps li.is-current .plan-building-mark {
+  border: 0;
+}
+
+/* Result: two equal cards (level ladder + goal summary). */
+.plan-result {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--grid-gap);
+}
+
+.plan-result-card {
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--card-padding);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-2xl);
+}
+
+.plan-ladder {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: end;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.plan-ladder-rung {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.plan-ladder-tag-slot {
+  min-height: var(--space-6);
+}
+
+/* Each rung a step higher than the one before. */
+.plan-ladder-bar {
+  height: calc((var(--rung) + 1) * var(--space-3));
+  margin-bottom: var(--space-1);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+}
+
+.plan-ladder-rung.is-reached .plan-ladder-bar {
+  border-color: var(--color-primary-500);
+  background: var(--color-primary-500);
+}
+
+.plan-ladder-rung.is-target .plan-ladder-bar {
+  border: 1.5px dashed var(--color-primary-500);
+}
+
+.plan-ladder-hsk {
+  color: var(--text-secondary);
+  font-size: var(--type-caption-size);
+  font-weight: var(--font-weight-strong);
+  line-height: 1.5;
+}
+
+.plan-ladder-rung.is-reached .plan-ladder-hsk,
+.plan-ladder-rung.is-target .plan-ladder-hsk {
+  color: var(--text-primary);
+}
+
+.plan-result-level {
+  margin: 0;
+  font-size: var(--type-h1-size);
+  font-weight: var(--font-weight-heading);
+  letter-spacing: var(--letter-spacing-display);
+  line-height: var(--line-height-snug);
+}
+
+.plan-result-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.plan-result-sub {
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-strong);
+  line-height: var(--line-height-normal);
+}
+
+.plan-result-goal {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.plan-result-goal > div {
+  min-width: 0;
+}
+
+.plan-result-goal .type-caption {
+  margin: 0;
+}
+
+.plan-result-goal .plan-icon-tile {
+  --plan-tile-size: 52px;
+}
+
+.plan-result-goal-title {
+  margin: 0;
+  font-size: var(--type-h2-size);
+  font-weight: var(--font-weight-heading);
+  line-height: var(--line-height-snug);
+  overflow-wrap: anywhere;
+}
+
+.plan-result-quote {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--surface-sunken);
+  font-size: var(--type-body-size);
+  line-height: var(--line-height-normal);
+  overflow-wrap: anywhere;
+}
+
+.plan-result-picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.plan-result-ai {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--type-caption-size);
+  line-height: 1.5;
+}
+
+.plan-result-week {
+  display: grid;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.plan-result-week-rows {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.plan-result-week-rows > div {
+  display: grid;
+  grid-template-columns: var(--space-7) minmax(0, 1fr);
+  column-gap: var(--space-3);
+}
+
+.plan-result-week-rows dt {
+  display: contents;
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-strong);
+  line-height: var(--line-height-normal);
+}
+
+.plan-result-week-icon {
+  display: grid;
+  grid-row: span 2;
+  place-items: center;
+  align-self: center;
+  width: var(--space-7);
+  height: var(--space-7);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+}
+
+.plan-result-week-rows dd {
+  grid-column: 2;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--type-caption-size);
+  line-height: 1.5;
+}
+
+@media (max-width: 75rem) {
+  .plan-result {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 48rem) {
+  .plan-check.has-tiles .learn-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-flow: row;
+  }
+
+  .plan-check.has-pairs .learn-options {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .plan-welcome-steps {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 30rem) {
+  .plan-ladder {
+    gap: var(--space-1);
+    overflow-x: auto;
+  }
+
+  .plan-ladder .tag {
+    max-width: none;
+    padding: 0 var(--space-1-5);
+    font-size: var(--font-size-2xs);
+    white-space: nowrap;
+  }
+}
+
+@media (forced-colors: active) {
+  .plan-ladder-rung.is-reached .plan-ladder-bar {
+    border-color: Highlight;
+    background: Highlight;
+    forced-color-adjust: none;
+  }
+
+  .plan-ladder-rung.is-target .plan-ladder-bar {
+    border-color: Highlight;
+  }
+}

@@ -1,149 +1,143 @@
 <template>
-  <AuthShell variant="recovery">
-    <div class="auth-flow">
-      <header class="auth-form-head">
-        <h1>{{ sentTo ? t('recovery.sentTitle') : t('recovery.forgotTitle') }}</h1>
-        <p v-if="!sentTo">{{ t('recovery.forgotCopy') }}</p>
-      </header>
+  <AuthShell>
+    <form class="auth-form" novalidate @submit.prevent="submit">
+      <h1 class="auth-title">{{ t('recovery.forgotTitle') }}</h1>
 
-      <div v-if="sentTo" class="auth-sent" data-testid="forgot-sent">
-        <p class="alert alert-success" role="status">
-          <IconGlyph name="check" :size="18" />
-          <span>{{ t('recovery.sentCopy', { email: sentTo }) }}</span>
+      <div class="field">
+        <label class="field-label" for="forgot-email">
+          {{ t('recovery.email') }}<span class="required-mark" aria-hidden="true">*</span>
+        </label>
+        <input
+          id="forgot-email"
+          v-model="email"
+          class="input"
+          type="email"
+          autocomplete="email"
+          required
+          :placeholder="t('recovery.emailPlaceholder')"
+          :aria-invalid="Boolean(emailError)"
+          :aria-describedby="emailError ? 'forgot-email-error' : undefined"
+          @blur="checkEmailOnBlur"
+        />
+        <p v-if="emailError" id="forgot-email-error" class="field-error">
+          <IconGlyph name="alert" :size="14" />{{ t(emailError) }}
         </p>
-        <p class="field-hint">{{ t('recovery.sentSpam') }}</p>
-        <p v-if="error" class="alert alert-danger" role="alert">
-          <IconGlyph name="alert" :size="18" />
-          <span>{{ error }}</span>
-        </p>
-        <div class="auth-sent-actions">
-          <button
-            class="btn btn-secondary"
-            type="button"
-            :disabled="submitting"
-            :aria-busy="submitting"
-            data-testid="send-again"
-            @click="sendAgain"
-          >
-            <IconGlyph name="refresh" :size="16" />
-            {{ t('recovery.sendAgain') }}
-          </button>
-          <button class="btn btn-ghost" type="button" @click="useAnotherEmail">
-            {{ t('recovery.useAnotherEmail') }}
-          </button>
-        </div>
+      </div>
+      <p v-if="sendFailure" id="forgot-send-error" class="callout is-danger" role="alert">
+        <IconGlyph name="alert" :size="18" />
+        <span>{{ resolveApiError(sendFailure.reason, t('recovery.sendFailed')) }}</span>
+      </p>
+
+      <!-- What the product says after sending: the link is in the inbox of this address, if it has an account. -->
+      <div v-if="sent" id="forgot-sent" class="callout" role="status" data-testid="forgot-sent">
+        <IconGlyph name="mail" :size="18" />
+        <span>
+          <strong>{{ t('recovery.sentTitle') }}</strong>
+          <span>{{ t('recovery.sentCopy') }}</span>
+          <span>{{ t('recovery.sentNewest') }}</span>
+        </span>
       </div>
 
-      <form v-else class="auth-form" novalidate @submit.prevent="submit">
-        <p v-if="error" id="forgot-error" class="alert alert-danger" role="alert">
-          <IconGlyph name="alert" :size="18" />
-          <span>{{ error }}</span>
-        </p>
-        <div class="field">
-          <label class="field-label" for="forgot-email">
-            {{ t('recovery.email') }}<span class="required-mark" aria-hidden="true">*</span>
-          </label>
-          <input
-            id="forgot-email"
-            v-model="email"
-            class="input"
-            type="email"
-            autocomplete="email"
-            required
-            :placeholder="t('recovery.emailPlaceholder')"
-            :aria-invalid="Boolean(error)"
-            :aria-describedby="error ? 'forgot-error' : 'forgot-steps'"
-          />
-        </div>
-        <button class="btn btn-primary btn-lg btn-block" type="submit" :disabled="submitting" :aria-busy="submitting">
-          <span>{{ submitting ? t('recovery.sending') : t('recovery.sendLink') }}</span>
-          <IconGlyph name="chevronRight" :size="18" />
-        </button>
-        <ol id="forgot-steps" class="auth-steps" :aria-label="t('recovery.steps')">
-          <li>{{ t('recovery.stepEnter') }}</li>
-          <li>{{ t('recovery.stepOpen') }}</li>
-          <li>{{ t('recovery.stepChoose') }}</li>
-        </ol>
-      </form>
+      <!-- One button: after sending it sends the link again, so focus returns to it once re-enabled. -->
+      <button
+        ref="submitButton"
+        class="btn btn-lg btn-block"
+        :class="sent ? 'btn-secondary' : 'btn-primary'"
+        type="submit"
+        :disabled="submitting || Boolean(emailError)"
+        :aria-busy="submitting"
+        :aria-describedby="sendFailure ? 'forgot-send-error' : sent ? 'forgot-sent' : undefined"
+        data-testid="forgot-submit"
+      >
+        <span>{{ submitLabel }}</span>
+        <IconGlyph v-if="!sent" name="chevronRight" :size="18" />
+      </button>
 
       <p class="auth-switch">
         <span>{{ t('recovery.rememberPassword') }}</span>
-        <RouterLink class="btn btn-link" to="/auth">{{ t('recovery.backToSignIn') }}</RouterLink>
+        <RouterLink class="btn btn-link auth-text-link" to="/auth">{{ t('recovery.backToSignIn') }}</RouterLink>
       </p>
-    </div>
+    </form>
     <AppToast :message="toast" />
   </AuthShell>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { computed, nextTick, ref, shallowRef, watch } from 'vue'
+import { RouterLink } from 'vue-router'
 
 import { authApi } from '@/api/services'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import AppToast from '@/components/common/AppToast.vue'
 import AuthShell from '@/components/public/AuthShell.vue'
+import { useFieldCheck } from '@/composables/useFieldCheck'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { useToast } from '@/composables/useToast'
 import { recoveryMessages } from '@/plugins/recoveryMessages'
 import { resolveApiError } from '@/utils/apiError'
 import { isValidEmail } from '@/utils/email'
-import { replaceSensitiveRouteState } from '@/utils/sensitiveData'
 import { getSessionStorage, safeGetItem, safeRemoveItem, storageKeys } from '@/utils/storage'
 
-const route = useRoute()
-const router = useRouter()
 const { t } = useLocalMessages({ recovery: recoveryMessages })
 const { toast, showToast } = useToast()
 
-replaceSensitiveRouteState(router, route, 'forgot-password')
-
 const email = ref(readRememberedEmail())
-const sentTo = ref<string | null>(null)
+const submitButton = ref<HTMLButtonElement | null>(null)
+const normalizedEmail = computed(() => email.value.trim().toLowerCase())
+/** The link went to the address in the field (the confirmation speaks of "this email"). */
+const sent = ref(false)
 const submitting = ref(false)
-const error = ref<string | null>(null)
+const sendFailure = shallowRef<{ reason: unknown } | null>(null)
+
+const {
+  error: emailError,
+  validate: validateEmail,
+  validateOnBlur: checkEmailOnBlur,
+} = useFieldCheck(email, (value) => (isValidEmail(value.trim()) ? null : 'recovery.emailInvalid'))
+
+const submitLabel = computed(() => {
+  if (submitting.value) return t('common.sending')
+  return sent.value ? t('recovery.sendAgain') : t('recovery.sendLink')
+})
 
 /** The sign-in page hands over the address typed there (session storage, read once). */
 function readRememberedEmail(): string {
   const storage = getSessionStorage()
-  const remembered = safeGetItem(storageKeys.recoveryEmail, storage)?.trim() ?? ''
+  const remembered = safeGetItem(storageKeys.recoveryEmail, storage) ?? ''
   safeRemoveItem(storageKeys.recoveryEmail, storage)
   return remembered
 }
 
-async function requestLink(address: string): Promise<boolean> {
-  submitting.value = true
-  error.value = null
-  try {
-    await authApi.forgotPassword(address)
-    return true
-  } catch (reason) {
-    error.value = resolveApiError(reason, t('recovery.sendFailed'))
-    return false
-  } finally {
-    submitting.value = false
-  }
-}
+// Another address is a new request: the confirmation belonged to the address it was sent for.
+watch(normalizedEmail, () => {
+  sent.value = false
+  sendFailure.value = null
+})
 
 async function submit(): Promise<void> {
   if (submitting.value) return
-  const address = email.value.trim().toLowerCase()
-  if (!isValidEmail(address)) {
-    error.value = t('recovery.emailInvalid')
+  if (!validateEmail()) {
+    void nextTick(() => document.getElementById('forgot-email')?.focus())
     return
   }
-  if (await requestLink(address)) sentTo.value = address
-}
-
-async function sendAgain(): Promise<void> {
-  if (sentTo.value && !submitting.value && (await requestLink(sentTo.value))) {
-    showToast(t('recovery.sentAgain'))
+  const hadButtonFocus = document.activeElement === submitButton.value
+  submitting.value = true
+  sendFailure.value = null
+  const address = normalizedEmail.value
+  try {
+    await authApi.forgotPassword(address)
+    // The confirmation speaks of the address in the field: not when it was changed while the link went out.
+    if (normalizedEmail.value !== address) return
+    if (sent.value) showToast(t('recovery.sentAgain'))
+    sent.value = true
+  } catch (reason) {
+    if (normalizedEmail.value === address) sendFailure.value = { reason }
+  } finally {
+    submitting.value = false
+    if (hadButtonFocus) {
+      await nextTick()
+      if (!document.activeElement || document.activeElement === document.body) submitButton.value?.focus()
+    }
   }
-}
-
-function useAnotherEmail(): void {
-  sentTo.value = null
-  error.value = null
-  email.value = ''
 }
 </script>

@@ -1,95 +1,76 @@
 package com.example.aichinese.config.seed;
 
 import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.annotation.Order;
 import org.springframework.boot.CommandLineRunner;
-import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.core.annotation.Order;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.aichinese.config.ProductionProfiles;
+
 import com.example.aichinese.entity.Badge;
 import com.example.aichinese.entity.LearningCategory;
-import com.example.aichinese.entity.LearningLevel;
 import com.example.aichinese.entity.Role;
-import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.RoleName;
 import com.example.aichinese.repository.BadgeRepository;
 import com.example.aichinese.repository.LearningCategoryRepository;
-import com.example.aichinese.repository.LearningLevelRepository;
 import com.example.aichinese.repository.RoleRepository;
 import com.example.aichinese.repository.SystemSettingRepository;
 import com.example.aichinese.repository.UserRepository;
+import com.example.aichinese.service.AuthService;
 import com.example.aichinese.service.PlatformSettingsService;
 import com.example.aichinese.service.PlatformSettingsService.SettingDefinition;
 import com.example.aichinese.service.RewardBadge;
+import com.example.aichinese.service.learn.HintPolicyService;
+import com.example.aichinese.util.LanguageCodes;
 
+import lombok.RequiredArgsConstructor;
+
+/**
+ * Reference data every installation needs, in every profile: the roles, the class themes, the badges, the platform
+ * settings' defaults and, when configured, the default admin. Rows are only added when missing (a badge row is kept
+ * aligned with {@link RewardBadge}), so the seeder runs safely on every start against a persistent database.
+ */
 @Component
 @Order(0)
+@RequiredArgsConstructor
 public class DataSeeder implements CommandLineRunner {
 
     private static final Logger log = LoggerFactory.getLogger(DataSeeder.class);
-    private static final Map<RoleName, String> ROLE_DESCRIPTIONS = Map.of(
-            RoleName.STUDENT, "Student role for learners using the platform.",
-            RoleName.TEACHER, "Teacher role for educators creating and managing learning content.",
-            RoleName.ADMIN, "Admin role for platform management and moderation.");
-    /** Mandarin levels of classes and students: Beginner 1 is HSK 1, Beginner 2 is HSK 2. */
-    private static final List<String> LEARNING_LEVELS = List.of("Beginner 1", "Beginner 2");
-    /** Class topics. */
+    /** Class themes (the "topics" of the class catalogue API). */
     private static final List<String> LEARNING_CATEGORIES = List.of(
-            "Pinyin",
-            "Tones",
-            "Vocabulary",
-            "Characters",
-            "Listening",
-            "Speaking",
-            "Sentences",
-            "Numbers",
-            "Culture");
+            "Travel",
+            "Work and career",
+            "Study or exchange",
+            "Daily life",
+            "Personal interest");
+
+    private static final int MIN_ADMIN_PASSWORD_LENGTH = 8;
 
     private final RoleRepository roleRepository;
-    private final LearningLevelRepository learningLevelRepository;
     private final LearningCategoryRepository learningCategoryRepository;
     private final BadgeRepository badgeRepository;
     private final SystemSettingRepository systemSettingRepository;
     private final UserRepository userRepository;
-    private final PasswordEncoder passwordEncoder;
+    private final AuthService authService;
+    private final Environment environment;
 
-    @Value("${DEFAULT_ADMIN_EMAIL:}")
+    @Value("${app.bootstrap-admin.email:}")
     private String defaultAdminEmail;
 
-    @Value("${DEFAULT_ADMIN_PASSWORD:}")
+    @Value("${app.bootstrap-admin.password:}")
     private String defaultAdminPassword;
-
-    public DataSeeder(
-            RoleRepository roleRepository,
-            LearningLevelRepository learningLevelRepository,
-            LearningCategoryRepository learningCategoryRepository,
-            BadgeRepository badgeRepository,
-            SystemSettingRepository systemSettingRepository,
-            UserRepository userRepository,
-            PasswordEncoder passwordEncoder) {
-        this.roleRepository = roleRepository;
-        this.learningLevelRepository = learningLevelRepository;
-        this.learningCategoryRepository = learningCategoryRepository;
-        this.badgeRepository = badgeRepository;
-        this.systemSettingRepository = systemSettingRepository;
-        this.userRepository = userRepository;
-        this.passwordEncoder = passwordEncoder;
-    }
 
     @Override
     @Transactional
     public void run(String... args) {
+        systemSettingRepository.lockForSeeding();
         seedRoles();
-        seedLearningLevels();
         seedLearningCategories();
         seedBadges();
         seedSystemSettings();
@@ -97,24 +78,11 @@ public class DataSeeder implements CommandLineRunner {
     }
 
     private void seedRoles() {
-        ROLE_DESCRIPTIONS.forEach((name, description) -> roleRepository.findByName(name).orElseGet(() -> {
-            Role role = new Role();
-            role.setName(name);
-            role.setDescription(description);
-            return roleRepository.save(role);
-        }));
-    }
-
-    private void seedLearningLevels() {
-        for (int i = 0; i < LEARNING_LEVELS.size(); i++) {
-            String name = LEARNING_LEVELS.get(i);
-            int sortOrder = i + 1;
-            learningLevelRepository.findByName(name).orElseGet(() -> {
-                LearningLevel level = new LearningLevel();
-                level.setName(name);
-                level.setDescription(name + " (HSK " + sortOrder + ")");
-                level.setSortOrder(sortOrder);
-                return learningLevelRepository.save(level);
+        for (RoleName name : RoleName.values()) {
+            roleRepository.findByName(name).orElseGet(() -> {
+                Role role = new Role();
+                role.setName(name);
+                return roleRepository.save(role);
             });
         }
     }
@@ -126,66 +94,55 @@ public class DataSeeder implements CommandLineRunner {
             learningCategoryRepository.findByName(name).orElseGet(() -> {
                 LearningCategory category = new LearningCategory();
                 category.setName(name);
-                category.setDescription(name + " learning category.");
                 category.setSortOrder(sortOrder);
                 return learningCategoryRepository.save(category);
             });
         }
     }
 
-    /** Exactly the badges the reward service awards. */
+    /** Exactly the badges the reward service awards; a stored row is kept aligned with RewardBadge (the earning rule). */
     private void seedBadges() {
         for (RewardBadge seed : RewardBadge.values()) {
             Badge badge = badgeRepository.findByName(seed.badgeName()).orElseGet(Badge::new);
-            boolean changed = badge.getId() == null
-                    || !Objects.equals(badge.getDescription(), seed.description())
-                    || !Objects.equals(badge.getIconKey(), seed.iconKey())
-                    || !badge.isActive();
-            if (changed) {
-                // Keeps the catalogue description (the earning rule) aligned with RewardBadge.
-                badge.setName(seed.badgeName());
-                badge.setDescription(seed.description());
-                badge.setIconKey(seed.iconKey());
-                badge.setActive(true);
-                badgeRepository.save(badge);
-            }
+            badge.setName(seed.badgeName());
+            badge.setDescription(seed.description());
+            badge.setIconKey(seed.iconKey());
+            badge.setActive(true);
+            badgeRepository.save(badge);
         }
     }
 
     private void seedSystemSettings() {
         for (SettingDefinition definition : PlatformSettingsService.SETTING_DEFINITIONS) {
-            systemSettingRepository.findBySettingKey(definition.key())
-                    .orElseGet(() -> systemSettingRepository.save(definition.newSetting()));
+            if (!systemSettingRepository.existsBySettingKey(definition.key())) {
+                systemSettingRepository.save(definition.newSetting());
+            }
+        }
+        if (!systemSettingRepository.existsBySettingKey(HintPolicyService.POLICY_KEY)) {
+            systemSettingRepository.save(HintPolicyService.defaultSetting());
         }
     }
 
     private void seedDefaultAdmin() {
-        if (isBlank(defaultAdminEmail) || isBlank(defaultAdminPassword)) {
+        if (defaultAdminEmail.isBlank() || defaultAdminPassword.isBlank()) {
             log.warn("Default admin credentials are not configured. Skipping default admin creation safely.");
             return;
         }
+        if (ProductionProfiles.isActive(environment)
+                && (ProductionProfiles.isPlaceholder(defaultAdminPassword)
+                        || defaultAdminPassword.length() < MIN_ADMIN_PASSWORD_LENGTH)) {
+            throw new IllegalStateException(
+                    "DEFAULT_ADMIN_PASSWORD must be at least 8 characters and not a placeholder value when the prod profile is active.");
+        }
 
-        String normalizedEmail = defaultAdminEmail.strip().toLowerCase(Locale.ROOT);
+        String normalizedEmail = AuthService.normalizeEmail(defaultAdminEmail);
 
         if (userRepository.existsByEmailIgnoreCase(normalizedEmail)) {
             return;
         }
 
-        Role adminRole = roleRepository.findByName(RoleName.ADMIN)
-                .orElseThrow(() -> new IllegalStateException("ADMIN role must exist before admin seeding."));
-
-        User admin = new User();
-        admin.setEmail(normalizedEmail);
-        admin.setPasswordHash(passwordEncoder.encode(defaultAdminPassword));
-        admin.setDisplayName("Platform Administrator");
-        admin.setPreferredLanguage("en");
-        admin.setRoles(Set.of(adminRole));
-        userRepository.save(admin);
-
+        authService.createAccount(
+                "Platform Administrator", normalizedEmail, defaultAdminPassword, LanguageCodes.ENGLISH, RoleName.ADMIN);
         log.info("Default admin account created.");
-    }
-
-    private static boolean isBlank(String value) {
-        return value == null || value.isBlank();
     }
 }

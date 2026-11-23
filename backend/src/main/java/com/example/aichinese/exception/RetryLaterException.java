@@ -12,7 +12,7 @@ public class RetryLaterException extends ResponseStatusException {
 
     public RetryLaterException(String reason, long retryAfterSeconds) {
         super(TOO_MANY_REQUESTS, reason);
-        this.retryAfterSeconds = retryAfterSeconds;
+        this.retryAfterSeconds = Math.max(1L, retryAfterSeconds);
     }
 
     @Override

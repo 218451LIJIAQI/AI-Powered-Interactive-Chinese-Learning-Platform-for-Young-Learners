@@ -1,0 +1,385 @@
+/* Pronunciation & handwriting practice checks: recorder, photo upload, scores, tone diagram, and check history.
+   Shared shell rules live in ai.css. */
+
+.ai-voice {
+  align-items: start;
+}
+
+.ai-voice-rail,
+.ai-check-form,
+.ai-check-result,
+.ai-check-score {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.ai-checks {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.ai-checks .row-list > li:first-child {
+  padding-top: 0;
+}
+
+.ai-checks .row-list > li:last-child {
+  padding-bottom: 0;
+}
+
+/* Type hugs its segments; Lesson fills the rest of the row. */
+.ai-check-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-4);
+}
+
+.ai-recorder,
+.ai-recording {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+}
+
+.ai-recorder {
+  border: 1px solid var(--border-default);
+}
+
+.ai-recorder .btn {
+  flex: 0 0 auto;
+}
+
+.ai-recorder .field-hint {
+  min-width: 0;
+}
+
+.ai-recording {
+  background: var(--surface-sunken);
+}
+
+.ai-recording .btn-ghost:not(:disabled):hover {
+  background: var(--color-ink-200);
+}
+
+.ai-recording .row-list-copy {
+  flex: 1 1 auto;
+}
+
+.ai-recording-name {
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+}
+
+.ai-file-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* The file field: our own button and file name, in the app's language (the native control follows the browser's). */
+.ai-file {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  min-height: var(--control-height-md);
+  padding: 0 var(--space-2) 0 var(--space-1);
+  border: 1px solid var(--border-field);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+
+.ai-file:hover:where(:not(:has(:disabled))) {
+  border-color: var(--color-ink-600);
+}
+
+.ai-file:has(:focus-visible) {
+  border-color: var(--color-primary-500);
+  box-shadow: var(--focus-halo);
+}
+
+.ai-file:has(:disabled) {
+  border-color: var(--border-default);
+  background: var(--surface-sunken);
+  cursor: not-allowed;
+}
+
+.ai-file:has(:disabled) .ai-file-name,
+.ai-file:has(:disabled) .btn {
+  color: var(--text-disabled);
+}
+
+.ai-file.is-invalid {
+  border-color: var(--color-danger);
+}
+
+.ai-file.is-invalid:has(:focus-visible) {
+  box-shadow: 0 0 0 4px var(--color-danger-a12);
+}
+
+.ai-file .btn {
+  flex: 0 0 auto;
+  pointer-events: none;
+}
+
+.ai-file-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-photo-preview,
+.ai-check-photo {
+  width: 100%;
+  max-height: 220px;
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  object-fit: contain;
+}
+
+.ai-check-status {
+  margin-right: auto;
+}
+
+/* The score. */
+.ai-check-total {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.ai-check-number {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: baseline;
+  gap: var(--space-1);
+  margin: 0;
+}
+
+.ai-check-number strong {
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: var(--font-size-5xl);
+  font-weight: var(--font-weight-heading);
+  line-height: var(--line-height-tight);
+}
+
+.ai-check-number span {
+  color: var(--text-secondary);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-strong);
+}
+
+.ai-check-copy {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.ai-check-headline {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-strong);
+  line-height: var(--line-height-normal);
+}
+
+.ai-check-meta {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+}
+
+.ai-subscores {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 132px), 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.ai-subscores > div {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+}
+
+.ai-subscores dt {
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-normal);
+}
+
+.ai-subscores dd {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-heading);
+  line-height: var(--line-height-snug);
+}
+
+.ai-tone-diagram {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+}
+
+.ai-tone-diagram-header,
+.ai-tone-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--space-3);
+  row-gap: var(--space-1);
+}
+
+.ai-tone-diagram-header {
+  justify-content: space-between;
+}
+
+.ai-tone-legend,
+.ai-tone-strip {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ai-tone-legend {
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.ai-tone-legend li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.ai-tone-legend span {
+  width: 1.25rem;
+  border-top: 2px solid var(--text-primary);
+}
+
+.ai-tone-legend .is-target {
+  border-top-color: var(--text-secondary);
+  border-top-style: dashed;
+}
+
+.ai-tone-strip {
+  display: grid;
+  grid-auto-columns: clamp(7rem, 42%, 11rem);
+  grid-auto-flow: column;
+  gap: var(--space-2);
+  overflow-x: auto;
+  padding-bottom: var(--space-1);
+}
+
+.ai-tone-card {
+  display: grid;
+  align-content: start;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+}
+
+.ai-tone-card.is-different {
+  background: var(--color-warning-soft);
+}
+
+.ai-tone-character {
+  color: var(--text-primary);
+  font-size: var(--font-size-base);
+}
+
+.ai-tone-curves {
+  display: block;
+  width: 100%;
+  height: 3rem;
+  fill: none;
+  stroke: var(--text-primary);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2px;
+}
+
+.ai-tone-curves .is-target {
+  stroke: var(--text-secondary);
+  stroke-dasharray: 4 4;
+}
+
+.ai-tone-card:not(.is-different) .is-target {
+  stroke-width: 4px;
+}
+
+.ai-tone-label {
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.ai-tone-card.is-different .ai-tone-label {
+  color: var(--color-warning-text);
+}
+
+.ai-check-section {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.ai-check-section p {
+  margin: 0;
+}
+
+.ai-tips {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding-left: var(--space-4);
+}
+
+.ai-check-detail {
+  display: grid;
+  gap: var(--space-2);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.ai-check-detail-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+@media (max-width: 40rem) {
+  .ai-check-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (forced-colors: active) {
+  .ai-file:has(:focus-visible) {
+    outline: var(--border-width-focus) solid Highlight;
+    outline-offset: var(--focus-ring-offset);
+  }
+
+  .ai-tone-card {
+    border: 1px solid CanvasText;
+  }
+
+  .ai-tone-card.is-different {
+    border: var(--border-width-thick) solid Highlight;
+  }
+}

@@ -1,9 +1,11 @@
 package com.example.aichinese.dto.auth;
 
-import com.example.aichinese.util.LanguageCodes;
-import com.fasterxml.jackson.annotation.JsonIgnore;
+import static com.example.aichinese.dto.DtoNormalization.redactValue;
+import static com.example.aichinese.dto.DtoNormalization.strip;
+import static com.example.aichinese.dto.DtoNormalization.stripToNull;
 
-import jakarta.validation.constraints.AssertTrue;
+import com.example.aichinese.util.LanguageCodes;
+
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -18,37 +20,27 @@ public record RegisterStudentRequest(
         @Size(max = 150, message = "Email must be at most 150 characters")
         String email,
         @NotBlank(message = "Password is required")
-        @Size(min = 8, max = 72, message = "Password must be between 8 and 72 characters")
+        @Size(min = 8, message = "Password must be at least 8 characters")
+        @MaxUtf8Bytes
         String password,
         @NotBlank(message = "Confirm password is required")
-        @Size(max = 72, message = "Confirm password must be at most 72 characters")
+        @MaxUtf8Bytes
         String confirmPassword,
-        @Pattern(regexp = "^(en|ms|zh-CN)?$", message = "Preferred language must be one of en, ms, or zh-CN")
+        @Pattern(regexp = LanguageCodes.SUPPORTED_PATTERN, message = "Preferred language must be one of en, ms, or zh-CN")
         String preferredLanguage) {
 
     public RegisterStudentRequest {
-        if (fullName != null) {
-            fullName = fullName.strip();
-        }
-        if (email != null) {
-            email = email.strip();
-        }
-        preferredLanguage = LanguageCodes.normalizeRequested(preferredLanguage);
-    }
-
-    @JsonIgnore
-    @AssertTrue(message = "Password and confirm password must be at most 72 bytes when encoded as UTF-8")
-    public boolean isPasswordsWithinBcryptByteLimit() {
-        return AuthDtoValidation.isWithinBcryptByteLimit(password)
-                && AuthDtoValidation.isWithinBcryptByteLimit(confirmPassword);
+        fullName = strip(fullName);
+        email = strip(email);
+        preferredLanguage = stripToNull(preferredLanguage);
     }
 
     @Override
     public String toString() {
-        return "RegisterStudentRequest[fullName=" + fullName
-                + ", email=" + email
-                + ", password=***REDACTED***"
-                + ", confirmPassword=***REDACTED***"
+        return "RegisterStudentRequest[fullName=" + redactValue(fullName)
+                + ", email=" + redactValue(email)
+                + ", password=" + redactValue(password)
+                + ", confirmPassword=" + redactValue(confirmPassword)
                 + ", preferredLanguage=" + preferredLanguage + "]";
     }
 }

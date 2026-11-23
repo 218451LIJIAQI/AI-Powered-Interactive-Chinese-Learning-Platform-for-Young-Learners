@@ -20,33 +20,32 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
+import lombok.RequiredArgsConstructor;
+
 /** JSON 401 (no or expired token) and 403 (signed in without the required role) answers of the security chain. */
 @Component
+@RequiredArgsConstructor
 public class JwtSecurityErrorHandler implements AuthenticationEntryPoint, AccessDeniedHandler {
 
     private static final Logger log = LoggerFactory.getLogger(JwtSecurityErrorHandler.class);
 
     private final ObjectMapper objectMapper;
 
-    public JwtSecurityErrorHandler(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
-    }
-
     @Override
     public void commence(HttpServletRequest request, HttpServletResponse response, AuthenticationException authException)
             throws IOException {
-        if (log.isDebugEnabled()) {
-            log.debug("Unauthenticated request rejected with HTTP 401 [requestId={}, method={}, path={}, cause={}]",
-                    RequestIdHolder.currentOrDash(),
-                    request.getMethod(),
-                    request.getRequestURI(),
-                    authException == null ? "AuthenticationException" : authException.getClass().getSimpleName());
-        }
+        log.debug("Unauthenticated request rejected with HTTP 401 [requestId={}, method={}, path={}, cause={}]",
+                RequestIdHolder.currentOrDash(),
+                request.getMethod(),
+                request.getRequestURI(),
+                authException.getClass().getSimpleName());
 
-        // A request that sent a token had a session that ended; one without a token never signed in.
-        String message = request.getHeader(HttpHeaders.AUTHORIZATION) == null
-                ? FriendlyErrorMessageResolver.signInRequiredMessage()
-                : FriendlyErrorMessageResolver.sessionExpiredMessage();
+        // A request that sent a Bearer token had a session that ended; one without a token never signed in.
+        boolean hasBearerToken = JwtAuthenticationFilter.extractBearerToken(request) != null;
+        String message = hasBearerToken
+                ? FriendlyErrorMessageResolver.sessionExpiredMessage()
+                : FriendlyErrorMessageResolver.signInRequiredMessage();
+        response.setHeader(HttpHeaders.WWW_AUTHENTICATE, "Bearer");
         ApiErrorResponseWriter.write(objectMapper, response, HttpStatus.UNAUTHORIZED, message);
     }
 
@@ -57,7 +56,7 @@ public class JwtSecurityErrorHandler implements AuthenticationEntryPoint, Access
                 RequestIdHolder.currentOrDash(),
                 request.getMethod(),
                 request.getRequestURI(),
-                accessDeniedException == null ? "AccessDeniedException" : accessDeniedException.getClass().getSimpleName());
+                accessDeniedException.getClass().getSimpleName());
 
         ApiErrorResponseWriter.write(objectMapper, response, HttpStatus.FORBIDDEN, FriendlyErrorMessageResolver.permissionDeniedMessage());
     }

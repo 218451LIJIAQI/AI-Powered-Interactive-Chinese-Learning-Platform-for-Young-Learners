@@ -3,11 +3,11 @@ package com.example.aichinese.service.plan;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
-import java.util.Objects;
 import java.util.stream.Collectors;
 
 import com.example.aichinese.entity.LearningPlan;
 import com.example.aichinese.entity.LearningPlanStep;
+import com.example.aichinese.entity.enums.EnumLookups;
 import com.example.aichinese.entity.enums.LevelCheckSkill;
 import com.example.aichinese.entity.enums.PlanFocus;
 import com.example.aichinese.entity.enums.PlanGoal;
@@ -22,33 +22,23 @@ final class PlanCodec {
         return values.stream().map(Enum::name).distinct().collect(Collectors.joining(","));
     }
 
-    /** The constants {@link #names} wrote; a name the enum no longer has is skipped. */
-    static <E extends Enum<E>> List<E> enums(String csv, Class<E> type) {
-        if (csv == null || csv.isBlank()) {
-            return List.of();
-        }
+    /**
+     * The constants {@link #names} wrote, in order. A name retired since the plan was saved (a focus or goal no longer
+     * offered) is passed over, so an older plan still opens.
+     */
+    private static <E extends Enum<E>> List<E> enums(String csv, Class<E> type) {
         return Arrays.stream(csv.split(","))
-                .map(String::strip)
-                .flatMap(name -> Arrays.stream(type.getEnumConstants()).filter(constant -> constant.name().equals(name)))
-                .distinct()
+                .flatMap(name -> EnumLookups.tryFrom(type, name).stream())
                 .toList();
     }
 
+    /** SparkBot's texts are single lines already ({@link PlanAdvisor#parse}); an empty list is stored as null. */
     static String lines(List<String> values) {
-        List<String> clean = values.stream().filter(Objects::nonNull).map(String::strip).filter(text -> !text.isEmpty())
-                .map(text -> text.replace('\n', ' ')).toList();
-        return clean.isEmpty() ? null : String.join("\n", clean);
+        return values.isEmpty() ? null : String.join("\n", values);
     }
 
     static List<String> lines(String text) {
-        if (text == null || text.isBlank()) {
-            return List.of();
-        }
-        return Arrays.stream(text.split("\\R")).map(String::strip).filter(line -> !line.isEmpty()).toList();
-    }
-
-    static List<PlanGoal> picks(LearningPlan plan) {
-        return enums(plan.getGoalPicks(), PlanGoal.class);
+        return text == null ? List.of() : List.of(text.split("\n"));
     }
 
     static List<PlanFocus> focus(LearningPlan plan) {
@@ -64,7 +54,7 @@ final class PlanCodec {
     }
 
     static PlanComposer.Goal goal(LearningPlan plan) {
-        return new PlanComposer.Goal(plan.getReason(), plan.getReasonText(), picks(plan), plan.getGoalText(),
-                plan.getDeadline(), plan.getPace(), focus(plan));
+        return new PlanComposer.Goal(plan.getReason(), plan.getReasonText(), enums(plan.getGoalPicks(), PlanGoal.class),
+                plan.getGoalText(), plan.getDeadline(), plan.getPace(), focus(plan));
     }
 }

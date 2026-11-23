@@ -3,61 +3,63 @@ package com.example.aichinese.controller;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Component;
+import org.springframework.web.util.WebUtils;
 
+import com.example.aichinese.config.RefreshCookieOriginFilter;
 import com.example.aichinese.config.SecurityProperties;
 import com.example.aichinese.dto.ApiResponse;
 import com.example.aichinese.dto.auth.AuthResponse;
 import com.example.aichinese.dto.auth.AuthSessionResponse;
 import com.example.aichinese.dto.auth.RefreshTokenIssue;
 
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
+import lombok.RequiredArgsConstructor;
+
 /**
- * The HttpOnly refresh-token cookie shared by the auth and account controllers: the response that starts a session
- * (sets the cookie, clears the legacy path) and the headers that clear it.
+ * The HttpOnly refresh-token cookie shared by the auth and account controllers: reading the cookie, starting a session
+ * and ending it using the single normalized cookie name from {@link SecurityProperties}.
  */
+@Component
+@RequiredArgsConstructor
 final class RefreshCookieWriter {
 
-    private static final String LEGACY_REFRESH_COOKIE_PATH = "/api/v1/auth";
-    private static final String REFRESH_COOKIE_PATH = "/api/v1/auth/refresh";
+    private final SecurityProperties properties;
 
-    private RefreshCookieWriter() {
+    /** The raw refresh token from the configured HttpOnly cookie, or {@code null} when absent. */
+    String readRefreshToken(HttpServletRequest request) {
+        Cookie cookie = WebUtils.getCookie(request, properties.refreshTokenCookieName());
+        return cookie == null ? null : cookie.getValue();
     }
 
-    /** A new session: the refresh cookie, plus clearing any cookie left at the legacy path, and the auth response. */
-    static ResponseEntity<ApiResponse<AuthResponse>> sessionResponse(
-            SecurityProperties properties,
+    /** A new session: the refresh cookie and the auth response. */
+    ResponseEntity<ApiResponse<AuthResponse>> sessionResponse(
+            HttpServletRequest request,
             String message,
             AuthSessionResponse session) {
-        RefreshTokenIssue refreshToken = session.refreshToken();
+        RefreshTokenIssue token = session.refreshToken();
+        ResponseCookie.ResponseCookieBuilder cookie = cookie(request, token.rawToken());
+        if (token.persistent()) {
+            cookie.maxAge(token.ttl());
+        }
         return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE,
-                        refreshCookie(properties, refreshToken).toString(),
-                        clearRefreshCookie(properties, LEGACY_REFRESH_COOKIE_PATH).toString())
+                .header(HttpHeaders.SET_COOKIE, cookie.build().toString())
                 .body(ApiResponse.success(message, session.authResponse()));
     }
 
-    /** Set-Cookie values that clear the refresh cookie at both the current and the legacy path. */
-    static String[] clearedCookieHeaders(SecurityProperties properties) {
-        return new String[] {
-                clearRefreshCookie(properties, REFRESH_COOKIE_PATH).toString(),
-                clearRefreshCookie(properties, LEGACY_REFRESH_COOKIE_PATH).toString()
-        };
+    /** A session that ended: the refresh cookie is cleared. */
+    ResponseEntity<ApiResponse<Void>> clearedCookieResponse(HttpServletRequest request, String message) {
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, cookie(request, "").maxAge(0).build().toString())
+                .body(ApiResponse.success(message, null));
     }
 
-    /** A persistent cookie lives as long as the token; otherwise it is a browser-session cookie. */
-    private static ResponseCookie refreshCookie(SecurityProperties properties, RefreshTokenIssue refreshToken) {
-        ResponseCookie.ResponseCookieBuilder cookie = builder(properties, refreshToken.rawToken(), REFRESH_COOKIE_PATH);
-        return (refreshToken.persistent() ? cookie.maxAge(refreshToken.ttl()) : cookie).build();
-    }
-
-    private static ResponseCookie clearRefreshCookie(SecurityProperties properties, String path) {
-        return builder(properties, "", path).maxAge(0).build();
-    }
-
-    private static ResponseCookie.ResponseCookieBuilder builder(SecurityProperties properties, String value, String path) {
+    private ResponseCookie.ResponseCookieBuilder cookie(HttpServletRequest request, String value) {
         return ResponseCookie.from(properties.refreshTokenCookieName(), value)
                 .httpOnly(true)
                 .secure(properties.refreshTokenCookieSecure())
                 .sameSite(properties.refreshTokenSameSite())
-                .path(path);
+                .path(request.getContextPath() + RefreshCookieOriginFilter.REFRESH_PATH);
     }
 }

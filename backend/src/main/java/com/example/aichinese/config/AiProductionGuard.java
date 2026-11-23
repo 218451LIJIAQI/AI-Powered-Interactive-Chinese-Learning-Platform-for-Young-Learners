@@ -21,16 +21,21 @@ public final class AiProductionGuard {
         if (!AiProperties.SUPPORTED_PROVIDERS.contains(aiProperties.normalizedProvider())) {
             throw new IllegalStateException(requiredMessage("AI_PROVIDER", "is not supported"));
         }
-        if (!StringUtils.hasText(aiProperties.getApiKey())) {
+        String apiKey = aiProperties.getApiKey();
+        if (!StringUtils.hasText(apiKey)) {
             throw new IllegalStateException(requiredMessage("AI_API_KEY", "must be configured"));
         }
-        if (ProductionProfiles.isPlaceholder(aiProperties.getApiKey())) {
+        if (ProductionProfiles.isPlaceholder(apiKey)) {
             throw new IllegalStateException(requiredMessage("AI_API_KEY", "must not use a placeholder value"));
         }
         if (!StringUtils.hasText(aiProperties.getModelName())) {
             throw new IllegalStateException(requiredMessage("AI_MODEL_NAME", "must be configured"));
         }
         HttpUrlValidation.requirePublicHttpsUrl(aiProperties.getApiBaseUrl(), "AI_API_BASE_URL", PROD_CONTEXT);
+        // The provider clients refuse any other URL, which would leave every AI feature unavailable.
+        if (aiProperties.normalizedApiBaseUrl() == null) {
+            throw new IllegalStateException(requiredMessage("AI_API_BASE_URL", "must not contain a query or fragment"));
+        }
     }
 
     private static String requiredMessage(String property, String requirement) {

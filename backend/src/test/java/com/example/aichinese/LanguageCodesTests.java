@@ -2,28 +2,27 @@ package com.example.aichinese;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import jakarta.validation.Validation;
-import jakarta.validation.Validator;
-
 import org.junit.jupiter.api.Test;
 
 import com.example.aichinese.dto.auth.RegisterStudentRequest;
 import com.example.aichinese.util.LanguageCodes;
 
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
+
 /**
- * Interface languages (FRLANG01): en, ms and zh-CN; the legacy "zh" code is mapped to zh-CN.
+ * Interface languages (FRLANG01): exactly en, ms and zh-CN.
  */
 class LanguageCodesTests {
 
-    private static final Validator VALIDATOR = Validation.buildDefaultValidatorFactory().getValidator();
-
     @Test
-    void normalisesSupportedLanguagesAndLegacyChinese() {
+    void keepsSupportedLanguagesAndRefusesAnythingElse() {
         assertThat(LanguageCodes.normalize("en")).isEqualTo("en");
-        assertThat(LanguageCodes.normalize(" MS ")).isEqualTo("ms");
+        assertThat(LanguageCodes.normalize(" ms ")).isEqualTo("ms");
         assertThat(LanguageCodes.normalize("zh-CN")).isEqualTo("zh-CN");
-        assertThat(LanguageCodes.normalize("zh")).isEqualTo("zh-CN");
-        assertThat(LanguageCodes.normalize("zh_cn")).isEqualTo("zh-CN");
+        assertThat(LanguageCodes.normalize("zh")).isNull();
+        assertThat(LanguageCodes.normalize("zh_cn")).isNull();
+        assertThat(LanguageCodes.normalize("MS")).isNull();
         assertThat(LanguageCodes.normalize("fr")).isNull();
         assertThat(LanguageCodes.normalize("  ")).isNull();
         assertThat(LanguageCodes.normalizeOrDefault("fr")).isEqualTo("en");
@@ -31,27 +30,19 @@ class LanguageCodesTests {
     }
 
     @Test
-    void normalizeRequestedMapsSupportedCodesAndKeepsOtherValuesForValidation() {
-        assertThat(LanguageCodes.normalizeRequested(" zh ")).isEqualTo("zh-CN");
-        assertThat(LanguageCodes.normalizeRequested("MS")).isEqualTo("ms");
-        assertThat(LanguageCodes.normalizeRequested(" FR ")).isEqualTo("fr");
-        assertThat(LanguageCodes.normalizeRequested("  ")).isEmpty();
-        assertThat(LanguageCodes.normalizeRequested(null)).isNull();
-    }
-
-    @Test
-    void studentRegistrationAcceptsZhCnAndMapsLegacyZh() {
+    void studentRegistrationAcceptsTheSupportedLanguagesOnly() {
         RegisterStudentRequest zhCn = request("zh-CN");
-        RegisterStudentRequest legacy = request("zh");
-        RegisterStudentRequest unsupported = request("fr");
 
-        assertThat(VALIDATOR.validate(zhCn)).isEmpty();
-        assertThat(zhCn.preferredLanguage()).isEqualTo("zh-CN");
-        assertThat(VALIDATOR.validate(legacy)).isEmpty();
-        assertThat(legacy.preferredLanguage()).isEqualTo("zh-CN");
-        assertThat(VALIDATOR.validate(unsupported))
-                .extracting(violation -> violation.getPropertyPath().toString())
-                .containsExactly("preferredLanguage");
+        try (var factory = Validation.buildDefaultValidatorFactory()) {
+            Validator validator = factory.getValidator();
+            assertThat(validator.validate(zhCn)).isEmpty();
+            assertThat(zhCn.preferredLanguage()).isEqualTo("zh-CN");
+            for (String unsupported : new String[] { "zh", "fr" }) {
+                assertThat(validator.validate(request(unsupported)))
+                        .extracting(violation -> violation.getPropertyPath().toString())
+                        .containsExactly("preferredLanguage");
+            }
+        }
     }
 
     private static RegisterStudentRequest request(String language) {

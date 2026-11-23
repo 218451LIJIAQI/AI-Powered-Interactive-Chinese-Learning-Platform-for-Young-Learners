@@ -1,153 +1,158 @@
-/* Public site: footer, landing, Help, the legal pages, sign-in and recovery, confirm e-mail, the public class
-   catalogue and class page, and the 404 / 403 pages. A product showcase in ink, purple and yellow with generous space:
-   editorial Fraunces type, real product moments, hairlines rather than boxes. */
+/* Public site header, landing, Help, legal, authentication, class catalogue and error pages. */
 
-/* Footer: quiet, on the paper
-   -------------------------------------------------------------------------- */
-.public-footer {
+.public-brand {
+  gap: var(--space-2-5);
+}
+
+.public-brand .brand-seal {
+  position: relative;
+  border-radius: var(--radius-xs);
+  background: var(--color-primary-700);
+  box-shadow: none;
+  font-size: calc(var(--seal-size) * 0.62);
+}
+
+.public-brand .brand-seal::before {
+  position: absolute;
+  inset: 3px;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  opacity: 0.38;
+  content: '';
+}
+
+.public-brand .brand-title {
+  font-size: var(--font-size-xl);
+  letter-spacing: -0.045em;
+  line-height: 1.15;
+}
+
+.public-nav-inner {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
-  gap: var(--space-10) var(--space-16);
-  margin-top: var(--space-24);
-  padding: var(--space-12) 0 var(--space-8);
-  border-top: 1px solid var(--border-subtle);
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: clamp(var(--space-4), 2.4vw, var(--space-8));
+  width: min(calc(100% - 2 * var(--page-gutter)), var(--public-max));
+  min-height: var(--topbar-height);
+  margin-inline: auto;
+  padding-block: var(--space-2);
 }
 
-.public-footer-brand {
-  display: grid;
-  align-content: start;
-  gap: var(--space-4);
-  max-width: 34ch;
-}
-
-.public-footer-blurb {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-md);
-  line-height: var(--line-height-normal);
-}
-
-.public-footer-columns {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--space-8) var(--space-6);
-}
-
-.public-footer-column h2 {
-  margin: 0 0 var(--space-3);
-  color: var(--text-secondary);
-  font-size: var(--type-overline-size);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: var(--letter-spacing-wide);
-  text-transform: uppercase;
-}
-
-.public-footer-column ul {
-  display: grid;
-  gap: var(--space-2);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.public-footer-column a {
-  color: var(--text-primary);
-  font-size: var(--font-size-md);
-  text-decoration: none;
-}
-
-.public-footer-column a:hover {
-  color: var(--text-link-hover);
-  text-decoration: underline;
-}
-
-.public-footer-copyright {
-  grid-column: 1 / -1;
-  margin: 0;
-  padding-top: var(--space-6);
-  border-top: 1px solid var(--border-subtle);
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-/* Disclosure rows (landing questions, Help answers): a hairline list, the question opens its answer.
-   -------------------------------------------------------------------------- */
-.public-qa {
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.public-qa > summary {
+.public-nav-links,
+.public-nav-actions,
+.public-nav-account {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+}
+
+.public-nav-links {
+  gap: clamp(var(--space-4), 2vw, var(--space-7));
+}
+
+.public-nav-links::before {
+  height: var(--space-5);
+  border-inline-start: 1px solid var(--border-strong);
+  content: '';
+}
+
+.public-nav-link,
+.public-sign-in {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--topbar-control-size);
+  color: var(--color-ink-700);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+}
+
+.public-nav-link:hover,
+.public-sign-in:hover,
+.public-nav-link[aria-current] {
+  color: var(--text-brand);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 6px;
+}
+
+.public-nav-actions,
+.public-nav-account {
   gap: var(--space-4);
-  padding: var(--space-4) 0;
-  color: var(--text-primary);
-  font-weight: var(--font-weight-semibold);
-  list-style: none;
-  cursor: pointer;
-  transition: color var(--duration-fast) var(--ease-standard);
 }
 
-.public-qa > summary::-webkit-details-marker {
-  display: none;
+.public-languages.pill-switch {
+  padding: 0 var(--space-4) 0 0;
+  border-inline-end: 1px solid var(--border-default);
+  border-radius: 0;
+  background: transparent;
 }
 
-.public-qa > summary:hover {
-  color: var(--text-link-hover);
-}
-
-.public-qa > summary:focus-visible {
+.public-languages button {
+  min-width: var(--space-8);
+  padding-inline: var(--space-1-5);
   border-radius: var(--radius-xs);
-  outline: var(--border-width-focus) solid var(--focus-ring-color);
-  outline-offset: var(--focus-ring-offset);
 }
 
-.public-qa-chevron {
-  flex: 0 0 auto;
-  color: var(--text-secondary);
-  transition: transform var(--duration-base) var(--ease-standard);
+.public-languages button:hover {
+  background: var(--surface-sunken);
 }
 
-.public-qa[open] .public-qa-chevron {
-  transform: rotate(180deg);
+.public-languages.pill-switch button[aria-pressed='true'] {
+  color: var(--color-primary-700);
+  background: var(--color-primary-100);
+  box-shadow: none;
+  font-weight: var(--font-weight-heading);
 }
 
-/* Landing
-   -------------------------------------------------------------------------- */
-.landing-page {
+.btn.public-nav-cta {
+  min-height: var(--topbar-control-size);
+  padding-inline: var(--space-4) var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--text-on-dark);
+  background: var(--surface-inverse);
+}
+
+.public-nav-cta:hover {
+  background: var(--color-primary-700);
+}
+
+/* Toasts and hash links clear both rows when a narrow window wraps the masthead. */
+body:has(.public-nav) .toast-region {
+  top: calc(var(--topbar-sticky-offset) + var(--space-3));
+}
+
+/* Landing: the hero on a violet wash, how it works, the plan's three steps */
+.landing {
   display: grid;
+  gap: clamp(var(--space-10), 4vw, var(--space-16));
   min-width: 0;
 }
 
-.landing-notice {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--color-success-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-success-soft);
-  color: var(--color-success-text);
+.landing > * {
+  min-width: 0;
 }
 
-.landing-notice p {
-  display: flex;
-  flex: 1 1 auto;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-2);
-  margin: 0;
-  color: var(--text-primary);
-  font-size: var(--font-size-md);
-}
-
-/* Hero: the headline and one yellow action beside a real lesson moment. */
+/* The hero's wash and practice-paper grid run across the whole window, up to the header: they are painted by a layer
+   wider than the page column (the public shell clips it at the window's edges), with a soft glow behind the preview. */
 .landing-hero {
+  position: relative;
+  isolation: isolate;
   display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  grid-template-columns: minmax(0, 1.12fr) minmax(0, 1fr);
   align-items: center;
-  gap: var(--space-16);
-  padding: var(--space-10) 0 var(--space-16);
+  gap: var(--space-12);
+  margin-top: calc(-1 * var(--space-10));
+  padding-block: clamp(var(--space-12), 8vh, var(--space-20)) clamp(var(--space-10), 6vh, var(--space-16));
+}
+
+.landing-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0 -100vmax;
+  z-index: -1;
+  border-bottom: 1px solid var(--color-primary-100);
+  background:
+    var(--pattern-grid-paper) 50% 0 / var(--pattern-grid-size) var(--pattern-grid-size),
+    var(--color-primary-50);
 }
 
 .landing-hero-copy {
@@ -158,930 +163,761 @@
 }
 
 .landing-audience {
-  color: var(--text-brand);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--chip-height);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-primary-200);
+  border-radius: var(--radius-pill);
+  background: var(--color-white-a80);
+  color: var(--color-primary-700);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-strong);
+}
+
+/* The promise and, close under it, what the product is in one sentence. */
+.landing-hero-heading {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
 }
 
 .landing-title {
-  max-width: 11ch;
-  margin: 0;
+  max-width: 20ch;
   font-family: var(--font-display);
   font-size: var(--type-display-size);
-  font-weight: var(--font-weight-semibold);
-  line-height: 1.02;
-  letter-spacing: var(--letter-spacing-display);
-  text-wrap: balance;
+  line-height: 1.08;
+  letter-spacing: -0.035em;
 }
 
 .landing-lead {
   max-width: 44ch;
   margin: 0;
-  color: var(--text-secondary);
+  color: var(--color-ink-700);
   font-size: var(--font-size-lg);
   line-height: var(--line-height-relaxed);
 }
 
-.landing-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2) var(--space-3);
-  margin-top: var(--space-2);
-}
-
-/* Every fact carries its separator (a gap, the dot, a gap). The list starts one separator left of the column and
-   is clipped at the column edge, so the separator of whichever fact starts a line is hidden: no line begins with a
-   dot, however the facts wrap. */
 .landing-facts {
-  --facts-separator: calc(2 * var(--space-3) + var(--space-1));
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  row-gap: var(--space-2);
-  margin: 0 0 0 calc(-1 * var(--facts-separator));
+  gap: var(--space-2) var(--space-5);
+  margin: 0;
   padding: 0;
-  clip-path: inset(0 0 0 var(--facts-separator));
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
   list-style: none;
+  color: var(--color-ink-700);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
 }
 
-.landing-facts li {
+.landing-facts > li {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-3);
-  padding-left: var(--space-3);
+  gap: var(--space-1-5);
 }
 
-.landing-facts li::before {
+.landing-facts .icon-glyph {
+  color: var(--color-primary-500);
+}
+
+/* A first lesson in miniature: the word on a raised sheet that hugs its tiles, the tones card overlapping its corner. */
+.landing-preview {
+  position: relative;
+  display: grid;
+  justify-self: center;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.landing-preview::before {
   content: '';
-  width: var(--space-1);
-  height: var(--space-1);
-  border-radius: var(--radius-round);
-  background: var(--color-primary-300);
+  position: absolute;
+  z-index: -1;
+  inset: -10% -15%;
+  background: radial-gradient(ellipse closest-side, var(--color-primary-200), transparent);
+  pointer-events: none;
 }
 
-/* The lesson moment: a lesson sheet laid on practice paper. */
-.landing-moment {
+.landing-word {
   display: grid;
   gap: var(--space-4);
-  margin: 0;
-  padding: var(--space-12) var(--space-10) var(--space-6);
+  min-width: 0;
+  padding: var(--space-4) var(--space-6) var(--space-8);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-2xl);
-  background: var(--paper-grid), var(--surface-subtle);
-}
-
-.landing-moment-sheet {
-  display: grid;
-  gap: var(--space-6);
-  padding: var(--space-6) var(--space-8);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-xl);
   background: var(--surface-card);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-md);
 }
 
-.landing-moment-top {
+/* What the card shows, with Listen at its right end: the label starts on the tiles' left edge and the button ends on
+   their right one. The row never widens the card (it takes the tiles' width, and a long label wraps), and it is as
+   tall as the button whether or not the button is there. */
+.landing-word-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-4);
+  gap: var(--space-3);
+  width: 0;
+  min-width: 100%;
+  min-height: var(--control-height-sm);
 }
 
-.landing-moment-steps {
-  display: flex;
-  gap: var(--space-1);
-}
-
-.landing-moment-steps span {
-  width: 18px;
-  height: 4px;
-  border-radius: var(--radius-pill);
-  background: var(--color-ink-100);
-}
-
-.landing-moment-steps span.is-done {
-  background: var(--color-primary-500);
-}
-
-.landing-moment-word {
-  display: flex;
-  justify-content: center;
-  gap: var(--space-4);
-}
-
-.landing-moment-syllable {
+.landing-word-figure {
   display: grid;
   justify-items: center;
-  gap: var(--space-1);
+  gap: var(--space-4);
+  min-width: 0;
+  margin: 0;
+}
+
+.landing-word-tiles,
+.auth-word-tiles {
+  display: flex;
+  gap: var(--space-3);
 }
 
 /* Two classes: outranks the size the shared .hanzi-tile sets on itself. */
-.hanzi-tile.landing-moment-tile {
-  --hanzi-tile-size: 128px;
+.hanzi-tile.landing-word-tile {
+  --hanzi-tile-size: 176px;
+  box-shadow: none;
+  transition:
+    border-color var(--duration-base) var(--ease-standard),
+    box-shadow var(--duration-base) var(--ease-standard);
 }
 
-.landing-moment-pinyin {
-  margin-top: var(--space-2);
+/* While the word is read aloud, its tiles and its speaker are lit. */
+.landing-word.is-speaking .landing-word-tile {
+  border-color: var(--color-primary-500);
+  box-shadow: var(--focus-halo);
+}
+
+.landing-word.is-speaking .landing-listen {
+  border-color: var(--border-interactive);
+  background: var(--color-primary-50);
+  color: var(--color-primary-700);
+}
+
+.landing-word-gloss {
   font-family: var(--font-display);
-  font-size: var(--font-size-2xl);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-tight);
+  font-size: var(--type-h2-size);
+  font-weight: var(--font-weight-strong);
+  line-height: var(--line-height-snug);
 }
 
-.landing-moment-tone {
-  color: var(--text-secondary);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
+.landing-preview-label {
+  margin: 0;
+  color: var(--color-ink-500);
+  font-size: var(--font-size-2xs);
+  font-weight: var(--font-weight-strong);
+  letter-spacing: var(--letter-spacing-wide);
+  line-height: var(--line-height-normal);
+  text-transform: uppercase;
 }
 
-.landing-moment-meaning {
+.landing-tones {
+  position: relative;
+  display: grid;
+  justify-self: end;
+  gap: var(--space-2);
+  margin-block-start: calc(-1 * var(--space-4));
+  margin-inline-end: calc(-1 * var(--space-4));
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-md);
+}
+
+.landing-tones-list {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  min-height: var(--control-height-sm);
-  padding-top: var(--space-4);
-  border-top: 1px solid var(--border-subtle);
-}
-
-.landing-moment-meaning strong {
-  font-family: var(--font-display);
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-semibold);
-}
-
-.landing-moment-xiaomei {
-  display: flex;
-  align-items: center;
   gap: var(--space-3);
   margin: 0;
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-lg);
-  background: var(--module-ai-soft);
-  font-size: var(--font-size-md);
+  padding: 0;
+  list-style: none;
 }
 
-.landing-moment-xiaomei strong {
-  margin-right: var(--space-1);
-  color: var(--module-ai);
-}
-
-/* Xiaomei's mark: 美 in her plum. */
-.landing-xiaomei-mark {
+.landing-tones-list > li {
   display: grid;
-  flex: 0 0 auto;
-  place-items: center;
-  width: var(--control-height-sm);
-  height: var(--control-height-sm);
-  border-radius: var(--radius-round);
-  background: var(--module-ai);
-  color: var(--text-on-dark);
-  font-size: var(--font-size-md);
-}
-
-.landing-moment-caption {
-  color: var(--text-secondary);
+  justify-items: center;
+  gap: var(--space-0-5);
   font-size: var(--font-size-sm);
-  text-align: center;
+  font-weight: var(--font-weight-strong);
 }
 
-/* Four ways to learn: numbered rows, each beside a slice of the product. */
-.landing-ways,
-.landing-about,
-.landing-faq {
-  padding: var(--space-20) 0;
-  border-top: 1px solid var(--border-subtle);
+.landing-tones-list svg {
+  width: 40px;
+  height: 32px;
 }
 
-.landing-ways {
-  padding-bottom: var(--space-8);
+/* Each contour is drawn once, from left to right, the way the voice moves through its tone: one after the other, as
+   the syllables are read. The paths have a length of 1 (pathLength), so one dash is the whole line. */
+.landing-tones-list path {
+  fill: none;
+  stroke: var(--color-primary-500);
+  stroke-dasharray: 1 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 3.5;
+  animation: landing-tone-draw 480ms var(--ease-standard) backwards;
+  animation-delay: calc(320ms + var(--tone-turn, 0) * 180ms);
+}
+
+.landing-tones-list > li:nth-child(2) {
+  --tone-turn: 1;
+}
+
+.landing-tones-list > li:nth-child(3) {
+  --tone-turn: 2;
+}
+
+.landing-tones-list > li:nth-child(4) {
+  --tone-turn: 3;
+}
+
+/* A little past the line's length, so the round cap of the dash still to come does not show as a dot. */
+@keyframes landing-tone-draw {
+  from {
+    stroke-dashoffset: 1.05;
+  }
+}
+
+/* Reduced motion: the lines are there from the start, with no wait for their turn. */
+@media (prefers-reduced-motion: reduce) {
+  .landing-tones-list path {
+    animation: none;
+  }
+}
+
+/* A section of the landing page: a large heading with one sentence under it, then its content. */
+.landing-section {
+  display: grid;
+  gap: var(--space-8);
 }
 
 .landing-section-head {
   display: grid;
-  gap: var(--space-3);
-  max-width: 62ch;
-  margin-bottom: var(--space-6);
-}
-
-.landing-section-head > p:last-child {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-lg);
-  line-height: var(--line-height-normal);
-}
-
-.landing-h2 {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--type-h1-size);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-tight);
-  letter-spacing: var(--letter-spacing-display);
-  text-wrap: balance;
-}
-
-.landing-way-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.landing-way {
-  --way-color: var(--text-primary);
-  display: grid;
-  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-  align-items: center;
-  gap: var(--space-8) var(--space-16);
-  padding: var(--space-12) 0;
-}
-
-.landing-way + .landing-way {
-  border-top: 1px solid var(--border-subtle);
-}
-
-.landing-way.is-learn {
-  --way-color: var(--module-learn);
-}
-
-.landing-way.is-practice {
-  --way-color: var(--pigment-jade);
-}
-
-.landing-way.is-ai {
-  --way-color: var(--module-ai);
-}
-
-.landing-way.is-classes {
-  --way-color: var(--module-classes);
-}
-
-.landing-way-copy {
-  display: grid;
-  align-content: start;
-  justify-items: start;
-  gap: var(--space-3);
+  gap: var(--space-2);
   min-width: 0;
 }
 
-.landing-way-number {
-  color: var(--way-color);
-  font-family: var(--font-display);
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
-  font-variant-numeric: lining-nums tabular-nums;
-  line-height: 1;
-}
-
-.landing-way h3 {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--font-size-3xl);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-tight);
-  letter-spacing: var(--letter-spacing-display);
-}
-
-.landing-way-copy > p {
-  max-width: 40ch;
+.landing-section-lead {
+  max-width: 64ch;
   margin: 0;
   color: var(--text-secondary);
+  font-size: var(--font-size-base);
   line-height: var(--line-height-relaxed);
 }
 
-/* The XP rule, quiet: a filled yellow square earns XP, an empty one does not (the text says which). */
-.landing-way-copy > .landing-xp {
+.landing-section-title,
+.auth-title,
+.confirm-email h1 {
+  font-family: var(--font-display);
+  font-size: var(--type-h1-size);
+  line-height: var(--line-height-snug);
+  letter-spacing: var(--letter-spacing-display);
+}
+
+/* How it works: one sheet (a .panel), its four parts side by side, each a short explanation (nothing here is a link).
+   The heading stands over the sheet, on the page, so every section's heading starts on the same left edge. The sheet
+   is padded 32, and less in a narrow window, where the pictures need the room. */
+.panel.landing-how-list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: clamp(var(--space-4), 2vw, var(--space-8));
+  margin: 0;
+  padding: clamp(var(--space-4), 2.5vw, var(--space-8));
+  list-style: none;
+}
+
+.landing-how-item {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+/* The picture of a part (LandingSpecimen): a specimen of it on the part's tint and squared paper, like a class's cover.
+   Each part of the product keeps one tint, here and nowhere as a status. */
+.landing-art {
+  container-type: inline-size;
+  display: grid;
+  place-items: center;
+  height: 132px;
+  margin-bottom: var(--space-2);
+  overflow: hidden;
+  border-radius: var(--radius-btn-lg);
+  background:
+    var(--pattern-grid-ink) 0 0 / 16px 16px,
+    var(--tint-bg);
+  /* A hairline of ink, so a pale tint keeps its edge on the white sheet. */
+  box-shadow: inset 0 0 0 1px var(--color-ink-a06);
+  color: var(--tint-fg);
+}
+
+/* In a narrow column a specimen is drawn smaller, still whole (the path is a drawing that fits its width already). */
+@container (max-width: 12.5rem) {
+  .landing-art > :not(.landing-art-path) {
+    scale: 0.8;
+  }
+}
+
+/* Learn: the path. Two lessons done, the one you are on in a halo, the next locked. */
+.landing-art-path {
+  width: min(100% - 2 * var(--space-3), 240px);
+  height: auto;
+  overflow: visible;
+}
+
+.landing-art-trail {
+  fill: none;
+  stroke: var(--color-primary-300);
+  stroke-dasharray: 1 8;
+  stroke-linecap: round;
+  stroke-width: 3;
+}
+
+.landing-art-trail.is-done {
+  stroke: var(--color-primary-500);
+  stroke-dasharray: none;
+}
+
+.landing-art-node circle {
+  fill: var(--surface-card);
+  stroke: var(--color-ink-300);
+  stroke-width: 2;
+}
+
+.landing-art-node path {
+  fill: none;
+  stroke: var(--color-ink-400);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.landing-art-node rect {
+  fill: var(--color-ink-400);
+}
+
+.landing-art-node.is-done circle {
+  fill: var(--color-primary-500);
+  stroke: var(--color-primary-500);
+}
+
+.landing-art-node.is-done path {
+  stroke: var(--color-white);
+  stroke-width: 2.5;
+}
+
+.landing-art-node.is-here circle {
+  stroke: var(--color-primary-500);
+  stroke-width: 3;
+}
+
+.landing-art-node.is-here .landing-art-halo {
+  fill: var(--color-primary-a16);
+  stroke: none;
+}
+
+.landing-art-node.is-here .landing-art-dot {
+  fill: var(--color-primary-500);
+  stroke: none;
+}
+
+/* Practice: a flashcard, the next one of the pile showing under it. */
+.landing-art-cards {
+  position: relative;
+  display: grid;
+}
+
+.landing-art-card {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: var(--space-0-5);
+  min-width: 112px;
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-sm);
+}
+
+.landing-art-card.is-under {
+  position: absolute;
+  inset: 0;
+  rotate: -8deg;
+  translate: -8px 2px;
+  box-shadow: var(--shadow-xs);
+  opacity: 0.72;
+}
+
+.landing-art-hanzi {
+  color: var(--text-primary);
+  font-family: var(--font-hanzi);
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-heading);
+  line-height: 1.2;
+}
+
+.landing-art-pinyin {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-strong);
+  line-height: var(--line-height-normal);
+}
+
+/* AI Helper: the talk partner's question, and a reply that is spoken. */
+.landing-art-chat {
+  display: grid;
+  gap: var(--space-2);
+  width: min(100% - 2 * var(--space-5), 208px);
+}
+
+.landing-art-bubble {
   display: inline-flex;
   align-items: center;
+  justify-self: start;
   gap: var(--space-2);
-  margin-top: var(--space-1);
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
+  min-height: 34px;
+  padding: var(--space-1-5) var(--space-3);
+  border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) var(--radius-xs);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-xs);
+  color: var(--text-primary);
+  font-family: var(--font-cjk);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
 }
 
-.landing-xp::before {
-  content: '';
-  width: 10px;
-  height: 10px;
-  border-radius: 2px;
-  box-shadow: inset 0 0 0 1.5px var(--border-interactive);
+.landing-art-bubble.is-reply {
+  justify-self: end;
+  border-radius: var(--radius-lg) var(--radius-lg) var(--radius-xs) var(--radius-lg);
+  background: var(--color-primary-500);
+  color: var(--color-white);
 }
 
-.landing-way-copy > .landing-xp.is-earning {
-  color: var(--text-brand);
+.landing-art-wave {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
 }
 
-.landing-xp.is-earning::before {
-  background: var(--color-accent-500);
-  box-shadow: none;
+.landing-art-wave > i {
+  width: 3px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: currentColor;
 }
 
-/* A slice of the product: a white sheet with a hairline. */
-.landing-render {
-  min-width: 0;
-  padding: var(--space-8);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-xl);
+.landing-art-wave > i:nth-child(2n) {
+  height: 12px;
+}
+
+.landing-art-wave > i:nth-child(3n) {
+  height: 18px;
+}
+
+/* Classes: three scenarios, as the white tiles of class covers. */
+.landing-art-scenes {
+  display: flex;
+  align-items: center;
+}
+
+.landing-art-scene {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-btn-lg);
   background: var(--surface-card);
   box-shadow: var(--shadow-xs);
 }
 
-/* 01 Learn: a path of lessons, stamped when done. */
-.landing-path {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  padding-block: var(--space-10);
+.landing-art-scene:first-child {
+  rotate: -8deg;
+  translate: 6px 4px;
 }
 
-.landing-path-stop {
-  position: relative;
-  display: grid;
-  justify-items: center;
-  align-content: start;
-  gap: var(--space-1);
-  text-align: center;
+.landing-art-scene:last-child {
+  rotate: 8deg;
+  translate: -6px 4px;
 }
 
-/* The track between two stops: purple as far as the path has come. */
-.landing-path-stop + .landing-path-stop::before {
-  content: '';
-  position: absolute;
-  top: 27px;
-  right: 50%;
-  width: 100%;
-  height: 2px;
-  background: var(--border-default);
-}
-
-.landing-path-stop.is-done + .landing-path-stop::before {
-  background: var(--color-primary-500);
-}
-
-.seal.landing-path-seal {
-  --seal-size: 56px;
+.landing-art-scene.is-front {
   position: relative;
   z-index: var(--z-raised);
-  margin-bottom: var(--space-2);
-}
-
-.seal.landing-path-seal:is(.is-outline, .is-muted) {
-  background: var(--surface-card);
-}
-
-.landing-path-word {
-  font-family: var(--font-hanzi);
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-bold);
-}
-
-.landing-path-pinyin {
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.landing-path-stop.is-locked :is(.landing-path-word, .landing-path-pinyin, .landing-path-lock) {
-  color: var(--color-ink-500);
-}
-
-.landing-path-next {
-  margin-top: var(--space-1);
-  padding: var(--space-0-5) var(--space-2);
-  border-radius: var(--radius-xs);
-  background: var(--color-primary-50);
-  color: var(--color-primary-600);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-bold);
-}
-
-.landing-path-lock {
-  margin-top: var(--space-1);
-}
-
-/* 02 Practice: a flashcard and the kinds of practice, each in its own pigment. */
-.landing-practice {
-  display: grid;
-  gap: var(--space-6);
-}
-
-.landing-flashcard {
-  display: flex;
-  align-items: center;
-  gap: var(--space-5);
-  padding: var(--space-5);
-  border: 1px solid var(--border-subtle);
+  width: 60px;
+  height: 60px;
   border-radius: var(--radius-lg);
-  background: var(--surface-subtle);
+  box-shadow: var(--shadow-sm);
 }
 
-.landing-flashcard-tiles {
-  display: flex;
-  gap: var(--space-1);
-}
-
-.hanzi-tile.landing-flashcard-tile {
-  --hanzi-tile-size: 72px;
-}
-
-.landing-flashcard-copy {
-  display: grid;
-  flex: 1 1 auto;
-  gap: var(--space-0-5);
-  min-width: 0;
-}
-
-.landing-flashcard-copy strong {
-  font-family: var(--font-display);
-  font-size: var(--font-size-2xl);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-tight);
-}
-
-.landing-flashcard-copy span {
-  color: var(--text-secondary);
-}
-
-.landing-flashcard-count {
-  align-self: flex-start;
-  color: var(--text-secondary);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
-  white-space: nowrap;
-}
-
-.landing-practice-types {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.landing-practice-types li {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1-5);
-  min-height: var(--control-height-sm);
-  padding: 0 var(--space-3);
-  border-radius: var(--radius-sm);
-  background: var(--type-soft);
-  color: var(--type-color);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-}
-
-.landing-practice-types .is-cobalt {
-  --type-color: var(--pigment-cobalt);
-  --type-soft: var(--pigment-cobalt-soft);
-}
-
-.landing-practice-types .is-teal {
-  --type-color: var(--pigment-teal);
-  --type-soft: var(--pigment-teal-soft);
-}
-
-.landing-practice-types .is-jade {
-  --type-color: var(--pigment-jade);
-  --type-soft: var(--pigment-jade-soft);
-}
-
-.landing-practice-types .is-cinnabar {
-  --type-color: var(--pigment-cinnabar);
-  --type-soft: var(--pigment-cinnabar-soft);
-}
-
-.landing-practice-types .is-ochre {
-  --type-color: var(--pigment-ochre);
-  --type-soft: var(--pigment-ochre-soft);
-}
-
-.landing-practice-types .is-plum {
-  --type-color: var(--pigment-plum);
-  --type-soft: var(--pigment-plum-soft);
-}
-
-/* 03 AI Helper: a two-line conversation with Xiaomei. */
-.landing-chat {
-  display: grid;
-  gap: var(--space-4);
-}
-
-.landing-chat-line {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--space-3);
-  margin: 0;
-}
-
-.landing-chat-line.is-you {
-  justify-content: flex-end;
-}
-
-.landing-chat-bubble {
-  display: grid;
-  gap: var(--space-0-5);
-  max-width: 80%;
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-lg);
-}
-
-.landing-chat-line.is-xiaomei .landing-chat-bubble {
-  border-bottom-left-radius: var(--radius-xs);
-  background: var(--module-ai-soft);
-}
-
-.landing-chat-line.is-you .landing-chat-bubble {
-  border-bottom-right-radius: var(--radius-xs);
-  background: var(--color-ink-100);
-  text-align: right;
-}
-
-.landing-chat-name {
-  color: var(--text-secondary);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-bold);
-}
-
-.landing-chat-line.is-xiaomei .landing-chat-name {
-  color: var(--module-ai);
-}
-
-.landing-chat-hanzi {
-  font-family: var(--font-cjk);
-  font-size: var(--font-size-xl);
-  line-height: var(--line-height-snug);
-}
-
-.landing-chat-pinyin {
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-/* 04 Classes: real classes, teacher first, as timetable-like rows. */
-.landing-render.featured-classes {
-  display: grid;
-  justify-items: start;
-  gap: var(--space-4);
-  padding: var(--space-2) var(--space-6) var(--space-5);
-}
-
-.featured-classes > * {
-  justify-self: stretch;
-}
-
-.featured-classes > .featured-classes-all {
-  justify-self: start;
-}
-
-.featured-classes-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.featured-class {
-  position: relative;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--space-4);
-  padding: var(--space-4) 0;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.featured-class-copy {
-  display: grid;
-  gap: var(--space-0-5);
-  min-width: 0;
-}
-
-.featured-class-teacher {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-1) var(--space-2);
-  color: var(--module-classes);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-bold);
-}
-
-.featured-class-link {
-  color: var(--text-primary);
-  font-family: var(--font-display);
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-snug);
-  text-decoration: none;
-  overflow-wrap: anywhere;
-}
-
-/* The whole row is the link's hit area. */
-.featured-class-link::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-}
-
-.featured-class-link:focus-visible {
-  outline: none;
-}
-
-.featured-class:has(.featured-class-link:focus-visible) {
-  border-radius: var(--radius-sm);
-  outline: var(--border-width-focus) solid var(--focus-ring-color);
-  outline-offset: var(--focus-ring-offset);
-}
-
-.featured-class-arrow {
-  color: var(--color-ink-400);
-  transition:
-    color var(--duration-fast) var(--ease-standard),
-    transform var(--duration-fast) var(--ease-standard);
-}
-
-.featured-class:hover .featured-class-link {
-  color: var(--text-link-hover);
-}
-
-.featured-class:hover .featured-class-arrow {
-  color: var(--text-primary);
-  transform: translateX(2px);
-}
-
-/* About and roles: a statement beside a hairline list. */
-.landing-about,
-.landing-faq {
-  display: grid;
-  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-  gap: var(--space-8) var(--space-16);
-}
-
-.landing-about-copy,
-.landing-faq-head {
-  display: grid;
-  align-content: start;
-  justify-items: start;
-  gap: var(--space-4);
-}
-
-.landing-about-copy > p:not(.page-eyebrow) {
-  max-width: 46ch;
+.landing-how-item p,
+.landing-step-copy {
   margin: 0;
   color: var(--text-secondary);
-  line-height: var(--line-height-relaxed);
-}
-
-.landing-roles {
-  margin: 0;
-  border-top: 1px solid var(--border-default);
-}
-
-.landing-role {
-  display: grid;
-  grid-template-columns: minmax(120px, 0.32fr) minmax(0, 1fr);
-  gap: var(--space-2) var(--space-6);
-  padding: var(--space-6) 0;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-/* The next section and the footer draw their own top rule, so the last rows don't add a second one. */
-.landing-role:last-child,
-.landing-faq .public-qa:last-child {
-  border-bottom: 0;
-}
-
-.landing-role dt {
-  font-family: var(--font-display);
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-snug);
-}
-
-.landing-role dd {
-  display: grid;
-  justify-items: start;
-  gap: var(--space-2);
-  margin: 0;
-  color: var(--text-secondary);
+  font-size: var(--type-body-size);
   line-height: var(--line-height-normal);
 }
 
-/* Questions: the disclosure list. */
-.landing-faq {
-  padding-bottom: 0;
-}
-
-.landing-faq-list {
-  border-top: 1px solid var(--border-default);
-}
-
-.landing-faq-item > summary {
-  padding: var(--space-5) 0;
-  font-family: var(--font-display);
-  font-size: var(--font-size-xl);
-  line-height: var(--line-height-snug);
-}
-
-.landing-faq-answer {
+/* The plan's three steps, numbered 一 二 三 on practice tiles; the tile's own dashed line leads to the next step. */
+.landing-steps {
+  --landing-steps-gap: var(--space-10);
+  --landing-step-tile: 56px;
   display: grid;
-  justify-items: start;
-  gap: var(--space-2);
-  max-width: 60ch;
-  padding-bottom: var(--space-6);
-}
-
-.landing-faq-answer p {
-  margin: 0;
-  color: var(--text-secondary);
-  line-height: var(--line-height-relaxed);
-}
-
-/* Help: a topic index beside the answers, the contact form last
-   -------------------------------------------------------------------------- */
-.help-page {
-  display: grid;
-  gap: var(--space-12);
-  min-width: 0;
-}
-
-/* Topics | answers | the contact form, which stays in view beside the answers. */
-.help-layout {
-  display: grid;
-  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr) minmax(320px, 380px);
-  grid-template-areas: 'index main contact';
-  align-items: start;
-  gap: var(--space-8) var(--space-12);
-}
-
-.legal-layout {
-  display: grid;
-  grid-template-columns: minmax(200px, 240px) minmax(0, 1fr);
-  align-items: start;
-  gap: var(--space-8) var(--space-16);
-}
-
-.help-topics,
-.legal-toc {
-  position: sticky;
-  top: calc(var(--topbar-height) + var(--space-6));
-  display: grid;
-  gap: var(--space-3);
-  min-width: 0;
-}
-
-.help-topics-title {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--type-overline-size);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: var(--letter-spacing-wide);
-  text-transform: uppercase;
-}
-
-.help-topics ol,
-.legal-toc ol {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-8) var(--landing-steps-gap);
   margin: 0;
   padding: 0;
-  border-left: 1px solid var(--border-subtle);
   list-style: none;
 }
 
-.help-topics a,
-.legal-toc a {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 36px;
-  margin-left: -1px;
-  padding: var(--space-1) var(--space-3);
-  border-left: 2px solid transparent;
-  color: var(--text-secondary);
-  font-size: var(--font-size-md);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-snug);
-  text-decoration: none;
-  transition:
-    color var(--duration-fast) var(--ease-standard),
-    border-color var(--duration-fast) var(--ease-standard);
+.landing-step {
+  position: relative;
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  gap: var(--space-1-5);
+  min-width: 0;
 }
 
-.help-topics a:hover,
-.legal-toc a:hover {
-  border-left-color: var(--color-primary-500);
+/* A plain tile: the practice square's centre line would read as one more stroke of 一 二 三. */
+.hanzi-tile.landing-step-tile {
+  --hanzi-tile-size: var(--landing-step-tile);
+  margin-bottom: var(--space-3);
+  background: var(--surface-card);
+}
+
+.landing-step:not(:last-child)::after {
+  position: absolute;
+  top: calc(var(--landing-step-tile) / 2 - 1px);
+  right: calc(var(--space-3) - var(--landing-steps-gap));
+  left: calc(var(--landing-step-tile) + var(--space-3));
+  border-top: 2px dashed var(--color-primary-200);
+  content: '';
+}
+
+.landing-step-copy {
+  max-width: 40ch;
+}
+
+/* The public footer (PublicFooter): one quiet line on a white sheet under a rule, as tall as the header above the
+   page. The year on the left, the pages the header has no room for on the right; in a narrow window they wrap under. */
+.public-footer {
+  border-top: 1px solid var(--border-subtle);
+  background: var(--surface-card);
+}
+
+/* The two sides share one baseline, and the line (or the lines, once the links wrap under) sits in the middle of the
+   bar. */
+.public-footer-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: center;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-8);
+  width: min(calc(100% - 2 * var(--page-gutter)), var(--public-max));
+  min-height: var(--space-16);
+  margin-inline: auto;
+  padding-block: var(--space-3);
+}
+
+.public-footer-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--space-5);
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: 2.15;
+}
+
+/* 再见: the page's last word, set as its first one is. It is larger than the line it stands in, so it takes no line
+   height of its own and the line stays 28 high. */
+.public-footer-bye > .hanzi {
+  margin-inline-end: var(--space-0-5);
+  color: var(--text-primary);
+  font-size: var(--font-size-base);
+  line-height: 1;
+}
+
+.public-footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* 28 high, so each link is easy to hit, and the header's own hover. */
+.public-footer-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--space-7);
+  color: var(--color-ink-700);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.public-footer-link:hover {
+  color: var(--text-brand);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 5px;
+}
+
+/* Help and the legal pages: breadcrumb, the public H1, a rail beside white cards */
+.public-doc {
+  padding-top: var(--space-2);
+}
+
+.public-doc .page-title h1 {
+  font-size: clamp(1.75rem, 6vw, var(--type-h1-public-size));
+  line-height: 1.2;
+}
+
+.public-rail-layout {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  align-items: start;
+  gap: var(--grid-gap);
+}
+
+/* Sticks under the sticky header, with the page gap below it. */
+.public-rail {
+  position: sticky;
+  top: calc(var(--topbar-sticky-offset) + var(--page-gap));
+  display: grid;
+  gap: var(--space-3);
+  max-height: calc(100vh - var(--topbar-sticky-offset) - 2 * var(--page-gap));
+  overflow-y: auto;
+  padding: var(--space-4);
+}
+
+.public-rail-list {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* An entry takes one line or two; the number or icon stays on the first. */
+.public-rail-link {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--type-label-size);
+  line-height: var(--line-height-normal);
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.public-rail-link .icon-glyph {
+  margin-top: var(--space-0-5);
+}
+
+.public-rail-link:hover {
+  background: var(--surface-sunken);
   color: var(--text-primary);
 }
 
+.public-rail-link.is-active {
+  background: var(--surface-hover);
+  box-shadow: inset 3px 0 var(--color-primary-500);
+  color: var(--text-link);
+  font-weight: var(--font-weight-strong);
+}
+
+.public-rail-number {
+  flex: 0 0 var(--space-5);
+}
+
+/* Help: the search above the topics in the rail; a card per topic with open question rows, the contact form last */
 .help-topics {
-  grid-area: index;
+  display: grid;
+  gap: var(--space-3);
 }
 
 .help-main {
   display: grid;
-  grid-area: main;
-  gap: var(--space-16);
+  gap: var(--grid-gap);
   min-width: 0;
 }
 
-.help-topic,
-.help-contact,
-.legal-section {
-  scroll-margin-top: calc(var(--topbar-height) + var(--space-6));
+/* While searching: the result line, with Clear search on its right. */
+.help-search-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  min-width: 0;
 }
 
-.help-topic {
+.help-search-summary p {
+  margin: 0;
+  min-width: 0;
+  font-size: var(--type-body-size);
+  line-height: var(--line-height-normal);
+  overflow-wrap: anywhere;
+}
+
+.help-card,
+.pub-class-units {
   display: grid;
   gap: var(--space-4);
 }
 
-.help-topic-title {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-3);
+.help-questions > li:first-child {
+  padding-top: 0;
+}
+
+.help-questions > li:last-child {
+  padding-bottom: 0;
+}
+
+.help-questions .row-list-copy {
+  gap: var(--space-1-5);
+}
+
+.help-answer,
+.help-sent p {
   margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--type-h2-size);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-snug);
-}
-
-/* A fixed column (not ch, which differs between the serif number and the body text), so the text below a heading
-   starts exactly under the heading's words. */
-.help-topic-number,
-.legal-section-number {
-  flex: 0 0 var(--space-5);
-  color: var(--text-brand);
-  font-size: var(--font-size-md);
-  font-variant-numeric: lining-nums tabular-nums;
-}
-
-.help-questions {
-  border-top: 1px solid var(--border-default);
-}
-
-.help-question p {
-  max-width: 62ch;
-  margin: 0;
-  padding-bottom: var(--space-5);
+  max-width: 72ch;
   color: var(--text-secondary);
+  font-size: var(--type-body-size);
   line-height: var(--line-height-relaxed);
 }
 
-.help-topic-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-5);
-  margin: 0;
+/* Inline prose links in help answers, sign-up consent, legal documents, and sign-in notices stay underlined. */
+.help-answer a,
+.auth-consent a,
+.legal-bullets a,
+.auth-notice-link {
+  color: var(--text-link);
+  font-weight: var(--font-weight-strong);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
 }
 
-/* The contact route: the one white sheet on the page. */
-.help-contact {
-  position: sticky;
-  top: calc(var(--topbar-height) + var(--space-6));
-  display: grid;
-  grid-area: contact;
-  gap: var(--space-5);
-  min-width: 0;
+.help-answer a:hover,
+.auth-consent a:hover,
+.legal-bullets a:hover,
+.auth-notice-link:hover {
+  color: var(--text-link-hover);
 }
 
-/* Beside the answers the column is narrow: one field per row. */
-.help-contact .form-grid.two {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.help-contact-head {
-  display: grid;
-  align-content: start;
-  justify-items: start;
-  gap: var(--space-3);
-}
-
-.help-contact-head p {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-md);
-  line-height: var(--line-height-normal);
-}
-
-.help-contact-mark {
-  display: grid;
-  place-items: center;
-  width: var(--control-height-md);
-  height: var(--control-height-md);
-  border-radius: var(--radius-md);
-  background: var(--color-primary-50);
-  color: var(--text-brand);
-}
-
-.help-contact-title {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--type-h2-size);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-snug);
-}
-
-.help-form {
+.help-form,
+.auth-form,
+.pub-class-hero-copy {
   display: grid;
   gap: var(--space-4);
   min-width: 0;
@@ -1089,341 +925,162 @@
 
 .help-form-footer {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
+  flex-wrap: wrap;
   justify-content: space-between;
-  gap: var(--space-3) var(--space-4);
-}
-
-.help-form-footer .field-hint {
-  flex: 1 1 240px;
-}
-
-.help-signed-in,
-.help-sent {
-  display: grid;
-  align-content: start;
-  justify-items: start;
   gap: var(--space-4);
 }
 
-.help-signed-in p {
-  margin: 0;
-  color: var(--text-secondary);
-  line-height: var(--line-height-relaxed);
-}
-
 .help-sent {
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: start;
-}
-
-.help-sent > .btn {
-  grid-column: 2;
-}
-
-.help-sent-mark {
-  display: grid;
-  place-items: center;
-  width: var(--control-height-lg);
-  height: var(--control-height-lg);
-  border-radius: var(--radius-round);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
   background: var(--color-success-soft);
+  overflow-wrap: anywhere;
+}
+
+.seal.help-sent-seal {
+  --seal-size: 44px;
+  background: var(--surface-card);
   color: var(--color-success-text);
 }
 
-.help-sent h3 {
-  margin: 0 0 var(--space-1);
-  font-family: var(--font-display);
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-semibold);
-}
-
-.help-sent p {
-  margin: 0;
-  color: var(--text-secondary);
-}
-
-.help-sent .help-sent-number {
-  margin-top: var(--space-2);
-  color: var(--text-primary);
-  font-weight: var(--font-weight-bold);
-}
-
-/* Legal documents and the Safety centre (LegalDocument): a reading layout
-   -------------------------------------------------------------------------- */
-.legal-page {
-  display: grid;
-  gap: var(--space-12);
-  min-width: 0;
-}
-
-.legal-related-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-5);
-}
-
-.legal-official-title {
-  flex: 1 1 100%;
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-/* The overline over the legal "On this page" list and the catalogue's search and filters. */
-.legal-toc-title,
-.pub-catalogue-filters-title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--type-overline-size);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: var(--letter-spacing-wide);
-  text-transform: uppercase;
-}
-
-.pub-catalogue-filters-title {
-  margin-bottom: var(--space-3);
-}
-
-.legal-toc ol {
-  counter-reset: legal-toc;
-}
-
-.legal-toc li {
-  counter-increment: legal-toc;
-}
-
-/* Even spacing whether an entry takes one line or two; numbered "01" like the section headings. */
-.legal-toc a {
-  align-items: baseline;
-  min-height: 0;
-  padding-block: var(--space-2);
-  font-size: var(--font-size-sm);
-}
-
-.legal-toc a::before {
-  content: counter(legal-toc, decimal-leading-zero);
-  flex: 0 0 var(--space-5);
-  color: var(--color-ink-500);
-  font-variant-numeric: tabular-nums;
-}
-
+/* The legal documents and the Safety centre (LegalDocument): one white card of text */
 .legal-body {
-  display: grid;
-  max-width: var(--reading-max);
-  min-width: 0;
+  padding: var(--space-8) var(--space-10);
 }
 
 .legal-section {
   display: grid;
   gap: var(--space-3);
-  padding-bottom: var(--space-8);
+  padding-block: var(--space-6);
+}
+
+.legal-section:first-child {
+  padding-top: 0;
+}
+
+.legal-section:last-child {
+  padding-bottom: 0;
 }
 
 .legal-section + .legal-section {
-  padding-top: var(--space-8);
   border-top: 1px solid var(--border-subtle);
 }
 
 .legal-section h2 {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-3);
-  margin: 0;
   font-family: var(--font-display);
-  font-size: var(--type-h2-size);
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-xl);
   line-height: var(--line-height-snug);
 }
 
-.legal-section p,
+.legal-section > p:not(.callout),
 .legal-bullets {
+  max-width: 70ch;
   margin: 0;
-  color: var(--text-primary);
+  color: var(--color-ink-700);
+  font-size: var(--font-size-base);
   line-height: var(--line-height-relaxed);
 }
 
-.legal-section > p {
-  padding-left: calc(var(--space-5) + var(--space-3));
-}
-
 .legal-bullets {
   display: grid;
-  gap: var(--space-2);
-  padding-left: calc(var(--space-5) + var(--space-3) + var(--space-5));
-}
-
-.legal-bullets li::marker {
-  color: var(--color-primary-600);
-}
-
-.legal-section-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-5);
+  gap: var(--space-3);
+  padding-left: var(--space-4);
 }
 
 .legal-note {
-  margin-top: var(--space-2);
+  border: 1px solid var(--border-default);
+  background: var(--surface-card);
 }
 
-/* Sign-in, create account, recovery and invite (AuthShell): a brand side beside the form
-   -------------------------------------------------------------------------- */
+/* Sign-in, create account, recovery and invite (AuthShell): one centred card, the brand side beside the form side */
 .auth-page {
   display: grid;
-  grid-template-columns: minmax(340px, 5fr) minmax(0, 7fr);
+  place-items: center;
   min-height: 100vh;
+  padding: var(--space-10);
 }
 
-.auth-brand {
-  position: sticky;
-  top: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-8);
-  height: 100vh;
-  padding: var(--space-8) var(--space-12) var(--space-12);
-  border-right: 1px solid var(--border-subtle);
-  background: var(--surface-page);
-}
-
-.auth-brand-word {
+/* Every short page keeps one card height, so moving between them does not move the card's edges. */
+.auth-card {
   display: grid;
-  justify-items: start;
-  gap: var(--space-5);
-  margin: auto 0 0;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  width: min(100%, 64rem);
+  min-height: 32rem;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-2xl);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-md);
 }
 
-.hanzi-tile.auth-brand-tile {
-  --hanzi-tile-size: clamp(160px, 14vw, 216px);
+/* The brand side: the night surface under the practice-paper grid, the first word a learner meets on white tiles. */
+.auth-side {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-8);
+  background:
+    var(--pattern-grid-night) 0 0 / var(--pattern-grid-size) var(--pattern-grid-size),
+    var(--surface-brand);
+  color: var(--text-on-dark);
 }
 
-.auth-brand-gloss {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--space-1) var(--space-3);
+.auth-side .brand-seal {
+  background: var(--color-white);
+  box-shadow: none;
+  color: var(--color-primary-600);
 }
 
-.auth-brand-pinyin {
-  font-family: var(--font-display);
-  font-size: var(--font-size-3xl);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-tight);
+.auth-side .brand-title {
+  color: var(--color-white);
 }
 
-.auth-brand-meaning {
-  color: var(--text-secondary);
-  font-size: var(--font-size-lg);
+.auth-side .brand-title .accent {
+  color: var(--color-primary-300);
 }
 
-.auth-brand-promise {
-  max-width: 22ch;
-  margin: 0 0 auto;
-  font-family: var(--font-display);
-  font-size: var(--font-size-2xl);
-  line-height: var(--line-height-snug);
-  letter-spacing: -0.01em;
-  text-wrap: balance;
+.auth-side .brand:focus-visible {
+  outline-color: var(--color-white);
+}
+
+.auth-word {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: var(--space-4);
+  margin: 0;
+}
+
+.hanzi-tile.auth-word-tile {
+  --hanzi-tile-size: 132px;
+  border-color: transparent;
+  box-shadow: var(--shadow-md);
+}
+
+.auth-word-gloss {
+  color: var(--text-on-brand-muted);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.5;
 }
 
 .auth-panel {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: center;
+  gap: var(--space-4);
   min-width: 0;
-  padding: var(--space-6) var(--space-12) var(--space-8);
-  background: var(--surface-card);
+  padding: var(--space-8) clamp(var(--space-5), 3.5vw, var(--space-12));
 }
 
 .auth-panel-top {
   display: flex;
   justify-content: flex-end;
-}
-
-.auth-panel-body,
-.auth-panel-foot {
-  width: 100%;
-  max-width: 440px;
-  margin-inline: auto;
-}
-
-/* The form starts at the same height on every auth page (and on both tabs), whatever its length; the foot sits at
-   the bottom. */
-.auth-panel-body {
-  display: grid;
-  gap: var(--space-6);
-  margin-block: 0 auto;
-  padding-block: clamp(var(--space-8), 8vh, var(--space-12)) var(--space-6);
-}
-
-.auth-panel-foot {
-  display: grid;
-  gap: var(--space-3);
-  padding-top: var(--space-5);
-  border-top: 1px solid var(--border-subtle);
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.auth-panel-safety {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  margin: 0;
-  line-height: var(--line-height-normal);
-}
-
-.auth-panel-safety .icon-glyph {
-  flex: 0 0 auto;
-  margin-top: 2px;
-  color: var(--color-success-text);
-}
-
-.auth-panel-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-4);
-}
-
-.auth-panel-links a {
-  color: var(--text-secondary);
-}
-
-.auth-panel-links a:hover {
-  color: var(--text-link-hover);
-}
-
-.auth-form,
-.auth-flow {
-  display: grid;
-  gap: var(--space-5);
-}
-
-.auth-form-head {
-  display: grid;
-  gap: var(--space-2);
-}
-
-.auth-form-head h1 {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--type-h1-size);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-tight);
-  letter-spacing: var(--letter-spacing-display);
-}
-
-.auth-form-head p {
-  margin: 0;
-  color: var(--text-secondary);
-  overflow-wrap: anywhere;
-}
-
-.auth-form .alert p {
-  margin: 0;
 }
 
 .auth-password {
@@ -1438,7 +1095,7 @@
   position: absolute;
   top: 50%;
   right: var(--space-1);
-  transform: translateY(-50%);
+  translate: 0 -50%;
 }
 
 .auth-form-row {
@@ -1449,160 +1106,44 @@
   gap: var(--space-2) var(--space-4);
 }
 
-/* Account type: two clear choices; the chosen one is outlined in ink with a check. */
-.auth-role-grid {
+/* 22 high, so one line of text is centred on the 18 checkbox and its 2 top margin. */
+.choice.auth-choice {
+  font-size: var(--type-label-size);
+  line-height: var(--line-height-relaxed);
+}
+
+/* A text link in a line of copy: as tall as the line, still 24 to hit. */
+.btn-link.auth-text-link {
+  min-height: var(--space-6);
+}
+
+.auth-hint {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  overflow-wrap: anywhere;
+}
+
+.auth-passwords {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-3);
-}
-
-.auth-role-card {
-  position: relative;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-4);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
-  background: var(--surface-card);
-  cursor: pointer;
-  transition:
-    border-color var(--duration-fast) var(--ease-standard),
-    box-shadow var(--duration-fast) var(--ease-standard);
-}
-
-.auth-role-card:hover {
-  border-color: var(--border-interactive);
-}
-
-.auth-role-card:has(.auth-role-input:checked) {
-  border-color: var(--color-primary-500);
-  box-shadow: inset 0 0 0 1px var(--color-primary-500);
-}
-
-.auth-role-card:has(.auth-role-input:focus-visible) {
-  outline: var(--border-width-focus) solid var(--focus-ring-color);
-  outline-offset: var(--focus-ring-offset);
-}
-
-/* The radio stays in the accessibility tree; the whole card is its visible control. */
-.auth-role-input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.auth-role-icon {
-  display: grid;
-  place-items: center;
-  width: var(--control-height-md);
-  height: var(--control-height-md);
-  border-radius: var(--radius-md);
-  background: var(--color-ink-100);
-  color: var(--color-ink-700);
-  transition:
-    background var(--duration-fast) var(--ease-standard),
-    color var(--duration-fast) var(--ease-standard);
-}
-
-.auth-role-card:has(.auth-role-input:checked) .auth-role-icon {
-  background: var(--color-primary-500);
-  color: var(--text-on-dark);
-}
-
-.auth-role-copy {
-  display: grid;
+  gap: var(--space-2);
   min-width: 0;
 }
 
-.auth-role-copy small {
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.auth-role-check {
-  position: absolute;
-  top: var(--space-2);
-  right: var(--space-2);
-  color: var(--color-primary-600);
-  opacity: 0;
-}
-
-.auth-role-card:has(.auth-role-input:checked) .auth-role-check {
-  opacity: 1;
-}
-
-.auth-teacher-note {
-  margin-top: var(--space-1);
-}
-
-.auth-consent a {
-  color: var(--text-link);
-  font-weight: var(--font-weight-semibold);
-  text-decoration: underline;
-  white-space: nowrap;
-}
-
-/* Forgot password: the three steps, numbered in seal outlines. */
-.auth-steps {
+.auth-consent-field {
   display: grid;
-  gap: var(--space-2);
-  margin: 0;
-  padding: var(--space-4) 0 0;
-  border-top: 1px solid var(--border-subtle);
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-  list-style: none;
-  counter-reset: auth-step;
+  gap: var(--space-1);
 }
 
-.auth-steps li {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  counter-increment: auth-step;
-}
-
-.auth-steps li::before {
-  content: counter(auth-step);
-  display: grid;
-  flex: 0 0 auto;
-  place-items: center;
-  width: var(--space-6);
-  height: var(--space-6);
-  border-radius: var(--radius-xs);
-  box-shadow: inset 0 0 0 1px var(--color-primary-300);
-  color: var(--text-brand);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-bold);
-}
-
-/* Reset password: the readiness checks. */
-.auth-readiness {
-  display: grid;
-  gap: var(--space-3);
-  padding: var(--space-4);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  background: var(--surface-subtle);
-}
-
-.auth-readiness-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  margin: 0;
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-bold);
-}
-
+/* Reset password: the two checks on a sunken strip, under the fields they judge. */
 .auth-checks {
   display: grid;
-  gap: var(--space-1-5);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2) var(--space-4);
   margin: 0;
-  padding: 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
   list-style: none;
 }
 
@@ -1610,33 +1151,45 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  min-width: 0;
   color: var(--text-secondary);
-  font-size: var(--font-size-sm);
+  font-size: var(--type-caption-size);
+  line-height: 1.5;
 }
 
 .auth-checks li.is-met {
-  color: var(--color-success-text);
+  color: var(--text-primary);
+  font-weight: var(--font-weight-strong);
 }
 
-.auth-sent {
+.auth-check-mark {
   display: grid;
-  gap: var(--space-3);
+  flex: 0 0 auto;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-round);
+  background: var(--surface-card);
 }
 
-.auth-sent-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
+.auth-checks li.is-met .auth-check-mark {
+  border-color: var(--color-primary-500);
+  background: var(--color-primary-500);
+  color: var(--text-on-primary);
 }
 
+/* "Remember your password? Back to sign in", under a rule. */
 .auth-switch {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-1) var(--space-2);
   margin: 0;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
   color: var(--text-secondary);
-  font-size: var(--font-size-md);
+  font-size: var(--type-body-size);
 }
 
 .auth-checking {
@@ -1651,548 +1204,385 @@
   margin: 0;
 }
 
-/* Confirm an e-mail address (inside the public header and footer): one quiet, centred state
-   -------------------------------------------------------------------------- */
+/* E-mail confirmation uses the compact system-page card. */
 .confirm-email {
   display: grid;
-  justify-items: center;
+  justify-items: start;
   gap: var(--space-4);
-  width: min(100%, 560px);
-  margin: var(--space-16) auto 0;
-  text-align: center;
-}
-
-.confirm-email h1 {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--type-h1-size);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-tight);
-  letter-spacing: var(--letter-spacing-display);
+  width: min(100%, 640px);
+  margin: var(--space-12) auto 0;
+  padding: var(--space-12);
+  border-radius: var(--radius-2xl);
 }
 
 .confirm-email p {
-  max-width: 48ch;
   margin: 0;
   color: var(--text-secondary);
+  font-size: var(--type-body-size);
   line-height: var(--line-height-normal);
   overflow-wrap: anywhere;
 }
 
-.confirm-email .btn {
-  margin-top: var(--space-2);
-}
-
-/* The shared state square (an empty 田字格, as in StatePanel), coloured by the outcome. */
-.confirm-email-icon {
-  margin-bottom: var(--space-2);
-}
-
+/* The shared state square, coloured by the outcome. */
 .confirm-email-icon.is-done {
+  background: var(--color-success-soft);
+  box-shadow: inset 0 0 0 1px var(--color-success-border);
   color: var(--color-success-text);
 }
 
 .confirm-email-icon.is-failed {
-  border-color: var(--color-danger-border);
+  background: var(--color-danger-soft);
+  box-shadow: inset 0 0 0 1px var(--color-danger-border);
   color: var(--color-danger-text);
 }
 
-.confirm-email .confirm-email-hint {
-  font-size: var(--font-size-sm);
-}
-
-/* Public class catalogue: filters and the free-to-join note in a rail beside the classes
-   -------------------------------------------------------------------------- */
-.pub-catalogue-layout {
+/* Public pages: shared page root */
+.public-page {
   display: grid;
-  grid-template-columns: minmax(240px, 280px) minmax(0, 1fr);
-  grid-template-rows: auto 1fr;
-  grid-template-areas:
-    'filters results'
-    'join results';
-  align-items: start;
-  gap: var(--space-6) var(--space-10);
-}
-
-.pub-catalogue-filters {
-  grid-area: filters;
+  gap: var(--page-gap);
   min-width: 0;
 }
 
-.pub-catalogue-filters-title .chip {
-  letter-spacing: normal;
-  text-transform: none;
-}
-
-/* Under the filters, whose hairline already sets it off. */
-.pub-catalogue-join {
+/* Public class page: the hero card (title, facts, how to start), then what's inside */
+.pub-class-hero {
   display: grid;
-  grid-area: join;
-  justify-items: start;
-  gap: var(--space-3);
+  grid-template-columns: minmax(0, 1fr) minmax(7rem, 22%);
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-xs);
 }
 
-.pub-catalogue-join-title {
+.pub-class-hero-copy {
+  padding: var(--card-padding);
+  overflow-wrap: anywhere;
+}
+
+.pub-class-cover {
+  display: grid;
+  place-items: center;
+  background:
+    var(--pattern-grid-ink) 0 0 / 16px 16px,
+    var(--tint-bg);
+}
+
+.pub-class-hero-copy > p {
   margin: 0;
+}
+
+.pub-class-title,
+.system-title {
   font-family: var(--font-display);
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-snug);
+  font-size: clamp(1.75rem, 6vw, var(--type-h1-public-size));
+  line-height: 1.2;
+  letter-spacing: var(--letter-spacing-display);
 }
 
-.pub-catalogue-join p {
-  margin: 0;
+.pub-class-title {
+  overflow-wrap: anywhere;
+}
+
+.pub-class-about {
+  max-width: 70ch;
   color: var(--text-secondary);
-  font-size: var(--font-size-md);
-  line-height: var(--line-height-normal);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-relaxed);
 }
 
-.pub-catalogue-join-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-.pub-catalogue-results {
-  display: grid;
-  grid-area: results;
-  gap: var(--section-gap);
-  min-width: 0;
-}
-
-.pub-catalogue-count {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-2) var(--space-4);
-}
-
-/* Public class page: teacher and joining in an aside, the syllabus and the timetable beside it
-   -------------------------------------------------------------------------- */
-.pub-class-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
-  grid-template-areas: 'main aside';
-  align-items: start;
-  gap: var(--space-10) var(--space-16);
-}
-
-.pub-class-aside {
-  display: grid;
-  grid-area: aside;
-  gap: var(--space-8);
-  min-width: 0;
-}
-
-.pub-class-main {
-  display: grid;
-  grid-area: main;
-  gap: var(--space-16);
-  min-width: 0;
-}
-
-.pub-class-teacher {
-  display: grid;
-  gap: var(--space-4);
-}
-
-.pub-class-teacher-head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-}
-
-.pub-class-teacher-head > div {
-  display: grid;
-  justify-items: start;
-  gap: var(--space-1);
-  min-width: 0;
-}
-
-.pub-class-teacher-name {
-  font-family: var(--font-display);
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-snug);
-}
-
-.pub-class-teacher-bio {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-md);
-  line-height: var(--line-height-normal);
-}
-
-/* The teacher's own note for the class, in the teacher's voice. */
-.pub-class-note {
-  margin: 0;
-  padding: var(--space-4) var(--space-5);
-  border-left: 2px solid var(--module-classes);
-  border-radius: 0 var(--radius-md) var(--radius-md) 0;
-  background: var(--module-classes-soft);
-}
-
-.pub-class-note blockquote {
-  margin: 0;
-}
-
-.pub-class-note p {
-  margin: 0;
-  font-family: var(--font-display);
-  line-height: var(--line-height-normal);
-}
-
-.pub-class-note figcaption {
+.pub-class-actions {
   margin-top: var(--space-2);
-  color: var(--module-classes);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
 }
 
-.pub-class-cta {
-  display: grid;
-  gap: var(--space-3);
-}
-
-.pub-class-cta-facts {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-md);
-}
-
-.pub-class-cta-facts strong {
-  color: var(--color-success-text);
-}
-
-.pub-class-expect-title {
-  margin: var(--space-2) 0 0;
-  padding-top: var(--space-4);
-  border-top: 1px solid var(--border-subtle);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-bold);
-}
-
-.pub-class-expect {
-  display: grid;
-  gap: var(--space-2);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.pub-class-expect li {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--space-2);
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-  line-height: var(--line-height-normal);
-}
-
-.pub-class-expect .icon-glyph {
-  margin-top: 2px;
-  color: var(--module-classes);
-}
-
-/* Syllabus: units as headings, lessons numbered through the class (CSS counters keep the row text clean). */
-.pub-class-syllabus {
-  display: grid;
-  gap: var(--space-8);
-  counter-reset: pub-lesson;
-}
-
+/* A unit: its name, then its locked lessons. */
 .pub-class-unit {
   display: grid;
   gap: var(--space-1);
-}
-
-.pub-class-unit-number {
-  margin: 0;
-  color: var(--module-classes);
-  font-size: var(--type-overline-size);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: var(--letter-spacing-wide);
-  text-transform: uppercase;
-}
-
-.pub-class-unit-title {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-snug);
-}
-
-.pub-class-unit-lessons {
-  margin: var(--space-3) 0 0;
-  padding: 0;
-  border-top: 1px solid var(--border-default);
-  list-style: none;
-}
-
-.pub-class-unit-lesson {
-  display: grid;
-  grid-template-columns: 2.5rem minmax(0, 1fr) auto;
-  align-items: baseline;
-  gap: var(--space-1) var(--space-3);
-  padding: var(--space-3-5) 0;
-  border-bottom: 1px solid var(--border-subtle);
-  counter-increment: pub-lesson;
-}
-
-.pub-class-unit-lesson::before {
-  content: counter(pub-lesson, decimal-leading-zero);
-  color: var(--color-ink-500);
-  font-family: var(--font-display);
-  font-variant-numeric: lining-nums tabular-nums;
-}
-
-.pub-class-unit-lesson strong {
-  font-weight: var(--font-weight-semibold);
-  overflow-wrap: anywhere;
-}
-
-/* Live sessions read like a timetable. */
-.pub-class-sessions {
-  display: grid;
-  gap: var(--space-4);
-}
-
-/* A plain line under the heading, like the other quiet "nothing yet" notes in lists (no box of its own). */
-.pub-class-sessions-empty {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-md);
-}
-
-.pub-class-timetable {
-  margin: 0;
-  padding: 0;
-  border-top: 1px solid var(--border-default);
-  list-style: none;
-}
-
-.pub-class-slot {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--space-2) var(--space-4);
-  padding: var(--space-3) 0;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.pub-class-slot-copy {
-  display: grid;
-  gap: var(--space-0-5);
   min-width: 0;
 }
 
-.pub-class-slot-copy strong {
+.pub-class-unit + .pub-class-unit {
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.pub-class-unit > h3 {
+  margin-block-end: var(--space-1);
+  color: var(--color-primary-700);
+  font-size: var(--type-card-title-size);
+}
+
+.row-list > li.pub-class-lesson {
+  justify-content: flex-start;
+  gap: var(--space-3);
+}
+
+.pub-class-lesson .row-list-title {
+  font-weight: var(--font-weight-medium);
   overflow-wrap: anywhere;
 }
 
-/* 404 and 403 (outside the public layout: own brand bar and language switch)
-   -------------------------------------------------------------------------- */
-.system-page {
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-  padding: 0 var(--page-gutter);
+.pub-class-lesson > .icon-glyph {
+  color: var(--text-secondary);
 }
 
-.system-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
-  width: min(100%, var(--page-max));
-  min-height: var(--topbar-height);
-  margin: 0 auto;
-  border-bottom: 1px solid var(--border-subtle);
+/* 404, 403 and maintenance (outside the public layout): one small white card */
+.system-page {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: var(--space-12);
 }
 
 .system-card {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: var(--space-10) var(--space-16);
-  width: min(100%, 980px);
-  margin: auto;
-  padding-block: var(--space-16);
-}
-
-.system-visual {
-  display: grid;
-  justify-items: center;
+  align-content: start;
   gap: var(--space-4);
+  width: min(100%, 640px);
+  min-height: 320px;
+  padding: var(--space-12);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-2xl);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-md);
 }
 
-.hanzi-tile.system-tile {
-  --hanzi-tile-size: clamp(176px, 20vw, 248px);
-}
-
-.system-word {
+.system-top {
   display: flex;
-  align-items: baseline;
-  gap: var(--space-2);
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-lg);
-}
-
-.system-pinyin {
-  color: var(--text-primary);
-  font-family: var(--font-display);
-  font-size: var(--font-size-2xl);
-  font-weight: var(--font-weight-semibold);
-}
-
-.system-copy {
-  display: grid;
-  justify-items: start;
-  gap: var(--space-5);
-  min-width: 0;
-}
-
-.system-kicker {
-  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2);
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+/* Maintenance: the sentence under the title, and the line that answers "Try again"; its room is kept, so the card does
+   not grow when the answer arrives. */
+.system-copy,
+.system-note {
   margin: 0;
   color: var(--text-secondary);
-  font-size: var(--type-overline-size);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: var(--letter-spacing-wide);
-  text-transform: uppercase;
-}
-
-.system-code {
-  color: var(--text-brand);
-  font-variant-numeric: lining-nums tabular-nums;
-}
-
-.system-copy h1 {
-  max-width: 18ch;
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: var(--type-h1-size);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-tight);
-  letter-spacing: var(--letter-spacing-display);
-  text-wrap: balance;
-}
-
-.system-message {
-  max-width: 46ch;
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--font-size-lg);
+  font-size: var(--type-body-size);
   line-height: var(--line-height-normal);
 }
 
-.system-actions {
+.system-note {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2) var(--space-3);
+  align-items: flex-start;
+  gap: var(--space-2);
+  min-height: var(--space-5);
 }
 
-.system-links-nav {
-  width: 100%;
-  margin-top: var(--space-4);
+.system-note > .icon-glyph {
+  margin-top: var(--space-0-5);
 }
 
-.system-links {
-  margin: 0;
-  padding: 0;
-  border-top: 1px solid var(--border-subtle);
-  list-style: none;
+.system-note.is-error {
+  color: var(--color-danger-text);
 }
 
-.system-link {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) 0;
-  border-bottom: 1px solid var(--border-subtle);
-  color: var(--text-primary);
-  text-decoration: none;
-}
-
-.system-link-icon {
-  color: var(--text-secondary);
-}
-
-.system-link-copy {
-  display: grid;
-  min-width: 0;
-}
-
-.system-link-copy strong {
-  font-size: var(--font-size-md);
-}
-
-.system-link-copy span {
-  color: var(--text-secondary);
-  font-size: var(--font-size-sm);
-}
-
-.system-link-arrow {
-  color: var(--color-ink-400);
-  transition:
-    color var(--duration-fast) var(--ease-standard),
-    transform var(--duration-fast) var(--ease-standard);
-}
-
-.system-link:hover strong {
-  color: var(--text-link-hover);
-}
-
-.system-link:hover .system-link-arrow {
-  color: var(--text-primary);
-  transform: translateX(2px);
-}
-
-/* Responsive
-   -------------------------------------------------------------------------- */
-@media (max-width: 1200px) {
-  .landing-hero,
-  .landing-way,
-  .landing-about,
-  .landing-faq {
-    gap: var(--space-8) var(--space-10);
+/* Responsive */
+@media (max-width: 75rem) {
+  .landing-hero {
+    gap: var(--space-8);
   }
 
-  .hanzi-tile.landing-moment-tile {
-    --hanzi-tile-size: 112px;
+  .hanzi-tile.landing-word-tile {
+    --hanzi-tile-size: 132px;
   }
 
-  .landing-moment-steps span {
-    width: 12px;
+  .landing-tones {
+    margin-inline-end: 0;
   }
 
-  .help-layout {
-    grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
-    grid-template-areas:
-      'index main'
-      'index contact';
-    gap: var(--space-12) var(--space-10);
+  .landing-steps {
+    --landing-steps-gap: var(--space-8);
   }
 
-  .help-contact {
-    position: static;
+  .legal-body {
+    padding: var(--space-6);
+  }
+}
+
+@media (max-width: 60rem) {
+  html:has(.public-nav) {
+    --topbar-height: 100px;
   }
 
-  .help-contact .form-grid.two {
+  .public-nav-inner {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0 var(--space-3);
+  }
+
+  .public-nav-links {
+    grid-area: 2 / 1 / 3 / -1;
+  }
+
+  .public-nav-links::before {
+    display: none;
+  }
+
+  .public-nav-actions {
+    justify-self: end;
+  }
+}
+
+@media (max-width: 56rem) {
+  .auth-page {
+    padding: var(--page-gutter);
+  }
+
+  .auth-side {
+    padding: var(--space-5);
+  }
+
+  .auth-passwords .form-grid.two {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hanzi-tile.auth-word-tile {
+    --hanzi-tile-size: clamp(76px, 12vw, 110px);
+  }
+
+  /* Beside the hero's words the word card has under half the window. Its tiles follow the window's width, so the
+     card stays wider than the tones card that overlaps its corner. */
+  .hanzi-tile.landing-word-tile {
+    --hanzi-tile-size: clamp(96px, 15.5vw, 132px);
+  }
+
+  .landing-title {
+    font-size: clamp(2rem, 5.5vw, var(--type-display-size));
+  }
+
+  .panel.landing-how-list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .legal-layout {
-    gap: var(--space-8) var(--space-10);
+  /* The steps run down the page: each tile beside its text, the dashed line leading down to the next tile. */
+  .landing-steps {
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  .pub-class-grid {
+  .landing-step {
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: var(--space-4);
+  }
+
+  .landing-step > :not(.landing-step-tile) {
+    grid-column: 2;
+  }
+
+  .hanzi-tile.landing-step-tile {
+    grid-row: 1 / span 3;
+    margin-bottom: 0;
+  }
+
+  .landing-step:not(:last-child)::after {
+    top: calc(var(--landing-step-tile) + var(--space-2));
+    right: auto;
+    bottom: calc(var(--space-2) - var(--space-8));
+    left: calc(var(--landing-step-tile) / 2 - 1px);
+    border-top: 0;
+    border-left: 2px dashed var(--color-primary-200);
+  }
+
+  .public-rail-layout {
+    grid-template-columns: minmax(11rem, 30%) minmax(0, 1fr);
+  }
+}
+
+/* A window too narrow for the hero's two columns: its words first, then the preview across the page under them. */
+@media (max-width: 48rem) {
+  .landing-hero {
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--space-10);
+  }
+
+  .hanzi-tile.landing-word-tile {
+    --hanzi-tile-size: clamp(88px, 30vw, 132px);
+  }
+
+  .auth-card,
+  .public-rail-layout,
+  .auth-checks,
+  .pub-class-hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pub-class-cover {
+    min-height: 7rem;
+  }
+
+  .public-rail {
+    position: static;
+    max-height: none;
+  }
+
+  .system-page {
+    padding: var(--page-gutter);
+  }
+
+  .system-card,
+  .confirm-email {
+    padding: var(--card-padding);
+  }
+}
+
+@media (max-width: 40rem) {
+  .public-nav-actions {
+    display: contents;
+  }
+
+  .public-nav-account {
+    grid-area: 1 / 2;
+    justify-self: end;
+  }
+
+  .public-nav-links {
+    grid-area: 2 / 1;
+    flex-wrap: wrap;
+    justify-self: start;
+    gap: var(--space-1) var(--space-3);
+  }
+
+  .public-languages.pill-switch {
+    grid-area: 2 / 2;
+    justify-self: end;
+    padding: 0;
+    border: 0;
+  }
+}
+
+/* In a highly magnified split window the masthead can occupy three rows. Let it scroll with the page. */
+@media (max-width: 29rem) {
+  html:has(.public-nav) {
+    --topbar-sticky-offset: 0px;
+  }
+
+  .public-nav {
+    position: static;
+  }
+
+  .public-nav-inner,
+  .public-nav-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1) var(--space-3);
+  }
+
+  .public-nav-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .panel.landing-how-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (forced-colors: active) {
+  .public-rail-link.is-active {
+    padding-inline-start: calc(var(--space-3) - 3px);
+    border-inline-start: 3px solid Highlight;
   }
 }

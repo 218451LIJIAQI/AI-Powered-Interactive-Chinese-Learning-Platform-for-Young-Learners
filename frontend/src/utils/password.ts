@@ -4,6 +4,15 @@ const BCRYPT_MAX_PASSWORD_BYTES = 72
 const textEncoder = new TextEncoder()
 
 /**
+ * True for a password the server counts as missing (@NotBlank): empty, or nothing but spaces and control characters,
+ * which Java's `String.trim()` removes (every character up to U+0020).
+ */
+export function isBlankPassword(password: string): boolean {
+  // eslint-disable-next-line no-control-regex
+  return !/[^\u0000-\u0020]/.test(password)
+}
+
+/**
  * The upper limit only: bcrypt uses at most 72 UTF-8 bytes of a password. The byte count is never below the
  * character count, so this one check also caps the length at 72 characters.
  */
@@ -11,8 +20,13 @@ export function isWithinPasswordByteLimit(password: string): boolean {
   return textEncoder.encode(password).byteLength <= BCRYPT_MAX_PASSWORD_BYTES
 }
 
-export function isPasswordLengthValid(password: string): boolean {
-  return password.length >= MIN_PASSWORD_LENGTH && isWithinPasswordByteLimit(password)
+export function meetsPasswordMinimum(password: string): boolean {
+  return password.length >= MIN_PASSWORD_LENGTH && !isBlankPassword(password)
+}
+
+/** The server's rule for a new password: 8 to 72 characters (at most 72 UTF-8 bytes), and not blank. */
+export function isNewPasswordValid(password: string): boolean {
+  return meetsPasswordMinimum(password) && isWithinPasswordByteLimit(password)
 }
 
 export interface PasswordChangeForm {
@@ -21,34 +35,24 @@ export interface PasswordChangeForm {
   confirmPassword: string
 }
 
-/** Full message keys (accountMessages) for client-side checks; the server repeats every rule (FRAUTH08). */
+/** Account field errors from local validation or a refused current password (FRAUTH08). */
 type PasswordChangeErrorKey =
-  | 'account.currentRequired'
-  | 'account.newRequired'
-  | 'account.confirmRequired'
+  | 'account.currentPasswordWrong'
   | 'account.passwordLength'
   | 'account.confirmMismatch'
   | 'account.sameAsCurrent'
 
 export type PasswordChangeErrors = Partial<Record<keyof PasswordChangeForm, PasswordChangeErrorKey>>
 
-/** Required fields, 8..72 characters (<= 72 UTF-8 bytes), confirmation matches, new differs from current. */
+/**
+ * A valid new password, a matching confirmation, and a new password unlike the current. The form is only sent with
+ * all three fields filled (not blank), so blank fields are not checked here.
+ */
 export function validatePasswordChange(form: PasswordChangeForm): PasswordChangeErrors {
   const errors: PasswordChangeErrors = {}
-  if (!form.currentPassword) errors.currentPassword = 'account.currentRequired'
-
-  if (!form.newPassword) errors.newPassword = 'account.newRequired'
-  else if (!isPasswordLengthValid(form.newPassword)) errors.newPassword = 'account.passwordLength'
-  else if (form.currentPassword && form.newPassword === form.currentPassword)
-    errors.newPassword = 'account.sameAsCurrent'
-
-  if (!form.confirmPassword) errors.confirmPassword = 'account.confirmRequired'
-  else if (form.newPassword && form.confirmPassword !== form.newPassword)
-    errors.confirmPassword = 'account.confirmMismatch'
-
+  if (!isWithinPasswordByteLimit(form.currentPassword)) errors.currentPassword = 'account.currentPasswordWrong'
+  if (!isNewPasswordValid(form.newPassword)) errors.newPassword = 'account.passwordLength'
+  else if (form.newPassword === form.currentPassword) errors.newPassword = 'account.sameAsCurrent'
+  if (form.confirmPassword !== form.newPassword) errors.confirmPassword = 'account.confirmMismatch'
   return errors
-}
-
-export function hasPasswordChangeErrors(errors: PasswordChangeErrors): boolean {
-  return Object.keys(errors).length > 0
 }

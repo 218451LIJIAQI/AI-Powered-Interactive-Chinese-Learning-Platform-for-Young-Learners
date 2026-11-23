@@ -2,6 +2,7 @@ package com.example.aichinese;
 
 import static com.example.aichinese.support.LearningApiTestClient.USER_PASSWORD;
 import static com.example.aichinese.support.LearningApiTestClient.fromRemoteAddress;
+import static com.example.aichinese.support.LearningApiTestClient.nextClientIp;
 import static com.example.aichinese.support.LearningApiTestClient.uniqueEmail;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.everyItem;
@@ -29,7 +30,8 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 
 import com.example.aichinese.entity.AuditLog;
 import com.example.aichinese.entity.User;
-import com.example.aichinese.repository.AuditLogRepository;
+import com.example.aichinese.entity.enums.NotificationType;
+import com.example.aichinese.service.NotificationService;
 import com.example.aichinese.support.ApiIntegrationTest;
 import com.fasterxml.jackson.databind.JsonNode;
 
@@ -49,10 +51,10 @@ class AccountSecurityIntegrationTests extends ApiIntegrationTest {
     private static final String PROFILE_PATH = "/api/v1/users/me/profile";
 
     @Autowired
-    private AuditLogRepository auditLogRepository;
+    private PasswordEncoder passwordEncoder;
 
     @Autowired
-    private PasswordEncoder passwordEncoder;
+    private NotificationService notificationService;
 
     @Value("${app.security.jwt.secret}")
     private String jwtSecret;
@@ -72,28 +74,33 @@ class AccountSecurityIntegrationTests extends ApiIntegrationTest {
         assertThat(user.getPasswordHash()).matches(BCRYPT_PATTERN).startsWith("$2a$12$");
         assertThat(passwordEncoder.matches(USER_PASSWORD, user.getPasswordHash())).isTrue();
 
+        jdbc.update("update student_profiles set total_points = 75 where user_id = ?", user.getId());
         mockMvc.perform(api.jsonPut(PROFILE_PATH, firstSession, Map.of(
-                        "displayName", "  Mei Ling  ",
-                        "preferredLanguage", "zh")))
+                        "displayName", " \u00a0Mei Ling\u202f ",
+                        "preferredLanguage", "zh-CN")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.fullName").value("Mei Ling"))
+                .andExpect(jsonPath("$.data.studentProfile.totalPoints").value(75))
                 .andExpect(jsonPath("$.data.preferredLanguage").value("zh-CN"));
+        mockMvc.perform(api.jsonPut(PROFILE_PATH, firstSession, Map.of(
+                        "displayName", "\u00a0\ufeff", "preferredLanguage", "zh-CN")))
+                .andExpect(status().isBadRequest());
         mockMvc.perform(api.jsonPut(PROFILE_PATH, firstSession, Map.of(
                         "displayName", "Mei Ling",
                         "preferredLanguage", "fr")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
 
-        mockMvc.perform(changePassword(firstSession, "WrongPassword1!", NEW_PASSWORD, NEW_PASSWORD))
+        mockMvc.perform(api.changePasswordRequest(firstSession, "WrongPassword1!", NEW_PASSWORD, NEW_PASSWORD))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Current password is incorrect."));
-        mockMvc.perform(changePassword(firstSession, USER_PASSWORD, "short", "short"))
+        mockMvc.perform(api.changePasswordRequest(firstSession, USER_PASSWORD, "short", "short"))
                 .andExpect(status().isBadRequest());
-        mockMvc.perform(changePassword(firstSession, USER_PASSWORD, NEW_PASSWORD, "Different789!"))
+        mockMvc.perform(api.changePasswordRequest(firstSession, USER_PASSWORD, NEW_PASSWORD, "Different789!"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Confirm password does not match."));
 
-        MvcResult changed = mockMvc.perform(changePassword(firstSession, USER_PASSWORD, NEW_PASSWORD, NEW_PASSWORD))
+        MvcResult changed = mockMvc.perform(api.changePasswordRequest(firstSession, USER_PASSWORD, NEW_PASSWORD, NEW_PASSWORD))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Password changed successfully. Other sessions have been signed out."))
                 .andExpect(header().exists(HttpHeaders.SET_COOKIE))
@@ -118,8 +125,7 @@ class AccountSecurityIntegrationTests extends ApiIntegrationTest {
         User updated = user(email);
         assertThat(updated.getPasswordHash()).matches(BCRYPT_PATTERN);
         assertThat(passwordEncoder.matches(NEW_PASSWORD, updated.getPasswordHash())).isTrue();
-        assertThat(auditLogRepository.findAll())
-                .anyMatch(log -> "PASSWORD_CHANGED".equals(log.getActionType()) && updated.getId().equals(log.getTargetId()));
+        assertThat(auditEntriesAbout("User", updated.getId())).extracting(AuditLog::getActionType).contains("PASSWORD_CHANGED");
 
         mockMvc.perform(api.jsonPut(PROFILE_PATH, null, Map.of())).andExpect(status().isUnauthorized());
     }
@@ -136,7 +142,7 @@ class AccountSecurityIntegrationTests extends ApiIntegrationTest {
                         "displayName", "No Store", "preferredLanguage", "en")))
                 .andExpect(status().isOk())
                 .andExpect(header().stringValues(HttpHeaders.CACHE_CONTROL, NO_STORE));
-        mockMvc.perform(changePassword(token, USER_PASSWORD, NEW_PASSWORD, NEW_PASSWORD))
+        mockMvc.perform(api.changePasswordRequest(token, USER_PASSWORD, NEW_PASSWORD, NEW_PASSWORD))
                 .andExpect(status().isOk())
                 .andExpect(header().stringValues(HttpHeaders.CACHE_CONTROL, NO_STORE));
     }
@@ -144,33 +150,57 @@ class AccountSecurityIntegrationTests extends ApiIntegrationTest {
     @Test
     void passwordChangeLockoutIsAuditedAlthoughTheRequestIsRejected() throws Exception {
         String token = api.registerStudent(uniqueEmail("change-lockout"));
-        long lastAuditIdBefore = auditLogRepository.findAll().stream().mapToLong(AuditLog::getId).max().orElse(0L);
+        String requestId = UUID.randomUUID().toString();
 
         // FRAUTH05 / FRAUTH08: wrong current passwords are limited like sign-in; the fifth one locks the account.
-        for (int attempt = 0; attempt < 5; attempt++) {
-            mockMvc.perform(changePassword(token, "WrongPassword1!", NEW_PASSWORD, NEW_PASSWORD))
+        for (int attempt = 1; attempt <= 5; attempt++) {
+            mockMvc.perform(api.changePasswordRequest(token, "WrongPassword1!", NEW_PASSWORD, NEW_PASSWORD)
+                            .header("X-Request-Id", requestId + "-" + attempt))
                     .andExpect(status().isBadRequest());
         }
-        mockMvc.perform(changePassword(token, "WrongPassword1!", NEW_PASSWORD, NEW_PASSWORD))
+        mockMvc.perform(api.changePasswordRequest(token, "WrongPassword1!", NEW_PASSWORD, NEW_PASSWORD))
                 .andExpect(status().isTooManyRequests());
 
-        // The lockout is kept although the rejected request rolls its own transaction back.
-        assertThat(auditLogRepository.findAll())
-                .anyMatch(log -> log.getId() > lastAuditIdBefore && "LOGIN_LOCKOUT".equals(log.getActionType()));
+        assertThat(auditForRequest(requestId + "-5", "LOGIN_LOCKOUT")).isPresent();
     }
 
     @Test
-    void teachersAndAdminsCanAlsoManageTheirAccount() throws Exception {
-        String teacherToken = api.registerTeacher(uniqueEmail("w4-account-teacher"));
-        mockMvc.perform(api.jsonPut(PROFILE_PATH, teacherToken, Map.of(
-                        "displayName", "Cikgu Aisyah",
-                        "preferredLanguage", "ms")))
+    void emailChangeLockoutIsAuditedLikePasswordChange() throws Exception {
+        String token = api.registerStudent(uniqueEmail("email-change-lockout"));
+        String requestId = UUID.randomUUID().toString();
+        Map<String, String> wrongPassword = Map.of(
+                "newEmail", uniqueEmail("email-change-lockout-new"), "currentPassword", "WrongPassword1!");
+
+        for (int attempt = 1; attempt <= 5; attempt++) {
+            mockMvc.perform(api.jsonPost("/api/v1/users/me/email-change", token, wrongPassword)
+                            .header("X-Request-Id", requestId + "-" + attempt))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.message").value("Current password is incorrect."));
+        }
+        mockMvc.perform(api.jsonPost("/api/v1/users/me/email-change", token, wrongPassword))
+                .andExpect(status().isTooManyRequests());
+
+        assertThat(auditForRequest(requestId + "-5", "LOGIN_LOCKOUT")).isPresent();
+    }
+
+    @Test
+    void adminsCanAlsoManageTheirAccount() throws Exception {
+        String adminToken = api.adminToken();
+        String originalName = api.data(mockMvc.perform(api.authGet("/api/v1/auth/me", adminToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.preferredLanguage").value("ms"));
-        mockMvc.perform(api.jsonPut(PROFILE_PATH, api.adminToken(), Map.of(
-                        "displayName", "Platform Admin",
-                        "preferredLanguage", "en")))
-                .andExpect(status().isOk());
+                .andReturn()).path("fullName").asText();
+        try {
+            mockMvc.perform(api.jsonPut(PROFILE_PATH, adminToken, Map.of(
+                            "displayName", "Platform Admin",
+                            "preferredLanguage", "en")))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.fullName").value("Platform Admin"));
+        } finally {
+            mockMvc.perform(api.jsonPut(PROFILE_PATH, adminToken, Map.of(
+                            "displayName", originalName,
+                            "preferredLanguage", "en")))
+                    .andExpect(status().isOk());
+        }
     }
 
     @Test
@@ -201,44 +231,44 @@ class AccountSecurityIntegrationTests extends ApiIntegrationTest {
 
     @Test
     void resetPasswordIsRateLimitedPerClientIpLikeForgotPassword() throws Exception {
+        String clientIp = nextClientIp();
         for (int attempt = 0; attempt < 10; attempt++) {
-            mockMvc.perform(unknownTokenReset("203.0.113.210")).andExpect(status().isBadRequest());
+            mockMvc.perform(unknownTokenReset(clientIp)).andExpect(status().isBadRequest());
         }
-        mockMvc.perform(unknownTokenReset("203.0.113.210"))
+        mockMvc.perform(unknownTokenReset(clientIp))
                 .andExpect(status().isTooManyRequests())
                 .andExpect(jsonPath("$.success").value(false));
     }
 
     @Test
     void notificationsCanBeFilteredByReadState() throws Exception {
-        String teacherToken = api.approvedTeacher(uniqueEmail("w4-notify-teacher"));
-        JsonNode unread = api.data(mockMvc.perform(api.authGet("/api/v1/notifications?status=UNREAD", teacherToken))
+        String email = uniqueEmail("w4-notify");
+        String learnerToken = api.registerStudent(email);
+        User learner = user(email);
+        for (int notice = 1; notice <= 2; notice++) {
+            notificationService.safeCreateNotification(learner, NotificationType.SYSTEM, "Notice " + notice,
+                    "Something happened.", null, null, "/student");
+        }
+        JsonNode unread = api.data(mockMvc.perform(api.authGet("/api/v1/notifications?status=UNREAD", learnerToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items[*].status").value(everyItem(is("UNREAD"))))
                 .andReturn());
         assertThat(unread.path("totalItems").asLong()).isPositive();
-        mockMvc.perform(api.authPatch("/api/v1/notifications/read-all", teacherToken)).andExpect(status().isOk());
-        mockMvc.perform(api.authGet("/api/v1/notifications?status=UNREAD", teacherToken))
+        mockMvc.perform(api.authPatch("/api/v1/notifications/read-all", learnerToken)).andExpect(status().isOk());
+        mockMvc.perform(api.authGet("/api/v1/notifications?status=UNREAD", learnerToken))
                 .andExpect(jsonPath("$.data.totalItems").value(0));
-        mockMvc.perform(api.authGet("/api/v1/notifications?status=READ", teacherToken))
+        mockMvc.perform(api.authGet("/api/v1/notifications?status=READ", learnerToken))
                 .andExpect(jsonPath("$.data.totalItems").value(unread.path("totalItems").asLong()));
-        mockMvc.perform(api.authGet("/api/v1/notifications?status=SOMETIMES", teacherToken))
+        mockMvc.perform(api.authGet("/api/v1/notifications?status=SOMETIMES", learnerToken))
                 .andExpect(status().isBadRequest());
     }
 
-    private MockHttpServletRequestBuilder changePassword(
-            String token, String currentPassword, String newPassword, String confirmPassword) throws Exception {
-        return api.jsonPost("/api/v1/users/me/password", token, Map.of(
-                "currentPassword", currentPassword,
-                "newPassword", newPassword,
-                "confirmPassword", confirmPassword));
-    }
-
-    private MockHttpServletRequestBuilder unknownTokenReset(String remoteIp) throws Exception {
+    /** A reset with a token nobody was sent, from {@code clientIp}. */
+    private MockHttpServletRequestBuilder unknownTokenReset(String clientIp) throws Exception {
         return api.jsonPost("/api/v1/auth/reset-password", null, Map.of(
                         "token", "not-a-real-token-" + UUID.randomUUID(),
                         "password", NEW_PASSWORD,
                         "confirmPassword", NEW_PASSWORD))
-                .with(fromRemoteAddress(remoteIp));
+                .with(fromRemoteAddress(clientIp));
     }
 }

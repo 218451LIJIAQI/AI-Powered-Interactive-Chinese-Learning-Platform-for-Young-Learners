@@ -4,15 +4,18 @@ import static com.example.aichinese.dto.DtoNormalization.redactLength;
 
 import java.time.LocalDateTime;
 
+import com.example.aichinese.entity.enums.AiFeatureKey;
+import com.example.aichinese.entity.enums.AiResponseReportReason;
+import com.example.aichinese.entity.enums.AiResponseReportStatus;
+
 /** One of the student's own AI reports, with the admin's note once it is resolved or dismissed. */
 public record StudentAiResponseReportResponse(
         Long id,
-        String featureKey,
-        String reasonCategory,
-        String description,
+        AiFeatureKey featureKey,
+        AiResponseReportReason reasonCategory,
         String promptSnapshot,
         String aiResponseSnapshot,
-        String status,
+        AiResponseReportStatus status,
         String reviewerNote,
         LocalDateTime reviewedAt,
         LocalDateTime createdAt) {
@@ -23,7 +26,6 @@ public record StudentAiResponseReportResponse(
                 + "id=" + id
                 + ", featureKey=" + featureKey
                 + ", reasonCategory=" + reasonCategory
-                + ", description=" + redactLength(description)
                 + ", promptSnapshot=" + redactLength(promptSnapshot)
                 + ", aiResponseSnapshot=" + redactLength(aiResponseSnapshot)
                 + ", status=" + status

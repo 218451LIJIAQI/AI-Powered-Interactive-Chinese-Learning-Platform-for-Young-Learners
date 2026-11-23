@@ -1,143 +1,160 @@
 <template>
-  <div class="plan-setup">
+  <div class="plan-setup" :class="{ 'is-building': step === 'building' && !buildError }">
     <FocusTopBar
       :label="topLabel"
       :close-label="t('plan.setup.closeLabel')"
+      :close-disabled="starting || hasPlanAlready"
       :progress="topProgress"
       :progress-label="t('plan.setup.progressLabel')"
-      @close="close"
+      @close="requestClose"
     />
     <h1 class="sr-only">{{ t('plan.setup.title') }}</h1>
+    <p v-if="exitError" ref="exitErrorRef" class="alert alert-danger plan-setup-error" role="alert" tabindex="-1">
+      {{ exitError }}
+    </p>
+    <!--
+      "Start my path" failed. A plan built more than a day ago (409) is built again from the same answers; a plan whose
+      goal date has passed (409) needs a new date first, so its goal opens with the date to pick again.
+    -->
+    <div
+      v-if="startError"
+      ref="startErrorRef"
+      class="alert alert-danger plan-setup-error plan-start-error"
+      role="alert"
+      tabindex="-1"
+    >
+      <span>{{ startError.message }}</span>
+      <button
+        v-if="startError.action === 'rebuild'"
+        class="btn btn-secondary btn-sm"
+        type="button"
+        :disabled="Boolean(finishing) || refreshingOptions"
+        data-testid="setup-build-again"
+        @click="buildAgain"
+      >
+        {{ t('plan.setup.buildAgain') }}
+      </button>
+      <button
+        v-else-if="startError.action === 'pickDate'"
+        class="btn btn-secondary btn-sm"
+        type="button"
+        :disabled="Boolean(finishing)"
+        data-testid="setup-pick-new-date"
+        @click="pickNewDate"
+      >
+        {{ t('plan.setup.editGoal') }}
+      </button>
+    </div>
 
     <StatePanel
-      v-if="options.loading.value"
+      v-if="loading"
+      heading-tag="h2"
       tone="loading"
       :title="t('plan.page.loading')"
       :message="t('plan.check.loadingHint')"
       spacious
     />
     <StatePanel
-      v-else-if="options.error.value || !options.data.value"
+      v-else-if="!setupOptions"
+      heading-tag="h2"
       tone="error"
       icon="alert"
-      :title="t('plan.setup.buildError')"
-      :message="options.error.value ?? ''"
+      :title="t('plan.page.loadError')"
+      :message="loadError ?? ''"
       spacious
-    >
-      <template #actions>
-        <button class="btn btn-primary" type="button" @click="options.reload">{{ t('plan.common.retry') }}</button>
-      </template>
-    </StatePanel>
+      @retry="reloadPage"
+    />
 
-    <div v-else class="plan-setup-body" :class="{ 'is-wide': WIDE_STEPS.has(step) }">
-      <!-- SparkBot asks every question; its short replies answer the student's choices. -->
-      <p v-if="QUESTION_STEPS.has(step)" class="plan-asker">
-        <span class="plan-spark-avatar" aria-hidden="true"><IconGlyph name="magic" :size="16" /></span>
-        {{ t('plan.setup.sparkBot') }}
-      </p>
-
+    <template v-else>
       <!-- Welcome -->
-      <section v-if="step === 'welcome'" class="plan-welcome" aria-labelledby="plan-welcome-title">
-        <div class="plan-journey" aria-hidden="true">
-          <span class="plan-journey-stop">
-            <span class="plan-journey-you">{{ t('plan.setup.journeyYou') }}</span>
-            {{ t('plan.setup.journeyToday') }}
-          </span>
-          <span class="plan-journey-road">{{ t('plan.setup.journeyPath') }}</span>
-          <span class="plan-journey-stop">
-            <span class="seal is-outline plan-journey-goal"><IconGlyph name="flag" :size="22" /></span>
-            {{ t('plan.setup.journeyGoal') }}
-          </span>
-        </div>
-        <h2 id="plan-welcome-title" class="plan-setup-title">{{ t('plan.setup.welcomeTitle') }}</h2>
-        <p class="plan-setup-lead">{{ t('plan.setup.welcomeLead') }}</p>
+      <section v-if="step === 'welcome'" class="plan-center" aria-labelledby="plan-welcome-title">
+        <h2 id="plan-welcome-title" class="focus-headline">{{ t('plan.setup.welcomeTitle') }}</h2>
         <ol class="plan-welcome-steps">
           <li v-for="(item, index) in WELCOME_STEPS" :key="item.title">
             <span class="plan-welcome-number" aria-hidden="true">{{ index + 1 }}</span>
-            <strong>{{ t(item.title) }}</strong>
-            <span>{{ t(item.hint) }}</span>
+            <span class="plan-welcome-copy">
+              <strong>{{ t(item.title) }}</strong>
+              <span>{{ t(item.hint) }}</span>
+            </span>
           </li>
         </ol>
-        <p class="plan-setup-note"><IconGlyph name="clock" :size="16" />{{ t('plan.setup.welcomeNote') }}</p>
+        <p class="plan-form-note"><IconGlyph name="clock" :size="16" />{{ t('plan.setup.welcomeNote') }}</p>
       </section>
 
-      <!-- 1 Why -->
-      <section v-else-if="step === 'why'" aria-labelledby="plan-why-title">
-        <h2 id="plan-why-title" class="plan-setup-title">{{ t('plan.setup.whyTitle') }}</h2>
-        <p class="plan-setup-lead">{{ t('plan.setup.whyLead') }}</p>
-        <GoalForm v-model="draft" :options="options.data.value" :sections="['reason']" />
-        <SparkReply v-if="draft.reason" :text="t(REASONS[draft.reason].reply)" />
+      <!-- Why, the goal, when and how much time, the focus -->
+      <section
+        v-else-if="formStep"
+        :key="step"
+        class="focus-stage plan-question"
+        :aria-labelledby="`plan-${step}-title`"
+      >
+        <div class="plan-question-head">
+          <h2 :id="`plan-${step}-title`" class="focus-headline">{{ t(formStep.title) }}</h2>
+          <p v-if="formStep.lead">{{ t(formStep.lead) }}</p>
+        </div>
+        <GoalForm
+          v-model="draft"
+          :options="setupOptions"
+          :sections="formStep.sections"
+          :suggested-focus="suggestedFocus"
+        />
+        <p v-if="step === 'focus' && suggestedFocus" class="plan-form-note" data-testid="focus-suggested">
+          <IconGlyph name="magic" :size="14" />{{ t('plan.setup.suggestedNote') }}
+        </p>
       </section>
 
-      <!-- 2 Goal -->
-      <section v-else-if="step === 'goal'" aria-labelledby="plan-goal-title">
-        <h2 id="plan-goal-title" class="plan-setup-title">{{ t('plan.setup.goalTitle') }}</h2>
-        <p class="plan-setup-lead">{{ t('plan.setup.goalLead') }}</p>
-        <GoalForm v-model="draft" :options="options.data.value" :sections="['goals']" />
-        <SparkReply v-if="goalReply" :text="goalReply" />
-      </section>
-
-      <!-- 3 Pace -->
-      <section v-else-if="step === 'pace'" aria-labelledby="plan-pace-title">
-        <h2 id="plan-pace-title" class="plan-setup-title">{{ t('plan.setup.paceTitle') }}</h2>
-        <p class="plan-setup-lead">{{ t('plan.setup.paceLead') }}</p>
-        <GoalForm v-model="draft" :options="options.data.value" :sections="['deadline', 'pace']" />
-        <SparkReply v-if="draft.pace" :text="t(PACES[draft.pace].reply)" />
-      </section>
-
-      <!-- 4 Your Mandarin -->
-      <section v-else-if="step === 'level'" aria-labelledby="plan-level-title">
-        <h2 id="plan-level-title" class="plan-setup-title">{{ t('plan.setup.levelTitle') }}</h2>
-        <p class="plan-setup-lead">{{ t('plan.setup.levelLead') }}</p>
+      <!-- How much Mandarin -->
+      <section v-else-if="step === 'level'" class="focus-stage plan-question" aria-labelledby="plan-level-title">
+        <div class="plan-question-head">
+          <h2 id="plan-level-title" class="focus-headline">{{ t('plan.setup.levelTitle') }}</h2>
+        </div>
         <PlanChoiceGrid
           :choices="selfLevelChoices"
-          :selected="selfLevel ? [selfLevel] : []"
+          :selected="levelChoice ? [levelChoice] : []"
           :label="t('plan.setup.levelTitle')"
+          variant="rows"
+          :columns="2"
           test-id="self-level-choices"
-          @toggle="pickSelfLevel"
+          @toggle="levelChoice = $event"
         />
-        <p class="plan-setup-note"><IconGlyph name="info" :size="16" />{{ t('plan.setup.checkInfo') }}</p>
-        <button class="btn btn-link plan-skip-check" type="button" data-testid="skip-check" @click="skipCheck">
-          {{ t('plan.setup.skipCheck') }}<IconGlyph name="chevronRight" :size="16" />
-        </button>
+        <p class="callout is-compact">
+          <IconGlyph name="info" :size="16" /><span>{{ t('plan.setup.checkInfo') }}</span>
+        </p>
+        <!-- Brand new learners start from the first lesson (S1.32); anyone else can still skip the check. -->
+        <p>
+          <button
+            v-if="levelChoice === 'NEW'"
+            class="btn btn-link"
+            type="button"
+            data-testid="take-check"
+            @click="startCheck"
+          >
+            {{ t('plan.setup.takeCheckInstead') }}
+          </button>
+          <button v-else class="btn btn-link" type="button" data-testid="skip-check" @click="skipCheck">
+            {{ t('plan.setup.skipCheck') }}
+          </button>
+        </p>
       </section>
 
       <!-- Level check -->
       <LevelCheckRunner
-        v-else-if="step === 'check' && selfLevel"
-        :start-level="CHECK_START[selfLevel]"
+        v-else-if="step === 'check'"
+        :start-level="setupOptions.checkStarts[selfLevel]"
+        :paused="leaving"
         @progress="checkProgress"
         @finished="checkFinished"
       />
       <LevelCheckDone
-        v-else-if="step === 'checkDone' && checkResult"
-        :answered="checkResult.answeredCount"
-        :known-skills="checkResult.knownSkills"
-        :new-skills="checkResult.newSkills"
+        v-else-if="step === 'checkDone' && check"
+        :title="t('plan.check.startingLevel', { level: t(LEVEL_KEYS[check.result.level]) })"
       />
-
-      <!-- 5 Focus -->
-      <section v-else-if="step === 'focus'" aria-labelledby="plan-focus-title">
-        <h2 id="plan-focus-title" class="plan-setup-title">{{ t('plan.setup.focusTitle') }}</h2>
-        <p class="plan-setup-lead">{{ t('plan.setup.focusLead') }}</p>
-        <GoalForm
-          v-model="draft"
-          :options="options.data.value"
-          :sections="['focus']"
-          :suggested-focus="suggestedFocus"
-        />
-        <p v-if="suggestedSkill" class="plan-setup-note">
-          <IconGlyph name="info" :size="16" />{{
-            t('plan.setup.suggestedNote', { skill: t(SKILL_KEYS[suggestedSkill]) })
-          }}
-        </p>
-        <SparkReply v-if="draft.focus.length" :text="t('plan.setup.focusReply')" />
-      </section>
 
       <!-- Building -->
       <template v-else-if="step === 'building'">
         <StatePanel
           v-if="buildError"
+          heading-tag="h2"
           tone="error"
           icon="alert"
           :title="t('plan.setup.buildError')"
@@ -145,155 +162,164 @@
           spacious
         >
           <template #actions>
-            <button class="btn btn-secondary" type="button" @click="step = plan ? 'result' : 'focus'">
+            <button class="btn btn-secondary" type="button" @click="backFromBuildError">
               {{ t('plan.common.back') }}
             </button>
-            <button class="btn btn-primary" type="button" @click="retryBuild">{{ t('plan.common.retry') }}</button>
+            <button
+              v-if="!plan && buildErrorStatus === 400"
+              class="btn btn-secondary"
+              type="button"
+              data-testid="setup-edit-pace"
+              @click="returnToPace"
+            >
+              {{ t('plan.setup.editGoal') }}
+            </button>
+            <button class="btn btn-primary" type="button" @click="retryBuild">{{ t('common.retry') }}</button>
           </template>
         </StatePanel>
-        <PlanBuilding v-else />
+        <PlanBuilding v-else :skipped-check="!check" />
       </template>
 
       <!-- Result -->
-      <section v-else-if="step === 'result' && plan" aria-labelledby="plan-result-title">
-        <div class="plan-result-head">
-          <span class="seal plan-result-seal" lang="zh-CN" aria-hidden="true">好</span>
-          <h2 id="plan-result-title" class="plan-setup-title">{{ t('plan.setup.resultTitle') }}</h2>
-          <p class="plan-setup-lead">{{ t('plan.setup.resultLead') }}</p>
-        </div>
-        <PlanResult :plan="plan" />
+      <section v-else-if="step === 'result' && plan" class="focus-stage plan-wide" aria-labelledby="plan-result-title">
+        <h2 id="plan-result-title" class="focus-headline">{{ t('plan.setup.resultTitle') }}</h2>
+        <PlanResult :plan="plan" :skipped-check="!check" @reported="reported" @daily-goal="showToast" />
       </section>
 
       <!-- Path -->
-      <section v-else-if="step === 'path' && plan" aria-labelledby="plan-path-title">
-        <div class="plan-path-head">
-          <h2 id="plan-path-title" class="plan-setup-title">
-            {{ t('plan.path.title', { goal: goalTitle(t, plan.goal.title, plan.goal.reason) }) }}
-          </h2>
-          <ul class="plan-path-chips">
-            <li class="tag">{{ t('plan.path.weeksChip', { count: plan.weeks.total }, plan.weeks.total) }}</li>
-            <li class="tag">{{ t(PACES[plan.pace.key].hint) }}</li>
-            <li class="tag">
-              {{
-                t('plan.level.fromTo', { from: t(LEVEL_KEYS[plan.level.placed]), to: t(LEVEL_KEYS[plan.level.target]) })
-              }}
-            </li>
-          </ul>
-          <p v-if="plan.aiAssisted" class="plan-path-ai">
-            <IconGlyph name="ai" :size="14" />{{ t('plan.path.aiChip') }}
-          </p>
-        </div>
-        <DataNotice v-if="!plan.aiAssisted" :info="t('plan.path.rulesNote')" />
-        <div class="plan-path-layout">
-          <PlanPath :plan="plan" />
-          <aside class="plan-side">
-            <PlanWeeks :plan="plan" />
-            <PlanOutcomes :plan="plan" />
-            <PlanCoverage :plan="plan" />
-            <PlanAiNote v-if="plan.aiAssisted" :plan="plan" />
-          </aside>
-        </div>
+      <PlanSetupPath
+        v-else-if="step === 'path' && plan"
+        :plan="plan"
+        :picked="picked"
+        :pick-error="pickError"
+        :starting="starting"
+        @pick="togglePick"
+        @reported="reported"
+      />
+
+      <section v-else-if="finished" class="plan-center" aria-labelledby="plan-finished-title">
+        <h2 id="plan-finished-title" class="focus-headline">
+          {{ t(step === 'saved' ? 'plan.setup.pathSaved' : 'plan.setup.setupSkipped') }}
+        </h2>
       </section>
-    </div>
 
-    <!-- Footer -->
-    <div v-if="footer" class="plan-setup-footer">
-      <button
-        v-if="footer.secondary"
-        class="btn btn-outline btn-lg"
-        type="button"
-        data-testid="setup-secondary"
-        @click="footer.secondary.run"
+      <AppOverlay
+        :open="editing"
+        :title="t('plan.setup.editTitle')"
+        test-id="edit-goal-dialog"
+        @close="editing = false"
       >
-        {{ footer.secondary.label }}
-      </button>
-      <p v-if="footer.note" class="plan-setup-footer-note">{{ footer.note }}</p>
-      <button
-        class="btn btn-primary btn-lg"
-        type="button"
-        data-testid="setup-primary"
-        :disabled="footer.primary.disabled"
-        @click="footer.primary.run"
-      >
-        {{ footer.primary.label }}
-      </button>
-    </div>
-    <p v-if="skipError" class="alert alert-danger plan-setup-error" role="alert">{{ skipError }}</p>
+        <GoalForm v-model="editDraft" :options="setupOptions" :sections="['goals', 'deadline']" compact />
+        <template #footer>
+          <button class="btn btn-secondary" type="button" @click="editing = false">
+            {{ t('common.cancel') }}
+          </button>
+          <button
+            class="btn btn-primary"
+            type="button"
+            :disabled="refreshingOptions || !deadlineReady(editDraft)"
+            data-testid="save-rebuild"
+            @click="rebuild"
+          >
+            {{ t('plan.setup.saveRebuild') }}
+          </button>
+        </template>
+      </AppOverlay>
+    </template>
 
-    <ConfirmDialog
-      tone="leave"
-      :open="leaving"
-      :title="t('plan.setup.laterTitle')"
-      :message="t('plan.setup.laterMessage')"
-      :confirm-label="t('plan.setup.setUpLater')"
-      :cancel-label="t('plan.setup.keepGoing')"
-      :busy="skipping"
-      @confirm="setUpLater"
-      @cancel="leaving = false"
-    />
-
-    <AppOverlay :open="editing" :title="t('plan.setup.editTitle')" test-id="edit-goal-dialog" @close="editing = false">
-      <GoalForm v-model="editDraft" :options="options.data.value!" :sections="['goals', 'deadline']" variant="chips" />
-      <p class="plan-form-note"><IconGlyph name="info" :size="16" />{{ t('plan.setup.editLevelStays') }}</p>
-      <template #footer>
-        <button class="btn btn-ghost" type="button" @click="editing = false">{{ t('plan.common.cancel') }}</button>
-        <button class="btn btn-primary" type="button" :disabled="!deadlineReady(editDraft)" @click="rebuild">
-          {{ t('plan.setup.saveRebuild') }}
+    <FocusFooter v-if="footer">
+      <template #start>
+        <button
+          v-if="footer.secondary"
+          class="btn btn-secondary btn-lg"
+          type="button"
+          data-testid="setup-secondary"
+          :disabled="starting"
+          @click="footer.secondary.run"
+        >
+          <IconGlyph v-if="footer.secondary.icon" :name="footer.secondary.icon" :size="18" />
+          {{ footer.secondary.label }}
         </button>
       </template>
-    </AppOverlay>
+      <template v-if="footer.note" #default>
+        <span role="status">{{ footer.note }}</span>
+      </template>
+      <template #end>
+        <button
+          class="btn btn-primary btn-lg"
+          type="button"
+          data-testid="setup-primary"
+          :disabled="footer.primary.disabled"
+          @click="footer.primary.run"
+        >
+          {{ footer.primary.label }}
+        </button>
+      </template>
+    </FocusFooter>
+
+    <!-- × and "Set up later" ask first (X2.01); once the plan is built, leaving loses more and says so (X2.28). -->
+    <ConfirmDialog
+      :open="leaving"
+      :title="plan ? t('plan.setup.readyTitle') : t('plan.setup.laterTitle')"
+      :message="plan ? t('plan.setup.readyMessage') : t('plan.setup.laterMessage')"
+      :confirm-label="plan ? t('plan.setup.leaveWithoutSaving') : t('plan.setup.setUpLater')"
+      :cancel-label="t('plan.setup.keepGoing')"
+      :busy="finishing === 'skip'"
+      @confirm="finishSetup('skip')"
+      @cancel="leaving = false"
+    />
+    <AppToast :message="toast" />
   </div>
 </template>
 
 <script setup lang="ts">
-import '@/styles/learn.css'
+import '@/styles/learn-shared.css'
 import '@/styles/plan.css'
+import '@/styles/plan-setup.css'
 
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
+import { getAuthSessionVersion } from '@/api/http'
 import { planApi } from '@/api/plan'
-import DataNotice from '@/components/common/DataNotice.vue'
+import AppOverlay from '@/components/common/AppOverlay.vue'
+import AppToast from '@/components/common/AppToast.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
+import FocusFooter from '@/components/layout/FocusFooter.vue'
 import FocusTopBar from '@/components/layout/FocusTopBar.vue'
-import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
-import AppOverlay from '@/components/common/AppOverlay.vue'
-import GoalForm from '@/components/plan/GoalForm.vue'
-import { deadlineReady, emptyDraft, goalInput, type GoalDraft } from '@/components/plan/goalDraft'
+import GoalForm, { type Section } from '@/components/plan/GoalForm.vue'
+import { deadlinePassed, deadlineReady, emptyDraft, goalInput, type GoalDraft } from '@/components/plan/goalDraft'
 import LevelCheckDone from '@/components/plan/LevelCheckDone.vue'
 import LevelCheckRunner from '@/components/plan/LevelCheckRunner.vue'
-import PlanAiNote from '@/components/plan/PlanAiNote.vue'
 import PlanBuilding from '@/components/plan/PlanBuilding.vue'
 import PlanChoiceGrid, { type PlanChoice } from '@/components/plan/PlanChoiceGrid.vue'
-import PlanCoverage from '@/components/plan/PlanCoverage.vue'
-import { goalTitle } from '@/components/plan/planFormat'
-import {
-  CHECK_START,
-  FOCUS_FOR_SKILL,
-  LEVEL_KEYS,
-  PACES,
-  REASONS,
-  SELF_LEVELS,
-  SKILL_KEYS,
-} from '@/components/plan/planLabels'
-import PlanOutcomes from '@/components/plan/PlanOutcomes.vue'
-import PlanPath from '@/components/plan/PlanPath.vue'
+import { FOCUS_FOR_SKILL, LEVEL_KEYS, SELF_LEVELS, type SelfLevelChoice } from '@/components/plan/planLabels'
 import PlanResult from '@/components/plan/PlanResult.vue'
-import PlanWeeks from '@/components/plan/PlanWeeks.vue'
-import SparkReply from '@/components/plan/SparkReply.vue'
-import { notifyProgressChanged } from '@/composables/useProgressRefresh'
+import PlanSetupPath from '@/components/plan/PlanSetupPath.vue'
+import { usePlanBuilder, type BuiltPlan } from '@/components/plan/usePlanBuilder'
+import { usePlanPick } from '@/components/plan/usePlanPick'
+import { invalidateHintSettings } from '@/composables/useHintSettings'
+import { useIsUnmounted } from '@/composables/useIsUnmounted'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { useResource } from '@/composables/useResource'
-import { planMessages } from '@/plugins/planMessages'
+import { usePageActive, usePageRedirect } from '@/composables/usePageNavigation'
+import { useToast } from '@/composables/useToast'
+import { planPathMessages } from '@/plugins/planPathMessages'
+import { planSetupMessages } from '@/plugins/planSetupMessages'
+import { planSummaryMessages } from '@/plugins/planSummaryMessages'
 import type { LevelCheckStep } from '@/types/learn'
-import type { LearningPlan, LevelCheckAnswer, PlanSelfLevel } from '@/types/plan'
-import { resolveApiError } from '@/utils/apiError'
+import type { LearningPlan, LevelCheckAnswer, PlanOptions, PlanSelfLevel } from '@/types/plan'
+import { apiErrorStatus, hasServerMessage, resolveApiError } from '@/utils/apiError'
+import { SERVER_MESSAGE } from '@/utils/serverMessages'
 
 /**
- * The learning plan setup after sign-up (focus mode, about 3 minutes): why, the goal, the pace, how much Mandarin,
- * the adaptive level check, the focus, then the plan is built (with SparkBot, or from rules when it is unavailable),
- * revealed for the student to confirm, and shown as a path. "Set up later" leaves for Home without saving answers.
+ * The learning plan setup after sign-up (focus mode, about 3 minutes): why, the goal, the goal date (picked on a
+ * calendar, or No date) with the daily time, how much Mandarin, the level check, the focus, then the plan is built
+ * (with SparkBot, or from rules when it is unavailable) as a draft, revealed for the learner to confirm, and shown as a
+ * road map; "Start my path" makes the draft the learner's plan. "Set up later" (× asks first) leaves for Home and
+ * discards a draft. A learner who already has a plan is sent to My learning plan, where the goal and the level change.
  */
 type Step =
   | 'welcome'
@@ -307,16 +333,23 @@ type Step =
   | 'building'
   | 'result'
   | 'path'
+  | 'saved'
+  | 'skipped'
 
 interface FooterAction {
   label: string
   run: () => void
   disabled?: boolean
+  icon?: string
 }
 
-/** Steps SparkBot asks, and the wide steps that show the plan. */
-const QUESTION_STEPS: ReadonlySet<Step> = new Set(['why', 'goal', 'pace', 'level', 'focus'])
-const WIDE_STEPS: ReadonlySet<Step> = new Set(['result', 'path'])
+/** The steps that ask for part of the goal. */
+const FORM_STEPS: Partial<Record<Step, { title: string; lead?: string; sections: Section[] }>> = {
+  why: { title: 'plan.setup.whyTitle', lead: 'plan.setup.whyLead', sections: ['reason'] },
+  goal: { title: 'plan.setup.goalTitle', lead: 'plan.setup.goalLead', sections: ['goals'] },
+  pace: { title: 'plan.setup.paceTitle', sections: ['deadline', 'pace'] },
+  focus: { title: 'plan.setup.focusTitle', lead: 'plan.setup.focusLead', sections: ['focus'] },
+}
 
 const WELCOME_STEPS = [
   { title: 'plan.setup.stepGoal', hint: 'plan.setup.stepGoalHint' },
@@ -324,243 +357,398 @@ const WELCOME_STEPS = [
   { title: 'plan.setup.stepPlan', hint: 'plan.setup.stepPlanHint' },
 ] as const
 
-/** The building screen stays at least this long, so its steps can be read. */
-const MIN_BUILDING_MS = 2400
+/** Where the bar stands on "How much Mandarin do you know?", the last step before the level check. */
+const BEFORE_CHECK = 80
+
+/**
+ * The steps up to the level check fill the bar to there, and the check carries on from it; the steps after the check
+ * leave it full.
+ */
+const STEP_PROGRESS: Partial<Record<Step, number>> = {
+  welcome: 0,
+  why: 20,
+  goal: 40,
+  pace: 60,
+  level: BEFORE_CHECK,
+  check: BEFORE_CHECK,
+}
 
 const router = useRouter()
-const { t, locale } = useLocalMessages({ plan: planMessages })
-const options = useResource(() => planApi.options())
+const { t, locale } = useLocalMessages({ plan: [planSummaryMessages, planSetupMessages, planPathMessages] })
+const { toast, showToast } = useToast()
+const options = useResource(planApi.options)
+const refreshingOptions = ref(false)
+let optionsRefreshSeq = 0
+/**
+ * Whether the learner already has a plan. The setup builds a first plan; a learner who has one (back from the plan, a
+ * refresh after it was built, a bookmark) changes it on My learning plan ("Update my goal", "Retake level check"), so a
+ * second setup cannot replace its goal and level from a fresh start.
+ */
+const existing = useResource(planApi.overview)
 
 const step = ref<Step>('welcome')
+const finished = computed(() => step.value === 'saved' || step.value === 'skipped')
 const draft = ref<GoalDraft>(emptyDraft())
 const editDraft = ref<GoalDraft>(emptyDraft())
-const selfLevel = ref<PlanSelfLevel | null>(null)
-const skipped = ref(false)
-const answers = ref<LevelCheckAnswer[]>([])
-const checkResult = ref<NonNullable<LevelCheckStep['result']> | null>(null)
-const checkAnswered = ref(0)
-const checkMax = ref(6)
+const levelChoice = ref<SelfLevelChoice | null>(null)
+/** The question of the level check on screen, as its `progress` event tells it; null until the first one is in. */
+const checkQuestion = ref<{ answered: number; max: number } | null>(null)
+/** The finished level check; null when it was skipped. */
+const check = ref<{ answers: LevelCheckAnswer[]; result: NonNullable<LevelCheckStep['result']> } | null>(null)
 const plan = ref<LearningPlan | null>(null)
-const buildError = ref<string | null>(null)
 const leaving = ref(false)
-const skipping = ref(false)
-const skipError = ref<string | null>(null)
+const finishing = ref<'confirm' | 'skip' | null>(null)
+const exitError = ref<string | null>(null)
+const exitErrorRef = ref<HTMLElement | null>(null)
+const starting = computed(() => finishing.value === 'confirm')
+const startError = ref<{ message: string; action: 'rebuild' | 'pickDate' | null } | null>(null)
+const startErrorRef = ref<HTMLElement | null>(null)
 const editing = ref(false)
-let lastBuild: (() => Promise<LearningPlan>) | null = null
+const isUnmounted = useIsUnmounted()
 
-const selfLevelChoices = computed<PlanChoice[]>(() =>
-  (Object.keys(SELF_LEVELS) as PlanSelfLevel[]).map((level) => ({
-    value: level,
-    label: t(SELF_LEVELS[level].label),
-    hint: t(SELF_LEVELS[level].hint),
-    icon: SELF_LEVELS[level].icon,
-  })),
+watch(
+  step,
+  () => {
+    exitError.value = null
+    startError.value = null
+  },
+  { flush: 'sync' },
 )
 
-const suggestedSkill = computed(() => checkResult.value?.newSkills[0] ?? null)
-const suggestedFocus = computed(() => (suggestedSkill.value ? FOCUS_FOR_SKILL[suggestedSkill.value] : null))
+const { picked, togglePick, pickError, whenSaved } = usePlanPick(plan, () => t('plan.path.pickError'))
 
-const goalReply = computed(() => {
-  if (draft.value.goalText.trim()) return t('plan.setup.goalReplyWords')
-  return draft.value.goals.length ? t('plan.setup.goalReplyPicked') : ''
+const builder = usePlanBuilder({
+  isBuilding: () => step.value === 'building' && finishing.value === null,
+  canStart: () => finishing.value === null && !finished.value,
+  beforeRequest: whenSaved,
+  onStart: () => {
+    step.value = 'building'
+  },
+  onBuilt: ({ plan: built, draft: committedDraft }) => {
+    if (committedDraft) draft.value = committedDraft
+    plan.value = built
+    step.value = 'result'
+  },
+  fallbackError: () => t('plan.setup.buildError'),
+})
+const { buildError, buildErrorStatus } = builder
+
+/** A plan built before this visit: the overview is read once, when the setup opens. */
+const hasPlanAlready = computed(() => Boolean(existing.data.value?.plan))
+/** Reading the choices and the learner's plan, or on the way to the plan they already have. */
+const loading = computed(() => options.loading.value || existing.loading.value || hasPlanAlready.value)
+const loadError = computed(() => options.error.value ?? existing.error.value)
+/** The setup's choices once the setup can be used: they are in, and the learner has no plan yet (or built it here). */
+const setupOptions = computed(() => (loading.value || loadError.value !== null ? null : options.data.value))
+
+const pageActive = usePageActive()
+usePageRedirect(() => (hasPlanAlready.value ? { name: 'student-plan' } : null), pageActive)
+
+function reloadPage(): void {
+  if (options.error.value !== null) void options.reload()
+  if (existing.error.value !== null) void existing.reload()
+}
+
+const selfLevel = computed<PlanSelfLevel>(() => (levelChoice.value ? SELF_LEVELS[levelChoice.value].self : 'NOT_SURE'))
+
+const selfLevelChoices = computed<PlanChoice<SelfLevelChoice>[]>(() =>
+  (Object.keys(SELF_LEVELS) as SelfLevelChoice[]).map((value) => {
+    const level = SELF_LEVELS[value]
+    return { value, label: t(level.label), hint: t(level.hint), icon: level.icon, tag: level.tag ? t(level.tag) : null }
+  }),
+)
+
+const suggestedFocus = computed(() => {
+  const skill = check.value?.result.newSkills[0]
+  return skill ? FOCUS_FOR_SKILL[skill] : null
 })
 
-const topLabel = computed(() => {
-  switch (step.value) {
-    case 'welcome':
-      return t('plan.setup.topWelcome')
-    case 'why':
-      return t('plan.setup.topStep', { step: 1 })
-    case 'goal':
-      return t('plan.setup.topStep', { step: 2 })
-    case 'pace':
-      return t('plan.setup.topStep', { step: 3 })
-    case 'level':
-      return t('plan.setup.topStep', { step: 4 })
-    case 'check':
-      return t('plan.check.topCheck', { count: Math.min(checkAnswered.value + 1, checkMax.value), max: checkMax.value })
-    case 'checkDone':
-      return t('plan.check.topDone')
-    case 'focus':
-      return t('plan.setup.topStep', { step: 5 })
-    case 'building':
-      return t('plan.setup.topBuilding')
-    default:
-      return t('plan.setup.topPlan')
-  }
-})
+const formStep = computed(() => FORM_STEPS[step.value])
 
+/**
+ * The top bar names the flow: the plan (while it is built too, S1.08), or the level check while it runs; the bar alone
+ * shows where the learner is.
+ */
+const topLabel = computed(() =>
+  t(step.value === 'check' || step.value === 'checkDone' ? 'plan.check.label' : 'plan.setup.stepPlan'),
+)
+
+/**
+ * One bar for the whole setup: it never goes back when the level check starts. The check's questions fill the rest of
+ * the bar, half a question ahead while one is being answered, and only its result completes it.
+ */
 const topProgress = computed(() => {
-  const fixed: Record<Step, number> = {
-    welcome: 0,
-    why: 10,
-    goal: 22,
-    pace: 34,
-    level: 46,
-    check: 50,
-    checkDone: 66,
-    focus: 76,
-    building: 88,
-    result: 94,
-    path: 100,
-  }
-  if (step.value === 'check') return 50 + Math.round((checkAnswered.value / Math.max(1, checkMax.value)) * 14)
-  return fixed[step.value]
+  const question = step.value === 'check' ? checkQuestion.value : null
+  if (!question) return STEP_PROGRESS[step.value] ?? 100
+  const share = question.max > 0 ? Math.min((question.answered + 0.5) / question.max, 1) : 0
+  return Math.min(BEFORE_CHECK + (100 - BEFORE_CHECK) * share, 99)
 })
 
 const whyReady = computed(
   () => draft.value.reason !== null && (draft.value.reason !== 'OTHER' || draft.value.reasonText.trim() !== ''),
 )
 
+/** The step's actions, only once the page knows the setup is for this learner. */
 const footer = computed<{ primary: FooterAction; secondary?: FooterAction; note?: string } | null>(() => {
+  if (!setupOptions.value) return null
   const back = (to: Step): FooterAction => ({ label: t('plan.common.back'), run: () => (step.value = to) })
+  const continueTo = (to: Step, disabled = false): FooterAction => ({
+    label: t('plan.common.continue'),
+    run: () => (step.value = to),
+    disabled,
+  })
   switch (step.value) {
+    case 'saved':
+    case 'skipped':
+      return { primary: { label: t('nav.home'), run: openHome } }
     case 'welcome':
       return {
         secondary: { label: t('plan.setup.setUpLater'), run: () => (leaving.value = true) },
         primary: { label: t('plan.setup.letsStart'), run: () => (step.value = 'why') },
       }
     case 'why':
-      return {
-        secondary: back('welcome'),
-        primary: { label: t('plan.common.continue'), run: () => (step.value = 'goal'), disabled: !whyReady.value },
-      }
+      return { secondary: back('welcome'), primary: continueTo('goal', !whyReady.value) }
     case 'goal':
-      return { secondary: back('why'), primary: { label: t('plan.common.continue'), run: () => (step.value = 'pace') } }
+      return { secondary: back('why'), primary: continueTo('pace') }
     case 'pace':
       return {
         secondary: back('goal'),
-        primary: {
-          label: t('plan.common.continue'),
-          run: () => (step.value = 'level'),
-          disabled: !deadlineReady(draft.value) || draft.value.pace === null,
-        },
+        primary: continueTo(check.value ? 'checkDone' : 'level', !deadlineReady(draft.value)),
       }
     case 'level':
       return {
-        secondary: back('pace'),
-        primary: { label: t('plan.setup.startCheck'), run: startCheck, disabled: selfLevel.value === null },
+        secondary: { label: t('plan.common.back'), run: returnToPace },
+        primary:
+          levelChoice.value === 'NEW'
+            ? { label: t('plan.setup.startFirstLesson'), run: skipCheck }
+            : { label: t('plan.setup.startCheck'), run: startCheck, disabled: levelChoice.value === null },
       }
     case 'checkDone':
-      return { primary: { label: t('plan.common.continue'), run: () => (step.value = 'focus') } }
+      return {
+        secondary: { label: t('plan.common.back'), run: returnToPace },
+        primary: continueTo('focus'),
+      }
     case 'focus':
       return {
-        secondary: back(skipped.value ? 'level' : 'checkDone'),
-        primary: { label: t('plan.setup.buildPlan'), run: build },
+        secondary: back(check.value ? 'checkDone' : 'level'),
+        primary: { label: t('plan.page.buildPlan'), run: build },
       }
     case 'result':
       return {
-        secondary: { label: t('plan.setup.editGoal'), run: openEdit },
+        secondary: { label: t('plan.setup.editGoal'), run: openEdit, icon: 'pen' },
         primary: { label: t('plan.setup.showPath'), run: () => (step.value = 'path') },
       }
     case 'path':
       return {
         secondary: back('result'),
-        note: t('plan.setup.noGuarantee'),
-        primary: { label: t('plan.setup.startPath'), run: startPath },
+        note: plan.value?.aiAssisted ? undefined : t('plan.path.rulesNote'),
+        primary: {
+          label: starting.value ? t('plan.setup.starting') : t('plan.setup.startPath'),
+          run: () => finishSetup('confirm'),
+          disabled: starting.value,
+        },
       }
     default:
       return null
   }
 })
 
-function close(): void {
-  if (plan.value) {
-    void router.push({ name: 'student-home' })
-    return
-  }
-  leaving.value = true
+/** Close leaves directly while loading, on load error, or once setup is done; otherwise asks before discarding. */
+function requestClose(): void {
+  if (starting.value || hasPlanAlready.value) return
+  if (finished.value || !setupOptions.value) void openHome()
+  else leaving.value = true
 }
 
-async function setUpLater(): Promise<void> {
-  skipping.value = true
-  skipError.value = null
+/** Save outstanding picks before confirming or discarding the draft, then open Home for the same session. */
+async function finishSetup(action: 'confirm' | 'skip'): Promise<void> {
+  if (finishing.value || finished.value) return
+  finishing.value = action
+  const version = getAuthSessionVersion()
+  const stillHere = () => !isUnmounted() && version === getAuthSessionVersion()
+  if (action === 'skip') exitError.value = null
+  else startError.value = null
+  let builtDuringSkip: BuiltPlan | null = null
   try {
-    await planApi.skip()
+    // Discard after a draft already being built has reached the server, even if that build failed.
+    if (action === 'skip') {
+      builtDuringSkip = await builder.abortAndAwait()
+    }
+    await whenSaved()
+    if (!stillHere()) return
+    await planApi[action]()
+    if (action === 'confirm' && version === getAuthSessionVersion()) invalidateHintSettings()
+    if (stillHere()) {
+      leaving.value = false
+      step.value = action === 'confirm' ? 'saved' : 'skipped'
+      await openHome()
+    }
+  } catch (reason) {
+    if (!stillHere()) return
+    if (action === 'skip') {
+      leaving.value = false
+      // Never leave the learner stranded on the infinite building spinner if skip fails after aborting the build.
+      if (step.value === 'building') {
+        if (builtDuringSkip) {
+          if (builtDuringSkip.draft) draft.value = builtDuringSkip.draft
+          plan.value = builtDuringSkip.plan
+          step.value = 'result'
+        } else {
+          step.value = plan.value ? 'result' : 'focus'
+        }
+      }
+      exitError.value = resolveApiError(reason, t('plan.setup.skipError'))
+      await nextTick()
+      if (stillHere()) exitErrorRef.value?.focus()
+    } else {
+      startError.value = {
+        message: resolveApiError(reason, t('plan.setup.startError')),
+        action: startErrorAction(reason),
+      }
+      await nextTick()
+      if (stillHere()) startErrorRef.value?.focus()
+    }
+  } finally {
+    if (stillHere()) finishing.value = null
+  }
+}
+
+async function openHome(): Promise<void> {
+  if (!pageActive.value) return
+  exitError.value = null
+  try {
     await router.push({ name: 'student-home' })
   } catch (reason) {
-    leaving.value = false
-    skipError.value = resolveApiError(reason, t('plan.setup.skipError'))
-  } finally {
-    skipping.value = false
+    if (!isUnmounted()) exitError.value = resolveApiError(reason)
   }
 }
 
-function pickSelfLevel(value: string): void {
-  selfLevel.value = value as PlanSelfLevel
+/** Refreshes `setupOptions.today` on day rollover so passed target dates are cleared and disabled. */
+async function refreshOptions(): Promise<PlanOptions | null> {
+  const seq = ++optionsRefreshSeq
+  const session = getAuthSessionVersion()
+  refreshingOptions.value = true
+  try {
+    const fresh = await planApi.options()
+    if (isUnmounted() || seq !== optionsRefreshSeq || session !== getAuthSessionVersion()) return null
+    options.replace(fresh)
+    if (editing.value && editDraft.value.deadline && deadlinePassed(editDraft.value.deadline, fresh.today)) {
+      editDraft.value = { ...editDraft.value, deadline: undefined }
+    }
+    if (step.value === 'pace' && draft.value.deadline && deadlinePassed(draft.value.deadline, fresh.today)) {
+      draft.value = { ...draft.value, deadline: undefined }
+    }
+    return fresh
+  } catch {
+    // Keep the already loaded setup options if a background day-rollover refresh fails.
+    return null
+  } finally {
+    if (!isUnmounted() && seq === optionsRefreshSeq) refreshingOptions.value = false
+  }
+}
+
+function returnToPace(): void {
+  step.value = 'pace'
+  void refreshOptions()
+}
+
+function backFromBuildError(): void {
+  step.value = plan.value ? 'result' : 'focus'
+}
+
+/** The way on from a refused "Start my path": build again, or (the goal date has passed) pick a new date first. */
+function startErrorAction(reason: unknown): 'rebuild' | 'pickDate' | null {
+  if (apiErrorStatus(reason) !== 409) return null
+  return hasServerMessage(reason, SERVER_MESSAGE.GOAL_DATE_PASSED) ? 'pickDate' : 'rebuild'
+}
+
+async function buildAgain(): Promise<void> {
+  if (finishing.value || finished.value || step.value !== 'path') return
+  const session = getAuthSessionVersion()
+  startError.value = null
+  const fresh = await refreshOptions()
+  if (
+    isUnmounted() ||
+    session !== getAuthSessionVersion() ||
+    finishing.value ||
+    finished.value ||
+    step.value !== 'path'
+  ) {
+    return
+  }
+  const today = fresh?.today ?? setupOptions.value?.today
+  if (draft.value.deadline && today && deadlinePassed(draft.value.deadline, today)) {
+    pickNewDate()
+    return
+  }
+  build()
+}
+
+/** Building again with the same date would be refused, so the goal opens with no date chosen. */
+function pickNewDate(): void {
+  if (finishing.value || finished.value) return
+  startError.value = null
+  editDraft.value = { ...draft.value, deadline: undefined }
+  editing.value = true
+  void refreshOptions()
 }
 
 function startCheck(): void {
-  skipped.value = false
-  answers.value = []
-  checkResult.value = null
-  checkAnswered.value = 0
+  check.value = null
+  checkQuestion.value = null
   step.value = 'check'
 }
 
 /** "Brand new? Skip the check": start from the first lesson. */
 function skipCheck(): void {
-  selfLevel.value = 'NEW_TO_MANDARIN'
-  skipped.value = true
-  answers.value = []
-  checkResult.value = null
+  levelChoice.value = 'NEW'
+  check.value = null
   step.value = 'focus'
 }
 
 function checkProgress(answered: number, max: number): void {
-  checkAnswered.value = answered
-  checkMax.value = max
+  checkQuestion.value = { answered, max }
 }
 
-function checkFinished(sent: LevelCheckAnswer[], result: NonNullable<LevelCheckStep['result']>): void {
-  answers.value = sent
-  checkResult.value = result
+function checkFinished(answers: LevelCheckAnswer[], result: NonNullable<LevelCheckStep['result']>): void {
+  check.value = { answers, result }
   step.value = 'checkDone'
 }
 
-async function runBuild(request: () => Promise<LearningPlan>): Promise<void> {
-  lastBuild = request
-  buildError.value = null
-  step.value = 'building'
-  const started = Date.now()
-  try {
-    const built = await request()
-    await new Promise((resolve) => setTimeout(resolve, Math.max(0, MIN_BUILDING_MS - (Date.now() - started))))
-    plan.value = built
-    step.value = 'result'
-    notifyProgressChanged()
-  } catch (reason) {
-    buildError.value = resolveApiError(reason, t('plan.setup.buildError'))
-  }
-}
-
 function build(): void {
-  const payload = {
-    goal: goalInput(draft.value),
-    levelCheck: { selfLevel: selfLevel.value ?? 'NEW_TO_MANDARIN', skipped: skipped.value, answers: answers.value },
-    language: locale.value,
-  }
-  void runBuild(() => planApi.build(payload))
+  const goal = goalInput(draft.value)
+  const levelCheck = { selfLevel: selfLevel.value, skipped: !check.value, answers: check.value?.answers ?? [] }
+  void builder.run(async () => ({ plan: await planApi.build({ goal, levelCheck, language: locale.value }) }))
 }
 
 function retryBuild(): void {
-  if (lastBuild) void runBuild(lastBuild)
+  builder.retry()
 }
 
 function openEdit(): void {
-  editDraft.value = { ...draft.value }
+  const currentToday = setupOptions.value?.today
+  const deadline =
+    draft.value.deadline && currentToday && deadlinePassed(draft.value.deadline, currentToday)
+      ? undefined
+      : draft.value.deadline
+  editDraft.value = { ...draft.value, deadline }
   editing.value = true
+  void refreshOptions()
 }
 
 /** "Save and rebuild": the level check result stays; the plan is rebuilt for the new goal. */
 function rebuild(): void {
-  draft.value = { ...editDraft.value }
+  if (refreshingOptions.value || !deadlineReady(editDraft.value)) return
+  const nextDraft = { ...editDraft.value }
   editing.value = false
-  const goal = goalInput(draft.value)
-  void runBuild(() => planApi.updateGoal(goal, locale.value))
+  const goal = goalInput(nextDraft)
+  void builder.run(async () => ({
+    plan: await planApi.updateGoal(goal, locale.value),
+    draft: nextDraft,
+  }))
 }
 
-function startPath(): void {
-  void router.push({ name: 'student-home' })
+function reported(): void {
+  showToast(t('aiSafety.reportSent'))
 }
 </script>

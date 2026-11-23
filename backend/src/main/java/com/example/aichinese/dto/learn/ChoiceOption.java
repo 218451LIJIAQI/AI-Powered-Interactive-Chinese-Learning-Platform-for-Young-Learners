@@ -1,5 +1,8 @@
 package com.example.aichinese.dto.learn;
 
+import static com.example.aichinese.dto.DtoNormalization.strip;
+import static com.example.aichinese.dto.DtoNormalization.stripToNull;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
@@ -11,4 +14,9 @@ public record ChoiceOption(
 
         @Size(max = 200, message = "Pinyin must not exceed 200 characters.")
         String pinyin) {
+
+    public ChoiceOption {
+        text = strip(text);
+        pinyin = stripToNull(pinyin);
+    }
 }

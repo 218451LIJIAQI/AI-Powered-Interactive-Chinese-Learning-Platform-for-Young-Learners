@@ -1,42 +1,44 @@
 package com.example.aichinese.entity.enums;
 
 /**
- * How much time a student can give (setup step 3). The pace sets the daily goal and, with the lesson lengths, how
- * many weeks each step of the plan takes.
+ * "Time I can give each day" (setup step 3): the four bands of daily self-study time in Shen &amp; Wu (2026), Frontiers
+ * in Psychology 17:1761904. HOURS_1_TO_2, the most common band (38.9%), is the setup's default. The band is shown as it
+ * is ("1–2 hours a day"); the daily goal is an Account setting of its own and does not follow it.
  */
 public enum PlanPace {
 
-    LIGHT(10, 3, 10),
+    UNDER_30_MIN(0, 30),
 
-    REGULAR(15, 5, 20),
+    MINUTES_30_TO_60(30, 60),
 
-    SERIOUS(20, 7, 30),
+    HOURS_1_TO_2(60, 120),
 
-    INTENSE(30, 7, 30);
+    /** Open-ended: no maximum. */
+    HOURS_2_PLUS(120, null);
 
-    private final int minutesPerDay;
-    private final int daysPerWeek;
-    private final int dailyGoalXp;
+    private final int minMinutesPerDay;
+    private final Integer maxMinutesPerDay;
 
-    PlanPace(int minutesPerDay, int daysPerWeek, int dailyGoalXp) {
-        this.minutesPerDay = minutesPerDay;
-        this.daysPerWeek = daysPerWeek;
-        this.dailyGoalXp = dailyGoalXp;
+    PlanPace(int minMinutesPerDay, Integer maxMinutesPerDay) {
+        this.minMinutesPerDay = minMinutesPerDay;
+        this.maxMinutesPerDay = maxMinutesPerDay;
     }
 
-    public int minutesPerDay() {
-        return minutesPerDay;
+    public int minMinutesPerDay() {
+        return minMinutesPerDay;
     }
 
-    public int daysPerWeek() {
-        return daysPerWeek;
+    /** Null for "2+ hours". */
+    public Integer maxMinutesPerDay() {
+        return maxMinutesPerDay;
     }
 
-    public int minutesPerWeek() {
-        return minutesPerDay * daysPerWeek;
-    }
-
-    public int dailyGoalXp() {
-        return dailyGoalXp;
+    /**
+     * The minutes a week the plan's weeks are laid out with: an internal, conservative estimate, never shown as an
+     * option. Each band counts at its lower bound (15 minutes for "Under 30 min", whose lower bound is 0), every day of
+     * the week, since the learner gives this time each day.
+     */
+    public int planningMinutesPerWeek() {
+        return Math.max(15, minMinutesPerDay) * 7;
     }
 }

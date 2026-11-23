@@ -1,0 +1,255 @@
+/* Ask SparkBot chat thread, composer, and My reports rail. Shared shell rules live in ai.css. */
+
+/* Ask SparkBot fills the space below the page navigation. */
+.ai-helper-page:has(> .ai-ask) {
+  height: max(640px, calc(100vh - var(--topbar-height) - var(--page-top) - var(--page-bottom)));
+  height: max(640px, calc(100dvh - var(--topbar-height) - var(--page-top) - var(--page-bottom)));
+}
+
+.ai-helper-page > .ai-ask {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.ai-ask {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.ai-ask-chat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-height: 0;
+}
+
+/* The messages rest on the composer and scroll up from there. */
+.ai-thread {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-height: 0;
+  overflow-y: auto;
+  outline-offset: calc(-1 * var(--border-width-focus));
+}
+
+.ai-thread > :first-child {
+  margin-top: auto;
+}
+
+.ai-thread-empty {
+  margin-bottom: auto;
+}
+
+.ai-message {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.ai-message.is-you {
+  justify-items: end;
+}
+
+.ai-message.is-bot {
+  justify-items: start;
+  gap: var(--space-2);
+}
+
+.ai-message-who {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-strong);
+  line-height: var(--line-height-normal);
+}
+
+.ai-bubble,
+.ai-answer {
+  max-width: 75%;
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.ai-bubble {
+  border-radius: var(--radius-lg) var(--radius-lg) var(--radius-xs) var(--radius-lg);
+  background: var(--color-primary-500);
+  color: var(--text-on-primary);
+  line-height: var(--line-height-normal);
+}
+
+.ai-answer {
+  border-radius: var(--radius-lg) var(--radius-lg) var(--radius-lg) var(--radius-xs);
+  background: var(--surface-sunken);
+  color: var(--text-primary);
+  line-height: var(--line-height-relaxed);
+}
+
+.ai-answer.is-thinking {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-strong);
+  line-height: var(--line-height-normal);
+}
+
+.ai-answer.is-problem {
+  background: var(--color-danger-soft);
+  color: var(--color-danger-text);
+}
+
+.ai-message-actions .btn {
+  padding-inline: 0;
+}
+
+.ai-message-actions .btn:not(:disabled):hover {
+  background: transparent;
+  color: var(--text-link-hover);
+}
+
+.ai-ask-composer {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.ai-ask-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--space-2);
+}
+
+/* One line like an input; it grows with a longer question (a question can have several lines). */
+.ai-ask-bar .textarea {
+  min-height: var(--control-height-md);
+  max-height: 120px;
+  padding-block: var(--space-2);
+  resize: vertical;
+}
+
+@supports (field-sizing: content) {
+  .ai-ask-bar .textarea {
+    resize: none;
+    field-sizing: content;
+  }
+}
+
+.ai-ask-rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  min-height: 0;
+}
+
+.ai-reports {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-height: 0;
+}
+
+.ai-reports-head {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.ai-report-list {
+  flex: 1 1 0;
+  align-content: start;
+  min-height: 0;
+  overflow-y: auto;
+  outline-offset: calc(-1 * var(--border-width-focus));
+}
+
+.ai-report-list > .ai-report-item {
+  display: grid;
+  justify-content: stretch;
+  gap: var(--space-1);
+}
+
+.ai-report-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.ai-report-top strong {
+  min-width: 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-normal);
+}
+
+.ai-report-meta {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-normal);
+  overflow-wrap: anywhere;
+}
+
+.ai-report-note {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+  margin-top: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-normal);
+  overflow-wrap: anywhere;
+}
+
+.ai-report-note p {
+  margin: 0;
+}
+
+.ai-report-note-head {
+  font-weight: var(--font-weight-strong);
+}
+
+@media (max-width: 75rem) {
+  .ai-ask {
+    grid-template-rows: auto;
+  }
+
+  .ai-helper-page:has(> .ai-ask) {
+    height: auto;
+  }
+
+  .ai-helper-page > .ai-ask {
+    flex: 0 0 auto;
+  }
+
+  .ai-ask-chat {
+    height: max(
+      560px,
+      calc(100vh - var(--topbar-height) - var(--page-top) - var(--tab-height) - var(--section-gap) - var(--page-bottom))
+    );
+    height: max(
+      560px,
+      calc(
+        100dvh - var(--topbar-height) - var(--page-top) - var(--tab-height) - var(--section-gap) - var(--page-bottom)
+      )
+    );
+  }
+
+  .ai-reports {
+    flex: 0 1 auto;
+  }
+
+  .ai-report-list {
+    flex: 0 1 auto;
+    overflow-y: visible;
+  }
+}

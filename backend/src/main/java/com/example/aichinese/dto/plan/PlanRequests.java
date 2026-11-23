@@ -1,21 +1,25 @@
 package com.example.aichinese.dto.plan;
 
+import static com.example.aichinese.dto.DtoNormalization.immutableListOrEmpty;
+import static com.example.aichinese.dto.DtoNormalization.redactLength;
+import static com.example.aichinese.dto.DtoNormalization.stripToNull;
+
 import java.time.LocalDate;
 import java.util.List;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
 import com.example.aichinese.dto.learn.LevelCheckNextRequest.Answer;
-import com.example.aichinese.entity.enums.MandarinLevel;
 import com.example.aichinese.entity.enums.PlanFocus;
 import com.example.aichinese.entity.enums.PlanGoal;
 import com.example.aichinese.entity.enums.PlanPace;
 import com.example.aichinese.entity.enums.PlanReason;
 import com.example.aichinese.entity.enums.PlanSelfLevel;
 
-/** Requests of the learning plan: the setup, a new goal, and a retaken level check. */
+/** Requests of the learning plan: the setup, a new goal, the class to take first, and a retaken level check. */
 public final class PlanRequests {
 
     private PlanRequests() {
@@ -30,7 +34,7 @@ public final class PlanRequests {
             String reasonText,
 
             @Size(max = 16, message = "Pick fewer goals.")
-            List<@NotNull PlanGoal> goals,
+            List<@NotNull(message = "Goal must not be null.") PlanGoal> goals,
 
             @Size(max = 200, message = "Keep your goal to 200 characters.")
             String goalText,
@@ -41,11 +45,24 @@ public final class PlanRequests {
             PlanPace pace,
 
             @Size(max = 2, message = "Pick up to 2 things to get better at.")
-            List<@NotNull PlanFocus> focus) {
+            List<@NotNull(message = "Focus must not be null.") PlanFocus> focus) {
 
         public GoalInput {
-            goals = goals == null ? List.of() : List.copyOf(goals);
-            focus = focus == null ? List.of() : List.copyOf(focus);
+            reasonText = stripToNull(reasonText);
+            goals = immutableListOrEmpty(goals);
+            goalText = stripToNull(goalText);
+            focus = immutableListOrEmpty(focus);
+        }
+
+        @Override
+        public String toString() {
+            return "GoalInput[reason=" + reason
+                    + ", reasonText=" + redactLength(reasonText)
+                    + ", goals=" + goals.size()
+                    + ", goalText=" + redactLength(goalText)
+                    + ", deadline=" + deadline
+                    + ", pace=" + pace
+                    + ", focus=" + focus + "]";
         }
     }
 
@@ -59,11 +76,11 @@ public final class PlanRequests {
 
             boolean skipped,
 
-            @Size(max = 6, message = "The level check has at most 6 questions.")
-            List<@Valid Answer> answers) {
+            @Size(max = 8, message = "The level check has at most 8 questions.")
+            List<@NotNull(message = "Question is required.") @Valid Answer> answers) {
 
         public LevelCheckInput {
-            answers = answers == null ? List.of() : List.copyOf(answers);
+            answers = immutableListOrEmpty(answers);
         }
     }
 
@@ -79,6 +96,10 @@ public final class PlanRequests {
 
             @Size(max = 20, message = "Language preference must not exceed 20 characters.")
             String language) {
+
+        public BuildRequest {
+            language = stripToNull(language);
+        }
     }
 
     /** "Update my goal": the level stays. */
@@ -89,20 +110,29 @@ public final class PlanRequests {
 
             @Size(max = 20, message = "Language preference must not exceed 20 characters.")
             String language) {
+
+        public UpdateGoalRequest {
+            language = stripToNull(language);
+        }
     }
 
-    /** A retaken level check: the level it started at and every answer. */
-    public record RetakeRequest(
-            MandarinLevel startLevel,
+    /** "Pick this first" on the road map: one of the plan's classes, or null to go back to the plan's own order. */
+    public record ClassPickRequest(
+            @Positive(message = "Pick a class from your plan.")
+            Long classId) {
+    }
 
-            @Size(max = 6, message = "The level check has at most 6 questions.")
-            List<@Valid Answer> answers,
+    /** A retaken level check: every answer. */
+    public record RetakeRequest(
+            @Size(max = 8, message = "The level check has at most 8 questions.")
+            List<@NotNull(message = "Question is required.") @Valid Answer> answers,
 
             @Size(max = 20, message = "Language preference must not exceed 20 characters.")
             String language) {
 
         public RetakeRequest {
-            answers = answers == null ? List.of() : List.copyOf(answers);
+            answers = immutableListOrEmpty(answers);
+            language = stripToNull(language);
         }
     }
 }

@@ -1,56 +1,33 @@
 /**
- * Maps AI-assisted teacher drafts (FRAI05) onto editable form state. Nothing here saves anything: the teacher
- * reviews the filled form and saves it through the normal create / submit-for-review flow.
+ * Maps an AI-assisted quiz draft (FRAI05, the admin lesson editor) onto quiz-question fields. The lesson editor saves
+ * each mapped question at once as an unchecked AI draft, which the admin checks or edits before publishing the lesson.
  */
 import type { AiQuizGeneratorResponse, QuizQuestionType } from '@/types/api'
-import { clean, resolveAnswerKey } from '@/utils/aiPracticeQuiz'
-import { QUESTION_TYPES } from '@/utils/classes'
+import { draftAnswerIndex } from '@/utils/aiPracticeQuiz'
+import { isQuestionType } from '@/utils/classes'
 
-interface QuizOptionDraft {
-  optionText: string
-  correctOption: boolean
-}
-
-interface QuizQuestionDraft {
-  questionType: QuizQuestionType
-  questionText: string
-  correctAnswerText: string
-  explanation: string
-  options: QuizOptionDraft[]
-}
-
-function normalizeQuizQuestionType(value: string | null | undefined): QuizQuestionType {
-  const normalized = clean(value)
+/** The type the AI wrote ("fill blank", "true-false"), or multiple choice for one the builder does not have. */
+function normalizeQuizQuestionType(value: string): QuizQuestionType {
+  const normalized = value
+    .trim()
     .toUpperCase()
     .replace(/[\s-]+/g, '_')
-  return QUESTION_TYPES.includes(normalized) ? (normalized as QuizQuestionType) : 'MULTIPLE_CHOICE'
+  return isQuestionType(normalized) ? normalized : 'MULTIPLE_CHOICE'
 }
 
-/** Turns AI quiz questions into question-builder rows; questions without text are dropped. */
-export function quizDraftToQuestionDrafts(response: AiQuizGeneratorResponse): QuizQuestionDraft[] {
-  return (response.questions ?? [])
-    .filter((question) => clean(question.questionText))
-    .map((question) => {
-      const optionTexts = (question.options ?? []).map((option) => clean(option)).filter(Boolean)
-      // Normalised match, or a single-letter key (A-D) pointing at an option; the teacher still reviews it.
-      const { indexes: correctIndexes, display: correctAnswer } = resolveAnswerKey(
-        optionTexts,
-        clean(question.correctAnswer),
-      )
-      const options = optionTexts.map((optionText, index) => ({
-        optionText,
-        correctOption: correctIndexes.includes(index),
-      }))
-      const explanation = [clean(question.explanation), clean(question.pinyin), clean(question.translation)]
-        .filter(Boolean)
-        .join(' · ')
-
-      return {
-        questionType: normalizeQuizQuestionType(question.questionType),
-        questionText: clean(question.questionText),
-        correctAnswerText: correctAnswer,
-        explanation,
-        options,
-      }
-    })
+/** Turns AI quiz questions into the fields of new quiz questions. */
+export function quizDraftToQuestionDrafts(response: AiQuizGeneratorResponse) {
+  return response.questions.map((question) => {
+    const correctIndex = draftAnswerIndex(question.options, question.correctAnswer)
+    return {
+      questionType: normalizeQuizQuestionType(question.questionType),
+      questionText: question.questionText,
+      correctAnswerText: correctIndex < 0 ? question.correctAnswer : question.options[correctIndex],
+      explanation: [question.explanation, question.pinyin, question.translation]
+        .map((part) => part?.trim())
+        .filter((part): part is string => Boolean(part))
+        .join(' · '),
+      options: question.options.map((optionText, index) => ({ optionText, correctOption: index === correctIndex })),
+    }
+  })
 }

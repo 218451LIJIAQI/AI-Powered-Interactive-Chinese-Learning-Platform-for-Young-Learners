@@ -2,10 +2,9 @@ package com.example.aichinese.controller;
 
 import java.util.List;
 
-import org.springframework.core.io.Resource;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -16,44 +15,30 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.example.aichinese.dto.ApiResponse;
 import com.example.aichinese.dto.PageResponse;
-import com.example.aichinese.dto.admin.AdminDeactivationResponse;
+import com.example.aichinese.dto.admin.AdminDeactivationRequest;
 import com.example.aichinese.dto.admin.AdminInviteRequest;
 import com.example.aichinese.dto.admin.AdminInviteResponse;
-import com.example.aichinese.dto.admin.AdminTeacherApplicationResponse;
-import com.example.aichinese.dto.admin.AdminTeacherApplicationSummaryResponse;
+import com.example.aichinese.dto.admin.AdminReactivationRequest;
 import com.example.aichinese.dto.admin.AdminUserDetailResponse;
 import com.example.aichinese.dto.admin.AdminUserListItemResponse;
-import com.example.aichinese.dto.admin.AdminUserStatusRequest;
-import com.example.aichinese.dto.admin.ApproveTeacherRequest;
-import com.example.aichinese.dto.review.RejectionReasonRequest;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.admin.AdminInviteService;
 import com.example.aichinese.service.admin.AdminUserService;
-import com.example.aichinese.service.admin.TeacherApplicationService;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Size;
 
-/** The admin Users section: all users (deactivate, reactivate, invite admin) and the teacher applications tab. */
+import lombok.RequiredArgsConstructor;
+
+/** The admin Users section: learners and admins (deactivate, reactivate) and admin invites (send, cancel, undo). */
 @Validated
 @RestController
 @RequestMapping("/api/v1/admin")
+@RequiredArgsConstructor
 public class AdminUsersController {
-
-    private static final int APPLICATION_QUEUE_LIMIT = 100;
 
     private final AdminUserService adminUserService;
     private final AdminInviteService adminInviteService;
-    private final TeacherApplicationService teacherApplicationService;
-
-    public AdminUsersController(
-            AdminUserService adminUserService,
-            AdminInviteService adminInviteService,
-            TeacherApplicationService teacherApplicationService) {
-        this.adminUserService = adminUserService;
-        this.adminInviteService = adminInviteService;
-        this.teacherApplicationService = teacherApplicationService;
-    }
 
     @GetMapping("/users")
     public ApiResponse<PageResponse<AdminUserListItemResponse>> listUsers(
@@ -77,23 +62,24 @@ public class AdminUsersController {
     }
 
     @PostMapping("/users/{id}/deactivate")
-    public ApiResponse<AdminDeactivationResponse> deactivate(
+    public ApiResponse<AdminUserDetailResponse> deactivate(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @PathVariable Long id,
-            @Valid @RequestBody AdminUserStatusRequest request) {
+            @Valid @RequestBody AdminDeactivationRequest request) {
         return ApiResponse.success(
                 "User deactivated.",
                 adminUserService.deactivate(currentUser, id, request.reason()));
     }
 
+    /** Runs at once and needs no reason, so the body may be left out; a reason given is audited. */
     @PostMapping("/users/{id}/reactivate")
     public ApiResponse<AdminUserDetailResponse> reactivate(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @PathVariable Long id,
-            @Valid @RequestBody AdminUserStatusRequest request) {
+            @Valid @RequestBody(required = false) AdminReactivationRequest request) {
         return ApiResponse.success(
                 "User reactivated.",
-                adminUserService.reactivate(currentUser, id, request.reason()));
+                adminUserService.reactivate(currentUser, id, request == null ? null : request.reason()));
     }
 
     @GetMapping("/admin-invites")
@@ -108,46 +94,20 @@ public class AdminUsersController {
         return ApiResponse.success("Invite sent.", adminInviteService.invite(currentUser, request.email()));
     }
 
-    @GetMapping("/teacher-applications")
-    public ApiResponse<List<AdminTeacherApplicationSummaryResponse>> teacherApplications() {
-        return ApiResponse.success(
-                "Teacher applications retrieved successfully.",
-                teacherApplicationService.waiting(APPLICATION_QUEUE_LIMIT));
-    }
-
-    @GetMapping("/teacher-applications/{teacherId}")
-    public ApiResponse<AdminTeacherApplicationResponse> teacherApplication(@PathVariable Long teacherId) {
-        return ApiResponse.success(
-                "Teacher application retrieved successfully.",
-                teacherApplicationService.get(teacherId));
-    }
-
-    @PostMapping("/teachers/{id}/approve")
-    public ApiResponse<AdminTeacherApplicationResponse> approveTeacher(
-            @AuthenticationPrincipal SecurityUserDetails currentUser,
-            @PathVariable Long id,
-            @Valid @RequestBody(required = false) ApproveTeacherRequest request) {
-        return ApiResponse.success(
-                "Teacher approved successfully.",
-                teacherApplicationService.approve(currentUser, id, request == null ? null : request.note()));
-    }
-
-    /** "Request changes": the teacher sees the reason and can resubmit (an approved teacher is locked again). */
-    @PostMapping("/teachers/{id}/reject")
-    public ApiResponse<AdminTeacherApplicationResponse> requestTeacherChanges(
-            @AuthenticationPrincipal SecurityUserDetails currentUser,
-            @PathVariable Long id,
-            @Valid @RequestBody RejectionReasonRequest request) {
-        return ApiResponse.success(
-                "Changes requested.",
-                teacherApplicationService.requestChanges(currentUser, id, request.reason()));
-    }
-
-    @GetMapping("/teacher-documents/{id}")
-    public ResponseEntity<Resource> teacherDocument(
+    /** "Cancel invite": the invite's link stops working until the cancel is undone. */
+    @DeleteMapping("/admin-invites/{id}")
+    public ApiResponse<Void> cancelInvite(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @PathVariable Long id) {
-        return FileDownloadResponseBuilder.buildAttachmentDownloadResponse(
-                teacherApplicationService.getDocument(currentUser, id));
+        adminInviteService.cancel(currentUser, id);
+        return ApiResponse.success("Invite cancelled. The link no longer works.", null);
+    }
+
+    /** The Undo of "Cancel invite": the invite is pending again and the link it sent works again. */
+    @PostMapping("/admin-invites/{id}/restore")
+    public ApiResponse<AdminInviteResponse> restoreInvite(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long id) {
+        return ApiResponse.success("Invite restored.", adminInviteService.restore(currentUser, id));
     }
 }

@@ -1,6 +1,9 @@
 package com.example.aichinese.entity.enums;
 
-/** The skill a level check question tests; the result lists the skills a new student already knows. */
+/**
+ * The skill a level check question tests, in the order the check asks them; the result lists the skills a new student
+ * already knows.
+ */
 public enum LevelCheckSkill {
 
     VOCABULARY,
@@ -9,7 +12,13 @@ public enum LevelCheckSkill {
 
     CHARACTERS,
 
+    NUMBERS,
+
+    PINYIN,
+
+    GRAMMAR,
+
     SENTENCES,
 
-    PINYIN
+    IDIOMS
 }

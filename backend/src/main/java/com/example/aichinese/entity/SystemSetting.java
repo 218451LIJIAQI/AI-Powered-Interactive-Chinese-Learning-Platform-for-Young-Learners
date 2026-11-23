@@ -25,10 +25,4 @@ public class SystemSetting extends BaseEntity {
 
     @Column(name = "setting_value", nullable = false, length = 2000)
     private String settingValue;
-
-    @Column(name = "description", length = 255)
-    private String description;
-
-    @Column(name = "editable", nullable = false)
-    private boolean editable = true;
 }

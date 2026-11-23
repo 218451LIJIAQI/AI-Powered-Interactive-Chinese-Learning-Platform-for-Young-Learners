@@ -3,10 +3,10 @@ package com.example.aichinese.service;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.LocalDate;
-import java.util.Arrays;
-import java.util.List;
 
 import org.junit.jupiter.api.Test;
+
+import com.example.aichinese.entity.enums.PracticeType;
 
 /** XP levels, streak rules and the badge catalogue. */
 class RewardRulesTests {
@@ -23,10 +23,10 @@ class RewardRulesTests {
     }
 
     @Test
-    void progressToNextLevelIsTheXpInsideTheLevel() {
-        assertThat(RewardRules.progressToNextLevelPercent(0)).isZero();
-        assertThat(RewardRules.progressToNextLevelPercent(55)).isEqualTo(55);
-        assertThat(RewardRules.progressToNextLevelPercent(230)).isEqualTo(30);
+    void xpIntoLevelIsTheXpInsideTheLevel() {
+        assertThat(RewardRules.xpIntoLevel(0)).isZero();
+        assertThat(RewardRules.xpIntoLevel(55)).isEqualTo(55);
+        assertThat(RewardRules.xpIntoLevel(230)).isEqualTo(30);
     }
 
     @Test
@@ -55,24 +55,45 @@ class RewardRulesTests {
     @Test
     void dailyGoalIsTenTwentyOrThirty() {
         assertThat(RewardRules.isDailyGoalOption(10)).isTrue();
+        assertThat(RewardRules.isDailyGoalOption(20)).isTrue();
         assertThat(RewardRules.isDailyGoalOption(30)).isTrue();
         assertThat(RewardRules.isDailyGoalOption(25)).isFalse();
         assertThat(RewardRules.isDailyGoalOption(null)).isFalse();
     }
 
     @Test
-    void longestRunCountsConsecutiveRightAnswers() {
-        assertThat(RewardRules.longestRun(List.of(true, true, false, true, true, true))).isEqualTo(3);
-        assertThat(RewardRules.longestRun(List.of(false, false))).isZero();
+    void accuracyIsTheRoundedShareOfRightAnswers() {
         assertThat(RewardRules.accuracyPercent(9, 10)).isEqualTo(90);
+        assertThat(RewardRules.accuracyPercent(2, 3)).isEqualTo(67);
+        assertThat(RewardRules.accuracyPercent(1, 3)).isEqualTo(33);
         assertThat(RewardRules.accuracyPercent(0, 0)).isZero();
     }
 
     @Test
+    void aRankOpensEveryHundredXp() {
+        assertThat(RewardRules.rankXp(1)).isZero();
+        assertThat(RewardRules.rankXp(3)).isEqualTo(200);
+        assertThat(RewardRules.levelFor(RewardRules.rankXp(4))).isEqualTo(4);
+    }
+
+    /** UI rules: fixed XP for Flashcards, Tracing and Matching; XP per answer times the items for the others. */
+    @Test
+    void practiceSetXpFollowsTheUiRules() {
+        assertThat(RewardRules.practiceSetXp(PracticeType.FLASHCARDS, 1, 6)).isEqualTo(10);
+        assertThat(RewardRules.practiceSetXp(PracticeType.FLASHCARDS, 2, 6)).isEqualTo(15);
+        assertThat(RewardRules.practiceSetXp(PracticeType.TRACING, 1, 1)).isEqualTo(10);
+        assertThat(RewardRules.practiceSetXp(PracticeType.TRACING, 2, 1)).isEqualTo(15);
+        assertThat(RewardRules.practiceSetXp(PracticeType.MATCHING, 1, 4)).isEqualTo(15);
+        assertThat(RewardRules.practiceSetXp(PracticeType.LISTENING, 1, 5)).isEqualTo(15);
+        assertThat(RewardRules.practiceSetXp(PracticeType.DRAG_DROP, 2, 4)).isEqualTo(16);
+        assertThat(RewardRules.practiceSetXp(PracticeType.TYPING, 1, 8)).isEqualTo(16);
+    }
+
+    @Test
     void badgeCatalogueHasEightDistinctBadgesThatStateTheirRule() {
-        assertThat(RewardBadge.values()).hasSize(8);
-        assertThat(Arrays.stream(RewardBadge.values()).map(RewardBadge::badgeName)).doesNotHaveDuplicates();
-        assertThat(Arrays.stream(RewardBadge.values()).map(RewardBadge::iconKey)).doesNotHaveDuplicates();
+        RewardBadge[] badges = RewardBadge.values();
+        assertThat(badges).hasSize(8).extracting(RewardBadge::badgeName).doesNotHaveDuplicates();
+        assertThat(badges).extracting(RewardBadge::iconKey).doesNotHaveDuplicates();
         assertThat(RewardBadge.QUIZ_STAR.description()).contains(RewardRules.QUIZ_STAR_PERCENT + "%");
         assertThat(RewardBadge.STREAK_EXPLORER.description()).contains(String.valueOf(RewardRules.STREAK_EXPLORER_DAYS));
         assertThat(RewardBadge.TEN_DAY_STREAK.description()).contains(String.valueOf(RewardRules.TEN_DAY_STREAK_DAYS));

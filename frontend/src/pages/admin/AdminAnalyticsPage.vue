@@ -1,17 +1,12 @@
 <template>
-  <div class="admin-insights page-stack">
-    <PageHeaderBlock :title="t('adminInsights.pageTitle')" :description="t('adminInsights.lede')">
+  <div class="page-stack">
+    <PageHeaderBlock :title="t('nav.analytics')" hide-title>
       <template #actions>
         <SegmentedControl
-          :model-value="days"
+          :model-value="data?.days ?? requestedDays"
+          :disabled="changingPeriod || analytics.loading.value"
           :label="t('adminInsights.periodLabel')"
-          :options="
-            PERIODS.map((option) => ({
-              value: option,
-              label: option === 7 ? t('adminInsights.last7') : t('adminInsights.last30'),
-              testId: `admin-insights-period-${option}`,
-            }))
-          "
+          :options="periodOptions"
           @update:model-value="selectPeriod"
         />
         <button
@@ -22,13 +17,23 @@
           @click="exportCsv"
         >
           <IconGlyph name="download" :size="16" />
-          {{ t('adminInsights.exportCsv') }}
+          <span>{{ t('common.exportCsv') }}</span>
         </button>
       </template>
     </PageHeaderBlock>
 
+    <!-- A period that could not be loaded: the numbers of the one before stay, and the control says which. -->
+    <DataNotice :error="data ? analytics.error.value : null" :error-title="t('adminInsights.loadError')">
+      <template #actions>
+        <button class="btn btn-secondary btn-sm" type="button" :disabled="changingPeriod" @click="retryPeriod">
+          {{ t('common.retry') }}
+        </button>
+      </template>
+    </DataNotice>
+
     <StatePanel
       v-if="analytics.loading.value"
+      heading-tag="h2"
       tone="loading"
       spacious
       :title="t('adminInsights.loading')"
@@ -36,47 +41,47 @@
     />
     <StatePanel
       v-else-if="!data"
+      heading-tag="h2"
       tone="error"
       icon="alert"
       spacious
       :title="t('adminInsights.loadError')"
       :message="analytics.error.value ?? ''"
-    >
-      <template #actions>
-        <button class="btn btn-primary" type="button" @click="analytics.reload">{{ t('adminInsights.retry') }}</button>
-      </template>
-    </StatePanel>
+      @retry="retryPeriod"
+    />
     <template v-else>
-      <section class="admin-insights-figures" :aria-label="t('adminInsights.figuresLabel')">
-        <dl class="admin-figures">
-          <div v-for="kpi in kpis" :key="kpi.label" class="admin-figure" data-testid="admin-insights-kpi">
-            <dt>{{ kpi.label }}</dt>
-            <dd>
-              <strong class="stat-figure">{{ kpi.value }}</strong>
-              <span>{{ kpi.detail }}</span>
-            </dd>
-          </div>
-        </dl>
-      </section>
-
-      <section class="admin-sheet admin-insights-chart" aria-labelledby="admin-insights-registrations-title">
-        <div class="admin-sheet-head">
-          <div>
-            <h2 id="admin-insights-registrations-title" class="admin-sheet-title">
-              {{ t('adminInsights.registrations') }}
-            </h2>
-            <p class="admin-sheet-caption" data-testid="admin-insights-registrations-detail">
+      <section class="panel admin-detail" aria-labelledby="admin-insights-registrations-title">
+        <header class="admin-section-head">
+          <div class="admin-list-head">
+            <h2 id="admin-insights-registrations-title" class="card-title">{{ t('adminInsights.registrations') }}</h2>
+            <p class="admin-meta" data-testid="admin-insights-registrations-detail">
               {{
                 t(
                   'adminInsights.registrationsDetail',
-                  { count: data.newRegistrations, from: formatShortDate(data.from), to: formatShortDate(data.to) },
+                  {
+                    count: formatNumber(data.newRegistrations, locale),
+                    from: formatShortDate(data.from, locale),
+                    to: formatShortDate(data.to, locale),
+                  },
                   data.newRegistrations,
                 )
               }}
             </p>
           </div>
-        </div>
-        <div class="admin-sheet-body admin-insights-plot">
+          <div class="admin-list-head admin-insights-users" data-testid="admin-insights-users">
+            <strong class="row-list-title">
+              {{
+                t(
+                  'adminInsights.usersTotal',
+                  { count: formatNumber(data.numbers.users.total) },
+                  data.numbers.users.total,
+                )
+              }}
+            </strong>
+            <p class="admin-meta">{{ usersBreakdown }}</p>
+          </div>
+        </header>
+        <div class="admin-insights-plot">
           <TrendChart :values="trend" :label="t('adminInsights.registrationsChart')" />
           <ol class="admin-insights-axis" aria-hidden="true">
             <li
@@ -92,12 +97,23 @@
       </section>
 
       <div class="admin-insights-grid">
-        <section class="admin-insights-block" aria-labelledby="admin-insights-learning-title">
-          <div class="admin-insights-head">
-            <h2 id="admin-insights-learning-title" class="admin-insights-title">{{ t('adminInsights.learning') }}</h2>
-            <p>{{ t('adminInsights.learningDetail') }}</p>
-          </div>
+        <section class="panel admin-detail" aria-labelledby="admin-insights-learning-title">
+          <h2 id="admin-insights-learning-title" class="card-title">{{ t('adminInsights.learning') }}</h2>
           <dl class="admin-insights-learning">
+            <div>
+              <dt>{{ t('adminInsights.lessonsCompleted') }}</dt>
+              <dd>{{ formatNumber(data.learning.lessonsCompleted) }}</dd>
+            </div>
+            <div>
+              <dt>{{ t('adminInsights.quizAverage') }}</dt>
+              <dd>
+                {{
+                  data.learning.quizAverage === null
+                    ? t('adminInsights.noQuizzes')
+                    : formatPercent(data.learning.quizAverage)
+                }}
+              </dd>
+            </div>
             <div>
               <dt>{{ t('adminInsights.activeStudents') }}</dt>
               <dd>
@@ -110,36 +126,30 @@
               </dd>
             </div>
             <div>
-              <dt>{{ t('adminInsights.lessonsCompleted') }}</dt>
-              <dd>{{ formatNumber(data.learning.lessonsCompleted) }}</dd>
-            </div>
-            <div>
-              <dt>{{ t('adminInsights.quizAverage') }}</dt>
-              <dd>
-                {{
-                  data.learning.quizAverage === null
-                    ? t('adminInsights.noQuizzes')
-                    : formatPercent(data.learning.quizAverage, { digits: 1 })
-                }}
-              </dd>
-            </div>
-            <div>
               <dt>{{ t('adminInsights.needsSupport') }}</dt>
-              <dd>
-                {{ formatNumber(data.learning.needsSupport) }}
-                <span class="type-caption">{{ t('adminInsights.needsSupportHint') }}</span>
-              </dd>
+              <dd>{{ formatNumber(data.learning.needsSupport) }}</dd>
             </div>
           </dl>
         </section>
 
-        <section class="admin-insights-block" aria-labelledby="admin-insights-content-title">
-          <div class="admin-insights-head">
-            <h2 id="admin-insights-content-title" class="admin-insights-title">{{ t('adminInsights.content') }}</h2>
-            <p>{{ t('adminInsights.contentDetail', { total: formatNumber(contentTotal) }) }}</p>
-          </div>
+        <section
+          v-for="section in shareSections"
+          :key="section.id"
+          class="panel admin-detail"
+          :aria-labelledby="`${section.id}-title`"
+        >
+          <header class="admin-section-head">
+            <div class="admin-list-head">
+              <h2 :id="`${section.id}-title`" class="card-title">{{ section.title }}</h2>
+              <p class="admin-meta">{{ section.summary }}</p>
+            </div>
+            <RouterLink class="btn btn-ghost btn-sm admin-link-action" :to="{ name: section.route }">
+              {{ section.link }}
+              <IconGlyph name="chevronRight" :size="16" />
+            </RouterLink>
+          </header>
           <ul class="admin-shares">
-            <li v-for="row in contentRows" :key="row.label" data-testid="admin-insights-content-row">
+            <li v-for="row in section.rows" :key="row.status" :data-testid="`${section.id}-row`">
               <span class="admin-share-head">
                 <span>{{ row.label }}</span>
                 <span>{{ row.text }}</span>
@@ -147,30 +157,6 @@
               <span class="admin-share-bar" aria-hidden="true"><span :style="{ width: `${row.percent}%` }" /></span>
             </li>
           </ul>
-          <RouterLink class="btn btn-link" :to="{ name: 'admin-content-review' }">
-            {{ t('adminInsights.openContent') }}
-            <IconGlyph name="chevronRight" :size="14" />
-          </RouterLink>
-        </section>
-
-        <section class="admin-insights-block" aria-labelledby="admin-insights-ai-title">
-          <div class="admin-insights-head">
-            <h2 id="admin-insights-ai-title" class="admin-insights-title">{{ t('adminInsights.ai') }}</h2>
-            <p>{{ t('adminInsights.aiDetail', { total: formatNumber(aiTotal) }) }}</p>
-          </div>
-          <ul class="admin-shares">
-            <li v-for="row in aiRows" :key="row.label" data-testid="admin-insights-ai-row">
-              <span class="admin-share-head">
-                <span>{{ row.label }}</span>
-                <span>{{ row.text }}</span>
-              </span>
-              <span class="admin-share-bar" aria-hidden="true"><span :style="{ width: `${row.percent}%` }" /></span>
-            </li>
-          </ul>
-          <RouterLink class="btn btn-link" :to="{ name: 'admin-ai-usage' }">
-            {{ t('adminInsights.openAiUsage') }}
-            <IconGlyph name="chevronRight" :size="14" />
-          </RouterLink>
         </section>
       </div>
     </template>
@@ -184,34 +170,41 @@ import { computed, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import { adminOverviewApi } from '@/api/ops'
-import SegmentedControl from '@/components/common/SegmentedControl.vue'
-import IconGlyph from '@/components/common/IconGlyph.vue'
-import StatePanel from '@/components/common/StatePanel.vue'
-import TrendChart from '@/components/common/TrendChart.vue'
 import AppToast from '@/components/common/AppToast.vue'
+import DataNotice from '@/components/common/DataNotice.vue'
+import IconGlyph from '@/components/common/IconGlyph.vue'
+import SegmentedControl from '@/components/common/SegmentedControl.vue'
+import StatePanel from '@/components/common/StatePanel.vue'
+import TrendChart, { type TrendPoint } from '@/components/common/TrendChart.vue'
 import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { useResource } from '@/composables/useResource'
 import { useToast } from '@/composables/useToast'
 import { adminAnalyticsMessages } from '@/plugins/adminAnalyticsMessages'
-import type { AnalyticsTrendPoint, ContentStatus } from '@/types/api'
-import type { AiRequestStatus } from '@/types/ops'
-import { csvBlob, toCsv, type CsvCell } from '@/utils/csv'
+import type { AiResultStatus, ContentStatus } from '@/types/api'
+import type { AdminAnalyticsResponse } from '@/types/ops'
+import { csvBlob } from '@/utils/csv'
 import { saveBlobDownload } from '@/utils/download'
-import { formatNumber, formatPercent, formatShortDate, ratioPercent } from '@/utils/format'
+import {
+  createDateFormatter,
+  formatNumber,
+  formatPercent,
+  formatShortDate,
+  parseDate,
+  ratioPercent,
+} from '@/utils/format'
+import '@/styles/admin-shared.css'
 import '@/styles/ops-admin.css'
 
-type Period = 7 | 30
+type Period = AdminAnalyticsResponse['days']
 
 const PERIODS: readonly Period[] = [7, 30]
 const CONTENT_STATUSES: readonly (readonly [ContentStatus, string])[] = [
   ['PUBLISHED', 'adminInsights.statusPublished'],
-  ['SUBMITTED', 'adminInsights.statusSubmitted'],
-  ['REJECTED', 'adminInsights.statusRejected'],
   ['DRAFT', 'adminInsights.statusDraft'],
   ['ARCHIVED', 'adminInsights.statusArchived'],
 ]
-const AI_STATUSES: readonly (readonly [AiRequestStatus, string])[] = [
+const AI_STATUSES: readonly (readonly [AiResultStatus, string])[] = [
   ['SUCCESS', 'adminInsights.aiSuccess'],
   ['UNAVAILABLE', 'adminInsights.aiUnavailable'],
   ['FAILED', 'adminInsights.aiFailed'],
@@ -222,103 +215,127 @@ const AXIS_LABEL_STEP = 5
 const { t, locale } = useLocalMessages({ adminInsights: adminAnalyticsMessages })
 const { toast, showToast } = useToast()
 
-const days = ref<Period>(7)
-const analytics = useResource(() => adminOverviewApi.analytics(days.value))
-const data = computed(() => analytics.data.value)
+const requestedDays = ref<Period>(7)
+const changingPeriod = ref(false)
+const analytics = useResource(() => adminOverviewApi.analytics(requestedDays.value))
+const data = analytics.data
 
-function selectPeriod(period: Period): void {
-  if (days.value === period) return
-  days.value = period
-  void analytics.reload()
-}
-
-const kpis = computed(() => {
-  const value = data.value
-  if (!value) return []
-  const { users } = value.numbers
-  return [
-    {
-      label: t('adminInsights.kpiUsers'),
-      value: formatNumber(users.total),
-      detail: [
-        t('adminInsights.countStudents', { count: formatNumber(users.students) }, users.students),
-        t('adminInsights.countTeachers', { count: formatNumber(users.teachers) }, users.teachers),
-        t('adminInsights.countAdmins', { count: formatNumber(users.admins) }, users.admins),
-      ].join(' · '),
-    },
-    {
-      label: t('adminInsights.kpiRegistrations'),
-      value: formatNumber(value.newRegistrations),
-      detail: t('adminInsights.kpiRegistrationsDetail', { days: value.days }),
-    },
-    {
-      label: t('adminInsights.kpiPublished'),
-      value: formatNumber(value.numbers.publishedContent),
-      detail: t('adminInsights.kpiPublishedDetail', { total: formatNumber(value.numbers.totalContent) }),
-    },
-    {
-      label: t('adminInsights.kpiAi'),
-      value: formatNumber(value.numbers.aiRequests),
-      detail: t('adminInsights.kpiAiDetail', { successful: formatNumber(value.numbers.successfulAiRequests) }),
-    },
-  ]
-})
-
-const trend = computed<AnalyticsTrendPoint[]>(() =>
-  (data.value?.registrations ?? []).map((day) => ({
-    label: formatShortDate(day.date, locale.value),
-    value: day.count,
+const periodOptions = computed(() =>
+  PERIODS.map((period) => ({
+    value: period,
+    label: period === 7 ? t('adminInsights.last7') : t('adminInsights.last30'),
+    testId: `admin-insights-period-${period}`,
   })),
 )
 
+async function loadPeriod(period: Period): Promise<void> {
+  requestedDays.value = period
+  changingPeriod.value = true
+  try {
+    await analytics.reload()
+  } finally {
+    changingPeriod.value = false
+  }
+}
+
+function selectPeriod(period: Period): void {
+  if (changingPeriod.value || analytics.loading.value) return
+  if (data.value?.days === period && analytics.error.value === null) return
+  void loadPeriod(period)
+}
+
+function retryPeriod(): void {
+  if (changingPeriod.value || analytics.loading.value) return
+  void loadPeriod(requestedDays.value)
+}
+
+const usersBreakdown = computed(() => {
+  const users = data.value?.numbers.users
+  if (!users) return ''
+  return [
+    t('adminInsights.countStudents', { count: formatNumber(users.students) }, users.students),
+    t('adminInsights.countAdmins', { count: formatNumber(users.admins) }, users.admins),
+  ].join(' · ')
+})
+
+const trend = computed<TrendPoint[]>(() => {
+  if (!data.value) return []
+  const format = createDateFormatter({ month: 'short', day: 'numeric' }, locale.value)
+  return data.value.registrations.map((day) => {
+    const date = parseDate(day.date)
+    return { label: date ? format(date) : '--', value: day.count }
+  })
+})
+
+/** Every day of a 7-day chart is labelled; the period is that of the days shown (a switch may still be loading). */
 function showAxisLabel(index: number): boolean {
   const last = trend.value.length - 1
-  return days.value === 7 || index === last || index % AXIS_LABEL_STEP === 0
+  return data.value?.days !== 30 || index === last || index % AXIS_LABEL_STEP === 0
 }
 
 /** Each label sits under its point: the chart spreads the points from edge to edge. */
 function axisPosition(index: number): number {
-  const last = trend.value.length - 1
-  return last > 0 ? (index / last) * 100 : 50
+  return trend.value.length <= 1 ? 50 : (index / (trend.value.length - 1)) * 100
 }
 
-function shareRows<S extends string>(
-  statuses: readonly (readonly [S, string])[],
-  counts: Record<S, number> | undefined,
-): { label: string; count: number; percent: number; text: string }[] {
-  const total = statuses.reduce((sum, [status]) => sum + (counts?.[status] ?? 0), 0)
-  return statuses.map(([status, key]) => {
-    const count = counts?.[status] ?? 0
+function sharesByStatus<S extends string>(statuses: readonly (readonly [S, string])[], counts: Record<S, number>) {
+  const total = statuses.reduce((sum, [status]) => sum + counts[status], 0)
+  const rows = statuses.map(([status, key]) => {
+    const count = counts[status]
     const percent = ratioPercent(count, total, { digits: 1 })
     return {
+      status,
       label: t(key),
       count,
       percent,
       text: t('adminInsights.share', { count: formatNumber(count), percent: formatPercent(percent, { digits: 1 }) }),
     }
   })
+  return { total, rows }
 }
 
-const contentRows = computed(() => shareRows(CONTENT_STATUSES, data.value?.contentByStatus))
-const contentTotal = computed(() => contentRows.value.reduce((sum, row) => sum + row.count, 0))
-const aiRows = computed(() => shareRows(AI_STATUSES, data.value?.aiRequestsByStatus))
-const aiTotal = computed(() => aiRows.value.reduce((sum, row) => sum + row.count, 0))
+const shareSections = computed(() => {
+  if (!data.value) return []
+  const content = sharesByStatus(CONTENT_STATUSES, data.value.contentByStatus)
+  const ai = sharesByStatus(AI_STATUSES, data.value.aiRequestsByStatus)
+  return [
+    {
+      id: 'admin-insights-content',
+      title: t('adminInsights.content'),
+      summary: t('adminInsights.contentDetail', { total: formatNumber(content.total) }),
+      link: t('adminInsights.openContent'),
+      route: 'admin-classes',
+      rows: content.rows,
+    },
+    {
+      id: 'admin-insights-ai',
+      title: t('adminInsights.ai'),
+      summary: t(
+        'adminInsights.aiDetail',
+        { total: formatNumber(data.value.numbers.aiRequests) },
+        data.value.numbers.aiRequests,
+      ),
+      link: t('adminInsights.openAiUsage'),
+      route: 'admin-ai-usage',
+      rows: ai.rows,
+    },
+  ]
+})
 
 function exportCsv(): void {
   const value = data.value
   if (!value) return
-  const rows: CsvCell[][] = [
+  const blob = csvBlob([
     [t('adminInsights.csvTitle')],
-    [t('adminInsights.csvPeriod'), value.from, value.to],
+    [t('adminInsights.periodLabel'), value.from, value.to],
     [],
     [t('adminInsights.csvMetric'), t('adminInsights.csvValue')],
-    [t('adminInsights.kpiUsers'), value.numbers.users.total],
+    [t('adminInsights.csvUsers'), value.numbers.users.total],
     [t('adminInsights.csvStudents'), value.numbers.users.students],
-    [t('adminInsights.csvTeachers'), value.numbers.users.teachers],
     [t('adminInsights.csvAdmins'), value.numbers.users.admins],
-    [t('adminInsights.kpiRegistrations'), value.newRegistrations],
-    [t('adminInsights.kpiPublished'), value.numbers.publishedContent],
-    [t('adminInsights.kpiAi'), value.numbers.aiRequests],
+    [t('adminInsights.csvRegistrations'), value.newRegistrations],
+    [t('adminInsights.csvPublished'), value.numbers.publishedContent],
+    [t('adminInsights.ai'), value.numbers.aiRequests],
     [t('adminInsights.activeStudents'), value.learning.activeStudents],
     [t('adminInsights.lessonsCompleted'), value.learning.lessonsCompleted],
     [t('adminInsights.quizAverage'), value.learning.quizAverage],
@@ -326,14 +343,13 @@ function exportCsv(): void {
     [],
     [t('adminInsights.csvDate'), t('adminInsights.registrationsChart')],
     ...value.registrations.map((day) => [day.date, day.count]),
-    [],
-    [t('adminInsights.content'), t('adminInsights.csvCount')],
-    ...contentRows.value.map((row) => [row.label, row.count]),
-    [],
-    [t('adminInsights.ai'), t('adminInsights.csvCount')],
-    ...aiRows.value.map((row) => [row.label, row.count]),
-  ]
-  saveBlobDownload({ blob: csvBlob(toCsv(rows)) }, `analytics-${value.days}d-${value.to}.csv`)
+    ...shareSections.value.flatMap((section) => [
+      [],
+      [section.title, t('adminInsights.csvCount')],
+      ...section.rows.map((row) => [row.label, row.count]),
+    ]),
+  ])
+  saveBlobDownload({ blob }, `analytics-${value.days}d-${value.to}.csv`)
   showToast(t('adminInsights.csvDownloaded'))
 }
 </script>

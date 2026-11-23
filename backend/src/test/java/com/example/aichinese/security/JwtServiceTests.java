@@ -5,12 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.charset.StandardCharsets;
-import java.util.Base64;
 import java.util.Date;
-import java.util.Map;
-import java.util.UUID;
-
-import javax.crypto.SecretKey;
 
 import org.junit.jupiter.api.Test;
 
@@ -20,50 +15,57 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.RequiredTypeException;
 import io.jsonwebtoken.security.Keys;
 
 /**
- * Unit coverage for {@code JwtService} - proves both secret formats
- * (plain-text and {@code base64:}-prefixed), the 32-byte minimum length
- * guard, and the {@code sessionVersion} claim that powers JWT
+ * Unit coverage for {@code JwtService} - proves the 32-byte minimum length
+ * guard and the {@code sessionVersion} claim that powers JWT
  * revocation on logout / password change.
  */
 class JwtServiceTests {
 
     private static final String TEST_SECRET = "RuntimeStyleJwtSecretForTests1234567890AB";
-    private static final String BASE64_SECRET_BYTES = "0123456789abcdefghijklmnopqrstuvwxyzABCDEF";
-    private static final String CLAIM_TYPE_EMAIL = "claim-type@example.com";
     private static final String VALIDATION_EMAIL = "user@example.com";
     private static final String MALFORMED_TOKEN = "not-a-jwt";
     private static final String BLANK_VALUE = "   ";
     private static final String SHORT_SECRET = "too-short-secret";
-    private static final String INVALID_SESSION_VERSION = "not-a-number";
     private static final long TOKEN_TTL_MS = 3_600_000L;
-    private static final long TEST_USER_ID = 99L;
 
     @Test
     void shouldGenerateTokenWithRuntimeStylePlainTextSecret() {
         String email = "plain-text@example.com";
         JwtService jwtService = jwtService();
 
-        String token = jwtService.generateToken(buildUser(email));
+        String token = jwtService.generateToken(buildUser(email), true, "session-1");
 
-        assertThat(token).isNotBlank();
         assertThat(jwtService.extractAllClaims(token).getSubject()).isEqualTo(email);
         assertThat(jwtService.isTokenValid(jwtService.extractAllClaims(token), email, 0L)).isTrue();
     }
 
+    /** The token names its browser session (sign-out of one device); a token from before sessions were named has none. */
     @Test
-    void shouldGenerateTokenWithExplicitBase64SecretPrefix() {
-        String email = "base64@example.com";
-        String base64Secret = "base64:" + Base64.getEncoder()
-                .encodeToString(BASE64_SECRET_BYTES.getBytes(StandardCharsets.UTF_8));
-        JwtService jwtService = jwtService(base64Secret);
+    void shouldNameTheBrowserSessionOfTheSignIn() {
+        JwtService jwtService = jwtService();
 
-        String token = jwtService.generateToken(buildUser(email));
+        assertThat(jwtService.sessionId(jwtService.extractAllClaims(
+                jwtService.generateToken(buildUser(VALIDATION_EMAIL), true, "family-42")))).isEqualTo("family-42");
+        assertThat(jwtService.sessionId(jwtService.extractAllClaims(
+                signedToken(0L, new Date(System.currentTimeMillis() + TOKEN_TTL_MS))))).isNull();
+    }
 
-        assertThat(token).isNotBlank();
-        assertThat(jwtService.extractAllClaims(token).getSubject()).isEqualTo(email);
+    /** A session that replaces the token's (a password change) keeps the sign-in's "Keep me signed in" choice. */
+    @Test
+    void shouldCarryTheKeepMeSignedInChoiceOfTheSignIn() {
+        JwtService jwtService = jwtService();
+
+        assertThat(jwtService.isPersistentSession(
+                jwtService.extractAllClaims(jwtService.generateToken(buildUser(VALIDATION_EMAIL), false, "session-1")))).isFalse();
+        assertThat(jwtService.isPersistentSession(
+                jwtService.extractAllClaims(jwtService.generateToken(buildUser(VALIDATION_EMAIL), true, "session-1")))).isTrue();
+        // A token issued before the claim existed counts as kept, as such a session was.
+        assertThat(jwtService.isPersistentSession(jwtService.extractAllClaims(
+                signedToken(0L, new Date(System.currentTimeMillis() + TOKEN_TTL_MS))))).isTrue();
     }
 
     @Test
@@ -73,7 +75,7 @@ class JwtServiceTests {
         User user = buildUser(email);
         user.setSessionVersion(2L);
 
-        String token = jwtService.generateToken(user);
+        String token = jwtService.generateToken(user, true, "session-1");
 
         assertThat(jwtService.isTokenValid(jwtService.extractAllClaims(token), email, 2L)).isTrue();
         assertThat(jwtService.isTokenValid(jwtService.extractAllClaims(token), email, 3L)).isFalse();
@@ -98,20 +100,36 @@ class JwtServiceTests {
     @Test
     void shouldReturnFalseForInvalidSessionVersionClaimType() {
         JwtService jwtService = jwtService();
-        String token = tokenWithClaims(Map.of("sessionVersion", INVALID_SESSION_VERSION));
-
-        assertThat(jwtService.isTokenValid(jwtService.extractAllClaims(token), CLAIM_TYPE_EMAIL, 0L)).isFalse();
+        // A fractional version must not be rounded down to the account's current version.
+        for (Object version : new Object[]{"not-a-number", 0.5}) {
+            String token = signedToken(version, new Date(System.currentTimeMillis() + TOKEN_TTL_MS));
+            assertThat(jwtService.isTokenValid(jwtService.extractAllClaims(token), VALIDATION_EMAIL, 0L)).isFalse();
+        }
     }
 
     @Test
-    void shouldRejectTokenGenerationForTransientUser() {
+    void browserSessionClaimsRequireTheirDeclaredTypes() {
         JwtService jwtService = jwtService();
-        User user = buildUser("transient@example.com");
-        user.setId(null);
+        Claims claims = Jwts.claims().add("persistent", "false").add("sid", 42).build();
 
-        assertThatThrownBy(() -> jwtService.generateToken(user))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("no id");
+        assertThatThrownBy(() -> jwtService.isPersistentSession(claims)).isInstanceOf(RequiredTypeException.class);
+        assertThatThrownBy(() -> jwtService.sessionId(claims)).isInstanceOf(RequiredTypeException.class);
+    }
+
+    @Test
+    void shouldReturnFalseWhenTheSessionVersionClaimIsMissing() {
+        JwtService jwtService = jwtService();
+        String token = signedToken(null, new Date(System.currentTimeMillis() + TOKEN_TTL_MS));
+
+        assertThat(jwtService.isTokenValid(jwtService.extractAllClaims(token), VALIDATION_EMAIL, 0L)).isFalse();
+    }
+
+    @Test
+    void shouldRejectTokenSignedWithAnotherKey() {
+        JwtService otherKey = jwtService("AnotherRuntimeStyleJwtSecretForTests12345");
+        String token = otherKey.generateToken(buildUser(VALIDATION_EMAIL), true, "session-1");
+
+        assertThatThrownBy(() -> jwtService().extractAllClaims(token)).isInstanceOf(JwtException.class);
     }
 
     @Test
@@ -119,32 +137,45 @@ class JwtServiceTests {
         // Proposal Table 6.2 "JWT expiration": the token expires the configured TTL after it was issued.
         // Rejection of an expired token is pinned by shouldRejectTokenWhoseExpiryIsInThePast, so no waiting.
         long ttlMs = 90_000L;
-        String token = new JwtService(securityProperties(TEST_SECRET, ttlMs, false))
-                .generateToken(buildUser("short-ttl@example.com"));
+        JwtService jwtService = new JwtService(securityProperties(TEST_SECRET, ttlMs, false));
 
-        Claims claims = Jwts.parser()
-                .verifyWith(Keys.hmacShaKeyFor(TEST_SECRET.getBytes(StandardCharsets.UTF_8)))
-                .build()
-                .parseSignedClaims(token)
-                .getPayload();
+        Claims claims = jwtService.extractAllClaims(jwtService.generateToken(buildUser("short-ttl@example.com"), true, "session-1"));
 
         assertThat(claims.getExpiration().getTime() - claims.getIssuedAt().getTime()).isEqualTo(ttlMs);
     }
 
     @Test
     void shouldRejectTokenWhoseExpiryIsInThePast() {
-        SecretKey key = Keys.hmacShaKeyFor(TEST_SECRET.getBytes(StandardCharsets.UTF_8));
-        Date past = new Date(System.currentTimeMillis() - 60_000L);
-        String expired = Jwts.builder()
-                .subject(VALIDATION_EMAIL)
-                .claim("sessionVersion", 0L)
-                .id(UUID.randomUUID().toString())
-                .issuedAt(new Date(past.getTime() - 60_000L))
-                .expiration(past)
-                .signWith(key)
-                .compact();
+        String expired = signedToken(0L, new Date(System.currentTimeMillis() - 60_000L));
 
         assertThatThrownBy(() -> jwtService().extractAllClaims(expired)).isInstanceOf(ExpiredJwtException.class);
+    }
+
+    @Test
+    void shouldValidateSubjectCaseInsensitivelyAndRejectDifferentEmail() {
+        JwtService jwtService = jwtService();
+        String token = jwtService.generateToken(buildUser(VALIDATION_EMAIL), true, "session-1");
+        Claims claims = jwtService.extractAllClaims(token);
+
+        assertThat(jwtService.isTokenValid(claims, VALIDATION_EMAIL.toUpperCase(), 0L)).isTrue();
+        assertThat(jwtService.isTokenValid(claims, "other@example.com", 0L)).isFalse();
+    }
+
+    @Test
+    void shouldRejectSignedTokenWithoutExpirationClaimAndExpiredClaimsDirectly() {
+        JwtService jwtService = jwtService();
+        String withoutExp = signedToken(0L, null);
+        Claims parsedWithoutExp = jwtService.extractAllClaims(withoutExp);
+
+        assertThat(parsedWithoutExp.getExpiration()).isNull();
+        assertThat(jwtService.isTokenValid(parsedWithoutExp, VALIDATION_EMAIL, 0L)).isFalse();
+
+        Claims expiredClaims = Jwts.claims()
+                .subject(VALIDATION_EMAIL)
+                .add("sessionVersion", 0L)
+                .expiration(new Date(System.currentTimeMillis() - 60_000L))
+                .build();
+        assertThat(jwtService.isTokenValid(expiredClaims, VALIDATION_EMAIL, 0L)).isFalse();
     }
 
     private static JwtService jwtService() {
@@ -155,22 +186,18 @@ class JwtServiceTests {
         return new JwtService(securityProperties(secret, TOKEN_TTL_MS, false));
     }
 
-    private String tokenWithClaims(Map<String, Object> claims) {
-        SecretKey key = Keys.hmacShaKeyFor(TEST_SECRET.getBytes(StandardCharsets.UTF_8));
-        Date now = new Date();
+    /** A token validly signed with the test secret, with values {@link JwtService} itself would never issue. */
+    private static String signedToken(Object sessionVersion, Date expiry) {
         return Jwts.builder()
-                .subject(CLAIM_TYPE_EMAIL)
-                .claims(claims)
-                .id(UUID.randomUUID().toString())
-                .issuedAt(now)
-                .expiration(new Date(now.getTime() + TOKEN_TTL_MS))
-                .signWith(key)
+                .subject(VALIDATION_EMAIL)
+                .claim("sessionVersion", sessionVersion)
+                .expiration(expiry)
+                .signWith(Keys.hmacShaKeyFor(TEST_SECRET.getBytes(StandardCharsets.UTF_8)))
                 .compact();
     }
 
     private User buildUser(String email) {
         User user = new User();
-        user.setId(TEST_USER_ID);
         user.setEmail(email);
         user.setSessionVersion(0L);
         return user;

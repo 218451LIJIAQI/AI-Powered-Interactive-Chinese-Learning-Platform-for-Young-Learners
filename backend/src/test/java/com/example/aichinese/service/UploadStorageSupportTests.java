@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.ByteArrayInputStream;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -19,16 +18,16 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.multipart.MultipartFile;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.example.aichinese.entity.UploadedFile;
+import com.example.aichinese.support.TestTransactions;
 
 @ExtendWith(OutputCaptureExtension.class)
 class UploadStorageSupportTests {
 
-    private static final String ORIGINAL_FILE_NAME = "lesson.pdf";
-    private static final String CONTENT_TYPE = "application/pdf";
     private static final String CONTENT = "demo";
     private static final String STORED_FILE_NAME = "stored.pdf";
     private static final String ESCAPING_FILE_NAME = "../outside.pdf";
@@ -38,15 +37,79 @@ class UploadStorageSupportTests {
     private static final String SENSITIVE_DIRECTORY = "sensitive-server-root";
     private static final String NESTED_FILE_NAME = "nested.txt";
     private static final String NESTED_FILE_CONTENT = "keeps the directory non-empty";
-    private static final String SAFE_ROLLBACK_LOG =
-            "Failed to delete stored object during upload rollback for name " + STORED_FILE_NAME;
+    private static final String SAFE_DELETION_LOG = "Failed to delete stored upload " + STORED_FILE_NAME;
 
     @TempDir
     Path tempDir;
 
+    /** A real transaction lifecycle (synchronizations, commit, rollback) without a database behind it. */
+    private final TransactionTemplate transaction = TestTransactions.synchronizingTemplate();
+
+    @Test
+    void interruptedCopyRemovesItsPartialFile() {
+        MockMultipartFile upload = new MockMultipartFile("file", new byte[] {1, 2}) {
+            @Override
+            public InputStream getInputStream() {
+                return new InputStream() {
+                    private boolean first = true;
+
+                    @Override
+                    public int read() throws IOException {
+                        if (first) {
+                            first = false;
+                            return 1;
+                        }
+                        throw new IOException("Upload interrupted");
+                    }
+                };
+            }
+        };
+        assertThatThrownBy(() -> UploadStorageSupport.storeMultipartFile(
+                upload, tempDir, STORED_FILE_NAME, STORAGE_FAILED_MESSAGE))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining(STORAGE_FAILED_MESSAGE);
+        assertThat(tempDir.resolve(STORED_FILE_NAME)).doesNotExist();
+    }
+
+    @Test
+    void failedCopyDoesNotOverwriteOrDeleteAnExistingTarget() throws IOException {
+        Path existing = Files.writeString(tempDir.resolve(STORED_FILE_NAME), CONTENT);
+        assertThatThrownBy(() -> UploadStorageSupport.storeMultipartFile(
+                new MockMultipartFile("file", new byte[] {1, 2}), tempDir, STORED_FILE_NAME, STORAGE_FAILED_MESSAGE))
+                .isInstanceOf(ResponseStatusException.class);
+        assertThat(existing).hasContent(CONTENT);
+    }
+
+    @Test
+    void rollingBackDeletionKeepsTheStoredFile() throws IOException {
+        Path existing = Files.writeString(tempDir.resolve(STORED_FILE_NAME), CONTENT);
+        assertThatThrownBy(() -> transaction.executeWithoutResult(status -> {
+            UploadStorageSupport.deleteManagedFile(tempDir.toString(), uploadedFile(STORED_FILE_NAME));
+            throw new IllegalStateException("Later database operation failed");
+        })).isInstanceOf(IllegalStateException.class);
+        assertThat(existing).hasContent(CONTENT);
+    }
+
+    @Test
+    void deletionWaitsForTheTransactionToCommit() throws IOException {
+        Path existing = Files.writeString(tempDir.resolve(STORED_FILE_NAME), CONTENT);
+        transaction.executeWithoutResult(status -> {
+            UploadStorageSupport.deleteManagedFile(tempDir.toString(), uploadedFile(STORED_FILE_NAME));
+            assertThat(existing).hasContent(CONTENT);
+        });
+        assertThat(existing).doesNotExist();
+    }
+
+    @Test
+    void deletionWithoutATransactionStillRemovesTheFile() throws IOException {
+        Path existing = Files.writeString(tempDir.resolve(STORED_FILE_NAME), CONTENT);
+        UploadStorageSupport.deleteManagedFile(tempDir.toString(), uploadedFile(STORED_FILE_NAME));
+        assertThat(existing).doesNotExist();
+    }
+
     @Test
     void storeMultipartFileClosesTheUploadStreamAfterCopying() throws IOException {
-        CloseTrackingMultipartFile multipartFile = multipartFile();
+        CloseTrackingMultipartFile multipartFile = new CloseTrackingMultipartFile();
 
         Path storedPath = UploadStorageSupport.storeMultipartFile(
                 multipartFile,
@@ -55,13 +118,13 @@ class UploadStorageSupportTests {
                 STORAGE_FAILED_MESSAGE);
 
         assertThat(Files.readString(storedPath, StandardCharsets.UTF_8)).isEqualTo(CONTENT);
-        assertThat(multipartFile.openedStreams()).hasSize(1);
-        assertThat(multipartFile.openedStreams().getFirst().closed()).isTrue();
+        assertThat(multipartFile.openedStreams).hasSize(1);
+        assertThat(multipartFile.openedStreams.getFirst().closed).isTrue();
     }
 
     @Test
     void storeMultipartFileRejectsManagedPathEscape() {
-        CloseTrackingMultipartFile multipartFile = multipartFile();
+        CloseTrackingMultipartFile multipartFile = new CloseTrackingMultipartFile();
 
         assertThatThrownBy(() -> UploadStorageSupport.storeMultipartFile(
                 multipartFile,
@@ -71,7 +134,7 @@ class UploadStorageSupportTests {
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining(UploadStorageSupport.INVALID_UPLOAD_TARGET_MESSAGE);
 
-        assertThat(multipartFile.openedStreams()).isEmpty();
+        assertThat(multipartFile.openedStreams).isEmpty();
     }
 
     @Test
@@ -83,7 +146,7 @@ class UploadStorageSupportTests {
         UploadStorageSupport.deleteQuietly(managedDirectory);
 
         assertThat(output)
-                .contains(SAFE_ROLLBACK_LOG)
+                .contains(SAFE_DELETION_LOG)
                 .contains("Exception")
                 .doesNotContain(tempDir.toString())
                 .doesNotContain(SENSITIVE_DIRECTORY)
@@ -92,21 +155,10 @@ class UploadStorageSupportTests {
     }
 
     @Test
-    void loadManagedFileReturnsNotFoundForMissingOrBlankMetadata() {
+    void loadManagedFileReturnsNotFoundForMissingBlankOrEscapingMetadata() {
         assertNotFoundWhenLoading(null);
-
-        UploadedFile uploadedFile = new UploadedFile();
-        uploadedFile.setStoredFileName(BLANK_STORED_FILE_NAME);
-
-        assertNotFoundWhenLoading(uploadedFile);
-    }
-
-    @Test
-    void loadManagedFileReturnsNotFoundForEscapingStoredFileName() {
-        UploadedFile uploadedFile = new UploadedFile();
-        uploadedFile.setStoredFileName(ESCAPING_FILE_NAME);
-
-        assertNotFoundWhenLoading(uploadedFile);
+        assertNotFoundWhenLoading(uploadedFile(BLANK_STORED_FILE_NAME));
+        assertNotFoundWhenLoading(uploadedFile(ESCAPING_FILE_NAME));
     }
 
     @Test
@@ -156,72 +208,25 @@ class UploadStorageSupportTests {
                 });
     }
 
-    private static CloseTrackingMultipartFile multipartFile() {
-        return new CloseTrackingMultipartFile(ORIGINAL_FILE_NAME, CONTENT_TYPE, CONTENT);
+    private static UploadedFile uploadedFile(String storedFileName) {
+        UploadedFile uploadedFile = new UploadedFile();
+        uploadedFile.setStoredFileName(storedFileName);
+        return uploadedFile;
     }
 
-    private static final class CloseTrackingMultipartFile implements MultipartFile {
+    private static final class CloseTrackingMultipartFile extends MockMultipartFile {
 
-        private final String originalFilename;
-        private final String contentType;
-        private final byte[] content;
         private final List<CloseTrackingInputStream> openedStreams = new ArrayList<>();
 
-        private CloseTrackingMultipartFile(String originalFilename, String contentType, String content) {
-            this.originalFilename = originalFilename;
-            this.contentType = contentType;
-            this.content = content.getBytes(StandardCharsets.UTF_8);
-        }
-
-        List<CloseTrackingInputStream> openedStreams() {
-            return openedStreams;
+        private CloseTrackingMultipartFile() {
+            super("file", CONTENT.getBytes(StandardCharsets.UTF_8));
         }
 
         @Override
-        public String getName() {
-            return "file";
-        }
-
-        @Override
-        public String getOriginalFilename() {
-            return originalFilename;
-        }
-
-        @Override
-        public String getContentType() {
-            return contentType;
-        }
-
-        @Override
-        public boolean isEmpty() {
-            return content.length == 0;
-        }
-
-        @Override
-        public long getSize() {
-            return content.length;
-        }
-
-        @Override
-        public byte[] getBytes() {
-            return content.clone();
-        }
-
-        @Override
-        public InputStream getInputStream() {
-            CloseTrackingInputStream stream = new CloseTrackingInputStream(content);
+        public InputStream getInputStream() throws IOException {
+            CloseTrackingInputStream stream = new CloseTrackingInputStream(getBytes());
             openedStreams.add(stream);
             return stream;
-        }
-
-        @Override
-        public void transferTo(File dest) throws IOException {
-            Files.write(dest.toPath(), content);
-        }
-
-        @Override
-        public void transferTo(Path dest) throws IOException {
-            Files.write(dest, content);
         }
     }
 
@@ -231,10 +236,6 @@ class UploadStorageSupportTests {
 
         private CloseTrackingInputStream(byte[] content) {
             super(content);
-        }
-
-        boolean closed() {
-            return closed;
         }
 
         @Override

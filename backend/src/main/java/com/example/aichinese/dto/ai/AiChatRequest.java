@@ -1,5 +1,6 @@
 package com.example.aichinese.dto.ai;
 
+import static com.example.aichinese.dto.DtoNormalization.redactLength;
 import static com.example.aichinese.dto.DtoNormalization.strip;
 import static com.example.aichinese.dto.DtoNormalization.stripToNull;
 
@@ -19,5 +20,12 @@ public record AiChatRequest(
     public AiChatRequest {
         message = strip(message);
         languagePreference = stripToNull(languagePreference);
+    }
+
+    @Override
+    public String toString() {
+        return "AiChatRequest[message=" + redactLength(message)
+                + ", languagePreference=" + languagePreference
+                + ", sessionId=" + sessionId + "]";
     }
 }

@@ -1,0 +1,470 @@
+/* Student Home: goal strip, next-lesson desk, unit step progress, daily timeline rail, and build-plan card.
+   Page-prefixed classes (`.home-*`). */
+
+/* A one-line notice across Home: confirm your e-mail, no connection, a plan that is behind or has ended. */
+.home-notice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 56px;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-btn-lg);
+}
+
+.home-notice.is-info {
+  background: var(--color-info-soft);
+}
+
+.home-notice.is-info > .icon-glyph {
+  color: var(--color-info-text);
+}
+
+.home-notice.is-warning {
+  background: var(--color-warning-soft);
+}
+
+.home-notice.is-warning > .icon-glyph {
+  color: var(--color-warning-text);
+}
+
+.home-notice-copy {
+  margin: 0;
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-strong);
+  line-height: var(--line-height-normal);
+  overflow-wrap: anywhere;
+}
+
+/* A notice without an action keeps its copy to the right edge. */
+.home-notice > .home-notice-copy:last-child {
+  grid-column: 2 / -1;
+}
+
+.home-notice .field-error {
+  grid-column: 2 / -1;
+  grid-row: 2;
+}
+
+/* Goal strip across the top of Home */
+.home-strip {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.6fr) auto;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--card-padding);
+  border-radius: var(--radius-xl);
+}
+
+.home-strip-goal {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.home-strip-title {
+  margin: 0;
+  font-size: var(--type-body-size);
+  font-weight: var(--font-weight-heading);
+  line-height: var(--line-height-normal);
+  overflow-wrap: anywhere;
+}
+
+.home-strip-progress {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.home-strip-progress .type-caption,
+.home-timeline-body .type-caption {
+  margin: 0;
+}
+
+.home-desk {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(18rem, 26%, 23.75rem);
+  align-items: stretch;
+  gap: var(--grid-gap);
+  min-width: 0;
+}
+
+/* The next step: a sheet in two halves. */
+.home-next {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.85fr);
+  min-width: 0;
+  min-height: clamp(21rem, 43vh, 27.5rem);
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-2xl);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-xs);
+}
+
+.home-next-body {
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: var(--space-6);
+  min-width: 0;
+  padding: clamp(var(--space-5), 2.4vw, var(--space-10));
+}
+
+.home-next-copy {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.home-next-title {
+  font-size: var(--type-h1-focus-size);
+  letter-spacing: var(--letter-spacing-display);
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.home-next-meta {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--type-body-size);
+  line-height: var(--line-height-normal);
+}
+
+/* The lesson's character on practice paper: a violet wash under the 田字格 grid. */
+.home-next-show {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--space-5);
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-4);
+  border-left: 1px solid var(--color-primary-100);
+  background:
+    var(--pattern-grid-paper) 50% 50% / var(--pattern-grid-size) var(--pattern-grid-size),
+    var(--color-primary-50);
+}
+
+.hanzi-tile.home-next-tile {
+  --hanzi-tile-size: clamp(7rem, 12vw, 12.5rem);
+  border-color: var(--color-primary-200);
+  box-shadow: var(--shadow-md);
+}
+
+.home-next-phrase {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 100%;
+  margin: 0;
+  padding: var(--space-1-5) var(--space-4) var(--space-1-5) var(--space-3);
+  border: 1px solid var(--color-primary-100);
+  border-radius: var(--radius-pill);
+  background: var(--surface-card);
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-normal);
+}
+
+.home-next-phrase .cjk-text {
+  font-size: var(--type-h2-size);
+  font-weight: var(--font-weight-strong);
+  line-height: var(--line-height-snug);
+}
+
+/* Every lesson of the path is finished: one centred message. */
+.home-next.is-done {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.home-next.is-done .home-next-body {
+  justify-items: center;
+  text-align: center;
+}
+
+/* The unit's lessons: a check when done, a ring on the next one, dashed for the rest. */
+.home-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.home-steps li {
+  display: flex;
+  align-items: center;
+}
+
+.home-steps li + li::before {
+  content: '';
+  width: var(--space-2);
+  height: 2px;
+  background: var(--border-default);
+}
+
+.home-steps li.is-done + li::before {
+  background: var(--color-primary-500);
+}
+
+.home-step {
+  display: grid;
+  place-items: center;
+  width: var(--control-height-sm);
+  height: var(--control-height-sm);
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-strong);
+}
+
+.home-steps li.is-done .home-step {
+  border: 0;
+  background: var(--color-primary-500);
+  color: var(--text-on-primary);
+}
+
+.home-steps li.is-current .home-step {
+  border: var(--border-width-thick) solid var(--color-primary-500);
+  background: var(--color-primary-50);
+  color: var(--color-primary-700);
+}
+
+/* Side rail: today's timeline and optional build-plan callout */
+.home-rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  min-width: 0;
+  padding: var(--card-padding);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-2xl);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-xs);
+}
+
+.home-rail-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.home-rail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: var(--control-height-sm);
+}
+
+.home-rail-figure {
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-strong);
+  line-height: var(--line-height-normal);
+  white-space: nowrap;
+}
+
+.home-timeline {
+  display: grid;
+  margin: 0;
+  padding: var(--space-4) 0 0;
+  border-top: 1px solid var(--border-subtle);
+  list-style: none;
+}
+
+.home-timeline-item {
+  display: grid;
+  grid-template-columns: var(--space-16) var(--space-3) minmax(0, 1fr);
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.home-timeline-when {
+  padding-top: var(--space-0-5);
+  color: var(--color-ink-500);
+  font-size: var(--type-overline-size);
+  font-weight: var(--font-weight-strong);
+  letter-spacing: var(--letter-spacing-wide);
+  line-height: var(--line-height-normal);
+  text-transform: uppercase;
+}
+
+/* A ring on the line; the line runs on to the next item. */
+.home-timeline-node {
+  position: relative;
+}
+
+.home-timeline-node::before {
+  content: '';
+  display: block;
+  width: var(--space-3);
+  height: var(--space-3);
+  margin-top: var(--space-1);
+  border: var(--border-width-thick) solid var(--color-primary-500);
+  border-radius: var(--radius-round);
+  background: var(--surface-card);
+}
+
+.home-timeline-item:not(:last-child) .home-timeline-node::after {
+  content: '';
+  position: absolute;
+  top: var(--space-5);
+  bottom: 0;
+  left: calc(50% - 1px);
+  width: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--border-default);
+}
+
+.home-timeline-body {
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  gap: var(--space-1);
+  min-width: 0;
+  padding-bottom: var(--space-6);
+}
+
+.home-timeline-item:last-child .home-timeline-body {
+  padding-bottom: 0;
+}
+
+.home-timeline-title {
+  margin: 0;
+  font-size: var(--type-body-size);
+  font-weight: var(--font-weight-strong);
+  line-height: var(--line-height-normal);
+}
+
+.home-timeline-body .btn {
+  margin-top: var(--space-2);
+}
+
+/* The offer to build a plan: the rail's one brand moment. */
+.home-build {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  background:
+    var(--pattern-grid-night) 0 0 / var(--pattern-grid-size) var(--pattern-grid-size),
+    var(--surface-brand);
+  color: var(--text-on-primary);
+  font-size: var(--type-label-size);
+  line-height: var(--line-height-normal);
+}
+
+.home-build p {
+  margin: 0;
+  color: var(--text-on-brand-muted);
+}
+
+.home-build-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: inherit;
+  font-size: var(--type-card-title-size);
+  line-height: 1.375;
+}
+
+.home-build-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: var(--control-height-md);
+  height: var(--control-height-md);
+  border-radius: var(--radius-md);
+  background: var(--color-white-a16);
+  color: var(--color-white);
+}
+
+/* The violet focus ring would vanish into the night surface. */
+.home-build .btn:focus-visible {
+  outline-color: var(--color-white);
+}
+
+@media (max-width: 75rem) {
+  .home-desk {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .home-strip {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .home-strip-progress {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+
+@media (max-width: 48rem) {
+  .home-notice {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .home-notice > .btn {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .home-notice .field-error {
+    grid-row: auto;
+  }
+
+  .home-strip {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .home-strip > .btn {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .home-next {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 0;
+  }
+
+  .home-next-show {
+    border-left: 0;
+    border-top: 1px solid var(--color-primary-100);
+    padding-block: var(--space-6);
+  }
+}
+
+@media (forced-colors: active) {
+  .home-notice,
+  .home-build {
+    border: 1px solid CanvasText;
+  }
+
+  .home-steps li.is-done .home-step {
+    border: 1px solid Highlight;
+    background: Highlight;
+    color: HighlightText;
+    forced-color-adjust: none;
+  }
+
+  .home-steps li.is-current .home-step {
+    border-color: Highlight;
+  }
+
+  .home-steps li + li::before,
+  .home-timeline-item:not(:last-child) .home-timeline-node::after {
+    background: CanvasText;
+    forced-color-adjust: none;
+  }
+
+  .home-steps li.is-done + li.is-done::before,
+  .home-steps li.is-done + li.is-current::before {
+    background: Highlight;
+  }
+}

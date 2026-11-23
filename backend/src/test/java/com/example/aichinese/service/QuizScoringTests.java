@@ -8,9 +8,10 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.server.ResponseStatusException;
 
-import com.example.aichinese.dto.learning.QuizSubmissionAnswerRequest;
+import com.example.aichinese.dto.classes.QuizSubmissionAnswerRequest;
 import com.example.aichinese.entity.QuizOption;
 import com.example.aichinese.entity.QuizQuestion;
+import com.example.aichinese.entity.enums.QuizQuestionType;
 
 /**
  * Proposal Table 6.2 "quiz scoring logic": option-based questions are scored by option id, only
@@ -43,6 +44,15 @@ class QuizScoringTests {
     }
 
     @Test
+    void eitherIdForTheSameLegacyLabelScoresWhileDifferentTonesStayDistinct() {
+        QuizQuestion question = question("CHOOSE_TONE", "mā");
+        List<QuizOption> options = List.of(option(1, "mā", true), option(2, " mā ", false), option(3, "mǎ", false));
+        assertThat(QuizScoring.isCorrect(question, options, 2L, null)).isTrue();
+        assertThat(QuizScoring.isCorrect(question, options, 3L, "mā")).isFalse();
+        assertThat(QuizScoring.isCorrect(question, options, FOREIGN_OPTION_ID, "mā")).isFalse();
+    }
+
+    @Test
     void optionBasedQuestionRejectsMissingOrForeignOptionIds() {
         QuizQuestion question = question("CHOOSE_PINYIN", "nǐ hǎo");
 
@@ -63,9 +73,12 @@ class QuizScoringTests {
         // Full-width letters (common with Chinese IMEs) are normalised by NFKC.
         assertThat(QuizScoring.isCorrect(fillBlank, List.of(), null, "ＨＡＯ")).isTrue();
         assertThat(QuizScoring.isCorrect(rearrange, List.of(), null, "我   是 学生")).isTrue();
+        assertThat(QuizScoring.isCorrect(rearrange, List.of(), null, "我\u2028是\u0085学生")).isTrue();
         // SDD 5.4: spaces are ignored, so the sentence typed without spaces is also correct.
         assertThat(QuizScoring.isCorrect(rearrange, List.of(), null, "我是学生")).isTrue();
         assertThat(QuizScoring.isCorrect(question("FILL_BLANK", "ni hao"), List.of(), null, "nihao")).isTrue();
+        // An older answer key may include an invisible edge character stripped by today's form.
+        assertThat(QuizScoring.isCorrect(question("FILL_BLANK", "\ufeff好"), List.of(), null, "好")).isTrue();
         assertThat(QuizScoring.isCorrect(fillBlank, List.of(), null, "hǎo"))
                 .as("tone marks are significant")
                 .isFalse();
@@ -85,7 +98,7 @@ class QuizScoringTests {
         assertThat(QuizScoring.percentage(0, 0)).isZero();
         assertThat(QuizScoring.percentage(5, 10)).isEqualTo(50);
         assertThat(QuizScoring.percentage(2, 3)).isEqualTo(66);
-        // 79.59 % must not count as "at least 80 %" (Quiz Star bonus, Mastered).
+        // 79.59 % must not count as "at least 80 %" (Quiz Star badge).
         assertThat(QuizScoring.percentage(39, 49)).isEqualTo(79);
         assertThat(QuizScoring.percentage(10, 10)).isEqualTo(100);
     }
@@ -93,7 +106,7 @@ class QuizScoringTests {
     private static QuizQuestion question(String type, String correctAnswerText) {
         QuizQuestion question = new QuizQuestion();
         question.setId(1L);
-        question.setQuestionType(type);
+        question.setQuestionType(QuizQuestionType.valueOf(type));
         question.setQuestionText("Question");
         question.setCorrectAnswerText(correctAnswerText);
         question.setPoints(5);

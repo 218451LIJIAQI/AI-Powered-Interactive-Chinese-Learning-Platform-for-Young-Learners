@@ -1,11 +1,12 @@
 package com.example.aichinese.controller;
 
-import java.util.List;
-
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -13,128 +14,114 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.example.aichinese.dto.ApiResponse;
 import com.example.aichinese.dto.PageResponse;
-import com.example.aichinese.dto.classes.ReviewViews;
-import com.example.aichinese.dto.review.RejectionReasonRequest;
+import com.example.aichinese.dto.classes.AdminClassViews;
+import com.example.aichinese.dto.classes.ClassRequests;
 import com.example.aichinese.security.SecurityUserDetails;
-import com.example.aichinese.service.classes.AdminClassContentService;
-import com.example.aichinese.service.classes.ClassReviewService;
+import com.example.aichinese.service.classes.AdminClassList;
+import com.example.aichinese.service.classes.ClassAuthoringService;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Size;
 
-/** Admin review queue of teacher classes and the Teacher classes list (archive and restore). */
+import lombok.RequiredArgsConstructor;
+
+/**
+ * Admin › Content › Classes: the classes and lessons list, the class page (details, units and lessons), publishing,
+ * archiving, restoring and deleting a draft class. Every admin edits every class; there is no review step.
+ */
+@Validated
 @RestController
 @RequestMapping("/api/v1/admin")
+@RequiredArgsConstructor
 public class AdminClassController {
 
-    private final ClassReviewService reviews;
-    private final AdminClassContentService content;
+    private final ClassAuthoringService classes;
+    private final AdminClassList classList;
 
-    public AdminClassController(ClassReviewService reviews, AdminClassContentService content) {
-        this.reviews = reviews;
-        this.content = content;
-    }
-
-    // ----- review queue -----
-
-    @GetMapping("/class-reviews")
-    public ApiResponse<ReviewViews.Queue> queue(@RequestParam(value = "type", required = false) String type) {
-        return ApiResponse.success("Review queue retrieved successfully.", reviews.queue(type));
-    }
-
-    @GetMapping("/class-reviews/classes/{classId}")
-    public ApiResponse<ReviewViews.Detail> classReview(@PathVariable Long classId) {
-        return ApiResponse.success("Review retrieved successfully.", reviews.classDetail(classId));
-    }
-
-    @PostMapping("/class-reviews/classes/{classId}/approve")
-    public ApiResponse<ReviewViews.Queue> approveClass(
-            @AuthenticationPrincipal SecurityUserDetails currentUser,
-            @PathVariable Long classId) {
-        return ApiResponse.success("Approved.", reviews.approveClass(currentUser, classId));
-    }
-
-    @PostMapping("/class-reviews/classes/{classId}/request-changes")
-    public ApiResponse<ReviewViews.Queue> requestClassChanges(
-            @AuthenticationPrincipal SecurityUserDetails currentUser,
-            @PathVariable Long classId,
-            @Valid @RequestBody RejectionReasonRequest request) {
-        return ApiResponse.success("Changes requested.", reviews.requestClassChanges(currentUser, classId, request.reason()));
-    }
-
-    @GetMapping("/class-reviews/lessons/{lessonId}")
-    public ApiResponse<ReviewViews.Detail> lessonReview(@PathVariable Long lessonId) {
-        return ApiResponse.success("Review retrieved successfully.", reviews.lessonDetail(lessonId));
-    }
-
-    @PostMapping("/class-reviews/lessons/{lessonId}/approve")
-    public ApiResponse<ReviewViews.Queue> approveLesson(
-            @AuthenticationPrincipal SecurityUserDetails currentUser,
-            @PathVariable Long lessonId) {
-        return ApiResponse.success("Approved.", reviews.approveLesson(currentUser, lessonId));
-    }
-
-    @PostMapping("/class-reviews/lessons/{lessonId}/request-changes")
-    public ApiResponse<ReviewViews.Queue> requestLessonChanges(
-            @AuthenticationPrincipal SecurityUserDetails currentUser,
-            @PathVariable Long lessonId,
-            @Valid @RequestBody RejectionReasonRequest request) {
-        return ApiResponse.success("Changes requested.", reviews.requestLessonChanges(currentUser, lessonId, request.reason()));
-    }
-
-    // ----- teacher classes -----
-
-    @GetMapping("/teacher-classes")
-    public ApiResponse<PageResponse<ReviewViews.ContentRow>> teacherClasses(
+    @GetMapping("/classes")
+    public ApiResponse<PageResponse<AdminClassViews.ContentRow>> list(
+            @Size(max = 200, message = "Keyword must not exceed 200 characters.")
             @RequestParam(value = "keyword", required = false) String keyword,
+            @Size(max = 40, message = "Type filter must not exceed 40 characters.")
             @RequestParam(value = "type", required = false) String type,
+            @Size(max = 40, message = "Status filter must not exceed 40 characters.")
             @RequestParam(value = "status", required = false) String status,
-            @RequestParam(value = "teacherId", required = false) Long teacherId,
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "10") int size) {
-        return ApiResponse.success("Teacher classes retrieved successfully.",
-                content.list(keyword, type, status, teacherId, page, size));
+        return ApiResponse.success("Classes retrieved successfully.", classList.list(keyword, type, status, page, size));
     }
 
-    @GetMapping("/teacher-classes/teachers")
-    public ApiResponse<List<ReviewViews.TeacherOption>> teachers() {
-        return ApiResponse.success("Teachers retrieved successfully.", content.teachers());
+    @PostMapping("/classes")
+    public ApiResponse<AdminClassViews.ClassPage> createClass(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @Valid @RequestBody ClassRequests.ClassDetails request) {
+        return ApiResponse.success("Class created as a draft.", classes.createClass(currentUser, request));
     }
 
-    @GetMapping("/teacher-classes/classes/{classId}")
-    public ApiResponse<ReviewViews.ContentDetail> classDetail(@PathVariable Long classId) {
-        return ApiResponse.success("Class retrieved successfully.", content.classDetail(classId));
+    @GetMapping("/classes/{classId}")
+    public ApiResponse<AdminClassViews.ClassPage> getClass(@PathVariable Long classId) {
+        return ApiResponse.success("Class retrieved successfully.", classes.classPage(classId));
     }
 
-    @PostMapping("/teacher-classes/classes/{classId}/archive")
-    public ApiResponse<ReviewViews.ContentDetail> archiveClass(
+    @PutMapping("/classes/{classId}")
+    public ApiResponse<AdminClassViews.ClassPage> saveDetails(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long classId,
+            @Valid @RequestBody ClassRequests.ClassDetails request) {
+        return ApiResponse.success("Class details saved.", classes.saveDetails(currentUser, classId, request));
+    }
+
+    @PostMapping("/classes/{classId}/publish")
+    public ApiResponse<AdminClassViews.ClassPage> publish(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @PathVariable Long classId) {
-        return ApiResponse.success("Class archived.", content.archiveClass(currentUser, classId));
+        return ApiResponse.success("Class published.", classes.publish(currentUser, classId));
     }
 
-    @PostMapping("/teacher-classes/classes/{classId}/restore")
-    public ApiResponse<ReviewViews.ContentDetail> restoreClass(
+    @PostMapping("/classes/{classId}/archive")
+    public ApiResponse<AdminClassViews.ClassPage> archive(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @PathVariable Long classId) {
-        return ApiResponse.success("Class restored.", content.restoreClass(currentUser, classId));
+        return ApiResponse.success("Class archived.", classes.archive(currentUser, classId));
     }
 
-    @GetMapping("/teacher-classes/lessons/{lessonId}")
-    public ApiResponse<ReviewViews.ContentDetail> lessonDetail(@PathVariable Long lessonId) {
-        return ApiResponse.success("Lesson retrieved successfully.", content.lessonDetail(lessonId));
-    }
-
-    @PostMapping("/teacher-classes/lessons/{lessonId}/archive")
-    public ApiResponse<ReviewViews.ContentDetail> archiveLesson(
+    @PostMapping("/classes/{classId}/restore")
+    public ApiResponse<AdminClassViews.ClassPage> restore(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
-            @PathVariable Long lessonId) {
-        return ApiResponse.success("Lesson archived.", content.archiveLesson(currentUser, lessonId));
+            @PathVariable Long classId) {
+        return ApiResponse.success("Class restored.", classes.restore(currentUser, classId));
     }
 
-    @PostMapping("/teacher-classes/lessons/{lessonId}/restore")
-    public ApiResponse<ReviewViews.ContentDetail> restoreLesson(
+    @DeleteMapping("/classes/{classId}")
+    public ApiResponse<Void> deleteClass(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
-            @PathVariable Long lessonId) {
-        return ApiResponse.success("Lesson restored.", content.restoreLesson(currentUser, lessonId));
+            @PathVariable Long classId) {
+        classes.deleteClass(currentUser, classId);
+        return ApiResponse.success("Draft class deleted.", null);
+    }
+
+    /** A class has 2 units: a third is refused (409). */
+    @PostMapping("/classes/{classId}/units")
+    public ApiResponse<AdminClassViews.ClassPage> addUnit(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long classId,
+            @Valid @RequestBody ClassRequests.UnitTitle request) {
+        return ApiResponse.success("Unit added.", classes.addUnit(currentUser, classId, request));
+    }
+
+    @PutMapping("/units/{unitId}")
+    public ApiResponse<AdminClassViews.ClassPage> renameUnit(
+            @AuthenticationPrincipal SecurityUserDetails currentUser,
+            @PathVariable Long unitId,
+            @Valid @RequestBody ClassRequests.UnitTitle request) {
+        return ApiResponse.success("Unit renamed.", classes.renameUnit(currentUser, unitId, request));
+    }
+
+    /** Adds a draft lesson to the unit and answers with its editor. */
+    @PostMapping("/units/{unitId}/lessons")
+    public ApiResponse<AdminClassViews.LessonEditor> addLesson(
+            @PathVariable Long unitId,
+            @Valid @RequestBody ClassRequests.LessonTitle request) {
+        return ApiResponse.success("Lesson created as a draft.", classes.addLesson(unitId, request));
     }
 }

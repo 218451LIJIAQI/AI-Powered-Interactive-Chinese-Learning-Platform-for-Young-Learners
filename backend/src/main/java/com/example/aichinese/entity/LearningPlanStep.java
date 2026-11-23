@@ -52,9 +52,6 @@ public class LearningPlanStep extends BaseEntity {
     @Column(name = "goal_picks", nullable = false, length = 400)
     private String goalPicks = "";
 
-    @Column(name = "optional_step", nullable = false)
-    private boolean optionalStep;
-
     /** A unit the level check showed the student mostly knows: planned as a quick review. */
     @Column(name = "quick_review", nullable = false)
     private boolean quickReview;

@@ -1,50 +1,75 @@
 package com.example.aichinese.dto.ai;
 
+import static com.example.aichinese.dto.DtoNormalization.redactLength;
+
 import java.util.List;
 
+import com.example.aichinese.entity.enums.AiRequestStatus;
+import com.example.aichinese.entity.enums.PlanReason;
+
 /**
- * The answers of Talk with Xiaomei. Each carries {@code status} (SUCCESS, FAILED or UNAVAILABLE) and, when it did not
- * succeed, the fixed {@code message} that says why; the AI content is then empty.
+ * The answers of Talk with Xiaomei. A reply and a summary carry {@code status} (SUCCESS, FAILED or UNAVAILABLE) and,
+ * when it did not succeed, the fixed {@code message} that says why; the AI content is then empty.
  */
 public final class XiaomeiResponses {
 
     private XiaomeiResponses() {
     }
 
-    /** A line of Chinese with its pinyin and its translation into the student's language. */
-    public record Line(String chinese, String pinyin, String translation) {
-    }
-
     /**
      * Xiaomei's next line, and a tip when the student's last line could sound more natural: {@code naturalVersion}
      * (the better sentence) and {@code tip} (why), both null when there is nothing to correct.
      */
-    public record Reply(String status, String message, Line reply, String naturalVersion, String tip) {
-    }
-
-    /** "Help me reply": three short lines the student could say next. */
-    public record Suggestions(String status, String message, List<Line> suggestions) {
-
-        public Suggestions {
-            suggestions = suggestions == null ? List.of() : List.copyOf(suggestions);
+    public record Reply(AiRequestStatus status, String message, AiStoryLineResponse reply, String naturalVersion, String tip) {
+        @Override
+        public String toString() {
+            return "Reply[status=" + status
+                    + ", message=" + message
+                    + ", reply=" + (reply == null ? "null" : "<present>")
+                    + ", naturalVersion=" + redactLength(naturalVersion)
+                    + ", tip=" + redactLength(tip)
+                    + "]";
         }
     }
 
     /**
      * The end-of-chat summary: Xiaomei's goodbye, short feedback, the useful expressions she used and the words the
-     * student used (translation = meaning).
+     * student used (translation = meaning), and what she will remember ({@code memory}, also when SparkBot could not
+     * write the rest: the plan's goal is not written by the AI).
      */
     public record Summary(
-            String status,
+            AiRequestStatus status,
             String message,
-            Line goodbye,
+            AiStoryLineResponse goodbye,
             String feedback,
-            List<Line> newExpressions,
-            List<Line> wordsUsed) {
+            List<AiStoryLineResponse> newExpressions,
+            List<AiStoryLineResponse> wordsUsed,
+            List<MemoryNote> memory) {
+        @Override
+        public String toString() {
+            return "Summary[status=" + status
+                    + ", message=" + message
+                    + ", goodbye=" + (goodbye == null ? "null" : "<present>")
+                    + ", feedback=" + redactLength(feedback)
+                    + ", newExpressions=" + (newExpressions == null ? 0 : newExpressions.size())
+                    + ", wordsUsed=" + (wordsUsed == null ? 0 : wordsUsed.size())
+                    + ", memory=" + (memory == null ? 0 : memory.size())
+                    + "]";
+        }
+    }
 
-        public Summary {
-            newExpressions = newExpressions == null ? List.of() : List.copyOf(newExpressions);
-            wordsUsed = wordsUsed == null ? List.of() : List.copyOf(wordsUsed);
+    /**
+     * One note Xiaomei remembers ("Xiaomei will remember"), oldest first. The goal of the learner's plan has
+     * {@code planReason}; its {@code text} is the plan's goal title, null for a plan built from rules (the page names the
+     * reason then, as the plan pages do). Any other note is a short fact from a chat, in {@code text}.
+     */
+    public record MemoryNote(Long id, String text, PlanReason planReason) {
+        @Override
+        public String toString() {
+            return "MemoryNote[id=" + id
+                    + ", text=" + redactLength(text)
+                    + ", planReason=" + planReason
+                    + "]";
         }
     }
 }

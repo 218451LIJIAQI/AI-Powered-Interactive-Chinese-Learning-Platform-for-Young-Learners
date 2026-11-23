@@ -2,11 +2,10 @@ package com.example.aichinese.entity.enums;
 
 import java.util.Optional;
 
+/** The two roles: a learner (STUDENT) and an admin. */
 public enum RoleName {
 
     STUDENT,
-
-    TEACHER,
 
     ADMIN;
 

@@ -1,15 +1,13 @@
-import { getCurrentScope, onScopeDispose, readonly, ref } from 'vue'
+import { computed, onDeactivated, onScopeDispose, readonly, ref, shallowRef } from 'vue'
 
-import { canSpeak as speechAvailable, speakChinese, stopSpeaking as cancelSpeech } from '@/utils/speech'
+import { mandarinVoice, speakChinese, stopSpeaking as cancelSpeech, type SpeechStateListener } from '@/utils/speech'
 
 /** The parts of the Web Speech API recognition object used here (it is still prefixed in Chrome and Edge). */
 interface RecognitionResultLike {
-  readonly isFinal: boolean
   readonly 0: { readonly transcript: string }
 }
 
 interface RecognitionEventLike {
-  readonly resultIndex: number
   readonly results: ArrayLike<RecognitionResultLike>
 }
 
@@ -29,14 +27,53 @@ type RecognitionConstructor = new () => RecognitionLike
 
 type RecognitionError = 'denied' | 'noSpeech' | 'failed'
 
-const MANDARIN = 'zh-CN'
+/** The Web Speech API errors told apart; any other is `failed` (and `aborted`, a session cancelled here, is ignored). */
+const RECOGNITION_ERRORS: ReadonlyMap<string, RecognitionError> = new Map<string, RecognitionError>([
+  ['not-allowed', 'denied'],
+  ['service-not-allowed', 'denied'],
+  ['no-speech', 'noSpeech'],
+])
 
-function recognitionConstructor(): RecognitionConstructor | null {
-  const scope = window as unknown as {
-    SpeechRecognition?: RecognitionConstructor
-    webkitSpeechRecognition?: RecognitionConstructor
+/** Browsers may list voices after the first render, or change them when the user installs another voice. */
+function useMandarinVoices() {
+  const voice = shallowRef(mandarinVoice())
+  const synthesis = window.speechSynthesis
+  const refresh = () => {
+    voice.value = mandarinVoice()
   }
-  return scope.SpeechRecognition ?? scope.webkitSpeechRecognition ?? null
+  synthesis?.addEventListener?.('voiceschanged', refresh)
+  onScopeDispose(() => synthesis?.removeEventListener?.('voiceschanged', refresh))
+  return {
+    canSpeak: computed(() => voice.value !== null),
+    hasInstalledVoice: computed(() => voice.value !== null && voice.value !== 'default'),
+  }
+}
+
+/** Reads Mandarin aloud and tracks whether the current line is still playing. */
+export function useMandarinReadAloud() {
+  const voices = useMandarinVoices()
+  const speaking = ref(false)
+
+  /** Reads `text` aloud; false when nothing is read (no speech in this browser, or nothing but spaces to read). */
+  function speak(text: string, slow = false, onSpeaking?: SpeechStateListener): boolean {
+    let finished = false
+    const accepted = speakChinese(text, slow, (playing, reason) => {
+      finished = !playing
+      speaking.value = playing
+      onSpeaking?.(playing, reason)
+    })
+    // Queued speech can be stopped before its first event. A synchronous end or error is already final.
+    if (accepted && !finished) speaking.value = true
+    return accepted
+  }
+
+  function stopSpeaking(): void {
+    if (speaking.value) cancelSpeech()
+  }
+
+  onDeactivated(stopSpeaking)
+  onScopeDispose(stopSpeaking)
+  return { ...voices, speaking: readonly(speaking), speak, stopSpeaking }
 }
 
 /**
@@ -46,97 +83,77 @@ function recognitionConstructor(): RecognitionConstructor | null {
  * reply.
  */
 export function useMandarinSpeech() {
-  const canSpeak = speechAvailable()
-  const Recognition = typeof window !== 'undefined' ? recognitionConstructor() : null
+  const browser = window as unknown as {
+    SpeechRecognition?: RecognitionConstructor
+    webkitSpeechRecognition?: RecognitionConstructor
+  }
+  const Recognition = browser.SpeechRecognition ?? browser.webkitSpeechRecognition ?? null
   const canListen = Recognition !== null
 
-  const speaking = ref(false)
-  const listening = ref(false)
+  const recognition = shallowRef<RecognitionLike | null>(null)
   /** What was heard so far: the final part followed by the part the browser may still change. */
   const heard = ref('')
   const recognitionError = ref<RecognitionError | null>(null)
-  let recognition: RecognitionLike | null = null
-  let finalText = ''
-
-  function speak(text: string, slow = false): void {
-    if (speakChinese(text, slow, (value) => (speaking.value = value))) speaking.value = true
-  }
-
-  function stopSpeaking(): void {
-    cancelSpeech()
-    speaking.value = false
-  }
+  onDeactivated(cancelListening)
+  onScopeDispose(cancelListening)
+  const voice = useMandarinReadAloud()
 
   /** Starts listening; `heard` fills in as the student speaks. Returns false when the browser cannot listen. */
   function listen(): boolean {
-    if (!Recognition || listening.value) return false
-    stopSpeaking()
-    finalText = ''
+    if (!Recognition || recognition.value) return false
+    // Opening the microphone intentionally silences any active read-aloud across the page.
+    cancelSpeech()
     heard.value = ''
     recognitionError.value = null
     const created = new Recognition()
-    created.lang = MANDARIN
+    created.lang = 'zh-CN'
     created.interimResults = true
     created.continuous = true
     created.maxAlternatives = 1
     created.onresult = (event) => {
-      let interim = ''
-      for (let index = event.resultIndex; index < event.results.length; index++) {
-        const result = event.results[index]
-        if (result.isFinal) finalText += result[0].transcript
-        else interim += result[0].transcript
-      }
-      heard.value = (finalText + interim).trim()
+      if (recognition.value !== created) return
+      // Each event carries the full session, including unchanged and revised interim results.
+      heard.value = Array.from(event.results, (result) => result[0]?.transcript ?? '')
+        .join('')
+        .trim()
     }
     created.onerror = (event) => {
-      if (event.error === 'aborted') return
-      recognitionError.value =
-        event.error === 'not-allowed' || event.error === 'service-not-allowed'
-          ? 'denied'
-          : event.error === 'no-speech'
-            ? 'noSpeech'
-            : 'failed'
+      if (recognition.value !== created || event.error === 'aborted') return
+      recognitionError.value = RECOGNITION_ERRORS.get(event.error) ?? 'failed'
     }
     created.onend = () => {
-      listening.value = false
-      recognition = null
+      if (recognition.value === created) recognition.value = null
     }
+    // Assign before start() so synchronous onerror/onend callbacks from start() observe this active instance.
+    recognition.value = created
     try {
       created.start()
     } catch {
-      recognitionError.value = 'failed'
+      if (recognition.value === created) recognition.value = null
+      if (recognitionError.value === null) recognitionError.value = 'failed'
       return false
     }
-    recognition = created
-    listening.value = true
     return true
   }
 
   /** Stops listening and forgets what was heard. */
   function cancelListening(): void {
-    recognition?.abort()
-    recognition = null
-    listening.value = false
+    const active = recognition.value
+    recognition.value = null
     heard.value = ''
-    finalText = ''
+    try {
+      active?.abort()
+    } catch {
+      // Browser recognition instances may throw InvalidStateError if already stopped during teardown.
+    }
   }
-
-  function dispose(): void {
-    cancelListening()
-    stopSpeaking()
-  }
-
-  if (getCurrentScope()) onScopeDispose(dispose)
 
   return {
-    canSpeak,
+    ...voice,
     canListen,
-    speaking: readonly(speaking),
-    listening: readonly(listening),
+    listening: computed(() => recognition.value !== null),
     heard: readonly(heard),
     recognitionError: readonly(recognitionError),
-    speak,
-    stopSpeaking,
     listen,
     cancelListening,
   }

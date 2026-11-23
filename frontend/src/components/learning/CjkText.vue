@@ -11,7 +11,7 @@ import { computed } from 'vue'
 import { splitCjkRuns } from '@/utils/cjkText'
 
 /** Inline text with Chinese runs marked `lang="zh-CN"` (readable CJK font, correct screen-reader voice). */
-const props = withDefaults(defineProps<{ text?: string | null }>(), { text: '' })
+const props = defineProps<{ text?: string | null }>()
 
 const runs = computed(() => splitCjkRuns(props.text))
 </script>

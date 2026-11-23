@@ -1,14 +1,7 @@
 package com.example.aichinese.service.ai;
 
+/** A provider's answer: non-blank {@code text} on success, otherwise a safe {@code errorSummary} for the usage log. */
 public record AiProviderResult(boolean success, String text, Integer tokenCount, String errorSummary) {
-
-    public AiProviderResult {
-        // A reply of control characters only (for example U+0000) passes the clients' isBlank() test but trims to "";
-        // HttpAiProviderClient turns this exception into the controlled failure "Provider request failed or timed out.".
-        if (success && text.isBlank()) {
-            throw new IllegalArgumentException("Successful provider result text must not be blank.");
-        }
-    }
 
     public static AiProviderResult success(String text, Integer tokenCount) {
         return new AiProviderResult(true, text, tokenCount, null);
@@ -16,5 +9,9 @@ public record AiProviderResult(boolean success, String text, Integer tokenCount,
 
     public static AiProviderResult failure(String errorSummary) {
         return new AiProviderResult(false, null, null, errorSummary);
+    }
+
+    public static AiProviderResult failure(String errorSummary, Integer tokenCount) {
+        return new AiProviderResult(false, null, tokenCount, errorSummary);
     }
 }

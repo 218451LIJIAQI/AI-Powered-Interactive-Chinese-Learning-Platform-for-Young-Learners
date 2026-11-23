@@ -18,8 +18,7 @@ import lombok.Setter;
 @Setter
 @Entity
 @Table(name = "quiz_attempts", indexes = {
-        @Index(name = "idx_quiz_attempts_quiz_id", columnList = "quiz_id"),
-        @Index(name = "idx_quiz_attempts_student_id", columnList = "student_id"),
+        @Index(name = "idx_quiz_attempts_student_quiz_submitted", columnList = "student_id,quiz_id,submitted"),
         @Index(name = "idx_quiz_attempts_completed_at", columnList = "completed_at")
 })
 public class QuizAttempt extends BaseEntity {
@@ -33,21 +32,14 @@ public class QuizAttempt extends BaseEntity {
     private StudentProfile student;
 
     @Column(name = "score")
-    private Integer score;
+    private Long score;
 
     @Column(name = "max_score")
-    private Integer maxScore;
+    private Long maxScore;
 
     @Column(name = "submitted", nullable = false)
     private boolean submitted;
 
-    @Column(name = "started_at", updatable = false)
-    private LocalDateTime startedAt;
-
     @Column(name = "completed_at")
     private LocalDateTime completedAt;
-
-    /** End of a timed attempt; an open attempt past it is submitted with the answers saved so far. */
-    @Column(name = "expires_at")
-    private LocalDateTime expiresAt;
 }

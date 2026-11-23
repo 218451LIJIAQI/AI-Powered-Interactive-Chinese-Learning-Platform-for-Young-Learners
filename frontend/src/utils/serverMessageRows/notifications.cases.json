@@ -1,0 +1,80 @@
+{
+  "about": "Notification texts as the backend stores them (and stored them: the retired wordings) and as they read in Bahasa Melayu and Simplified Chinese. serverMessageRows/notifications.test.ts checks localizeNotificationMessage against them: fixed rows, spacing, case and a final full stop, values kept exactly (Chinese, $1, braces, line breaks), values in another order, the more specific template, a live session's start, and text without a row.",
+  "cases": [
+    { "en": "Class approved", "ms": "Kelas diluluskan", "zh-CN": "课堂已通过审核" },
+    { "en": "  class   APPROVED. ", "ms": "Kelas diluluskan", "zh-CN": "课堂已通过审核" },
+    {
+      "en": "Mei Ling 美玲 (Year 1) joined Campus Life $1 {title}.",
+      "ms": "Mei Ling 美玲 (Year 1) telah menyertai Campus Life $1 {title}.",
+      "zh-CN": "Mei Ling 美玲 (Year 1) 加入了“Campus Life $1 {title}”。"
+    },
+    { "en": "New question from Li\nWei", "ms": "Soalan baharu daripada Li\nWei", "zh-CN": "Li\nWei 提了一个新问题" },
+    {
+      "en": "A visitor (mei@example.com) sent #1042 “Login fails”. Reply within 2 working days.",
+      "ms": "Seorang pelawat (mei@example.com) menghantar #1042 “Login fails”. Balas dalam 2 hari bekerja.",
+      "zh-CN": "一位访客（mei@example.com）发送了 #1042“Login fails”。请在 2 个工作日内回复。"
+    },
+    {
+      "en": "Aina sent #1043 “Audio stops”. Reply within 2 working days.",
+      "ms": "Aina menghantar #1043 “Audio stops”. Balas dalam 2 hari bekerja.",
+      "zh-CN": "Aina 发送了 #1043“Audio stops”。请在 2 个工作日内回复。"
+    },
+    {
+      "en": "\"Greetings\" (Mandarin for Campus Life) starts at 3:00 PM on Saturday 14 November 2026, Asia/Kuala_Lumpur time.",
+      "ms": "\"Greetings\" (Mandarin for Campus Life) bermula Sabtu, 14 November 2026 pada 3:00 PTG, waktu Asia/Kuala_Lumpur.",
+      "zh-CN": "“Greetings”（Mandarin for Campus Life）将于 2026年11月14日星期六 15:00（Asia/Kuala_Lumpur 时间）开始。"
+    },
+    {
+      "en": "\"Night class\" (Campus Life) starts at 12:00 AM on Sunday 15 November 2026, UTC time.",
+      "ms": "\"Night class\" (Campus Life) bermula Ahad, 15 November 2026 pada 12:00 PG, waktu UTC.",
+      "zh-CN": "“Night class”（Campus Life）将于 2026年11月15日星期日 00:00（UTC 时间）开始。"
+    },
+    {
+      "en": "\"Greetings\" (Campus Life) starts at 3:00 PM on Friday 14 November 2026, UTC time.",
+      "ms": "\"Greetings\" (Campus Life) bermula 3:00 PM on Friday 14 November 2026, waktu UTC.",
+      "zh-CN": "“Greetings”（Campus Life）将于 3:00 PM on Friday 14 November 2026（UTC 时间）开始。"
+    },
+    {
+      "en": "Aina reported an AI answer (score seems wrong).",
+      "ms": "Aina melaporkan jawapan AI (markah kelihatan salah).",
+      "zh-CN": "Aina 举报了一条 AI 回答（分数似乎不对）。"
+    },
+    {
+      "en": "An admin asked for changes to the details of \"Campus Life\": Add a cover photo.",
+      "ms": "Pentadbir meminta perubahan pada butiran \"Campus Life\": Add a cover photo.",
+      "zh-CN": "管理员要求修改“Campus Life”的课堂信息：Add a cover photo."
+    },
+    {
+      "en": "An admin asked for changes to \"Lesson 2\": Fix the tones.",
+      "ms": "Pentadbir meminta perubahan pada \"Lesson 2\": Fix the tones.",
+      "zh-CN": "管理员要求修改“Lesson 2”：Fix the tones."
+    },
+    {
+      "en": "Admin Lee: Please upload a clearer certificate.",
+      "ms": "Admin Lee: Please upload a clearer certificate.",
+      "zh-CN": "Admin Lee: Please upload a clearer certificate."
+    },
+    { "en": "You reached Rank 3", "ms": "Anda mencapai Pangkat 3", "zh-CN": "你升到了第 3 段位" },
+    {
+      "en": "You're now Rank 3 · Regular. Rank 4 is next.",
+      "ms": "Anda kini Pangkat 3 · Tetap. Seterusnya Pangkat 4.",
+      "zh-CN": "你现在是第 3 段位 · 常客。下一个是第 4 段位。"
+    },
+    {
+      "en": "A new listening set is ready: “At the Café”.",
+      "ms": "Set mendengar baharu sudah sedia: “At the Café”.",
+      "zh-CN": "新的听力练习组已上线：“At the Café”。"
+    },
+    {
+      "en": "“Greetings” in Mandarin Foundations was updated with new content.",
+      "ms": "“Greetings” dalam Mandarin Foundations telah dikemas kini dengan kandungan baharu.",
+      "zh-CN": "“Mandarin Foundations”中的“Greetings”已更新，加入了新内容。"
+    },
+    {
+      "en": "You have 6 mistakes saved. Fixing them takes about 3 minutes.",
+      "ms": "Anda ada 6 kesilapan yang disimpan. Membetulkannya mengambil masa kira-kira 3 minit.",
+      "zh-CN": "你有 6 道错题待复习，改正它们大约需要 3 分钟。"
+    },
+    { "en": "Something new happened.", "ms": "Something new happened.", "zh-CN": "Something new happened." }
+  ]
+}

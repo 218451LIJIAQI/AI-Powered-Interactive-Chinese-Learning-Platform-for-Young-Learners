@@ -5,7 +5,6 @@ import com.example.aichinese.entity.base.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
-import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
@@ -16,9 +15,7 @@ import lombok.Setter;
 @Getter
 @Setter
 @Entity
-@Table(name = "quiz_options", indexes = {
-        @Index(name = "idx_quiz_options_question_id", columnList = "question_id")
-})
+@Table(name = "quiz_options")
 public class QuizOption extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -31,6 +28,10 @@ public class QuizOption extends BaseEntity {
 
     @Column(name = "correct_option", nullable = false)
     private boolean correctOption;
+
+    /** What a learner who picks this answer reads in the quiz review ("That's 面"); null when there is none. */
+    @Column(name = "feedback", length = 300)
+    private String feedback;
 
     @Column(name = "sort_order", nullable = false)
     private Integer sortOrder = 0;

@@ -1,14 +1,10 @@
 package com.example.aichinese.entity;
 
 import com.example.aichinese.entity.base.LessonActivity;
-import com.example.aichinese.entity.base.PracticeActivityContent;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
@@ -17,38 +13,32 @@ import lombok.Setter;
 @Setter
 @Entity
 @Table(name = "tracing_exercises", indexes = {
-        @Index(name = "idx_tracing_exercises_status", columnList = "content_status"),
         @Index(name = "idx_tracing_exercises_status_updated", columnList = "content_status,updated_at"),
-        @Index(name = "idx_tracing_exercises_hsk_level", columnList = "hsk_level"),
-        @Index(name = "idx_tracing_exercises_difficulty", columnList = "difficulty"),
-        @Index(name = "idx_tracing_exercises_created_by_user_id", columnList = "created_by_user_id"),
-        @Index(name = "idx_tracing_exercises_lesson", columnList = "lesson_id")
+        @Index(name = "idx_tracing_exercises_hsk_level", columnList = "hsk_level")
 })
-public class TracingExercise extends PracticeActivityContent implements LessonActivity {
+public class TracingExercise extends LessonActivity {
 
     @Column(name = "target_character", length = 100)
     private String targetCharacter;
 
-    @Column(name = "pinyin", length = 255)
+    /**
+     * One value per character, joined with "|" for a class tracing activity (TracingCharacters): its 8 characters
+     * with up to 40 characters of pinyin and 80 of meaning each must fit.
+     */
+    @Column(name = "pinyin", length = 400)
     private String pinyin;
 
-    @Column(name = "meaning", length = 500)
+    @Column(name = "meaning", length = 700)
     private String meaning;
 
     /** Strokes of all target characters together; the pad asks for this many before Done. */
     @Column(name = "stroke_count")
     private Integer strokeCount;
 
-    @Column(name = "xp_reward", nullable = false)
-    private Integer xpReward = 12;
-    /** The class lesson this activity belongs to; null for a practice-library set. */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "lesson_id")
-    private Lesson lesson;
-
-    @Column(name = "lesson_position")
-    private Integer lessonPosition;
-
-    @Column(name = "revision_source_id")
-    private Long revisionSourceId;
+    /**
+     * The strokes of each target character, comma-separated ("4,4" for 中文), adding up to {@code strokeCount}; null
+     * when the set does not say (a single character has its {@code strokeCount}).
+     */
+    @Column(name = "character_strokes", length = 100)
+    private String characterStrokes;
 }

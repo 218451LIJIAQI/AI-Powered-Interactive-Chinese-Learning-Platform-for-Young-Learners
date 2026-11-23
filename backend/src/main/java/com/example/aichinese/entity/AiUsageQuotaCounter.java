@@ -8,7 +8,6 @@ import com.example.aichinese.entity.base.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
-import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -21,9 +20,6 @@ import lombok.Setter;
 @Entity
 @Table(
         name = "ai_usage_quota_counters",
-        indexes = {
-                @Index(name = "idx_ai_usage_quota_counters_user_id", columnList = "user_id")
-        },
         uniqueConstraints = {
                 @UniqueConstraint(name = "uk_ai_usage_quota_counters_user", columnNames = "user_id")
         })

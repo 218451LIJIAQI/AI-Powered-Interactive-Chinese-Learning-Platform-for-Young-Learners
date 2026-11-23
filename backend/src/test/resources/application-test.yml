@@ -1,14 +1,13 @@
 spring:
   datasource:
-    url: jdbc:h2:mem:aichinese-${random.uuid};MODE=MYSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
-    username: sa
-    password:
+    # The tests' own MySQL database (created if missing). Every Spring test context rebuilds its tables when it starts,
+    # and only one context is kept open at a time (src/test/resources/spring.properties). Concurrent test runs on one
+    # MySQL server must each set their own TEST_DB_NAME, or they rebuild each other's tables.
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3307}/${TEST_DB_NAME:ai_chinese_learning_test}?createDatabaseIfNotExist=true&sslMode=DISABLED&allowPublicKeyRetrieval=true&connectionTimeZone=Asia/Singapore&useUnicode=true&characterEncoding=utf8
   jpa:
     hibernate:
-      # Test profile intentionally uses Hibernate create-drop with isolated H2
-      # databases for fast integration tests. Runtime profiles must use
-      # Flyway-managed migrations plus ddl-auto=validate.
-      ddl-auto: create-drop
+      # SchemaResetConfig empties the database before Hibernate creates the test schema.
+      ddl-auto: create-only
   flyway:
     enabled: false
 
@@ -17,14 +16,28 @@ logging:
     root: warn
 
 app:
-  # Pinned: the live-class tests build "now" in Asia/Singapore, the zone of classes created without one.
+  # The tests' database is emptied before Hibernate rebuilds it (SchemaResetConfig), so tables of an earlier version
+  # never block the rebuild.
+  schema-reset:
+    database: ${TEST_DB_NAME:ai_chinese_learning_test}
+  # Pinned: the platform day of streaks, daily goals and the background jobs.
   platform:
     default-time-zone: Asia/Singapore
+  # No background jobs: the tests call the jobs themselves, with a fixed clock.
+  # Also pinned via Maven Surefire systemPropertyVariables so shell APP_SCHEDULING_ENABLED cannot override this.
+  scheduling:
+    enabled: false
   security:
     public-auth-rate-limit:
       # Integration tests create many accounts from MockMvc's shared IP in one JVM.
-      # The limiter logic is unit-tested in PublicAuthRequestLimiterTests; the forgot/reset-password default (10) stays active here.
+      # The limiter logic is unit-tested in PublicAuthRequestLimiterTests; pin forgot-password-requests here so
+      # host FORGOT_PASSWORD_REQUESTS_PER_WINDOW cannot shift AuthControllerIntegrationTests' 429 threshold.
       register-requests: 10000
+      forgot-password-requests: 10
+    forwarded:
+      # Also pinned via Maven Surefire systemPropertyVariables so shell APP_SECURITY_FORWARDED_TRUSTED_PROXIES
+      # cannot alter ClientIpResolver behavior in tests.
+      trusted-proxies: ""
     jwt:
       secret: RuntimeStyleJwtSecretForTests1234567890AB
       # Keep test tokens long-lived so slow local verification or a paused
@@ -37,15 +50,32 @@ app:
   upload:
     directory: ./target/test-uploads
     max-file-size: 1KB
-    verification-document-max-file-size: 1KB
+    support-screenshot-max-file-size: 1KB
     ai-audio-max-file-size: 1KB
-    ai-image-max-file-size: 1KB
+    ai-image-max-file-size: 2KB
     recorded-video-directory: ./target/test-recorded-videos
-    max-video-file-size: 1KB
-  # Pinned off so a developer shell with AI_ENABLE_REAL_PROVIDER / SMTP_ENABLED set never makes the test
-  # suite call the paid AI provider or send real e-mail; tests that need them set these properties themselves.
+    max-video-file-size: 3KB
+  # Pinned off so a developer shell with AI_ENABLE_REAL_PROVIDER or SMTP_ENABLED set never makes the test suite call
+  # the paid AI provider or send real e-mail; app.cors.allowed-origins is also pinned in Maven Surefire so shell
+  # APP_CORS_ALLOWED_ORIGINS cannot override the default loopback origins.
+  cors:
+    allowed-origins: ""
   ai:
     enable-real-provider: false
+    provider: openai
+    api-base-url: https://api.openai.com/v1
     api-key: ""
+    api-key-file: ""
+    model-name: gpt-5.6-luna
+    timeout-seconds: 30
+    max-output-tokens: 1200
+    rate-limit:
+      requests-per-minute: 10
+      requests-per-day: 100
+    pronunciation:
+      secret-id: ""
+      secret-key: ""
+      soe-app-id: ""
   email:
     enabled: false
+    password-reset-base-url: http://localhost:5174/reset-password

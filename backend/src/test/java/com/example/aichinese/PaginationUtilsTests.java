@@ -2,9 +2,14 @@ package com.example.aichinese;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import com.example.aichinese.dto.PageResponse;
 import com.example.aichinese.util.PaginationUtils;
@@ -20,33 +25,41 @@ class PaginationUtilsTests {
     private static final int OVERSIZED_REQUEST_SIZE = 100_000;
 
     @Test
-    void sanitizePageFloorsNegativePagesToZero() {
-        assertThat(PaginationUtils.sanitizePage(-10)).isZero();
-        assertThat(PaginationUtils.sanitizePage(3)).isEqualTo(3);
+    void pageRequestFloorsNegativePagesToZero() {
+        assertThat(PaginationUtils.pageRequest(-10, 25).getPageNumber()).isZero();
+        assertThat(PaginationUtils.pageRequest(3, 25).getPageNumber()).isEqualTo(3);
     }
 
     @Test
-    void sanitizeSizeBoundsValuesToDefaultMaximum() {
-        assertThat(PaginationUtils.sanitizeSize(-5)).isEqualTo(1);
-        assertThat(PaginationUtils.sanitizeSize(0)).isEqualTo(1);
-        assertThat(PaginationUtils.sanitizeSize(25)).isEqualTo(25);
-        assertThat(PaginationUtils.sanitizeSize(OVERSIZED_REQUEST_SIZE)).isEqualTo(100);
+    void pageRequestBoundsSizesToDefaultMaximum() {
+        assertThat(PaginationUtils.pageRequest(0, -5).getPageSize()).isEqualTo(1);
+        assertThat(PaginationUtils.pageRequest(0, 0).getPageSize()).isEqualTo(1);
+        assertThat(PaginationUtils.pageRequest(0, 25).getPageSize()).isEqualTo(25);
+        assertThat(PaginationUtils.pageRequest(0, OVERSIZED_REQUEST_SIZE).getPageSize()).isEqualTo(100);
     }
 
     @Test
-    void startAndEndIndexAvoidIntegerOverflowForVeryLargePages() {
-        int startIndex = PaginationUtils.startIndex(Integer.MAX_VALUE, OVERSIZED_REQUEST_SIZE, 50);
-        int endIndex = PaginationUtils.endIndex(startIndex, OVERSIZED_REQUEST_SIZE, 50);
+    void aPageBeyondTheJpaOffsetLimitReadsOnlyTheFilteredTotal() {
+        var requested = PaginationUtils.pageRequest(Integer.MAX_VALUE, OVERSIZED_REQUEST_SIZE);
+        List<Pageable> queries = new ArrayList<>();
+        Page<String> page = PaginationUtils.readPage(requested, query -> {
+            queries.add(query);
+            return new PageImpl<>(List.of("first match"), query, 50);
+        });
 
-        assertThat(startIndex).isEqualTo(50);
-        assertThat(endIndex).isEqualTo(50);
+        assertThat(queries).containsExactly(PageRequest.of(0, 1));
+        assertThat(page.getContent()).isEmpty();
+        assertThat(page.getNumber()).isEqualTo(Integer.MAX_VALUE);
+        assertThat(page.getSize()).isEqualTo(PaginationUtils.DEFAULT_MAX_PAGE_SIZE);
+        assertThat(page.getTotalElements()).isEqualTo(50);
     }
 
     /** A page reports its page count from the sanitized size, as every paged service builds it. */
     @Test
     void pageResponseCountsPagesOfTheSanitizedSize() {
-        int size = PaginationUtils.sanitizeSize(OVERSIZED_REQUEST_SIZE);
-        assertThat(PageResponse.of(List.of(), 0, size, 250).totalPages()).isEqualTo(3);
-        assertThat(PageResponse.of(List.of(), 0, 25, 0).totalPages()).isZero();
+        int size = PaginationUtils.pageRequest(0, OVERSIZED_REQUEST_SIZE).getPageSize();
+        assertThat(new PageResponse<>(List.of(), 0, size, 250).totalPages()).isEqualTo(3);
+        assertThat(new PageResponse<>(List.of(), 0, 25, 0).totalPages()).isZero();
+        assertThat(new PageResponse<>(List.of(), 0, 2, Long.MAX_VALUE).totalPages()).isEqualTo(Long.MAX_VALUE / 2 + 1);
     }
 }

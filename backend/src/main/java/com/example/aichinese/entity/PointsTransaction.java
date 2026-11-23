@@ -17,8 +17,9 @@ import lombok.Setter;
 @Setter
 @Entity
 @Table(name = "points_transactions", indexes = {
-        @Index(name = "idx_points_transactions_student_id", columnList = "student_id"),
-        @Index(name = "idx_points_transactions_created_at", columnList = "created_at")
+        @Index(name = "idx_points_transactions_student_source_pair", columnList = "student_id,source_type,source_id"),
+        @Index(name = "idx_points_transactions_created_at", columnList = "created_at"),
+        @Index(name = "idx_points_transactions_student_created", columnList = "student_id,created_at")
 }, uniqueConstraints = {
         @UniqueConstraint(name = "uk_points_transactions_student_source", columnNames = { "student_id", "source_key" })
 })
@@ -40,11 +41,10 @@ public class PointsTransaction extends BaseEntity {
     @Column(name = "source_id", updatable = false)
     private Long sourceId;
 
-    // Database-generated, as in the V1 baseline, so the unique key above also works on a newly created H2
-    // schema (demo and test profiles, a new desktop database). An existing desktop H2 file (ddl-auto: update)
-    // keeps its old columns until its data folder is recreated. Flyway owns the MySQL column.
+    // Database-generated, as in the V1 baseline, so the unique key above also works on the schemas Hibernate
+    // creates for the demo and test profiles. Flyway owns the column of the main database.
     @Column(name = "source_key", insertable = false, updatable = false, length = 220,
             columnDefinition = "varchar(220) generated always as (case when source_type is not null"
-                    + " and source_id is not null then concat(source_type, '#', source_id) else null end)")
+                    + " and source_id is not null then concat(source_type, '#', source_id) else null end) stored")
     private String sourceKey;
 }

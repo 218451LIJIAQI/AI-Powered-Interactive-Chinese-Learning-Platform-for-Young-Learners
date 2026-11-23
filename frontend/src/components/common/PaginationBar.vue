@@ -1,34 +1,41 @@
 <template>
-  <nav class="pagination" :aria-label="label" :data-testid="testId('pagination')">
-    <span class="pagination-info" :data-testid="testId('page-label')">{{ infoText }}</span>
+  <!-- One page needs no pager: no "Page 1 of 1" and no two disabled arrows; a list without tabs keeps its summary. -->
+  <component
+    :is="totalPages > 1 ? 'nav' : 'div'"
+    v-if="totalPages > 1 || summary"
+    class="pagination"
+    :aria-label="totalPages > 1 ? label : undefined"
+  >
+    <span class="pagination-summary" role="status">
+      <span class="pagination-info">{{ summary || pageText }}</span>
+      <span v-if="summary && totalPages > 1" class="pagination-position">{{ pageText }}</span>
+    </span>
 
-    <div class="pagination-pages">
+    <div v-if="totalPages > 1" class="pagination-pages">
       <button
         class="btn btn-secondary btn-sm"
         :class="{ 'btn-icon': iconOnly }"
         type="button"
-        :aria-label="iconOnly ? previousText : undefined"
-        :disabled="currentPage <= 1"
-        :data-testid="testId('previous-page')"
-        @click="emit('update:currentPage', currentPage - 1)"
+        :aria-label="iconOnly ? t('pagination.previous') : undefined"
+        :disabled="page <= 0"
+        @click="emit('update:page', page - 1)"
       >
         <IconGlyph name="chevronLeft" :size="16" />
-        <span v-if="!iconOnly">{{ previousText }}</span>
+        <span v-if="!iconOnly">{{ t('pagination.previous') }}</span>
       </button>
       <button
         class="btn btn-secondary btn-sm"
         :class="{ 'btn-icon': iconOnly }"
         type="button"
-        :aria-label="iconOnly ? nextText : undefined"
-        :disabled="currentPage >= totalPages"
-        :data-testid="testId('next-page')"
-        @click="emit('update:currentPage', currentPage + 1)"
+        :aria-label="iconOnly ? t('pagination.next') : undefined"
+        :disabled="page >= totalPages - 1"
+        @click="emit('update:page', page + 1)"
       >
-        <span v-if="!iconOnly">{{ nextText }}</span>
+        <span v-if="!iconOnly">{{ t('pagination.next') }}</span>
         <IconGlyph name="chevronRight" :size="16" />
       </button>
     </div>
-  </nav>
+  </component>
 </template>
 
 <script setup lang="ts">
@@ -36,39 +43,34 @@ import { computed } from 'vue'
 
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { paginationMessages } from '@/plugins/paginationMessages'
+import { formatNumber } from '@/utils/format'
 
 import IconGlyph from './IconGlyph.vue'
 
 interface Props {
-  /** 1-based page shown; the buttons emit `update:currentPage` with the page to show. */
-  currentPage: number
+  /** 0-based page shown, as the server counts them; the buttons emit `update:page` with the page to show. */
+  page: number
   totalPages: number
-  /** Summary text; defaults to "Page {currentPage} of {totalPages}". */
-  info?: string
-  /** Accessible name of the `<nav>` landmark. */
+  /** Optional caller-formatted item summary (e.g. "412 events") for a list without tab counts. */
+  summary?: string
+  /** Accessible name of the `<nav>` landmark when multiple pages are present. */
   label: string
   /** Chevron-only buttons; "Previous" / "Next" become their accessible names. */
   iconOnly?: boolean
-  /** Adds `<prefix>-pagination`, `-page-label`, `-previous-page` and `-next-page` test ids. */
-  testIdPrefix?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  info: '',
+  summary: undefined,
   iconOnly: false,
-  testIdPrefix: '',
 })
 
-const emit = defineEmits<{ 'update:currentPage': [page: number] }>()
+const emit = defineEmits<{ 'update:page': [page: number] }>()
 
-const { t } = useLocalMessages({ pagination: paginationMessages })
-const infoText = computed(
-  () => props.info || t('pagination.pageOf', { page: props.currentPage, total: props.totalPages }),
+const { t, locale } = useLocalMessages({ pagination: paginationMessages })
+const pageText = computed(() =>
+  t('pagination.pageOf', {
+    page: formatNumber(props.page + 1, locale.value),
+    total: formatNumber(props.totalPages, locale.value),
+  }),
 )
-const previousText = computed(() => t('pagination.previous'))
-const nextText = computed(() => t('pagination.next'))
-
-function testId(part: string): string | undefined {
-  return props.testIdPrefix ? `${props.testIdPrefix}-${part}` : undefined
-}
 </script>

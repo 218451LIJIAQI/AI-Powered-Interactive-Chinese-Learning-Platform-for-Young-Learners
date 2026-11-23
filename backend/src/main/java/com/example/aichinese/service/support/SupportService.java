@@ -1,6 +1,7 @@
 package com.example.aichinese.service.support;
 
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
+import static org.springframework.http.HttpStatus.CONFLICT;
 import static org.springframework.http.HttpStatus.FORBIDDEN;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
@@ -8,12 +9,15 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.EnumMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
-import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -34,242 +38,251 @@ import com.example.aichinese.entity.enums.SupportClosedBy;
 import com.example.aichinese.entity.enums.SupportRequestStatus;
 import com.example.aichinese.entity.enums.SupportRequesterRole;
 import com.example.aichinese.entity.enums.SupportTopic;
+import com.example.aichinese.exception.FriendlyErrorMessageResolver;
 import com.example.aichinese.repository.SupportMessageRepository;
 import com.example.aichinese.repository.SupportRequestRepository;
-import com.example.aichinese.repository.UserRepository;
-import com.example.aichinese.repository.projection.StatusCountProjection;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.AuditLogService;
 import com.example.aichinese.service.AuditLogService.AuditTarget;
+import com.example.aichinese.service.AuthService;
 import com.example.aichinese.service.FileStorageService;
 import com.example.aichinese.service.NotificationService;
 import com.example.aichinese.service.StoredFileDownload;
 import com.example.aichinese.service.TransactionalEmailDispatcher;
-import com.example.aichinese.service.account.AccountRoles;
+import com.example.aichinese.service.account.CurrentAccount;
 import com.example.aichinese.util.PaginationUtils;
 import com.example.aichinese.util.TextUtils;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityNotFoundException;
+import jakarta.persistence.LockModeType;
+
 /**
- * Help & support: requests from students, teachers and visitors, answered by admins in the Support queue.
+ * Support requests: a learner's "Report a problem" and a visitor's message on the public Help page, answered by admins
+ * in the Support queue. Support's replies go to the requester by e-mail (learners have no support pages).
  *
- * <p>A request is OPEN while it waits for support, ANSWERED after a support reply (the requester's turn) and SOLVED
- * when the requester or support marks it solved. An answered request nobody replies to closes by itself 7 days after
- * the last support reply; that happens lazily, before any read or write, so it needs no scheduler.
+ * <p>A request is OPEN while it waits for support, ANSWERED after a support reply and SOLVED when support marks it
+ * solved (with or without a reply; a solved request can be reopened, the Undo of "Mark as solved"). An answered request
+ * closes 7 days after the last support reply. Reading the queue closes expired requests in bounded batches. A write
+ * checks the expiry of the request it locks.</p>
  */
 @Service
 public class SupportService {
 
     private static final Duration AUTO_CLOSE_AFTER = Duration.ofDays(7);
-    private static final int FIRST_NUMBER = 1000;
+    private static final int AUTO_CLOSE_BATCH_SIZE = 500;
     private static final int VISITOR_SUBJECT_LENGTH = 80;
-    private static final String TARGET_TYPE = "SupportRequest";
+    public static final String TARGET_TYPE = "SupportRequest";
     private static final String ADMIN_SUPPORT_PATH = "/admin/support";
     private static final String NOT_FOUND_MESSAGE = "Support request was not found.";
 
     private final SupportRequestRepository requestRepository;
     private final SupportMessageRepository messageRepository;
-    private final UserRepository userRepository;
+    private final SupportRequestNumberSequence numberSequence;
+    private final CurrentAccount currentAccount;
     private final FileStorageService fileStorageService;
     private final NotificationService notificationService;
     private final AuditLogService auditLogService;
     private final TransactionalEmailDispatcher emailDispatcher;
+    private final EntityManager entityManager;
+    private final TransactionTemplate readOnlyTransaction;
+    private final TransactionTemplate writeTransaction;
 
     public SupportService(
             SupportRequestRepository requestRepository,
             SupportMessageRepository messageRepository,
-            UserRepository userRepository,
+            SupportRequestNumberSequence numberSequence,
+            CurrentAccount currentAccount,
             FileStorageService fileStorageService,
             NotificationService notificationService,
             AuditLogService auditLogService,
-            TransactionalEmailDispatcher emailDispatcher) {
+            TransactionalEmailDispatcher emailDispatcher,
+            EntityManager entityManager,
+            PlatformTransactionManager transactionManager) {
         this.requestRepository = requestRepository;
         this.messageRepository = messageRepository;
-        this.userRepository = userRepository;
+        this.numberSequence = numberSequence;
+        this.currentAccount = currentAccount;
         this.fileStorageService = fileStorageService;
         this.notificationService = notificationService;
         this.auditLogService = auditLogService;
         this.emailDispatcher = emailDispatcher;
+        this.entityManager = entityManager;
+        this.readOnlyTransaction = new TransactionTemplate(transactionManager);
+        this.readOnlyTransaction.setReadOnly(true);
+        this.writeTransaction = new TransactionTemplate(transactionManager);
+        this.writeTransaction.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
     }
 
-    // ----- requester (signed-in student or teacher) -----
+    // A learner ("Report a problem")
 
-    @Transactional
-    public List<SupportRequestSummaryResponse> listOwn(SecurityUserDetails currentUser) {
-        closeExpired();
-        User requester = requireRequester(currentUser);
-        return requestRepository.findByRequesterIdOrderByCreatedAtDescIdDesc(requester.getId()).stream()
-                .map(request -> toSummary(request, requester))
-                .toList();
-    }
-
-    @Transactional
-    public SupportRequestDetailResponse getOwn(SecurityUserDetails currentUser, Long requestId) {
-        closeExpired();
-        User requester = requireRequester(currentUser);
-        return toDetail(requireOwn(requester, requestId));
-    }
-
-    @Transactional
-    public SupportRequestDetailResponse create(
+    /**
+     * Checks account role and topic and stages any screenshot to disk outside database locks, then persists the request
+     * and allocates its sequential number in a short READ_COMMITTED transaction.
+     */
+    public SupportRequestCreatedResponse create(
             SecurityUserDetails currentUser, CreateSupportRequest form, MultipartFile screenshot) {
-        User requester = requireRequester(currentUser);
+        readOnlyTransaction.executeWithoutResult(status -> {
+            User preview = currentAccount.require(currentUser);
+            if (preview.requirePrimaryRole() != RoleName.STUDENT) {
+                throw new ResponseStatusException(FORBIDDEN, FriendlyErrorMessageResolver.permissionDeniedMessage());
+            }
+        });
+        requireSelectableTopic(form.topic());
+        try (var staged = stageScreenshot(screenshot)) {
+            return writeTransaction.execute(status -> {
+                User requester = currentAccount.lock(currentUser);
+                if (requester.requirePrimaryRole() != RoleName.STUDENT) {
+                    throw new ResponseStatusException(FORBIDDEN, FriendlyErrorMessageResolver.permissionDeniedMessage());
+                }
+                UploadedFile attachment = staged == null
+                        ? null
+                        : fileStorageService.saveStagedUpload(staged, requester);
+                SupportRequest request = newRequest(
+                        requester, requester.getEmail(), null, SupportRequesterRole.STUDENT, form.topic(), form.subject());
+                addMessage(request, requester, false, form.message(), attachment);
+                notifyAdminsOfNewRequest(request, requester.getDisplayName());
+                return new SupportRequestCreatedResponse(request.getNumber(), request.getRequesterEmail());
+            });
+        }
+    }
+
+    // Visitor (the public Help page)
+
+    @Transactional
+    public SupportRequestCreatedResponse createForVisitor(VisitorSupportRequest form) {
+        requireSelectableTopic(form.topic());
+        String email = AuthService.normalizeEmail(form.email());
+        // The visitor has no account: the replies e-mailed to them follow the language they wrote from.
         SupportRequest request = newRequest(
-                requester,
-                requester.getEmail(),
-                AccountRoles.has(requester, RoleName.TEACHER) ? SupportRequesterRole.TEACHER : SupportRequesterRole.STUDENT,
-                form.topic(),
-                form.subject());
-        addMessage(request, requester, false, form.message(), storeScreenshot(screenshot, requester));
-        notifyAdmins(request, "New support request",
-                requester.getDisplayName() + " sent #" + request.getNumber() + " “" + request.getSubject()
-                        + "”. Reply within 2 working days.");
-        return toDetail(request);
+                null, email, form.language(), SupportRequesterRole.VISITOR, form.topic(), subjectFrom(form.message()));
+        addMessage(request, null, false, form.message(), null);
+        notifyAdminsOfNewRequest(request, "A visitor (" + email + ")");
+        return new SupportRequestCreatedResponse(request.getNumber(), email);
     }
 
-    /** The requester answers support (or adds details); the request waits for support again. */
-    @Transactional
-    public SupportRequestDetailResponse replyAsRequester(
-            SecurityUserDetails currentUser, Long requestId, String body) {
-        closeExpired();
-        User requester = requireRequester(currentUser);
-        SupportRequest request = requireOwn(requester, requestId);
-        requireNotSolved(request);
-        addMessage(request, requester, false, body, null);
-        request.setStatus(SupportRequestStatus.OPEN);
-        request.setClosesAt(null);
-        requestRepository.save(request);
-        notifyAdmins(request, "Reply on a support request",
-                requester.getDisplayName() + " replied on #" + request.getNumber() + " “" + request.getSubject() + "”.");
-        return toDetail(request);
+    // Admin queue
+
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public SupportQueueResponse queue(SupportRequestStatus status, int page, int size) {
+        LocalDateTime now = LocalDateTime.now();
+        // Lock candidate expired requests on PRIMARY in ascending id order (matching account deletion) in bounded batches.
+        List<Long> expiredIds = requestRepository.findExpiredIds(now);
+        for (int from = 0; from < expiredIds.size(); from += AUTO_CLOSE_BATCH_SIZE) {
+            List<Long> batch = expiredIds.subList(from, Math.min(from + AUTO_CLOSE_BATCH_SIZE, expiredIds.size()));
+            List<Long> lockedIds = requestRepository.lockIdsInOrder(batch);
+            if (!lockedIds.isEmpty()) {
+                requestRepository.closeExpiredByIds(lockedIds, now);
+            }
+        }
+        PageRequest pageRequest = PaginationUtils.pageRequest(page, size);
+        Map<SupportRequestStatus, Long> counts = counts();
+        long total = counts.getOrDefault(status, 0L);
+        List<SupportRequest> requests = List.of();
+        if (pageRequest.getOffset() < total && pageRequest.getOffset() <= Integer.MAX_VALUE) {
+            requests = status == SupportRequestStatus.SOLVED
+                    ? requestRepository.findByStatusOrderBySolvedAtDescIdDesc(status, pageRequest)
+                    : requestRepository.findByStatusOrderByUpdatedAtAscIdAsc(status, pageRequest);
+        }
+        return new SupportQueueResponse(counts, new PageResponse<>(
+                requests.stream().map(SupportService::toSummary).toList(), pageRequest.getPageNumber(),
+                pageRequest.getPageSize(), total));
     }
 
-    @Transactional
-    public SupportRequestDetailResponse solveAsRequester(SecurityUserDetails currentUser, Long requestId) {
-        closeExpired();
-        User requester = requireRequester(currentUser);
-        SupportRequest request = requireOwn(requester, requestId);
-        if (request.getStatus() != SupportRequestStatus.SOLVED) {
-            markSolved(request, SupportClosedBy.REQUESTER);
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public SupportRequestDetailResponse get(Long requestId) {
+        SupportRequest request = require(requestId);
+        LocalDateTime now = LocalDateTime.now();
+        if (isAutoCloseDue(request, now)) {
+            requestRepository.closeExpiredByIds(List.of(request.getId()), now);
+            request = require(requestId);
         }
         return toDetail(request);
     }
 
-    @Transactional
-    public StoredFileDownload ownAttachment(SecurityUserDetails currentUser, Long messageId) {
-        User requester = requireRequester(currentUser);
-        SupportMessage message = messageRepository.findDetailedById(messageId)
-                .filter(found -> found.getRequest().getRequester() != null
-                        && found.getRequest().getRequester().getId().equals(requester.getId()))
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Requested file could not be found."));
-        return attachmentOf(message);
-    }
-
     /**
-     * Requests support answered that wait for this user (the Help & support badge). Read-only, like every count, so
-     * it also works inside the nav-count read-only transaction: a request past its closing time no longer counts.
+     * Support answers: the reply is e-mailed to the requester (a learner at the account's address, in the account's
+     * language; a visitor at the address and in the language of the Help page form). The request becomes ANSWERED and
+     * closes by itself 7 days later.
      */
-    @Transactional(readOnly = true)
-    public long countAwaitingRequester(Long userId) {
-        return requestRepository.countAnsweredStillOpen(userId, LocalDateTime.now());
-    }
-
-    // ----- visitor (public Help page) -----
-
-    @Transactional
-    public SupportRequestCreatedResponse createForVisitor(VisitorSupportRequest form) {
-        String email = form.email().toLowerCase(Locale.ROOT);
-        SupportRequest request = newRequest(
-                null, email, SupportRequesterRole.VISITOR, form.topic(), subjectFrom(form.message()));
-        addMessage(request, null, false, form.message(), null);
-        notifyAdmins(request, "New support request",
-                "A visitor (" + email + ") sent #" + request.getNumber() + " “" + request.getSubject()
-                        + "”. Reply within 2 working days.");
-        return new SupportRequestCreatedResponse(request.getNumber(), email);
-    }
-
-    // ----- admin queue -----
-
-    @Transactional
-    public SupportQueueResponse queue(SupportRequestStatus status, int page, int size) {
-        closeExpired();
-        Page<SupportRequest> requests = status == SupportRequestStatus.SOLVED
-                ? requestRepository.findByStatusOrderBySolvedAtDescIdDesc(status, PaginationUtils.pageRequest(page, size))
-                : requestRepository.findByStatusOrderByUpdatedAtAscIdAsc(status, PaginationUtils.pageRequest(page, size));
-        return new SupportQueueResponse(
-                counts(),
-                PageResponse.from(requests, request -> toSummary(request, request.getRequester())));
-    }
-
-    @Transactional
-    public SupportRequestDetailResponse get(Long requestId) {
-        closeExpired();
-        return toDetail(require(requestId));
-    }
-
-    /** Support answers: the request becomes ANSWERED and closes by itself 7 days later if nobody replies. */
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public SupportRequestDetailResponse reply(SecurityUserDetails currentUser, Long requestId, String body) {
-        closeExpired();
-        User agent = requireUser(currentUser);
-        SupportRequest request = require(requestId);
-        requireNotSolved(request);
+        LockedSupportWrite locked = lockForWrite(currentUser, requestId);
+        User agent = locked.agent();
+        SupportRequest request = locked.request();
+        if (request.getStatus() == SupportRequestStatus.SOLVED) {
+            throw new ResponseStatusException(BAD_REQUEST,
+                    "This request is solved. Reopen it first if you need to reply.");
+        }
         LocalDateTime now = LocalDateTime.now();
         addMessage(request, agent, true, body, null);
         request.setStatus(SupportRequestStatus.ANSWERED);
         request.setLastSupportReplyAt(now);
         request.setClosesAt(now.plus(AUTO_CLOSE_AFTER));
-        requestRepository.save(request);
+        // The queue orders by the last change, so a reply moves the request.
+        request.setUpdatedAt(now);
 
         User requester = request.getRequester();
-        if (requester != null) {
-            notificationService.safeCreateNotification(
-                    requester,
-                    NotificationType.SUPPORT_REQUEST,
-                    "Support replied to your request",
-                    agent.getDisplayName() + " answered #" + request.getNumber() + " “" + request.getSubject()
-                            + "”. Reply, or mark it solved.",
-                    TARGET_TYPE,
-                    request.getId(),
-                    requesterPath(request),
-                    agent);
-        } else {
-            emailDispatcher.enqueueSupportReply(request.getRequesterEmail(), request.getNumber(), request.getSubject(), body);
-        }
+        String email = requester == null ? request.getRequesterEmail() : requester.getEmail();
+        String language = requester == null ? request.getRequesterLanguage() : requester.getPreferredLanguage();
+        emailDispatcher.enqueueSupportReply(email, language, request.getNumber(), request.getSubject(), body);
         auditLogService.record(agent, "SUPPORT_REPLY_SENT", target(request), null,
                 "Support replied to request #" + request.getNumber() + ".");
         return toDetail(request);
     }
 
-    @Transactional
+    /** Marks the request solved, answered or not; solving it again changes nothing. */
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public SupportRequestDetailResponse solve(SecurityUserDetails currentUser, Long requestId) {
-        closeExpired();
-        User agent = requireUser(currentUser);
-        SupportRequest request = require(requestId);
+        LockedSupportWrite locked = lockForWrite(currentUser, requestId);
+        User agent = locked.agent();
+        SupportRequest request = locked.request();
         if (request.getStatus() == SupportRequestStatus.SOLVED) {
             return toDetail(request);
         }
-        markSolved(request, SupportClosedBy.SUPPORT);
-        if (request.getRequester() != null) {
-            notificationService.safeCreateNotification(
-                    request.getRequester(),
-                    NotificationType.SUPPORT_REQUEST,
-                    "Your request was marked as solved",
-                    "#" + request.getNumber() + " “" + request.getSubject()
-                            + "” is solved. If it happens again, send a new request.",
-                    TARGET_TYPE,
-                    request.getId(),
-                    requesterPath(request),
-                    agent);
-        }
+        LocalDateTime now = LocalDateTime.now();
+        markSolved(request, SupportClosedBy.SUPPORT, now);
+        request.setUpdatedAt(now);
         auditLogService.record(agent, "SUPPORT_REQUEST_SOLVED", target(request), null,
                 "Support marked request #" + request.getNumber() + " as solved.");
         return toDetail(request);
     }
 
-    @Transactional
+    /**
+     * Reopens a solved request (the Undo of "Mark as solved"): back to ANSWERED when support has replied, otherwise to
+     * OPEN. An answered request closes by itself 7 days after the last support reply again, or 7 days after reopening
+     * when that time has passed.
+     */
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public SupportRequestDetailResponse reopen(SecurityUserDetails currentUser, Long requestId) {
+        LockedSupportWrite locked = lockForWrite(currentUser, requestId);
+        User agent = locked.agent();
+        SupportRequest request = locked.request();
+        if (request.getStatus() != SupportRequestStatus.SOLVED) {
+            throw new ResponseStatusException(CONFLICT, "Only a solved request can be reopened.");
+        }
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime lastReply = request.getLastSupportReplyAt();
+        if (lastReply == null) {
+            request.setStatus(SupportRequestStatus.OPEN);
+            request.setClosesAt(null);
+        } else {
+            LocalDateTime closesAt = lastReply.plus(AUTO_CLOSE_AFTER);
+            request.setStatus(SupportRequestStatus.ANSWERED);
+            request.setClosesAt(closesAt.isAfter(now) ? closesAt : now.plus(AUTO_CLOSE_AFTER));
+        }
+        request.setSolvedAt(null);
+        request.setClosedBy(null);
+        request.setUpdatedAt(now);
+        auditLogService.record(agent, "SUPPORT_REQUEST_REOPENED", target(request), null,
+                "Support reopened request #" + request.getNumber() + ".");
+        return toDetail(request);
+    }
+
     public StoredFileDownload attachment(Long messageId) {
-        return attachmentOf(messageRepository.findDetailedById(messageId)
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Requested file could not be found.")));
+        UploadedFile attachment = messageRepository.findAttachmentByMessageId(messageId)
+                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Requested file could not be found."));
+        return fileStorageService.loadSupportScreenshot(attachment);
     }
 
     /** Requests waiting for support (the admin Support badge and dashboard); closing never changes OPEN ones. */
@@ -282,30 +295,68 @@ public class SupportService {
     @Transactional(readOnly = true)
     public List<SupportRequestSummaryResponse> oldestOpen(int limit) {
         return requestRepository.findByStatusOrderByUpdatedAtAscIdAsc(
-                        SupportRequestStatus.OPEN, PaginationUtils.pageRequest(0, limit))
-                .map(request -> toSummary(request, request.getRequester()))
-                .getContent();
+                        SupportRequestStatus.OPEN, PaginationUtils.pageRequest(0, limit)).stream()
+                .map(SupportService::toSummary)
+                .toList();
     }
 
-    // ----- shared -----
-
-    /** Closes answered requests whose 7 days without a reply have passed (inside the caller's transaction). */
-    private void closeExpired() {
-        requestRepository.closeExpired(LocalDateTime.now());
+    private record LockedSupportWrite(User agent, SupportRequest request) {
     }
 
-    private SupportRequest newRequest(
-            User requester, String email, SupportRequesterRole role, SupportTopic topic, String subject) {
+    /**
+     * The request and acting admin, locked for a write. Account locks precede the request, matching deletion and admin
+     * status changes. READ_COMMITTED on the HTTP write operations also lets their returned thread include replies
+     * committed while waiting for these locks. Expire just this request: a reply must not first lock every expired
+     * request through the queue's bulk update.
+     */
+    private LockedSupportWrite lockForWrite(SecurityUserDetails currentUser, Long requestId) {
+        SupportRequest request = require(requestId);
+        User requester = request.getRequester();
+        User actor = currentAccount.lockWith(currentUser, requester);
+        if (requester != null && requester.getDeletedAt() != null) {
+            throw new ResponseStatusException(NOT_FOUND, NOT_FOUND_MESSAGE);
+        }
+        // No account lock guards a visitor's request, yet deleting the account with its address removes it (under the
+        // request's lock): a write that waited for that lock, or came after it, finds no request.
+        try {
+            entityManager.refresh(request, LockModeType.PESSIMISTIC_WRITE);
+        } catch (EntityNotFoundException deleted) {
+            throw new ResponseStatusException(NOT_FOUND, NOT_FOUND_MESSAGE, deleted);
+        }
+        expireIfDue(request);
+        return new LockedSupportWrite(actor, request);
+    }
+
+    private void expireIfDue(SupportRequest request) {
+        LocalDateTime now = LocalDateTime.now();
+        if (isAutoCloseDue(request, now)) {
+            markSolved(request, SupportClosedBy.AUTO, request.getClosesAt());
+            request.setUpdatedAt(now);
+        }
+    }
+
+    private static boolean isAutoCloseDue(SupportRequest request, LocalDateTime now) {
+        return request.getStatus() == SupportRequestStatus.ANSWERED
+                && request.getClosesAt() != null
+                && !request.getClosesAt().isAfter(now);
+    }
+
+    private static void requireSelectableTopic(SupportTopic topic) {
+        if (topic == null || !topic.isSelectable()) {
+            throw new ResponseStatusException(BAD_REQUEST, FriendlyErrorMessageResolver.invalidRequestMessage());
+        }
+    }
+
+    private SupportRequest newRequest(User requester, String email, String language, SupportRequesterRole role,
+            SupportTopic topic, String subject) {
         SupportRequest request = new SupportRequest();
-        // Numbers are unique (uk_support_requests_number); two requests sent in the same instant fail one of them,
-        // which the requester simply sends again.
-        request.setNumber(Math.max(FIRST_NUMBER - 1, requestRepository.findHighestNumber()) + 1);
+        request.setNumber(numberSequence.nextNumber());
         request.setRequester(requester);
         request.setRequesterEmail(email);
+        request.setRequesterLanguage(language);
         request.setRequesterRole(role);
         request.setTopic(topic);
         request.setSubject(subject);
-        request.setStatus(SupportRequestStatus.OPEN);
         return requestRepository.saveAndFlush(request);
     }
 
@@ -317,46 +368,30 @@ public class SupportService {
         message.setBody(body);
         message.setAttachment(attachment);
         messageRepository.save(message);
-        // The queue orders by the last change, so a reply moves the request.
-        request.setUpdatedAt(LocalDateTime.now());
     }
 
-    private void markSolved(SupportRequest request, SupportClosedBy closedBy) {
+    private void markSolved(SupportRequest request, SupportClosedBy closedBy, LocalDateTime solvedAt) {
         request.setStatus(SupportRequestStatus.SOLVED);
-        request.setSolvedAt(LocalDateTime.now());
+        request.setSolvedAt(solvedAt);
         request.setClosedBy(closedBy);
         request.setClosesAt(null);
-        requestRepository.save(request);
     }
 
-    private UploadedFile storeScreenshot(MultipartFile screenshot, User owner) {
+    private FileStorageService.StagedUpload stageScreenshot(MultipartFile screenshot) {
         if (screenshot == null || screenshot.isEmpty()) {
             return null;
         }
-        return fileStorageService.storeSupportScreenshot(screenshot, owner);
+        return fileStorageService.stageSupportScreenshot(screenshot);
     }
 
-    private StoredFileDownload attachmentOf(SupportMessage message) {
-        if (message.getAttachment() == null) {
-            throw new ResponseStatusException(NOT_FOUND, "Requested file could not be found.");
-        }
-        return fileStorageService.loadSupportScreenshot(message.getAttachment());
-    }
-
-    private void notifyAdmins(SupportRequest request, String title, String message) {
-        for (User admin : userRepository.findAllByRoleName(RoleName.ADMIN)) {
-            if (admin.isActive()) {
-                notificationService.safeCreateNotification(
-                        admin,
-                        NotificationType.SUPPORT_REQUEST,
-                        title,
-                        message,
-                        TARGET_TYPE,
-                        request.getId(),
-                        ADMIN_SUPPORT_PATH + "?request=" + request.getId(),
-                        request.getRequester());
-            }
-        }
+    /** {@code sender} names who sent the request: the learner, or the visitor with the address. */
+    private void notifyAdminsOfNewRequest(SupportRequest request, String sender) {
+        String message = sender + " sent #" + request.getNumber() + " “" + request.getSubject()
+                + "”. Reply within 2 working days.";
+        Long requestId = request.getId();
+        notificationService.notifyActiveAdmins(NotificationType.SUPPORT_REQUEST, "New support request", message,
+                TARGET_TYPE, requestId, ADMIN_SUPPORT_PATH + "?request=" + requestId,
+                () -> requestRepository.findIdWithReadLock(requestId).isPresent());
     }
 
     private Map<SupportRequestStatus, Long> counts() {
@@ -364,9 +399,7 @@ public class SupportService {
         for (SupportRequestStatus status : SupportRequestStatus.values()) {
             counts.put(status, 0L);
         }
-        for (StatusCountProjection row : requestRepository.countGroupedByStatus()) {
-            SupportRequestStatus.tryFrom(row.getStatus()).ifPresent(status -> counts.put(status, row.getCount()));
-        }
+        requestRepository.groupByStatus().forEach(row -> counts.put(row.getStatus(), row.getCount()));
         return counts;
     }
 
@@ -384,11 +417,11 @@ public class SupportService {
                                 message.getAttachment().getFileSize())))
                 .toList();
         User requester = request.getRequester();
-        return new SupportRequestDetailResponse(
-                toSummary(request, requester), requester == null ? null : requester.getId(), messages);
+        return new SupportRequestDetailResponse(toSummary(request), requester == null ? null : requester.getId(), messages);
     }
 
-    private static SupportRequestSummaryResponse toSummary(SupportRequest request, User requester) {
+    private static SupportRequestSummaryResponse toSummary(SupportRequest request) {
+        User requester = request.getRequester();
         return new SupportRequestSummaryResponse(
                 request.getId(),
                 request.getNumber(),
@@ -396,58 +429,41 @@ public class SupportService {
                 request.getSubject(),
                 request.getStatus(),
                 requester == null ? null : requester.getDisplayName(),
-                request.getRequesterEmail(),
+                requester == null ? request.getRequesterEmail() : requester.getEmail(),
                 request.getRequesterRole(),
                 request.getCreatedAt(),
                 request.getUpdatedAt(),
-                request.getLastSupportReplyAt(),
                 request.getClosesAt(),
                 request.getSolvedAt(),
                 request.getClosedBy());
     }
 
-    /** The visitor form has no subject: the first line of the message, shortened, stands in for it. */
+    /**
+     * The visitor form has no subject: the first non-blank line of the message (see {@code VisitorSupportRequest}),
+     * shortened, stands in for it.
+     */
     private static String subjectFrom(String message) {
-        String firstLine = message.strip().lines().findFirst().orElse("").strip();
-        return TextUtils.truncateWithEllipsis(firstLine, VISITOR_SUBJECT_LENGTH);
-    }
-
-    private static String requesterPath(SupportRequest request) {
-        String root = request.getRequesterRole() == SupportRequesterRole.TEACHER ? "/teacher" : "/student";
-        return root + "/support/" + request.getId();
+        return message.lines()
+                .map(line -> TextUtils.truncateWithEllipsis(line, VISITOR_SUBJECT_LENGTH))
+                .filter(subject -> subject != null)
+                .findFirst()
+                .orElseGet(() -> TextUtils.truncateWithEllipsis(message, VISITOR_SUBJECT_LENGTH));
     }
 
     private static AuditTarget target(SupportRequest request) {
-        return new AuditTarget(TARGET_TYPE, request.getId(), "#" + request.getNumber() + " " + request.getSubject());
+        return new AuditTarget(TARGET_TYPE, request.getId(), numberLabel(request) + " " + request.getSubject());
     }
 
-    private static void requireNotSolved(SupportRequest request) {
-        if (request.getStatus() == SupportRequestStatus.SOLVED) {
-            throw new ResponseStatusException(BAD_REQUEST, "This request is solved. Send a new request if you need more help.");
-        }
-    }
-
-    private SupportRequest requireOwn(User requester, Long requestId) {
-        return requestRepository.findByIdAndRequesterId(requestId, requester.getId())
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, NOT_FOUND_MESSAGE));
+    /**
+     * "#1041": the audit label of a request deleted with its requester's account, which keeps the number but not the
+     * subject (the requester's own words).
+     */
+    public static String numberLabel(SupportRequest request) {
+        return "#" + request.getNumber();
     }
 
     private SupportRequest require(Long requestId) {
         return requestRepository.findDetailedById(requestId)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, NOT_FOUND_MESSAGE));
-    }
-
-    /** Students and teachers (applicants included) send requests; admins answer them in the Support queue. */
-    private User requireRequester(SecurityUserDetails currentUser) {
-        User user = requireUser(currentUser);
-        if (AccountRoles.has(user, RoleName.ADMIN)) {
-            throw new ResponseStatusException(FORBIDDEN, "Admins answer support requests in the Support queue.");
-        }
-        return user;
-    }
-
-    private User requireUser(SecurityUserDetails currentUser) {
-        return userRepository.findWithRolesById(currentUser.getUserId())
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "User was not found."));
     }
 }

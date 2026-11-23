@@ -1,465 +1,435 @@
 <template>
-  <div class="lesson-quiz-layout">
-    <section class="panel lesson-editor-sheet" aria-labelledby="lesson-quiz-title">
-      <div class="lesson-editor-section">
-        <div class="lesson-quiz-chips" role="group" :aria-label="t('lessonEditor.quiz.inLesson')">
+  <div class="lesson-with-rail">
+    <section class="panel authoring-card" aria-labelledby="lesson-quiz-title">
+      <template v-if="questions.length">
+        <div class="section-header">
+          <h2 id="lesson-quiz-title" class="card-title">{{ t('lessonEditor.quiz.questions') }}</h2>
           <button
-            v-for="(item, index) in editor.quizzes"
-            :key="item.id"
-            type="button"
-            class="lesson-quiz-chip"
-            :aria-pressed="item.id === quiz?.id"
-            @click="selectedId = item.id"
-          >
-            {{ t('lessonEditor.quiz.chip', { number: index + 1, title: item.title }) }}
-            <template v-if="item.stage"> · {{ t(STAGE_KEYS[item.stage]) }}</template>
-          </button>
-          <button
-            v-if="editor.editable"
-            type="button"
-            class="btn btn-ghost btn-sm"
-            :disabled="busy"
-            data-testid="add-quiz"
-            @click="addQuiz"
-          >
-            <IconGlyph name="plus" :size="16" />{{ t('lessonEditor.quiz.add') }}
-          </button>
-        </div>
-
-        <div class="lesson-editor-section-head">
-          <div>
-            <h2 id="lesson-quiz-title" class="card-title">
-              {{
-                quiz
-                  ? t('lessonEditor.quiz.title', { number: quizIndex + 1, title: quiz.title })
-                  : t('lessonEditor.tabs.quiz')
-              }}
-            </h2>
-            <p class="type-caption">{{ t('lessonEditor.quiz.intro') }}</p>
-          </div>
-          <div v-if="quiz && editor.editable" class="lesson-editor-item-actions">
-            <button type="button" class="btn btn-ghost btn-sm" :disabled="busy" @click="duplicateQuiz">
-              <IconGlyph name="copy" :size="16" />{{ t('lessonEditor.quiz.duplicate') }}
-            </button>
-            <button type="button" class="btn btn-ghost btn-sm" :disabled="busy" @click="archiveOpen = true">
-              <IconGlyph name="archive" :size="16" />{{ t('lessonEditor.quiz.archive') }}
-            </button>
-          </div>
-        </div>
-        <p v-if="!quiz" class="lesson-editor-empty">{{ t('lessonEditor.quiz.empty') }}</p>
-
-        <form v-if="quiz" class="lesson-quiz-settings" @submit.prevent="saveSettings">
-          <div class="field">
-            <label class="field-label" :for="`${baseId}-title`">{{ t('lessonEditor.quiz.settingsTitle') }}</label>
-            <input
-              :id="`${baseId}-title`"
-              v-model="settings.title"
-              class="input"
-              maxlength="200"
-              required
-              :disabled="!editor.editable"
-            />
-          </div>
-          <div class="field">
-            <label class="field-label" :for="`${baseId}-limit`">{{ t('lessonEditor.quiz.timeLimit') }}</label>
-            <input
-              :id="`${baseId}-limit`"
-              v-model.number="settings.timeLimitMinutes"
-              class="input"
-              type="number"
-              min="1"
-              max="180"
-              :placeholder="t('lessonEditor.quiz.noLimit')"
-              :disabled="!editor.editable"
-            />
-          </div>
-          <div class="field">
-            <label class="field-label" :for="`${baseId}-stage`">{{ t('lessonEditor.quiz.stage') }}</label>
-            <select :id="`${baseId}-stage`" v-model="settings.stage" class="select" :disabled="!editor.editable">
-              <option :value="null">{{ t('lessonEditor.activities.noStage') }}</option>
-              <option v-for="value in STAGES" :key="value" :value="value">{{ t(STAGE_KEYS[value]) }}</option>
-            </select>
-          </div>
-          <div class="field">
-            <span class="field-label">{{ t('lessonEditor.quiz.marks') }}</span>
-            <span class="lesson-quiz-marks">{{ t('classes.marks', quiz.totalPoints) }}</span>
-          </div>
-          <button
-            v-if="editor.editable && settingsChanged"
-            type="submit"
-            class="btn btn-secondary btn-sm"
-            :disabled="busy"
-          >
-            {{ t('lessonEditor.quiz.saveSettings') }}
-          </button>
-        </form>
-        <p v-if="quiz" class="type-caption lesson-editor-foot-note">
-          <IconGlyph name="eyeOff" :size="14" /> {{ t('lessonEditor.quiz.hintsNote') }}
-        </p>
-      </div>
-
-      <div v-if="quiz" class="lesson-editor-section">
-        <div class="lesson-editor-section-head">
-          <div>
-            <h3 class="card-title">{{ t('lessonEditor.quiz.questions', { count: quiz.questions.length }) }}</h3>
-            <p class="type-caption">
-              {{ t('lessonEditor.quiz.questionsFacts', { marks: t('classes.marks', quiz.totalPoints) }) }}
-            </p>
-          </div>
-          <button
-            v-if="canEditQuestions"
+            v-if="canEdit"
             type="button"
             class="btn btn-secondary btn-sm"
+            :disabled="full || working"
+            :aria-describedby="full ? countHintId : undefined"
             data-testid="add-question"
             @click="openQuestion(null)"
           >
             <IconGlyph name="plus" :size="16" />{{ t('lessonEditor.quiz.addQuestion') }}
           </button>
         </div>
-        <p v-if="quiz.questionsLocked" class="callout is-compact is-warning">
-          <IconGlyph name="lock" :size="16" /><span>{{ t('lessonEditor.quiz.locked') }}</span>
+        <p v-if="quiz?.questionsLocked" class="callout">
+          <IconGlyph name="lock" :size="18" /><span>{{ t('lessonEditor.quiz.locked') }}</span>
         </p>
-        <p v-if="!quiz.questions.length" class="lesson-editor-empty">{{ t('lessonEditor.quiz.noQuestions') }}</p>
-        <ol v-else class="lesson-editor-list">
-          <li v-for="(question, index) in quiz.questions" :key="question.id" class="lesson-editor-item lesson-question">
-            <span class="lesson-editor-step" aria-hidden="true">{{ index + 1 }}</span>
-            <div class="lesson-editor-item-copy">
-              <span class="lesson-question-type">
-                {{ t(questionTypeKey(question.type)) }} · {{ t('classes.marks', question.points) }}
+        <ol ref="questionList" class="row-list lesson-questions">
+          <li v-for="(question, index) in questions" :key="question.id" data-testid="quiz-question">
+            <span class="authoring-tile is-sm" aria-hidden="true">{{ index + 1 }}</span>
+            <div class="lesson-question-copy">
+              <span class="lesson-question-tags">
+                <span class="tag is-sm">{{ t(questionTypeKey(question.type)) }}</span>
+                <span v-if="question.aiDraft" class="tag is-sm" data-testid="ai-draft-tag">
+                  {{ t('lessonEditor.quiz.aiDraftTag') }}
+                </span>
               </span>
-              <strong><CjkText :text="question.text" /></strong>
+              <strong class="row-list-title"><CjkText :text="question.text" /></strong>
+              <span v-if="question.audioUrl" class="row-list-meta">
+                {{ t('lessonEditor.quiz.audio', { file: fileName(question.audioUrl) }) }}
+              </span>
               <span v-if="question.options.length" class="lesson-question-options">
                 <span
                   v-for="option in question.options"
                   :key="option.id"
                   class="tag"
-                  :class="{ 'is-correct': option.correct }"
+                  :class="option.correct ? 'is-strong' : 'is-outline'"
                 >
-                  <IconGlyph v-if="option.correct" name="check" :size="12" />
+                  <IconGlyph v-if="option.correct" name="check" :size="14" />
                   <CjkText :text="option.text" />
+                  <span v-if="option.correct" class="sr-only"> ({{ t('lessonEditor.question.correctAnswer') }})</span>
                 </span>
               </span>
-              <span v-else-if="question.correctAnswerText" class="type-caption">
-                {{ t('lessonEditor.quiz.answer', { answer: question.correctAnswerText }) }}
+              <span v-else-if="question.correctAnswerText" class="row-list-meta">
+                <CjkText :text="t('lessonEditor.quiz.answer', { answer: question.correctAnswerText })" />
               </span>
-              <span v-if="question.explanation" class="type-caption">
-                {{ t('lessonEditor.quiz.explanation', { text: question.explanation }) }}
+              <span v-if="question.explanation" class="row-list-meta">
+                <CjkText :text="t('lessonEditor.quiz.explanation', { text: question.explanation })" />
               </span>
-              <span v-if="question.hint" class="type-caption">{{
-                t('lessonEditor.quiz.hint', { text: question.hint })
-              }}</span>
             </div>
-            <div v-if="canEditQuestions" class="lesson-editor-item-actions">
-              <button
-                type="button"
-                class="btn btn-ghost btn-sm"
-                :aria-label="t('lessonEditor.quiz.editLabel', { number: index + 1 })"
-                @click="openQuestion(question)"
-              >
-                <IconGlyph name="edit" :size="16" />{{ t('lessonEditor.quiz.edit') }}
-              </button>
+            <div v-if="canEdit" class="row-list-actions">
               <button
                 type="button"
                 class="btn btn-ghost btn-icon btn-sm"
-                :disabled="busy"
-                :aria-label="t('lessonEditor.quiz.duplicateLabel', { number: index + 1 })"
-                :title="t('lessonEditor.quiz.duplicateQuestion')"
-                @click="duplicateQuestion(question.id)"
-              >
-                <IconGlyph name="copy" :size="16" />
-              </button>
-              <button
-                type="button"
-                class="btn btn-ghost btn-icon btn-sm"
+                :disabled="working"
                 :aria-label="t('lessonEditor.quiz.deleteLabel', { number: index + 1 })"
                 :title="t('lessonEditor.quiz.deleteQuestion')"
-                @click="deleteTarget = question"
+                @click="deleteQuestion(question)"
               >
                 <IconGlyph name="trash" :size="16" />
               </button>
-              <span class="teacher-move">
-                <button
-                  type="button"
-                  class="btn btn-ghost btn-icon btn-sm"
-                  :disabled="busy || index === 0"
-                  :aria-label="t('lessonEditor.quiz.moveUp', { number: index + 1 })"
-                  @click="moveQuestion(index, -1)"
-                >
-                  <IconGlyph name="arrowUp" :size="16" />
-                </button>
-                <button
-                  type="button"
-                  class="btn btn-ghost btn-icon btn-sm"
-                  :disabled="busy || index === quiz.questions.length - 1"
-                  :aria-label="t('lessonEditor.quiz.moveDown', { number: index + 1 })"
-                  @click="moveQuestion(index, 1)"
-                >
-                  <IconGlyph name="arrowDown" :size="16" />
-                </button>
-              </span>
+              <!-- An unchecked AI draft: Keep checks it as it is; saving an edit checks it too (A3.28 → A3.37). -->
+              <button
+                v-if="question.aiDraft"
+                type="button"
+                class="btn btn-secondary btn-sm"
+                :disabled="working"
+                :aria-label="t('lessonEditor.quiz.keepLabel', { number: index + 1 })"
+                data-testid="keep-question"
+                @click="keepQuestion(question, index + 1)"
+              >
+                <IconGlyph name="check" :size="16" />{{ t('lessonEditor.quiz.keep') }}
+              </button>
+              <button
+                type="button"
+                class="btn btn-secondary btn-sm"
+                :disabled="working"
+                :data-question-edit="index + 1"
+                :aria-label="t('lessonEditor.quiz.editLabel', { number: index + 1 })"
+                @click="openQuestion(question)"
+              >
+                <IconGlyph name="edit" :size="16" />{{ t('common.edit') }}
+              </button>
             </div>
           </li>
         </ol>
-      </div>
+      </template>
+      <template v-else>
+        <h2 id="lesson-quiz-title" class="sr-only">{{ t('lessonEditor.quiz.questions') }}</h2>
+        <!-- Nothing yet: adding the first question is the main task here, so it is the primary button. -->
+        <StatePanel
+          tone="empty"
+          icon="quiz"
+          :title="t('lessonEditor.quiz.emptyTitle')"
+          :message="t('lessonEditor.quiz.emptyMessage')"
+        >
+          <template v-if="canEdit" #actions>
+            <button
+              type="button"
+              class="btn btn-primary"
+              :disabled="working"
+              data-testid="add-first-question"
+              @click="openQuestion(null)"
+            >
+              <IconGlyph name="plus" :size="16" />{{ t('lessonEditor.quiz.addQuestion') }}
+            </button>
+          </template>
+        </StatePanel>
+      </template>
     </section>
 
-    <aside class="lesson-quiz-side">
-      <section v-if="canEditQuestions" class="panel" aria-labelledby="lesson-quiz-ai-title">
-        <h2 id="lesson-quiz-ai-title" class="sr-only">{{ t('lessonEditor.quiz.aiTitle') }}</h2>
-        <TeacherAiDraftPanel :disabled="busy" @quiz-draft="addDraftQuestions" />
+    <div class="lesson-rail">
+      <AdminQuizDraftPanel
+        v-if="canEdit"
+        :lesson-id="editor.lessonId"
+        :count-hint-id="countHintId"
+        :remaining="remaining"
+        :disabled="busy"
+        @quiz-draft="addDraftQuestions"
+        @generating="generating = $event"
+      />
+      <section class="panel authoring-card" aria-labelledby="lesson-quiz-hints-title">
+        <div class="authoring-card-head">
+          <h2 id="lesson-quiz-hints-title" class="card-title">{{ t('lessonEditor.quiz.hintsTitle') }}</h2>
+          <p class="type-caption">{{ t('lessonEditor.quiz.hintsSubtitle') }}</p>
+        </div>
+        <!-- The quiz's one setting. It is not a question, so it stays editable when the questions are locked. -->
+        <div class="lesson-quiz-setting">
+          <div class="row-list-copy">
+            <label class="row-list-title" :for="`${baseId}-hints`">{{ t('lessonEditor.quiz.hints') }}</label>
+            <span :id="`${baseId}-hints-note`" class="row-list-meta">{{ t('lessonEditor.quiz.hintsNote') }}</span>
+          </div>
+          <span class="lesson-quiz-switch">
+            <span aria-hidden="true">{{
+              hintsChecked ? t('lessonEditor.quiz.hintsOn') : t('lessonEditor.quiz.hintsOff')
+            }}</span>
+            <input
+              :id="`${baseId}-hints`"
+              class="switch"
+              type="checkbox"
+              role="switch"
+              :checked="hintsChecked"
+              :disabled="!editor.editable || working"
+              :aria-describedby="`${baseId}-hints-note`"
+              data-testid="quiz-hints"
+              @change="setHints($event.target as HTMLInputElement)"
+            />
+          </span>
+        </div>
+        <p class="type-caption">
+          {{ hintsChecked ? t('lessonEditor.quiz.hintsOnNote') : t('lessonEditor.quiz.hintsOffNote') }}
+        </p>
       </section>
-      <section v-if="quiz" class="lesson-quiz-attempts-section" aria-labelledby="lesson-quiz-recent-title">
-        <h2 id="lesson-quiz-recent-title" class="card-title">{{ t('lessonEditor.quiz.recent') }}</h2>
-        <p v-if="!quiz.attemptCount" class="type-caption">{{ t('lessonEditor.quiz.noAttempts') }}</p>
-        <template v-else>
-          <p class="type-caption">
-            {{
-              t('lessonEditor.quiz.recentFacts', {
-                attempts: t('lessonEditor.quiz.attempts', quiz.attemptCount),
-                average: quiz.averagePercent ?? 0,
-              })
-            }}
-          </p>
-          <ul class="lesson-quiz-attempts">
-            <li v-for="(attempt, index) in quiz.recentAttempts" :key="index">
-              <span>{{ attempt.studentName }} · {{ formatShortDate(attempt.completedAt) }}</span>
-              <strong>{{ attempt.percent }}%</strong>
-            </li>
-          </ul>
-        </template>
-      </section>
-    </aside>
+    </div>
 
     <LessonQuestionDrawer
-      :open="questionOpen"
+      v-if="editingQuestion !== undefined"
       :question="editingQuestion"
       :busy="busy"
       :error="drawerError"
-      @close="questionOpen = false"
+      @close="editingQuestion = undefined"
       @save="saveQuestion"
-    />
-    <ConfirmDialog
-      :open="deleteTarget !== null"
-      :title="t('lessonEditor.question.deleteTitle')"
-      :message="deleteTarget ? t('lessonEditor.question.deleteMessage', { number: deleteTarget.number }) : ''"
-      :confirm-label="t('lessonEditor.quiz.deleteQuestion')"
-      tone="danger"
-      :busy="busy"
-      @cancel="deleteTarget = null"
-      @confirm="deleteQuestion"
-    />
-    <ConfirmDialog
-      :open="archiveOpen"
-      :title="t('lessonEditor.quiz.archiveTitle')"
-      :message="quiz ? t('lessonEditor.quiz.archiveMessage', { title: quiz.title }) : ''"
-      :confirm-label="t('lessonEditor.quiz.archive')"
-      tone="danger"
-      :busy="busy"
-      @cancel="archiveOpen = false"
-      @confirm="archiveQuiz"
     />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, useId, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue'
 
-import { lessonEditorApi } from '@/api/classes'
-import TeacherAiDraftPanel from '@/components/ai/TeacherAiDraftPanel.vue'
+import { lessonEditorApi } from '@/api/adminClasses'
+import AdminQuizDraftPanel from '@/components/admin/AdminQuizDraftPanel.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
+import StatePanel from '@/components/common/StatePanel.vue'
 import CjkText from '@/components/learning/CjkText.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { classesMessages } from '@/plugins/classesMessages'
 import { lessonEditorMessages } from '@/plugins/lessonEditorMessages'
-import type { AiQuizGeneratorResponse, LearningStage } from '@/types/api'
-import type { EditorQuestion, LessonEditor, QuestionPayload } from '@/types/classes'
+import type { AiQuizGeneratorResponse } from '@/types/api'
+import type { EditorQuestion, LessonEditor, QuestionPayload } from '@/types/adminClasses'
 import { quizDraftToQuestionDrafts } from '@/utils/aiDraft'
-import { resolveApiError } from '@/utils/apiError'
-import { STAGE_KEYS, questionTypeKey } from '@/utils/classes'
-import { formatShortDate } from '@/utils/format'
-import { STAGES } from '@/utils/learnLabels'
+import { apiErrorStatus, resolveApiError } from '@/utils/apiError'
+import { questionTypeKey } from '@/utils/classes'
+import { DEFAULT_QUESTION_POINTS, QUIZ_SIZE, lessonQuiz } from '@/utils/lessonEditor'
 
-import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import LessonQuestionDrawer from './LessonQuestionDrawer.vue'
 
-/** The Quiz tab: the lesson's quizzes, their settings and questions, AI-assisted drafts and recent attempts. */
+/**
+ * The Quiz tab: the lesson's quiz of exactly 5 questions, with AI-assisted drafts and the "Allow SparkBot hints"
+ * switch beside it. At 5 questions, Add question and AI drafts stop until one is deleted.
+ */
 const props = defineProps<{ editor: LessonEditor }>()
-const emit = defineEmits<{ updated: [editor: LessonEditor]; notice: [message: string]; error: [message: string] }>()
+const emit = defineEmits<{
+  updated: [editor: LessonEditor]
+  notice: [message: string]
+  error: [message: string]
+  /** A question was deleted: the editor offers Undo, which puts it back in its place. */
+  deleted: [question: EditorQuestion, quizId: number]
+  /** A write or an AI draft starts (true) or ends (false); the editor's tabs and Publish wait for it. */
+  saving: [saving: boolean]
+}>()
 
 const { t } = useLocalMessages({ lessonEditor: lessonEditorMessages, classes: classesMessages })
 const baseId = useId()
-const AI_QUESTION_POINTS = 2
+const countHintId = `${baseId}-count-hint`
 
-const selectedId = ref<number | null>(null)
-const quiz = computed(
-  () => props.editor.quizzes.find((item) => item.id === selectedId.value) ?? props.editor.quizzes[0] ?? null,
-)
-const quizIndex = computed(() => props.editor.quizzes.findIndex((item) => item.id === quiz.value?.id))
-const canEditQuestions = computed(() => props.editor.editable && Boolean(quiz.value) && !quiz.value!.questionsLocked)
-
-const settings = ref<{ title: string; timeLimitMinutes: number | null; stage: LearningStage | null }>({
-  title: '',
-  timeLimitMinutes: null,
-  stage: null,
-})
-watch(
-  quiz,
-  (current) => {
-    settings.value = {
-      title: current?.title ?? '',
-      timeLimitMinutes: current?.timeLimitMinutes ?? null,
-      stage: current?.stage ?? null,
-    }
-  },
-  { immediate: true },
-)
-const settingsChanged = computed(
-  () =>
-    Boolean(quiz.value) &&
-    (settings.value.title.trim() !== quiz.value!.title ||
-      (settings.value.timeLimitMinutes || null) !== quiz.value!.timeLimitMinutes ||
-      settings.value.stage !== quiz.value!.stage),
-)
+const quiz = computed(() => lessonQuiz(props.editor))
+const questions = computed(() => quiz.value?.questions ?? [])
+const canEdit = computed(() => props.editor.editable && !quiz.value?.questionsLocked)
+const remaining = computed(() => Math.max(0, QUIZ_SIZE - questions.value.length))
+const full = computed(() => remaining.value === 0)
+/** The setting being saved; null while no save of it is out. */
+const savingHints = ref<boolean | null>(null)
+/** What the switch shows: the saved setting, or the new one while it is being saved. */
+const hintsChecked = computed(() => savingHints.value ?? quiz.value?.hintsAllowed ?? false)
 
 const busy = ref(false)
-const questionOpen = ref(false)
-const editingQuestion = ref<EditorQuestion | null>(null)
+const generating = ref(false)
+/** A write or an AI draft is out: no other change starts meanwhile. */
+const working = computed(() => busy.value || generating.value)
+watch(working, (saving) => emit('saving', saving), { flush: 'sync' })
+/** Undefined closes the drawer; null opens it for a new question. */
+const editingQuestion = ref<EditorQuestion | null>()
 const drawerError = ref<string | null>(null)
-const deleteTarget = ref<EditorQuestion | null>(null)
-const archiveOpen = ref(false)
-
-async function act(action: () => Promise<LessonEditor>, notice: string): Promise<LessonEditor | null> {
-  busy.value = true
-  try {
-    const next = await action()
-    emit('updated', next)
-    emit('notice', notice)
-    return next
-  } catch (reason) {
-    emit('error', resolveApiError(reason, t('lessonEditor.quiz.error')))
-    return null
-  } finally {
+/**
+ * Bumped whenever this panel switches to another lesson or unmounts so in-flight mutations and batches belonging to
+ * the previous lesson drop silently instead of mutating or emitting onto the new lesson.
+ */
+let panelVersion = 0
+watch(
+  () => props.editor.lessonId,
+  () => {
+    panelVersion += 1
+    editingQuestion.value = undefined
+    drawerError.value = null
+    savingHints.value = null
     busy.value = false
+    generating.value = false
+  },
+  { flush: 'sync' },
+)
+onBeforeUnmount(() => {
+  panelVersion += 1
+  if (working.value) emit('saving', false)
+})
+
+/** "meitian.mp3" for a link to an audio file; the server only stores full web addresses. */
+function fileName(url: string): string {
+  try {
+    return new URL(url).pathname.split('/').pop() || url
+  } catch {
+    return url
   }
 }
 
-async function addQuiz(): Promise<void> {
-  const before = new Set(props.editor.quizzes.map((item) => item.id))
-  const next = await act(
-    () =>
-      lessonEditorApi.addQuiz(props.editor.lessonId, {
-        title: t('lessonEditor.quiz.newQuizTitle'),
-        timeLimitMinutes: 10,
-        learningStage: 'GUIDED',
-      }),
-    t('lessonEditor.quiz.added'),
-  )
-  if (next) selectedId.value = next.quizzes.find((item) => !before.has(item.id))?.id ?? selectedId.value
+/**
+ * Gives the lesson its quiz. The server refuses a second one (409) when the quiz was made elsewhere, in another tab:
+ * this editor is then out of date, so it is read again and the quiz shows, and the next action uses it. The refusal
+ * still reaches the caller, which says so.
+ */
+async function addQuiz(current: LessonEditor, hints: boolean, version: number): Promise<LessonEditor> {
+  try {
+    return await lessonEditorApi.addQuiz(current.lessonId, { title: current.title, hintsAllowed: hints })
+  } catch (reason) {
+    if (apiErrorStatus(reason) === 409 && version === panelVersion) {
+      const fresh = await lessonEditorApi.get(current.lessonId).catch(() => null)
+      if (fresh && version === panelVersion) emit('updated', fresh)
+    }
+    throw reason
+  }
 }
 
-function saveSettings(): void {
-  if (!quiz.value) return
-  void act(
-    () =>
-      lessonEditorApi.updateQuiz(props.editor.lessonId, quiz.value!.id, {
-        title: settings.value.title.trim(),
-        description: quiz.value!.description,
-        timeLimitMinutes: settings.value.timeLimitMinutes || null,
-        learningStage: settings.value.stage,
-      }),
-    t('lessonEditor.quiz.saved'),
-  )
+/** The id of the lesson's quiz; a new lesson gets it, hints off, with its first question. */
+async function ensureQuiz(current: LessonEditor, version: number): Promise<number | null> {
+  const existing = lessonQuiz(current)
+  if (existing) return existing.id
+  const next = await addQuiz(current, false, version)
+  if (version !== panelVersion) return null
+  emit('updated', next)
+  return next.quizzes[0]!.id
 }
 
-function duplicateQuiz(): void {
-  if (!quiz.value) return
-  void act(
-    () => lessonEditorApi.duplicateQuiz(props.editor.lessonId, quiz.value!.id),
-    t('lessonEditor.quiz.duplicated'),
-  )
-}
-
-async function archiveQuiz(): Promise<void> {
-  if (!quiz.value) return
-  const next = await act(
-    () => lessonEditorApi.archiveQuiz(props.editor.lessonId, quiz.value!.id),
-    t('lessonEditor.quiz.archived'),
-  )
-  archiveOpen.value = false
-  if (next) selectedId.value = null
+/**
+ * Turns SparkBot hints on or off for this lesson's quiz. Like every edit it is saved on the working copy, so a
+ * published quiz keeps its setting for learners until the lesson is published again. A lesson without a quiz yet gets
+ * its quiz here, with the setting chosen.
+ */
+async function setHints(input: HTMLInputElement): Promise<void> {
+  const allowed = input.checked
+  if (working.value || !props.editor.editable) {
+    input.checked = hintsChecked.value
+    return
+  }
+  const current = props.editor
+  const existing = lessonQuiz(current)
+  const version = panelVersion
+  busy.value = true
+  savingHints.value = allowed
+  try {
+    const next = existing
+      ? await lessonEditorApi.updateQuiz(current.lessonId, existing.id, { hintsAllowed: allowed })
+      : await addQuiz(current, allowed, version)
+    if (version !== panelVersion) return
+    emit('updated', next)
+    emit('notice', t('lessonEditor.quiz.hintsSaved'))
+  } catch (reason) {
+    if (version === panelVersion) emit('error', resolveApiError(reason, t('lessonEditor.quiz.error')))
+  } finally {
+    if (version === panelVersion) {
+      // From here the switch shows the quiz's setting: the saved one, or the one it still has when the save failed.
+      savingHints.value = null
+      busy.value = false
+    }
+  }
 }
 
 function openQuestion(question: EditorQuestion | null): void {
+  if (working.value || !canEdit.value || (!question && full.value)) return
   editingQuestion.value = question
   drawerError.value = null
-  questionOpen.value = true
 }
 
 async function saveQuestion(payload: QuestionPayload): Promise<void> {
-  if (!quiz.value) return
+  const question = editingQuestion.value
+  if (question === undefined || busy.value || !canEdit.value) return
+  const current = props.editor
+  const version = panelVersion
   busy.value = true
   drawerError.value = null
   try {
-    const next = editingQuestion.value
-      ? await lessonEditorApi.updateQuestion(props.editor.lessonId, editingQuestion.value.id, payload)
-      : await lessonEditorApi.addQuestion(props.editor.lessonId, quiz.value.id, payload)
+    let next: LessonEditor
+    if (question) {
+      // Saved by the admin: the server checks an AI draft too.
+      next = await lessonEditorApi.updateQuestion(current.lessonId, question.id, payload)
+    } else {
+      const quizId = await ensureQuiz(current, version)
+      if (quizId === null || version !== panelVersion) return
+      next = await lessonEditorApi.addQuestion(current.lessonId, quizId, payload)
+    }
+    if (version !== panelVersion) return
     emit('updated', next)
+    // X1.18: one confirmation for a new question and an edited one.
     emit('notice', t('lessonEditor.question.saved'))
-    questionOpen.value = false
+    editingQuestion.value = undefined
   } catch (reason) {
-    drawerError.value = resolveApiError(reason, t('lessonEditor.question.error'))
+    if (version === panelVersion) drawerError.value = resolveApiError(reason, t('lessonEditor.question.error'))
   } finally {
-    busy.value = false
+    if (version === panelVersion) busy.value = false
   }
 }
 
-function duplicateQuestion(questionId: number): void {
-  void act(
-    () => lessonEditorApi.duplicateQuestion(props.editor.lessonId, questionId),
-    t('lessonEditor.question.duplicated'),
-  )
-}
-
-async function deleteQuestion(): Promise<void> {
-  const target = deleteTarget.value
-  if (!target) return
-  await act(() => lessonEditorApi.deleteQuestion(props.editor.lessonId, target.id), t('lessonEditor.question.deleted'))
-  deleteTarget.value = null
-}
-
-function moveQuestion(index: number, step: -1 | 1): void {
-  if (!quiz.value) return
-  const ids = quiz.value.questions.map((question) => question.id)
-  const [moved] = ids.splice(index, 1)
-  ids.splice(index + step, 0, moved!)
-  void act(() => lessonEditorApi.reorderQuestions(props.editor.lessonId, quiz.value!.id, ids), t('lessonEditor.saved'))
-}
-
-/** AI questions are added to the selected quiz one by one; the teacher checks each before submitting. */
-async function addDraftQuestions(draft: AiQuizGeneratorResponse): Promise<void> {
-  if (!quiz.value) return
-  const quizId = quiz.value.id
+/** Deleting runs at once; the editor's toast offers Undo, which puts the question back in its place. */
+async function deleteQuestion(question: EditorQuestion): Promise<void> {
+  const quizId = quiz.value?.id
+  if (working.value || !canEdit.value || quizId === undefined) return
+  const version = panelVersion
   busy.value = true
   try {
-    let latest: LessonEditor | null = null
-    for (const question of quizDraftToQuestionDrafts(draft)) {
-      latest = await lessonEditorApi.addQuestion(props.editor.lessonId, quizId, {
+    const next = await lessonEditorApi.deleteQuestion(props.editor.lessonId, question.id)
+    if (version !== panelVersion) return
+    emit('updated', next)
+    emit('deleted', question, quizId)
+  } catch (reason) {
+    if (version === panelVersion) emit('error', resolveApiError(reason, t('lessonEditor.quiz.error')))
+  } finally {
+    if (version === panelVersion) busy.value = false
+  }
+}
+
+/** After Keep, focus goes to the same row's Edit button (Keep leaves the row). */
+const questionList = ref<HTMLOListElement | null>(null)
+
+/**
+ * Keep: the admin checked an AI draft and keeps it as it is, so it is no longer an AI draft and stops holding back
+ * publishing. A published lesson's first change gives the quiz new ids, so the row is found again by its number.
+ */
+async function keepQuestion(question: EditorQuestion, number: number): Promise<void> {
+  if (working.value || !canEdit.value) return
+  const version = panelVersion
+  busy.value = true
+  try {
+    const next = await lessonEditorApi.keepQuestion(props.editor.lessonId, question.id)
+    if (version !== panelVersion) return
+    emit('updated', next)
+  } catch (reason) {
+    if (version === panelVersion) emit('error', resolveApiError(reason, t('lessonEditor.quiz.error')))
+    return
+  } finally {
+    if (version === panelVersion) busy.value = false
+  }
+  // Once the buttons are enabled again: a disabled button takes no focus.
+  await nextTick()
+  if (version !== panelVersion) return
+  questionList.value?.querySelector<HTMLButtonElement>(`[data-question-edit="${number}"]`)?.focus()
+}
+
+/**
+ * AI questions are added to the quiz one by one, never past its 5, each marked as an AI draft until the admin keeps
+ * or edits it. Each shows as it is saved, so when the server refuses one (an answer key that matches no option), those
+ * before it are on the page.
+ */
+async function addDraftQuestions(draft: AiQuizGeneratorResponse): Promise<void> {
+  if (busy.value || !canEdit.value) return
+  const current = props.editor
+  const toAdd = quizDraftToQuestionDrafts(draft).slice(0, remaining.value)
+  if (!toAdd.length) return
+  const version = panelVersion
+  busy.value = true
+  try {
+    const quizId = await ensureQuiz(current, version)
+    if (quizId === null || version !== panelVersion) return
+    for (const question of toAdd) {
+      const next = await lessonEditorApi.addQuestion(current.lessonId, quizId, {
         questionType: question.questionType,
         questionText: question.questionText,
-        points: AI_QUESTION_POINTS,
+        points: DEFAULT_QUESTION_POINTS,
         correctAnswerText: question.correctAnswerText || null,
         explanation: question.explanation || null,
         options: question.options,
+        aiDraft: true,
       })
+      if (version !== panelVersion) return
+      emit('updated', next)
     }
-    if (latest) {
-      emit('updated', latest)
-      emit('notice', t('lessonEditor.quiz.aiAdded'))
-    }
+    emit('notice', t('lessonEditor.quiz.aiAdded'))
   } catch (reason) {
-    emit('error', resolveApiError(reason, t('lessonEditor.question.error')))
+    if (version === panelVersion) emit('error', resolveApiError(reason, t('lessonEditor.question.error')))
   } finally {
-    busy.value = false
+    if (version === panelVersion) busy.value = false
   }
 }
 </script>

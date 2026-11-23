@@ -1,10 +1,15 @@
 package com.example.aichinese.entity;
 
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.stream.Stream;
+
+import org.hibernate.annotations.DynamicUpdate;
 
 import com.example.aichinese.entity.base.BaseEntity;
+import com.example.aichinese.entity.enums.RoleName;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import jakarta.persistence.Column;
@@ -22,6 +27,8 @@ import lombok.Setter;
 @Getter
 @Setter
 @Entity
+// A profile/preference edit must not write stale passwords, session versions or account status from its earlier read.
+@DynamicUpdate
 @Table(
         name = "users",
         indexes = {
@@ -61,15 +68,7 @@ public class User extends BaseEntity {
     @Column(name = "email_verified_at")
     private LocalDateTime emailVerifiedAt;
 
-    @Column(name = "notify_live_session_reminders", nullable = false)
-    private boolean notifyLiveSessionReminders = true;
-
-    @Column(name = "notify_feedback", nullable = false)
-    private boolean notifyFeedback = true;
-
-    @Column(name = "notify_content_reviews", nullable = false)
-    private boolean notifyContentReviews = true;
-
+    /** An admin's "Daily summary" e-mail (AI reports and support requests waiting); Account › Email notifications. */
     @Column(name = "notify_review_queues", nullable = false)
     private boolean notifyReviewQueues = true;
 
@@ -77,7 +76,19 @@ public class User extends BaseEntity {
     @JoinTable(
             name = "user_roles",
             joinColumns = @JoinColumn(name = "user_id"),
-            inverseJoinColumns = @JoinColumn(name = "role_id"),
-            uniqueConstraints = @UniqueConstraint(name = "uk_user_roles_user_role", columnNames = { "user_id", "role_id" }))
+            inverseJoinColumns = @JoinColumn(name = "role_id"))
     private Set<Role> roles = new HashSet<>();
+
+    /** The sign-in response and permissions use the same order. A dual-role account opens the admin dashboard. */
+    public Stream<RoleName> orderedRoleNames() {
+        return roles.stream()
+                .map(Role::getName)
+                .sorted(Comparator.comparingInt((RoleName role) -> role == RoleName.ADMIN ? 0 : 1)
+                        .thenComparing(RoleName::name));
+    }
+
+    public RoleName requirePrimaryRole() {
+        return orderedRoleNames().findFirst()
+                .orElseThrow(() -> new IllegalStateException("Account " + getId() + " has no role."));
+    }
 }

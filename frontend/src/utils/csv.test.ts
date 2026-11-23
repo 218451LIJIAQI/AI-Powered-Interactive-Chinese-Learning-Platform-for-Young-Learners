@@ -9,8 +9,10 @@ describe('CSV text', () => {
     )
   })
 
-  it('neutralises text a spreadsheet would run as a formula, but not negative numbers', () => {
-    expect(toCsv([['=SUM(A1:A2)', '@cmd', '+1', -3]])).toBe("'=SUM(A1:A2),'@cmd,'+1,-3\r\n")
+  it('neutralises text a spreadsheet would run as a formula, including leading whitespace or newlines, but not negative numbers', () => {
+    expect(toCsv([['=SUM(A1:A2)', '@cmd', '+1', ' =1+1', '\u00a0@cmd', '\n=1+1', -3]])).toBe(
+      "'=SUM(A1:A2),'@cmd,'+1,' =1+1,'\u00a0@cmd,\"'\n=1+1\",-3\r\n",
+    )
   })
 
   it('joins rows with CRLF', () => {

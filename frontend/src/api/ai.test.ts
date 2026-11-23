@@ -11,24 +11,26 @@ const turns = [{ speaker: 'XIAOMEI' as const, text: '你好！我是小美。' }
 
 describe('AI Helper wrappers', () => {
   it('sends the conversation, quiz, story, report and check-list requests to the /ai endpoints', async () => {
-    const calls = installAxiosCapture({ items: [] })
+    const calls = installAxiosCapture()
 
     await aiHelperApi.status()
     await aiHelperApi.xiaomeiReply({ scenario: 'CAFE', turns, message: '我要一杯奶茶', languagePreference: 'en' })
-    await aiHelperApi.xiaomeiSuggestions({ scenario: 'CAFE', turns, languagePreference: 'ms' })
     await aiHelperApi.xiaomeiSummary({ scenario: 'CAFE', turns, languagePreference: 'zh-CN' })
     await aiHelperApi.quiz({ topic: 'Food', numberOfQuestions: 3, languagePreference: 'en' })
     await aiHelperApi.story({ topic: 'Family', languagePreference: 'en' })
-    await aiHelperApi.practiceChecks()
+    await aiHelperApi.practiceChecks(0, 5)
     await aiHelperApi.practiceCheckLessons()
     await aiHelperApi.deletePracticeCheck(7)
-    await aiHelperApi.reports()
+    await aiHelperApi.reports(1)
     await aiHelperApi.report({ featureKey: 'STORY_GENERATOR', reasonCategory: 'UNCLEAR_EXPLANATION' })
+    await aiHelperApi.restorePracticeCheck(7)
+    await aiHelperApi.xiaomeiMemory()
+    await aiHelperApi.forgetXiaomeiNote(3)
+    await aiHelperApi.restoreXiaomeiNote(3)
 
     expect(calls.map(({ method, url }) => `${method} ${url}`)).toEqual([
       'GET /ai/status',
       'POST /ai/conversation/reply',
-      'POST /ai/conversation/suggestions',
       'POST /ai/conversation/summary',
       'POST /ai/quiz-generator',
       'POST /ai/story-generator',
@@ -37,32 +39,46 @@ describe('AI Helper wrappers', () => {
       'DELETE /ai/practice-checks/7',
       'GET /ai/reports',
       'POST /ai/reports',
+      'POST /ai/practice-checks/7/restore',
+      'GET /ai/conversation/memory',
+      'DELETE /ai/conversation/memory/3',
+      'POST /ai/conversation/memory/3/restore',
     ])
     expect(calls[1]!.data).toEqual({ scenario: 'CAFE', turns, message: '我要一杯奶茶', languagePreference: 'en' })
-    expect(calls[6]!.params).toEqual({ page: 0, size: 5 })
-    expect(calls[10]!.data).toEqual({ featureKey: 'STORY_GENERATOR', reasonCategory: 'UNCLEAR_EXPLANATION' })
+    expect(calls[5]!.params).toEqual({ page: 0, size: 5 })
+    expect(calls[8]!.params).toEqual({ page: 1, size: 20 })
+    expect(calls[9]!.data).toEqual({ featureKey: 'STORY_GENERATOR', reasonCategory: 'UNCLEAR_EXPLANATION' })
   })
 
-  it('uploads a practice check as multipart form data with a whole-second recording length', async () => {
-    const calls = installAxiosCapture({ status: 'SUCCESS', message: null, check: null })
-    const recording = new Blob(['voice'], { type: 'audio/webm' })
+  it('fits both report snapshots into the server fields without splitting a Han character', async () => {
+    const calls = installAxiosCapture()
+    const prompt = '问'.repeat(3999)
+    const reply = '𠀀'.repeat(2000)
+    await aiHelperApi.report({
+      featureKey: 'STORY_GENERATOR',
+      reasonCategory: 'UNCLEAR_EXPLANATION',
+      promptSnapshot: prompt + '𠀀',
+      aiResponseSnapshot: reply + '答',
+    })
+    expect(calls[0]!.data).toMatchObject({ promptSnapshot: prompt, aiResponseSnapshot: reply })
+  })
+
+  it('uploads a practice check as multipart form data', async () => {
+    const calls = installAxiosCapture()
+    const recording = new File(['voice'], 'xie-xie.webm', { type: 'audio/webm' })
 
     await aiHelperApi.checkPractice({
       type: 'RECORDING',
       file: recording,
-      fileName: 'xie-xie.webm',
       targetText: '  谢谢  ',
       lessonId: 12,
-      durationSeconds: 3.4,
       languagePreference: 'en',
     })
     await aiHelperApi.checkPractice({
       type: 'HANDWRITING',
-      file: new Blob(['img'], { type: 'image/png' }),
-      fileName: 'hao.png',
+      file: new File(['img'], 'hao.png', { type: 'image/png' }),
       targetText: '好',
       lessonId: null,
-      durationSeconds: null,
       languagePreference: 'zh-CN',
     })
 
@@ -74,22 +90,49 @@ describe('AI Helper wrappers', () => {
     expect(recordingForm.get('type')).toBe('RECORDING')
     expect(recordingForm.get('targetText')).toBe('谢谢')
     expect(recordingForm.get('lessonId')).toBe('12')
-    expect(recordingForm.get('durationSeconds')).toBe('3')
     expect((recordingForm.get('file') as File).name).toBe('xie-xie.webm')
     const photoForm = calls[1]!.data as FormData
     expect(photoForm.get('type')).toBe('HANDWRITING')
     expect(photoForm.has('lessonId')).toBe(false)
-    expect(photoForm.has('durationSeconds')).toBe(false)
     expect(photoForm.get('languagePreference')).toBe('zh-CN')
+  })
+
+  it('applies endpoint-specific timeouts to AI generation and practice check uploads', async () => {
+    const timeouts: Array<{ url?: string; timeout?: number }> = []
+    http.defaults.adapter = (async (config) => {
+      timeouts.push({ url: config.url, timeout: config.timeout })
+      return axiosResponse(config, 200, { success: true, data: {} })
+    }) satisfies AxiosAdapter
+
+    await aiHelperApi.xiaomeiReply({ scenario: 'CAFE', turns, message: '你好', languagePreference: 'en' })
+    await aiHelperApi.checkPractice({
+      type: 'RECORDING',
+      file: new File(['voice'], 'a.webm', { type: 'audio/webm' }),
+      targetText: '你好',
+      languagePreference: 'en',
+    })
+    await aiHelperApi.checkPractice({
+      type: 'HANDWRITING',
+      file: new File(['img'], 'a.png', { type: 'image/png' }),
+      targetText: '好',
+      languagePreference: 'en',
+    })
+
+    expect(timeouts).toEqual([
+      { url: '/ai/conversation/reply', timeout: 45_000 },
+      { url: '/ai/practice-checks', timeout: 370_000 },
+      { url: '/ai/practice-checks', timeout: 90_000 },
+    ])
   })
 })
 
 describe('admin AI wrappers', () => {
-  it('maps reports, review decisions, usage and settings to /admin/ai', async () => {
-    const calls = installAxiosCapture({ items: [] })
+  it('maps reports, review decisions, usage, settings and hint policy to /admin/ai', async () => {
+    const calls = installAxiosCapture()
+    const levels = [{ tier: 'HSK1' as const, delaySeconds: 15, perSet: 2 }]
 
-    await adminAiApi.reports({ status: 'OPEN', page: 1, size: 8 })
-    await adminAiApi.reportCounts()
+    await adminAiApi.reports({ page: 1, size: 8 })
+    await adminAiApi.report(3)
     await adminAiApi.reviewReport(3, 'DISMISSED', 'The answer was correct.')
     await adminAiApi.usageSummary()
     await adminAiApi.usageLogs({ featureType: 'CHAT_TUTOR', status: '', userRole: 'STUDENT' }, 2, 10)
@@ -99,10 +142,12 @@ describe('admin AI wrappers', () => {
       sensitiveWordFilter: true,
       aiSafetyCheck: false,
     })
+    await adminAiApi.hintPolicy()
+    await adminAiApi.saveHintPolicy(levels)
 
     expect(calls).toEqual([
-      { method: 'GET', url: '/admin/ai/reports', params: { status: 'OPEN', page: 1, size: 8 }, data: undefined },
-      { method: 'GET', url: '/admin/ai/reports/counts', params: undefined, data: undefined },
+      { method: 'GET', url: '/admin/ai/reports', params: { page: 1, size: 8 }, data: undefined },
+      { method: 'GET', url: '/admin/ai/reports/3', params: undefined, data: undefined },
       {
         method: 'POST',
         url: '/admin/ai/reports/3/review',
@@ -123,6 +168,8 @@ describe('admin AI wrappers', () => {
         params: undefined,
         data: { aiNoticeText: 'AI can make mistakes.', sensitiveWordFilter: true, aiSafetyCheck: false },
       },
+      { method: 'GET', url: '/admin/ai/hints', params: undefined, data: undefined },
+      { method: 'PUT', url: '/admin/ai/hints', params: undefined, data: { levels } },
     ])
   })
 

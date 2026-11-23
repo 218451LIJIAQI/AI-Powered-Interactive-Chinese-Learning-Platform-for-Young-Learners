@@ -1,5 +1,6 @@
 package com.example.aichinese.dto.learn;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import com.example.aichinese.entity.enums.LearningStage;
@@ -7,26 +8,27 @@ import com.example.aichinese.entity.enums.PracticeType;
 
 /**
  * A Practice set ready to play, without answers. Items are keyed for checking; matching sets add the meanings to pair
- * (shuffled), stories their lines, tracing sets the strokes to draw.
+ * (shuffled), tracing sets the strokes to draw.
+ *
+ * @param done every item was right in a previous run. Flashcards require a "Got it" rating for every card in that run,
+ *             although the first complete review earns XP with any combination of ratings.
+ * @param characterStrokes tracing: the strokes of each character in order, adding up to {@code strokeCount} ("Character
+ *                         1 of 2 · 0 of 4 strokes"); null when the set does not say
+ * @param runStartedAt the start of this practice run, sent with each hint request so its allowance is counted separately
+ * @param runSignature the server's signature of this run, sent back with {@code runStartedAt}
  */
 public record PracticeSetResponse(
         Long id,
         PracticeType type,
-        String title,
         LearningStage stage,
-        Integer hskLevel,
         int xpReward,
         boolean done,
         List<Item> items,
-        List<StoryLine> storyLines,
         List<String> matchingChoices,
-        Integer strokeCount) {
-
-    public PracticeSetResponse {
-        items = items == null ? List.of() : List.copyOf(items);
-        storyLines = storyLines == null ? List.of() : List.copyOf(storyLines);
-        matchingChoices = matchingChoices == null ? List.of() : List.copyOf(matchingChoices);
-    }
+        Integer strokeCount,
+        List<Integer> characterStrokes,
+        LocalDateTime runStartedAt,
+        String runSignature) {
 
     public record Item(
             String key,
@@ -39,10 +41,5 @@ public record PracticeSetResponse(
             String exampleMeaning,
             List<ChoiceOption> options,
             List<String> tiles) {
-
-        public Item {
-            options = options == null ? List.of() : List.copyOf(options);
-            tiles = tiles == null ? List.of() : List.copyOf(tiles);
-        }
     }
 }

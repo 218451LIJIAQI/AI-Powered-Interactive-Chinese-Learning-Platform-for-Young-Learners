@@ -1,52 +1,35 @@
 package com.example.aichinese.dto;
 
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Objects;
 
-/** Normalisation and check helpers shared by the request and response records. */
+import com.example.aichinese.util.TextUtils;
+
+/** Normalisation and {@code toString()} helpers shared by the request and response records. */
 public final class DtoNormalization {
-
-    /** An optional http(s) link without whitespace; an empty value means "no link". */
-    public static final String OPTIONAL_HTTP_URL_PATTERN = "^(https?://\\S+)?$";
 
     private static final String REDACTED = "<redacted>";
 
     private DtoNormalization() {
     }
 
+    /** Strip form whitespace before validation, preserving an omitted field for partial updates. */
     public static String strip(String value) {
-        return value == null ? null : value.strip();
+        return value == null ? null : TextUtils.stripFormSpaces(value);
     }
 
+    /** Strip form whitespace (including NBSP / full-width spaces) and convert blank optional fields to {@code null}. */
     public static String stripToNull(String value) {
-        String stripped = strip(value);
-        return stripped == null || stripped.isEmpty() ? null : stripped;
+        return TextUtils.trimToNull(value);
     }
 
+    /** Leaves null elements for Bean Validation to report at their actual list positions. */
     public static <T> List<T> immutableListOrEmpty(List<T> values) {
         return values == null ? List.of() : values.stream().toList();
     }
 
-    /** The stripped value; a null or blank value is a programming error in the caller. */
-    public static String requireNonBlank(String value, String fieldName) {
-        String stripped = Objects.requireNonNull(value, fieldName + " must not be null").strip();
-        if (stripped.isEmpty()) {
-            throw new IllegalArgumentException(fieldName + " must not be blank");
-        }
-        return stripped;
-    }
-
-    /** Role names stripped, without repeats, in their first order; an absent list is empty. */
-    public static List<String> normalizeRoles(List<String> source) {
-        if (source == null || source.isEmpty()) {
-            return List.of();
-        }
-        LinkedHashSet<String> normalized = new LinkedHashSet<>(source.size());
-        for (String role : source) {
-            normalized.add(requireNonBlank(role, "role"));
-        }
-        return List.copyOf(normalized);
+    /** Preserves {@code null} so {@code @NotNull} rejects missing lists, while copying non-null lists immutably. */
+    public static <T> List<T> immutableListOrNull(List<T> values) {
+        return values == null ? null : values.stream().toList();
     }
 
     /** For toString(): hides a personal value but shows whether it is present. */

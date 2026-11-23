@@ -1,17 +1,13 @@
 package com.example.aichinese.service.account;
 
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
-import static org.springframework.http.HttpStatus.TOO_MANY_REQUESTS;
-import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.Locale;
+import java.util.Optional;
 
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -20,127 +16,143 @@ import com.example.aichinese.dto.account.EmailChangeResponse;
 import com.example.aichinese.entity.EmailChangeToken;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.repository.EmailChangeTokenRepository;
+import com.example.aichinese.repository.PasswordResetTokenRepository;
 import com.example.aichinese.repository.UserRepository;
-import com.example.aichinese.security.LoginAttemptLimiter;
+import com.example.aichinese.security.PublicAuthRequestLimiter;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.AuditLogService;
 import com.example.aichinese.service.AuditLogService.AuditTarget;
+import com.example.aichinese.service.AuthService;
 import com.example.aichinese.service.RefreshTokenService;
 import com.example.aichinese.service.SecureTokens;
 import com.example.aichinese.service.TransactionalEmailDispatcher;
+import com.example.aichinese.service.admin.AuditLogQueryService;
+
+import lombok.RequiredArgsConstructor;
 
 /**
  * Changing the sign-in e-mail: the current password proves the owner asks, and a link sent to the new address proves
  * the owner can read it. The address changes only when that link is opened, once and within 60 minutes; opening it
- * signs the account out everywhere, so every device signs in again with the new address.
+ * signs the account out everywhere, so every device signs in again with the new address. While the change waits, the
+ * Account page can send the link again (a new link replaces the old one) or cancel the change (the link stops working).
  */
 @Service
+@RequiredArgsConstructor
 public class AccountEmailService {
 
     private static final Duration LINK_TTL = Duration.ofMinutes(60);
-    private static final String INVALID_LINK = "This confirmation link is invalid or has already been used.";
+    private static final String NO_PENDING_CHANGE =
+            "No email change is waiting for confirmation. Use Change email to start again.";
 
     private final UserRepository userRepository;
     private final EmailChangeTokenRepository tokenRepository;
-    private final PasswordEncoder passwordEncoder;
-    private final LoginAttemptLimiter loginAttemptLimiter;
+    private final PasswordResetTokenRepository passwordResetTokenRepository;
+    private final AuthService authService;
     private final TransactionalEmailDispatcher emailDispatcher;
     private final EmailProperties emailProperties;
     private final AuditLogService auditLogService;
     private final RefreshTokenService refreshTokenService;
+    private final PublicAuthRequestLimiter requestLimiter;
+    private final CurrentAccount currentAccount;
+    private final EmailVerificationTokenClaimer tokenClaimer;
 
-    public AccountEmailService(
-            UserRepository userRepository,
-            EmailChangeTokenRepository tokenRepository,
-            PasswordEncoder passwordEncoder,
-            LoginAttemptLimiter loginAttemptLimiter,
-            TransactionalEmailDispatcher emailDispatcher,
-            EmailProperties emailProperties,
-            AuditLogService auditLogService,
-            RefreshTokenService refreshTokenService) {
-        this.userRepository = userRepository;
-        this.tokenRepository = tokenRepository;
-        this.passwordEncoder = passwordEncoder;
-        this.loginAttemptLimiter = loginAttemptLimiter;
-        this.emailDispatcher = emailDispatcher;
-        this.emailProperties = emailProperties;
-        this.auditLogService = auditLogService;
-        this.refreshTokenService = refreshTokenService;
-    }
-
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public EmailChangeResponse requestChange(
             SecurityUserDetails currentUser, String rawNewEmail, String currentPassword, String clientIp) {
-        User user = userRepository.findById(currentUser.getUserId())
-                .orElseThrow(() -> new ResponseStatusException(UNAUTHORIZED, "Authenticated user could not be found."));
-        String limiterKey = user.getEmail();
-        if (!loginAttemptLimiter.isAllowed(limiterKey, clientIp)) {
-            long retrySeconds = Math.max(1L, loginAttemptLimiter.retryAfter(limiterKey, clientIp).toSeconds());
-            throw new ResponseStatusException(
-                    TOO_MANY_REQUESTS, "Too many failed attempts. Please try again in " + retrySeconds + " seconds.");
-        }
-        if (!passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
-            loginAttemptLimiter.recordFailure(limiterKey, clientIp);
-            throw new ResponseStatusException(BAD_REQUEST, "Current password is incorrect.");
-        }
-        loginAttemptLimiter.recordSuccess(limiterKey, clientIp);
+        User user = authService.requireCurrentPassword(currentUser, currentPassword, clientIp);
 
-        String newEmail = rawNewEmail.strip().toLowerCase(Locale.ROOT);
+        String newEmail = AuthService.normalizeEmail(rawNewEmail);
         if (newEmail.equals(user.getEmail())) {
             throw new ResponseStatusException(BAD_REQUEST, "This is already your email address.");
         }
-        if (userRepository.existsByEmailIgnoreCase(newEmail)) {
-            throw new ResponseStatusException(BAD_REQUEST, "Email is already registered.");
-        }
+        return sendLink(user, newEmail, clientIp,
+                "User asked to change their email address; a confirmation link was sent to the new address.");
+    }
 
+    /**
+     * "Resend link": a new link to the address that waits for confirmation, which replaces the link sent before. The
+     * current password already confirmed this change, so it is not asked again; the new link is limited like the first,
+     * and an address another account took meanwhile is refused.
+     */
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public EmailChangeResponse resendLink(SecurityUserDetails currentUser, String clientIp) {
+        User user = currentAccount.lock(currentUser);
+        String newEmail = tokenRepository.findLockedPendingToken(user.getId(), LocalDateTime.now())
+                .map(EmailChangeToken::getNewEmail)
+                .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, NO_PENDING_CHANGE));
+        return sendLink(user, newEmail, clientIp, "User asked for the confirmation link of their email change again;"
+                + " a new link was sent to the new address.");
+    }
+
+    /**
+     * "Cancel change": the waiting change ends and its link stops working; the address stays as it is. Nothing waiting
+     * (the link was opened, or it ran out meanwhile) is no error: the change is over either way.
+     */
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public void cancel(SecurityUserDetails currentUser) {
+        User user = currentAccount.lock(currentUser);
+        LocalDateTime now = LocalDateTime.now();
+        // Only retire and audit when an unexpired confirmation link is actually waiting.
+        if (tokenRepository.findLockedPendingToken(user.getId(), now).isEmpty()) {
+            return;
+        }
+        tokenRepository.retireOpenTokensForUser(user.getId(), now);
+        audit(user, "EMAIL_CHANGE_CANCELLED",
+                "User cancelled their email change; its confirmation link no longer works.");
+    }
+
+    /** The address a change waits to confirm: that of the newest link that can still be opened. */
+    public Optional<String> pendingEmail(Long userId) {
+        return tokenRepository.findPendingEmail(userId, LocalDateTime.now());
+    }
+
+    /**
+     * Retires the open links of the account and e-mails a new one, valid for 60 minutes, to {@code newEmail}. Limited
+     * like "Forgot password", per sender and recipient: each request either e-mails an address the requester typed or
+     * says it belongs to another account, so the limit comes first and checking addresses counts too.
+     */
+    private EmailChangeResponse sendLink(User user, String newEmail, String clientIp, String auditDescription) {
+        requestLimiter.checkEmailChangeAllowed(newEmail, clientIp);
+        AccountGuards.requireUnregisteredEmail(userRepository, newEmail);
         LocalDateTime now = LocalDateTime.now();
         tokenRepository.retireOpenTokensForUser(user.getId(), now);
         String rawToken = SecureTokens.newHexToken();
         EmailChangeToken token = new EmailChangeToken();
-        token.setUser(user);
+        token.initialize(user, SecureTokens.sha256Hex(rawToken), now.plus(LINK_TTL));
         token.setNewEmail(newEmail);
-        token.setTokenHash(SecureTokens.sha256Hex(rawToken));
-        token.setExpiresAt(now.plus(LINK_TTL));
         tokenRepository.save(token);
-
-        emailDispatcher.enqueueEmailChangeConfirmation(newEmail, emailProperties.resolveFrontendUrl("confirm-email")
-                + "?token=" + URLEncoder.encode(rawToken, StandardCharsets.UTF_8));
-        auditLogService.record(user, "EMAIL_CHANGE_REQUESTED",
-                new AuditTarget("User", user.getId(), user.getDisplayName()), null,
-                "User asked to change their email address; a confirmation link was sent to the new address.");
+        emailDispatcher.enqueueEmailChangeConfirmation(user, newEmail, emailProperties.resolveFrontendUrl("confirm-email")
+                + "?token=" + rawToken);
+        audit(user, "EMAIL_CHANGE_REQUESTED", auditDescription);
         return new EmailChangeResponse(newEmail);
     }
 
-    /** Opens the link: the new address replaces the old one and every session is signed out. */
-    @Transactional
-    public String confirm(String rawToken) {
-        EmailChangeToken token = tokenRepository.findByTokenHash(SecureTokens.sha256Hex(rawToken.strip()))
-                .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, INVALID_LINK));
-        LocalDateTime now = LocalDateTime.now();
-        if (token.getUsedAt() != null) {
-            throw new ResponseStatusException(BAD_REQUEST, INVALID_LINK);
-        }
-        if (!token.getExpiresAt().isAfter(now)) {
-            throw new ResponseStatusException(BAD_REQUEST, "This confirmation link has expired. Ask for a new one in Account.");
-        }
-        User user = token.getUser();
-        if (!user.isActive() || user.getDeletedAt() != null) {
-            throw new ResponseStatusException(BAD_REQUEST, INVALID_LINK);
-        }
-        if (userRepository.existsByEmailIgnoreCase(token.getNewEmail())) {
-            throw new ResponseStatusException(BAD_REQUEST, "Email is already registered.");
-        }
+    private void audit(User user, String action, String description) {
+        auditLogService.record(user, action,
+                new AuditTarget(AuditLogQueryService.TARGET_USER, user.getId(), user.getDisplayName()), null, description);
+    }
 
-        String previousEmail = user.getEmail();
-        token.setUsedAt(now);
-        tokenRepository.save(token);
+    /** Opens the link: the new address replaces the old one and every session is signed out. */
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public String confirm(String rawToken) {
+        // Consume before checking email uniqueness so a retired/replayed link never reveals address availability.
+        EmailVerificationTokenClaimer.Claimed<EmailChangeToken> claimed = tokenClaimer.claim(
+                tokenRepository,
+                rawToken,
+                (user, token) -> true,
+                () -> new ResponseStatusException(
+                        BAD_REQUEST, "This confirmation link has expired. Ask for a new one in Account."));
+        EmailChangeToken token = claimed.token();
+        User user = claimed.user();
+        LocalDateTime now = claimed.claimedAt();
+        AccountGuards.requireUnregisteredEmail(userRepository, token.getNewEmail());
         user.setEmail(token.getNewEmail());
         // The link went to the new address, so opening it confirms that address too.
         user.setEmailVerifiedAt(now);
         refreshTokenService.invalidateSessions(user);
-        auditLogService.record(user, "EMAIL_CHANGED",
-                new AuditTarget("User", user.getId(), user.getDisplayName()), null,
-                "User confirmed a new email address (previously " + previousEmail + ").");
+        // A reset link sent to the old address must not reach the account any more.
+        passwordResetTokenRepository.retireOpenTokensForUser(user.getId(), now);
+        audit(user, "EMAIL_CHANGED", "User confirmed a new email address.");
         return user.getEmail();
     }
 }

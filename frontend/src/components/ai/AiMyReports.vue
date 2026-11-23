@@ -1,5 +1,11 @@
 <template>
-  <div class="ai-reports" data-testid="ai-my-reports">
+  <section class="panel ai-reports" :aria-labelledby="`${baseId}-title`" data-testid="ai-my-reports">
+    <header class="ai-reports-head">
+      <h2 :id="`${baseId}-title`" class="card-title">{{ t('aiHelper.myReports') }}</h2>
+      <p v-if="totalItems" class="card-subtitle">
+        {{ t('aiHelper.myReportsCount', { count: totalItems }, totalItems) }}
+      </p>
+    </header>
     <StatePanel
       v-if="loading"
       tone="loading"
@@ -7,46 +13,35 @@
       :message="t('aiHelper.reportsLoadingHint')"
       :skeleton="false"
     />
-    <StatePanel
-      v-else-if="error && !reports.length"
-      tone="error"
-      icon="alert"
-      :title="t('aiHelper.reportsError')"
-      :message="error"
-    >
+    <StatePanel v-else-if="error" tone="error" icon="alert" :title="t('aiHelper.reportsError')" :message="error">
       <template #actions>
-        <button class="btn btn-secondary btn-sm" type="button" @click="emit('retry')">{{ t('aiHelper.retry') }}</button>
+        <button class="btn btn-secondary btn-sm" type="button" @click="reload">{{ t('common.retry') }}</button>
       </template>
     </StatePanel>
-    <template v-else-if="reports.length">
-      <p class="ai-reports-count">{{ t('aiHelper.myReportsCount', { count: reports.length }, reports.length) }}</p>
-      <ul class="ai-report-list">
-        <li v-for="report in reports" :key="report.id" class="ai-report-item">
-          <div class="ai-report-top">
-            <strong>{{ t(reportReasonKey(report.reasonCategory)) }}</strong>
-            <StatusPill :label="t(status(report).labelKey)" :tone="status(report).tone" :icon="status(report).icon" />
-          </div>
-          <p v-if="firstLine(report)" class="ai-report-quote cjk-text">“{{ firstLine(report) }}”</p>
-          <p class="ai-report-meta">
-            {{
-              t('aiHelper.reportSent', {
-                feature: t(reportFeatureKey(report.featureKey)),
-                time: formatDateTime(report.createdAt),
-              })
-            }}
+    <ul v-else-if="reportRows.length" class="row-list ai-report-list" tabindex="0" :aria-labelledby="`${baseId}-title`">
+      <li v-for="{ report, quote } in reportRows" :key="report.id" class="ai-report-item">
+        <div class="ai-report-top">
+          <strong>{{ t(reportReasonKey(report.reasonCategory)) }}</strong>
+          <StatusPill :label="t(REPORT_STATUS[report.status].labelKey)" :tone="REPORT_STATUS[report.status].tone" />
+        </div>
+        <p v-if="quote" class="ai-report-meta">“{{ quote }}”</p>
+        <p class="ai-report-meta">
+          {{
+            t('aiHelper.reportSent', {
+              feature: t(`opsLabels.aiFeatures.${report.featureKey}`),
+              time: formatDateTime(report.createdAt),
+            })
+          }}
+        </p>
+        <p v-if="report.status === 'PENDING_REVIEW'" class="ai-report-meta">{{ t('aiHelper.reportWaiting') }}</p>
+        <div v-else-if="report.reviewerNote" class="ai-report-note">
+          <p class="ai-report-note-head">
+            {{ t('aiHelper.adminNote', { time: formatDateTime(report.reviewedAt) }) }}
           </p>
-          <p v-if="report.status === 'PENDING_REVIEW'" class="ai-report-waiting">
-            <IconGlyph name="clock" :size="14" />{{ t('aiHelper.reportWaiting') }}
-          </p>
-          <div v-else-if="report.reviewerNote" class="ai-report-note">
-            <p class="ai-report-note-head">
-              {{ t('aiHelper.adminNote', { time: formatDateTime(report.reviewedAt) }) }}
-            </p>
-            <p>{{ report.reviewerNote }}</p>
-          </div>
-        </li>
-      </ul>
-    </template>
+          <p>{{ report.reviewerNote }}</p>
+        </div>
+      </li>
+    </ul>
     <StatePanel
       v-else
       tone="empty"
@@ -54,38 +49,54 @@
       :title="t('aiHelper.noReportsTitle')"
       :message="t('aiHelper.noReports')"
     />
-  </div>
+    <PaginationBar
+      v-if="!error"
+      :page="displayedPage"
+      :total-pages="totalPages"
+      :label="t('aiHelper.myReports')"
+      icon-only
+      @update:page="goToPage"
+    />
+  </section>
 </template>
 
 <script setup lang="ts">
-import IconGlyph from '@/components/common/IconGlyph.vue'
+import { computed, ref, useId, watch } from 'vue'
+
+import { aiHelperApi } from '@/api/ai'
+import PaginationBar from '@/components/common/PaginationBar.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
 import StatusPill from '@/components/common/StatusPill.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
+import { useResource, useServerPage } from '@/composables/useResource'
 import { aiHelperMessages } from '@/plugins/aiHelperMessages'
-import { aiSafetyMessages } from '@/plugins/aiSafetyMessages'
+import { opsLabelMessages } from '@/plugins/opsLabelMessages'
 import type { StudentAiResponseReportResponse } from '@/types/api'
 import { formatDateTime } from '@/utils/format'
+import { truncateText } from '@/utils/truncateText'
 
-import { REPORT_STATUS, reportFeatureKey, reportReasonKey } from './aiHelper'
+import { REPORT_STATUS, reportReasonKey } from './aiHelper'
 
-/** "My reports" (in a drawer of the AI Helper): every AI report of the student, with the admin's note once answered. */
-defineProps<{
-  reports: readonly StudentAiResponseReportResponse[]
-  loading: boolean
-  error: string | null
-}>()
-const emit = defineEmits<{ retry: [] }>()
+const props = defineProps<{ revision: number }>()
+const page = ref(0)
+const resource = useResource(() => aiHelperApi.reports(page.value))
+const { loading, error, reload } = resource
+const { items: reports, totalItems, totalPages, displayedPage, goToPage } = useServerPage(resource, page)
+// A report submitted in any AI Helper tab appears at the start of the history.
+watch(
+  () => props.revision,
+  () => goToPage(0),
+)
 
-const { t } = useLocalMessages({ aiHelper: aiHelperMessages, aiSafety: aiSafetyMessages })
-
-function status(report: StudentAiResponseReportResponse) {
-  return REPORT_STATUS[report.status] ?? REPORT_STATUS.PENDING_REVIEW
-}
+const { t } = useLocalMessages({ aiHelper: aiHelperMessages, opsLabels: opsLabelMessages })
+const baseId = useId()
 
 /** The last line of what was asked (a conversation's newest turn), else of the answer: the quote that names a report. */
-function firstLine(report: StudentAiResponseReportResponse): string {
-  const text = (report.promptSnapshot || report.aiResponseSnapshot || '').split('\n').at(-1)?.trim() ?? ''
-  return text.length > 90 ? `${text.slice(0, 87)}…` : text
+function quotedLine(report: StudentAiResponseReportResponse): string {
+  const source = report.promptSnapshot?.trim() || report.aiResponseSnapshot?.trim() || ''
+  const text = source.split('\n').at(-1)?.trim() ?? ''
+  return text.length > 90 ? `${truncateText(text, 87)}…` : text
 }
+
+const reportRows = computed(() => reports.value.map((report) => ({ report, quote: quotedLine(report) })))
 </script>
