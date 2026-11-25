@@ -252,7 +252,7 @@ class SchemaEnumContractTests {
                 .containsExactlyInAnyOrderElementsOf(allSchemaEnumColumns);
     }
 
-    /** Removed teacher-era tables/columns (V3) and dropped unused enum columns (V13) stay absent. */
+    /** Removed teacher-era tables/columns and dropped unused enum columns stay absent. */
     @Test
     void removedAndDroppedEnumColumnsAreGone() {
         assertThat(ENUM_COLUMNS).doesNotContainKeys(

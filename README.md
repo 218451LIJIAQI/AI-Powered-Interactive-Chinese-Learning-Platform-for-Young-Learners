@@ -225,17 +225,12 @@ Concurrent test runs against one MySQL server must use different `TEST_DB_NAME` 
 The startup, scheduled job, hint, support and quiz concurrency tests observe row locks. Enable MySQL Performance
 Schema and give the test user read access to `performance_schema.data_locks`.
 
-`MySqlMigrationSmokeTests` builds the schema with the Flyway migrations and validates every JPA entity against
-it; `MySqlMigrationUpgradeTests` fills earlier schema versions with data and checks that the later migrations keep and
-convert it (V1→V2, V2→V3 with the teacher-era data, V3→V4, V6→V7 for weighted quiz scores, V7→V8 for the
-removed duplicate counter indexes, V8→V9 for hints delivered before their practice run was recorded, V9→V10 for schema
-integrity constraints and secondary indexes, V10→V11 for `package_items` referential integrity, question-type
-normalisation and constraint checks, and redundant-index cleanup, V11→V12 for case-sensitive AI enum checks and
-support/AI/refresh-token index tuning, V12→V13 for unused column/index cleanup and retired TONES practice checks, and
-V13→V14 for unique lesson working-copy revisions, composite covering FK indexes, and unused `hsk_level` index cleanup).
-Both are skipped unless enabled. The smoke test needs an existing, empty database; the upgrade test creates and drops
-`<TEST_DB_NAME>_upgrade_check` (`migration_upgrade_check` when `TEST_DB_NAME` is unset), so the user needs the right to
-create and drop databases:
+`MySqlMigrationSmokeTests` builds the schema from the consolidated Flyway baseline (`V1__consolidated_schema.sql`),
+validates every JPA entity against it, checks its integrity constraints and hot-path indexes, and exercises live MySQL
+enforcement (case-sensitive enum checks, generated unique keys, foreign keys, 64-bit quiz score bounds, JSON columns,
+and composite covering index orders) in an isolated scratch database. It is skipped unless enabled. It needs an
+existing, empty database and creates and drops `<TEST_DB_NAME>_upgrade_check` (`migration_upgrade_check` when
+`TEST_DB_NAME` is unset), so the user needs the right to create and drop databases:
 
 ```bash
 RUN_MYSQL_MIGRATION_TEST=true DB_USERNAME=root DB_PASSWORD=... DB_NAME=an_empty_database ./mvnw test -Dtest='MySqlMigration*Tests'
@@ -276,7 +271,7 @@ npm run test:e2e
 - Roles: learners (`STUDENT` internally) and admins. Admins make and publish the classes (Admin › Content › Classes);
   a lesson can be published once it has a video, key phrases, its three activities (Flashcards, Tracing, Matching) and
   a quiz of exactly five questions with every AI-drafted question checked; a class once it has two units with four to
-  six published lessons. Migration `V3` removed the earlier teacher role: accounts left without a role were
+  six published lessons. Earlier versions also had a teacher role; when it was removed, accounts left without a role were
   deactivated (their rows are kept). An account with both roles opens the admin dashboard by default. A direct
   link can open either workspace, with that workspace's navigation. Admin accounts cannot delete themselves.
 - Signing out ends the session in that browser. Changing the password ends all other sessions while issuing a fresh
