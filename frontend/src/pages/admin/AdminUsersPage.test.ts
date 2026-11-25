@@ -1,5 +1,5 @@
 import { flushPromises, type VueWrapper } from '@vue/test-utils'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { PageResponse } from '@/types/api'
 import type { AdminInvite, AdminUserDetail, AdminUserListItem, AdminUserQuery, AuditEntry } from '@/types/ops'
@@ -98,10 +98,6 @@ describe('AdminUsersPage', () => {
     usersApi.list.mockResolvedValue(pageOf([farah, daniel]))
     usersApi.invites.mockResolvedValue([])
     usersApi.get.mockImplementation(async (id: number) => detailOf(id === farah.id ? farah : daniel))
-  })
-
-  afterEach(() => {
-    vi.useRealTimers()
   })
 
   it('lists users and sends only the filters that are set', async () => {
@@ -566,10 +562,10 @@ describe('AdminUsersPage', () => {
     expect(wrapper.find('[data-testid="admin-users-invites"]').exists()).toBe(false)
 
     await wrapper.get('[data-testid="admin-users-invite"]').trigger('click')
-    const drawer = wrapper.get('[data-testid="admin-users-invite-drawer"]')
-    expect(drawer.get('h2').text()).toBe('Invite admin')
-    expect(drawer.text()).toContain('Admins manage classes, users and AI settings.')
-    expect(drawer.text()).toContain('They get an email link to set a password.')
+    const dialog = wrapper.get('[data-testid="admin-users-invite-dialog"]')
+    expect(dialog.get('h2').text()).toBe('Invite admin')
+    expect(dialog.text()).toContain('Admins manage classes, users and AI settings.')
+    expect(dialog.text()).toContain('They get an email link to set a password.')
     // A2.07: the field names the fix under itself, and Send invite waits until it is fixed.
     await wrapper.get('[data-testid="admin-users-invite-email"]').setValue('not-an-email')
     await wrapper.get('#admin-users-invite-form').trigger('submit')
@@ -584,7 +580,7 @@ describe('AdminUsersPage', () => {
     await flushPromises()
 
     expect(usersApi.invite).toHaveBeenCalledWith('mei@example.com')
-    expect(wrapper.find('[data-testid="admin-users-invite-drawer"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="admin-users-invite-dialog"]').exists()).toBe(false)
     expect(wrapper.text()).toContain('Invite sent to mei@example.com.')
     const invites = wrapper.get('[data-testid="admin-users-invites"]').text()
     expect(invites).toContain('Admin invite pending')
@@ -746,7 +742,7 @@ describe('AdminUsersPage', () => {
     await wrapper.get('[data-testid="admin-users-invite"]').trigger('click')
     await wrapper.get('[data-testid="admin-users-invite-email"]').trigger('blur')
     expect(wrapper.find('#admin-users-invite-error').exists()).toBe(true)
-    await buttonNamed(wrapper.get('[data-testid="admin-users-invite-drawer"]'), 'Cancel').trigger('click')
+    await buttonNamed(wrapper.get('[data-testid="admin-users-invite-dialog"]'), 'Cancel').trigger('click')
 
     await wrapper.get('[data-testid="admin-users-invite"]').trigger('click')
     expect(wrapper.find('#admin-users-invite-error').exists()).toBe(false)
@@ -772,12 +768,12 @@ describe('AdminUsersPage', () => {
     const { wrapper } = await mountAtRoute(AdminUsersPage, '/admin/users')
     const form = await fillInvite(wrapper)
     await form.trigger('submit')
-    const drawer = wrapper.get('[data-testid="admin-users-invite-drawer"]')
-    const buttons = drawer.findAll('button')
+    const dialog = wrapper.get('[data-testid="admin-users-invite-dialog"]')
+    const buttons = dialog.findAll('button')
     const locked = buttons.every((button) => button.attributes('disabled') !== undefined)
     const emailLocked = wrapper.get('[data-testid="admin-users-invite-email"]').attributes('disabled')
-    await buttonNamed(drawer, 'Cancel').trigger('click')
-    const stayedOpen = wrapper.find('[data-testid="admin-users-invite-drawer"]').exists()
+    await buttonNamed(dialog, 'Cancel').trigger('click')
+    const stayedOpen = wrapper.find('[data-testid="admin-users-invite-dialog"]').exists()
     invite.reject(new Error('Invite service unavailable'))
     await flushPromises()
 
@@ -790,7 +786,7 @@ describe('AdminUsersPage', () => {
     await wrapper.get('#admin-users-invite-form').trigger('submit')
     await flushPromises()
     expect(usersApi.invite).toHaveBeenCalledTimes(2)
-    expect(wrapper.find('[data-testid="admin-users-invite-drawer"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="admin-users-invite-dialog"]').exists()).toBe(false)
   })
 
   it('shows why the server refused an invite without blocking a retry, until the address changes', async () => {

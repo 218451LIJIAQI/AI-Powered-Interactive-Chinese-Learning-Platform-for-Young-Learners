@@ -35,7 +35,6 @@ class LoginAttemptLimiterTests {
     void allowsLoginWhenNoFailuresRecorded() {
         LoginAttemptLimiter limiter = new LoginAttemptLimiter();
 
-        assertThat(isAllowed(limiter, EMAIL, IP)).isTrue();
         assertThat(limiter.retryAfter(EMAIL, IP)).isEqualTo(Duration.ZERO);
     }
 
@@ -46,7 +45,7 @@ class LoginAttemptLimiterTests {
         for (int i = 0; i < LoginAttemptLimiter.MAX_FAILED_ATTEMPTS - 1; i++) {
             boolean nowLocked = limiter.recordFailure(EMAIL, IP);
             assertThat(nowLocked).as("attempt %d", i + 1).isFalse();
-            assertThat(isAllowed(limiter, EMAIL, IP)).isTrue();
+            assertThat(limiter.retryAfter(EMAIL, IP)).isEqualTo(Duration.ZERO);
         }
 
         boolean lockedOnLastAttempt = limiter.recordFailure(EMAIL, IP);
@@ -55,7 +54,6 @@ class LoginAttemptLimiterTests {
         assertThat(limiter.recordFailure(EMAIL, IP))
                 .as("subsequent failures while already locked do not re-engage lockout")
                 .isFalse();
-        assertThat(isAllowed(limiter, EMAIL, IP)).isFalse();
         assertThat(limiter.retryAfter(EMAIL, IP)).isPositive();
     }
 
@@ -64,12 +62,11 @@ class LoginAttemptLimiterTests {
         MutableInstantSource clock = new MutableInstantSource();
         LoginAttemptLimiter limiter = limiter(clock);
         recordFailuresUntilLocked(limiter, EMAIL, IP);
-        assertThat(isAllowed(limiter, EMAIL, IP)).isFalse();
+        assertThat(limiter.retryAfter(EMAIL, IP)).isPositive();
 
         // Advance the clock past the lock window; the slot should reset.
         clock.advance(LoginAttemptLimiter.LOCK_DURATION.plusSeconds(1));
 
-        assertThat(isAllowed(limiter, EMAIL, IP)).isTrue();
         assertThat(limiter.retryAfter(EMAIL, IP)).isEqualTo(Duration.ZERO);
     }
 
@@ -93,7 +90,7 @@ class LoginAttemptLimiterTests {
         clock.advance(LoginAttemptLimiter.ATTEMPT_WINDOW);
 
         assertThat(limiter.recordFailure(EMAIL, IP)).as("earlier failures no longer count").isFalse();
-        assertThat(isAllowed(limiter, EMAIL, IP)).isTrue();
+        assertThat(limiter.retryAfter(EMAIL, IP)).isEqualTo(Duration.ZERO);
         for (int i = 0; i < LoginAttemptLimiter.MAX_FAILED_ATTEMPTS - 2; i++) {
             assertThat(limiter.recordFailure(EMAIL, IP)).isFalse();
         }
@@ -122,8 +119,8 @@ class LoginAttemptLimiterTests {
 
         // A bucket is keyed by the email and the IP together, so changing
         // either one alone gives an independent bucket that is not locked.
-        assertThat(isAllowed(limiter, OTHER_EMAIL, IP)).isTrue();
-        assertThat(isAllowed(limiter, EMAIL, OTHER_IP)).isTrue();
+        assertThat(limiter.retryAfter(OTHER_EMAIL, IP)).isEqualTo(Duration.ZERO);
+        assertThat(limiter.retryAfter(EMAIL, OTHER_IP)).isEqualTo(Duration.ZERO);
     }
 
     @Test
@@ -134,8 +131,8 @@ class LoginAttemptLimiterTests {
         // The login pipeline normalises emails to lowercase before reaching
         // the limiter, but defence in depth: ensure the limiter itself is
         // not fooled by the case of the supplied address.
-        assertThat(isAllowed(limiter, LOWERCASE_EMAIL, IP)).isFalse();
-        assertThat(isAllowed(limiter, UPPERCASE_EMAIL, IP)).isFalse();
+        assertThat(limiter.retryAfter(LOWERCASE_EMAIL, IP)).isPositive();
+        assertThat(limiter.retryAfter(UPPERCASE_EMAIL, IP)).isPositive();
     }
 
     @Test
@@ -154,7 +151,6 @@ class LoginAttemptLimiterTests {
 
         recordFailureSpray(limiter);
 
-        assertThat(isAllowed(limiter, EMAIL, IP)).isFalse();
         assertThat(limiter.retryAfter(EMAIL, IP)).isPositive();
     }
 
@@ -174,10 +170,6 @@ class LoginAttemptLimiterTests {
         limiter.recordFailure(LONG_EMAIL_PREFIX + "second@example.com", LONG_IP_PREFIX + "2");
 
         assertThat(limiter.trackedAttemptCount()).isEqualTo(1);
-    }
-
-    private static boolean isAllowed(LoginAttemptLimiter limiter, String email, String ip) {
-        return limiter.retryAfter(email, ip).isZero();
     }
 
     private static LoginAttemptLimiter limiter(InstantSource clock) {

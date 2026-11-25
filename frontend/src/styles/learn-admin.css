@@ -84,14 +84,6 @@
 
 /* Practice library */
 
-.admin-library-history > li:first-child {
-  padding-top: 0;
-}
-
-.admin-library-history > li:last-child {
-  padding-bottom: 0;
-}
-
 .admin-library-col-type {
   width: 132px;
 }
@@ -214,7 +206,7 @@
 
 .admin-learning-option {
   display: grid;
-  grid-template-columns: auto repeat(2, minmax(0, 1fr)) auto;
+  grid-template-columns: minmax(var(--space-4), auto) repeat(2, minmax(0, 1fr)) var(--control-height-sm);
   align-items: center;
   gap: var(--space-2);
 }
@@ -272,10 +264,21 @@
   .admin-learning-word-row,
   .admin-learning-word-row.is-sentence,
   .admin-learning-item-row,
-  .admin-learning-option,
   .admin-learning-answer {
     grid-template-columns: minmax(0, 1fr);
     align-items: stretch;
+  }
+
+  .admin-learning-option {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .admin-learning-option > input:last-of-type {
+    grid-column: 2 / 4;
+  }
+
+  .admin-learning-option > .btn {
+    grid-area: 1 / 3;
   }
 
   .admin-learning-word-row.is-sentence > :first-child,
@@ -283,22 +286,21 @@
   .admin-learning-word-row.is-sentence > :nth-child(3),
   .admin-learning-word-row.is-sentence > .btn {
     grid-area: auto;
-    grid-column: auto;
   }
 
-  .admin-learning-option + .admin-learning-option,
+  .admin-learning-option:not(.type-caption) + .admin-learning-option,
   .admin-learning-answer:not(.type-caption) + .admin-learning-answer {
     padding-top: var(--space-3);
     border-top: 1px solid var(--border-subtle);
   }
 
   .admin-learning-word-row > .btn,
-  .admin-learning-option > .btn,
   .admin-learning-answer > .btn {
     justify-self: end;
     margin-bottom: 0;
   }
 
+  .admin-learning-option.type-caption,
   .admin-learning-answer.type-caption {
     display: none;
   }

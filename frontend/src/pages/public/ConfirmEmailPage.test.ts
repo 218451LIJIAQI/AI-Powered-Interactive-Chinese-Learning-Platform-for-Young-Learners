@@ -15,17 +15,19 @@ const mocks = vi.hoisted(() => ({
   logout: vi.fn(),
   push: vi.fn(),
   replace: vi.fn(),
+  currentRoute: { value: { meta: {} as { roles?: UserRole[] } } },
   route: { query: {} as Record<string, string> },
 }))
 
 vi.mock('vue-router', async () => ({
   RouterLink: (await import('@/test/helpers')).routerLinkStub,
   useRoute: () => mocks.route,
-  useRouter: () => ({ push: mocks.push, replace: mocks.replace }),
+  useRouter: () => ({ push: mocks.push, replace: mocks.replace, currentRoute: mocks.currentRoute }),
 }))
 
-vi.mock('@/api/ops', () => ({ publicOpsApi: { confirmEmail: mocks.confirmEmail } }))
-vi.mock('@/api/plan', () => ({ emailConfirmationApi: { confirm: mocks.confirmSignup } }))
+vi.mock('@/api/services', () => ({
+  authApi: { confirmEmail: mocks.confirmEmail, confirmSignupEmail: mocks.confirmSignup },
+}))
 
 const authStore = reactive({
   activeRole: null as UserRole | null,
@@ -61,6 +63,9 @@ beforeEach(() => {
   })
   mocks.push.mockReset()
   mocks.replace.mockReset()
+  mocks.replace.mockResolvedValue(undefined)
+  mocks.push.mockResolvedValue(undefined)
+  mocks.currentRoute.value.meta = {}
   authStore.activeRole = null
   authStore.isAuthenticated = false
   mocks.route.query = {}
@@ -252,5 +257,25 @@ describe('ConfirmEmailPage (FRAUTH08)', () => {
     await flushPromises()
     expect(mocks.logout).toHaveBeenCalledOnce()
     expect(mocks.push).toHaveBeenCalledWith('/auth')
+  })
+
+  it('redirects away from a protected route if email confirmation clears the session after leaving the page', async () => {
+    const check = deferred<boolean>()
+    mocks.route.query = { token: 'confirm-token' }
+    authStore.isAuthenticated = true
+    authStore.activeRole = 'STUDENT'
+    mocks.confirmEmail.mockResolvedValue({ email: 'new@example.com' })
+    mocks.hasLiveSession.mockReturnValue(check.promise)
+
+    const wrapper = await mountPage()
+    mocks.replace.mockClear()
+    mocks.currentRoute.value.meta = { roles: ['STUDENT'] }
+    wrapper.unmount()
+
+    check.resolve(false)
+    await flushPromises()
+
+    expect(mocks.clearSessionInAllTabs).toHaveBeenCalledOnce()
+    expect(mocks.replace).toHaveBeenCalledExactlyOnceWith({ name: 'auth', query: { email: 'changed' } })
   })
 })

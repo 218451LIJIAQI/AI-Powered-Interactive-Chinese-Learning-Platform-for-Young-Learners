@@ -97,7 +97,7 @@ public class TransactionalEmailDispatcher {
         }
         body.append(BLANK_LINE).append(texts.text(language, "reviewQueueDigest.switchOffNote"));
         eventPublisher.publishEvent(new EmailDeliveryRequested(
-                recipient.getEmail(), texts.text(language, "reviewQueueDigest.subject"), body.toString()));
+                recipient.getEmail(), singleLine(texts.text(language, "reviewQueueDigest.subject")), body.toString()));
     }
 
     /** The queues of the daily summary, as the admin sidebar counts them. */
@@ -144,5 +144,12 @@ public class TransactionalEmailDispatcher {
      * transaction it is dropped, as the listener only runs after a commit: every caller queues inside its transaction.
      */
     public record EmailDeliveryRequested(String email, String subject, String body) {
+
+        @Override
+        public String toString() {
+            return "EmailDeliveryRequested[email=[REDACTED], subjectLen="
+                    + (subject == null ? 0 : subject.length())
+                    + ", bodyLen=" + (body == null ? 0 : body.length()) + "]";
+        }
     }
 }

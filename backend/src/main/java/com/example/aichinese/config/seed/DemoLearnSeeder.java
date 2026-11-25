@@ -308,15 +308,17 @@ public class DemoLearnSeeder implements CommandLineRunner {
             PracticeActivityContent set = set(PracticeType.FLASHCARDS, title);
             PracticeCatalog.SetContent content = practiceCatalog.content(PracticeType.FLASHCARDS, set);
             PracticeCatalog.Item card = content.items().get(cardIndex);
-            mistakeService.recordStillLearning(student, PracticeService.mistakeRef(PracticeType.FLASHCARDS, set, card),
-                    set.getTitle(), PracticeCatalog.flashcardQuestion(content, card))
-                    .setLastWrongAt(clock.onDayAgo(daysAgo, 12));
+            LocalDateTime when = clock.onDayAgo(daysAgo, 12);
+            var recorded = mistakeService.recordStillLearning(student, PracticeService.mistakeRef(PracticeType.FLASHCARDS, set, card),
+                    set.getTitle(), PracticeCatalog.flashcardQuestion(content, card));
+            recorded.setLastWrongAt(when);
         }
 
         /** Recorded as Learn and Practice record a wrong answer, then dated back (the row is flushed with the seeder). */
         private void mistake(MistakeSource source, String itemRef, String title, GradableItem item, int daysAgo) {
-            mistakeService.record(student, source, itemRef, title, item, firstWrongOption(item), false)
-                    .setLastWrongAt(clock.onDayAgo(daysAgo, 10));
+            LocalDateTime when = clock.onDayAgo(daysAgo, 10);
+            var recorded = mistakeService.record(student, source, itemRef, title, item, firstWrongOption(item), false);
+            recorded.setLastWrongAt(when);
         }
 
         private String firstWrongOption(GradableItem item) {

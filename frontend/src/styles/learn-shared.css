@@ -268,9 +268,9 @@
   color: var(--color-danger-text);
 }
 
-/* On the filled correct option the tick and the pinyin are white, like its text. */
+/* On the filled correct option the tick and the pinyin inherit the row's white (or HighlightText) color. */
 .option-row.is-correct :is(.learn-option-mark, .learn-option-pinyin) {
-  color: var(--color-white);
+  color: inherit;
 }
 
 /* Sentence building: the answer on a ruled line, a second rule, then the bank of tiles. */
@@ -536,7 +536,28 @@
   }
 }
 
+@media (max-width: 48rem) and (min-height: 37.5625rem) {
+  html:has(.learn-checkbar:is(.is-correct, .is-wrong)),
+  html:has(.learn-checkbar .hint-panel-card) {
+    --focus-footer-height: 224px;
+  }
+
+  .learn-checkbar {
+    max-height: 45vh;
+    overflow-y: auto;
+  }
+}
+
 @media (forced-colors: active) {
+  .learn-rank-medal,
+  .learn-checkbar.is-correct .learn-checkbar-icon {
+    border: var(--border-width-thick) solid Highlight;
+  }
+
+  .learn-checkbar.is-wrong .learn-checkbar-icon {
+    border: var(--border-width-thick) dashed Highlight;
+  }
+
   .learn-tile.is-used {
     border: 1px dashed GrayText;
     background: Canvas;

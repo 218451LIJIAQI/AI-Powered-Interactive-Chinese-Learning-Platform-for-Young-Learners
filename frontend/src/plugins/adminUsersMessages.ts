@@ -11,6 +11,8 @@ export const adminUsersMessages = {
     accountAll: 'All accounts',
     accountActive: 'Active',
     accountDeactivated: 'Deactivated',
+    accountDeleted: 'Deleted',
+    deletedNote: 'This account was deleted by its owner and can’t be reactivated.',
     colUser: 'User',
     joined: 'Joined',
     colDetails: 'Details',
@@ -83,6 +85,8 @@ export const adminUsersMessages = {
     accountAll: 'Semua akaun',
     accountActive: 'Aktif',
     accountDeactivated: 'Dinyahaktifkan',
+    accountDeleted: 'Dipadamkan',
+    deletedNote: 'Akaun ini telah dipadamkan oleh pemiliknya dan tidak boleh diaktifkan semula.',
     colUser: 'Pengguna',
     joined: 'Menyertai',
     colDetails: 'Butiran',
@@ -157,6 +161,8 @@ export const adminUsersMessages = {
     accountAll: '全部账号',
     accountActive: '正常',
     accountDeactivated: '已停用',
+    accountDeleted: '已注销',
+    deletedNote: '该账号已由本人注销，无法重新启用。',
     colUser: '用户',
     joined: '加入时间',
     colDetails: '详情',
@@ -218,4 +224,4 @@ export const adminUsersMessages = {
     inviteRestored: '邀请已恢复，链接重新有效。',
     restoreInviteFailed: '无法恢复邀请。',
   },
-}
+} as const

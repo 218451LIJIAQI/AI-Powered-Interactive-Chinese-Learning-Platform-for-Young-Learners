@@ -7,13 +7,15 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.BiConsumer;
+import java.util.function.BiPredicate;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Predicate;
 
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -26,12 +28,9 @@ import com.example.aichinese.entity.CoursePackage;
 import com.example.aichinese.entity.LearningModule;
 import com.example.aichinese.entity.Lesson;
 import com.example.aichinese.entity.LessonKeyPhrase;
-import com.example.aichinese.entity.Quiz;
-import com.example.aichinese.entity.QuizQuestion;
 import com.example.aichinese.entity.RecordedLessonVideo;
 import com.example.aichinese.entity.UploadedFile;
 import com.example.aichinese.entity.User;
-import com.example.aichinese.entity.base.LessonActivity;
 import com.example.aichinese.entity.enums.ClassActivityType;
 import com.example.aichinese.entity.enums.ContentStatus;
 import com.example.aichinese.entity.enums.RecordedVideoSourceType;
@@ -40,7 +39,10 @@ import com.example.aichinese.repository.RecordedLessonVideoRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.ContentSafetyService;
 import com.example.aichinese.service.FileStorageService;
+import com.example.aichinese.service.TransactionRunner;
 import com.example.aichinese.service.learn.LearnerNotifications;
+
+import lombok.RequiredArgsConstructor;
 
 /**
  * The admin lesson editor: details and key phrases, the video, the practice activities and the quiz of a class lesson,
@@ -52,6 +54,7 @@ import com.example.aichinese.service.learn.LearnerNotifications;
  * ({@link ClassAuthoringAccess}).
  */
 @Service
+@RequiredArgsConstructor
 public class LessonEditorService {
 
     /** A lesson quiz has exactly this many questions. */
@@ -62,6 +65,7 @@ public class LessonEditorService {
     private final ClassAuthoringAccess access;
     private final ClassContentSupport content;
     private final LessonRevisionService revisions;
+    private final LessonRevisionDiff revisionDiff;
     private final LessonEditorAssembler assembler;
     private final LessonActivityEditor activityEditor;
     private final LessonQuizEditor quizEditor;
@@ -70,38 +74,7 @@ public class LessonEditorService {
     private final FileStorageService fileStorageService;
     private final ContentSafetyService safety;
     private final LearnerNotifications learnerNotifications;
-    private final TransactionTemplate writeTransaction;
-    private final TransactionTemplate readOnlyTransaction;
-
-    public LessonEditorService(
-            ClassAuthoringAccess access,
-            ClassContentSupport content,
-            LessonRevisionService revisions,
-            LessonEditorAssembler assembler,
-            LessonActivityEditor activityEditor,
-            LessonQuizEditor quizEditor,
-            LessonKeyPhraseRepository keyPhraseRepository,
-            RecordedLessonVideoRepository videoRepository,
-            FileStorageService fileStorageService,
-            ContentSafetyService safety,
-            LearnerNotifications learnerNotifications,
-            PlatformTransactionManager transactionManager) {
-        this.access = access;
-        this.content = content;
-        this.revisions = revisions;
-        this.assembler = assembler;
-        this.activityEditor = activityEditor;
-        this.quizEditor = quizEditor;
-        this.keyPhraseRepository = keyPhraseRepository;
-        this.videoRepository = videoRepository;
-        this.fileStorageService = fileStorageService;
-        this.safety = safety;
-        this.learnerNotifications = learnerNotifications;
-        this.writeTransaction = new TransactionTemplate(transactionManager);
-        this.writeTransaction.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
-        this.readOnlyTransaction = new TransactionTemplate(transactionManager);
-        this.readOnlyTransaction.setReadOnly(true);
-    }
+    private final TransactionRunner transactions;
 
     /** The version shown in the editor, which can still be the live lesson until the first valid change. */
     private record EditTarget(Lesson lesson, CoursePackage coursePackage, Lesson version) {
@@ -123,10 +96,7 @@ public class LessonEditorService {
     }
 
     private EditTarget editTarget(Long lessonId) {
-        return editTarget(lockLessonForAuthoring(lessonId));
-    }
-
-    private EditTarget editTarget(ClassAuthoringAccess.LockedLesson locked) {
+        ClassAuthoringAccess.LockedLesson locked = lockLessonForAuthoring(lessonId);
         Lesson lesson = locked.lesson();
         requireLessonEditable(lesson);
         Lesson version = lesson.getContentStatus() == ContentStatus.PUBLISHED
@@ -154,28 +124,25 @@ public class LessonEditorService {
         Lesson lesson = editable.lesson();
         LearningModule targetUnit = resolveMoveTarget(editable.coursePackage(), lesson, request.unitId());
         String safeTitle = safety.requireSafeText(request.title(), 200, "Lesson title is required.");
-        String safeSummary = safety.optionalSafeText(request.summary(), 1000);
         List<LessonViews.KeyPhrase> safePhrases = new ArrayList<>(request.keyPhrases().size());
         for (ClassRequests.KeyPhrase phrase : request.keyPhrases()) {
-            safety.screenText(phrase.chinese(), phrase.pinyin(), phrase.meaning());
-            safePhrases.add(new LessonViews.KeyPhrase(phrase.chinese(), phrase.pinyin(), phrase.meaning()));
+            String chinese = safety.requireSafeText(phrase.chinese(), 100, "Chinese is required for every key phrase.");
+            String pinyin = safety.requireSafeText(phrase.pinyin(), 200, "Pinyin is required for every key phrase.");
+            String meaning = safety.requireSafeText(phrase.meaning(), 300, "Meaning is required for every key phrase.");
+            safePhrases.add(new LessonViews.KeyPhrase(chinese, pinyin, meaning));
         }
         if (editable.needsWorkingCopy()
                 && Objects.equals(lesson.getTitle(), safeTitle)
-                && Objects.equals(lesson.getSummary(), safeSummary)
-                && Objects.equals(lesson.getEstimatedDurationMinutes(), request.minutes())
                 && content.keyPhraseViews(lesson.getId()).equals(safePhrases)) {
             if (targetUnit != null) {
                 moveLesson(currentUser, editable.coursePackage(), lesson, null, targetUnit);
             }
-            return assembler.view(editable.coursePackage(), lesson, lesson);
+            return assembler.view(editable.coursePackage(), lesson, lesson, false);
         }
 
         EditTarget target = prepareWrite(editable);
         Lesson working = target.version();
         working.setTitle(safeTitle);
-        working.setSummary(safeSummary);
-        working.setEstimatedDurationMinutes(request.minutes());
         revisions.deleteKeyPhrases(working.getId());
         int order = 1;
         for (LessonViews.KeyPhrase phrase : safePhrases) {
@@ -243,15 +210,16 @@ public class LessonEditorService {
             throw new ResponseStatusException(BAD_REQUEST, "Choose a video file to upload.");
         }
         String safeTitle = safety.requireSafeText(title, 200, "Title is required.");
-        readOnlyTransaction.executeWithoutResult(status -> {
+        transactions.readOnly(() -> {
+            access.requireAdmin(currentUser);
             Lesson lesson = access.requireLesson(lessonId);
             ClassAuthoringAccess.requireNotArchived(content.requireClassOfLesson(lesson));
             requireLessonEditable(lesson);
         });
         try (var staged = fileStorageService.stageRecordedVideo(file)) {
-            return writeTransaction.execute(status -> {
-                EditTarget target = prepareWrite(editTarget(lessonId));
+            return transactions.writeReadCommitted(() -> {
                 User admin = access.requireAdmin(currentUser);
+                EditTarget target = prepareWrite(editTarget(lessonId));
                 UploadedFile uploadedFile = fileStorageService.saveStagedUpload(staged, admin);
                 revisions.removeDraftVideos(target.version());
                 RecordedLessonVideo video = new RecordedLessonVideo();
@@ -291,10 +259,10 @@ public class LessonEditorService {
         ClassActivityType type = LessonActivityEditor.parseType(request.type());
         EditTarget editable = editTarget(lessonId);
         activityEditor.requireSlotFree(editable.version(), type);
-        String safeTitle = activityEditor.validate(type, request);
+        LessonActivityEditor.ValidatedActivity validated = activityEditor.validate(type, request);
         User admin = access.requireAdmin(currentUser);
         EditTarget target = prepareWrite(editable);
-        activityEditor.add(target.version(), admin, type, safeTitle, request);
+        activityEditor.add(target.version(), admin, type, validated);
         return saved(target);
     }
 
@@ -308,18 +276,12 @@ public class LessonEditorService {
         if (pathType != LessonActivityEditor.parseType(request.type())) {
             throw new ResponseStatusException(BAD_REQUEST, "The activity type can't be changed.");
         }
-        EditTarget editable = editTarget(lessonId);
-        LessonActivity existing = activityEditor.requireActivity(editable.version(), pathType, activityId);
-        String safeTitle = activityEditor.validate(pathType, request);
-        if (editable.needsWorkingCopy() && activityEditor.isUnchanged(existing, safeTitle, request)) {
-            return assembler.view(editable.coursePackage(), editable.lesson(), editable.lesson(), false);
-        }
-        EditTarget target = prepareWrite(editable);
-        LessonActivity toUpdate = editable.needsWorkingCopy()
-                ? activityEditor.requireActivity(target.version(), pathType, activityId)
-                : existing;
-        activityEditor.update(toUpdate, safeTitle, request);
-        return saved(target);
+        return editPart(lessonId,
+                editable -> activityEditor.requireActivity(editable.version(), pathType, activityId),
+                existing -> activityEditor.validate(pathType, request),
+                activityEditor::isUnchanged,
+                target -> activityEditor.requireActivity(target.version(), pathType, activityId),
+                activityEditor::update);
     }
 
     /** Creates the lesson's quiz; a lesson has one. "Allow SparkBot hints" is off unless the request turns it on. */
@@ -340,15 +302,11 @@ public class LessonEditorService {
      */
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public AdminClassViews.LessonEditor updateQuiz(Long lessonId, Long quizId, ClassRequests.QuizSettings request) {
-        EditTarget editable = editTarget(lessonId);
-        Quiz existing = quizEditor.requireQuiz(editable.version(), quizId);
-        if (editable.needsWorkingCopy() && existing.isHintsAllowed() == request.hintsAllowed()) {
-            return assembler.view(editable.coursePackage(), editable.lesson(), editable.lesson(), false);
-        }
-        EditTarget target = prepareWrite(editable);
-        Quiz toUpdate = editable.needsWorkingCopy() ? quizEditor.requireQuiz(target.version(), quizId) : existing;
-        quizEditor.updateQuiz(toUpdate, request);
-        return saved(target);
+        return editPart(lessonId,
+                editable -> quizEditor.requireQuiz(editable.version(), quizId),
+                existing -> existing.isHintsAllowed() == request.hintsAllowed(),
+                target -> quizEditor.requireQuiz(target.version(), quizId),
+                toUpdate -> quizEditor.updateQuiz(toUpdate, request));
     }
 
     /**
@@ -358,58 +316,75 @@ public class LessonEditorService {
      */
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public AdminClassViews.LessonEditor addQuestion(Long lessonId, Long quizId, QuizQuestionRequest request) {
-        EditTarget editable = editTarget(lessonId);
-        Quiz existing = quizEditor.requireCanAddQuestion(editable.version(), quizId);
-        LessonQuizEditor.ValidatedQuestion validated = quizEditor.validateQuestion(request);
-        EditTarget target = prepareWrite(editable);
-        Quiz toUpdate = editable.needsWorkingCopy() ? quizEditor.requireQuiz(target.version(), quizId) : existing;
-        quizEditor.addQuestion(toUpdate, request, validated);
-        return saved(target);
+        return editPart(lessonId,
+                editable -> quizEditor.requireCanAddQuestion(editable.version(), quizId),
+                existing -> quizEditor.validateQuestion(request),
+                (existing, validated) -> false,
+                target -> quizEditor.requireQuiz(target.version(), quizId),
+                (toUpdate, validated) -> quizEditor.addQuestion(toUpdate, request, validated));
     }
 
     /** Saves the question; an edit checks an AI draft question too. */
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public AdminClassViews.LessonEditor updateQuestion(Long lessonId, Long questionId, QuizQuestionRequest request) {
-        EditTarget editable = editTarget(lessonId);
-        QuizQuestion existing = quizEditor.requireCanEditQuestion(editable.lesson(), editable.version(), questionId);
-        LessonQuizEditor.ValidatedQuestion validated = quizEditor.validateQuestion(request);
-        if (editable.needsWorkingCopy() && quizEditor.isUnchanged(existing, validated)) {
-            return assembler.view(editable.coursePackage(), editable.lesson(), editable.lesson(), false);
-        }
-        EditTarget target = prepareWrite(editable);
-        QuizQuestion toUpdate = editable.needsWorkingCopy()
-                ? quizEditor.resolveQuestionInRevision(target.lesson(), target.version(), questionId)
-                : existing;
-        quizEditor.updateQuestion(toUpdate, validated);
-        return saved(target);
+        return editPart(lessonId,
+                editable -> quizEditor.requireCanEditQuestion(editable.lesson(), editable.version(), questionId),
+                existing -> quizEditor.validateQuestion(request),
+                quizEditor::isUnchanged,
+                target -> quizEditor.resolveQuestionInRevision(target.lesson(), target.version(), questionId),
+                quizEditor::updateQuestion);
     }
 
     /** Keeps an AI draft question as it is: it is checked. Keeping a checked question changes nothing. */
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public AdminClassViews.LessonEditor keepQuestion(Long lessonId, Long questionId) {
-        EditTarget editable = editTarget(lessonId);
-        QuizQuestion existing = quizEditor.requireCanEditQuestion(editable.lesson(), editable.version(), questionId);
-        if (editable.needsWorkingCopy() && !existing.isAiDraft()) {
-            return assembler.view(editable.coursePackage(), editable.lesson(), editable.lesson(), false);
-        }
-        EditTarget target = prepareWrite(editable);
-        QuizQuestion toKeep = editable.needsWorkingCopy()
-                ? quizEditor.resolveQuestionInRevision(target.lesson(), target.version(), questionId)
-                : existing;
-        quizEditor.keepQuestion(toKeep);
-        return saved(target);
+        return editPart(lessonId,
+                editable -> quizEditor.requireCanEditQuestion(editable.lesson(), editable.version(), questionId),
+                existing -> !existing.isAiDraft(),
+                target -> quizEditor.resolveQuestionInRevision(target.lesson(), target.version(), questionId),
+                quizEditor::keepQuestion);
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public AdminClassViews.LessonEditor deleteQuestion(Long lessonId, Long questionId) {
+        return editPart(lessonId,
+                editable -> quizEditor.requireCanEditQuestion(editable.lesson(), editable.version(), questionId),
+                existing -> false,
+                target -> quizEditor.resolveQuestionInRevision(target.lesson(), target.version(), questionId),
+                quizEditor::deleteQuestion);
+    }
+
+    /**
+     * Loads and validates an existing part before cloning a published lesson, skipping cloning on a no-op edit and
+     * re-resolving the part in the new working copy when a clone is created.
+     */
+    private <T, V> AdminClassViews.LessonEditor editPart(
+            Long lessonId,
+            Function<EditTarget, T> load,
+            Function<T, V> validate,
+            BiPredicate<T, V> isUnchanged,
+            Function<EditTarget, T> resolveInRevision,
+            BiConsumer<T, V> apply) {
         EditTarget editable = editTarget(lessonId);
-        QuizQuestion existing = quizEditor.requireCanEditQuestion(editable.lesson(), editable.version(), questionId);
+        T existing = load.apply(editable);
+        V validated = validate.apply(existing);
+        if (editable.needsWorkingCopy() && isUnchanged.test(existing, validated)) {
+            return assembler.view(editable.coursePackage(), editable.lesson(), editable.lesson(), false);
+        }
         EditTarget target = prepareWrite(editable);
-        QuizQuestion toDelete = editable.needsWorkingCopy()
-                ? quizEditor.resolveQuestionInRevision(target.lesson(), target.version(), questionId)
-                : existing;
-        quizEditor.deleteQuestion(toDelete);
+        T toMutate = editable.needsWorkingCopy() ? resolveInRevision.apply(target) : existing;
+        apply.accept(toMutate, validated);
         return saved(target);
+    }
+
+    private <T> AdminClassViews.LessonEditor editPart(
+            Long lessonId,
+            Function<EditTarget, T> load,
+            Predicate<T> isUnchanged,
+            Function<EditTarget, T> resolveInRevision,
+            Consumer<T> apply) {
+        return editPart(lessonId, load, existing -> null, (existing, ignored) -> isUnchanged.test(existing),
+                resolveInRevision, (target, ignored) -> apply.accept(target));
     }
 
     /**
@@ -438,6 +413,7 @@ public class LessonEditorService {
         switch (lesson.getContentStatus()) {
             case DRAFT -> {
                 assembler.requireComplete(lesson);
+                requirePublishedCapacity(locked.coursePackage());
                 revisions.publishNewLesson(lesson);
                 access.audit(admin, "ADMIN_LESSON_PUBLISH", lesson, "Admin published a lesson.");
             }
@@ -457,7 +433,7 @@ public class LessonEditorService {
             }
             case ARCHIVED -> throw new ResponseStatusException(CONFLICT, LESSON_ARCHIVED);
         }
-        return assembler.view(locked.coursePackage(), lesson, lesson);
+        return assembler.view(locked.coursePackage(), lesson, lesson, false);
     }
 
     /** Drops the unpublished changes of a published lesson; learners never saw them. */
@@ -469,7 +445,7 @@ public class LessonEditorService {
         Lesson revision = content.revisionOf(lesson)
                 .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "This lesson has no changes to discard."));
         revisions.deleteLessonTree(revision);
-        return assembler.view(locked.coursePackage(), lesson, lesson);
+        return assembler.view(locked.coursePackage(), lesson, lesson, false);
     }
 
     /**
@@ -483,6 +459,12 @@ public class LessonEditorService {
         Lesson lesson = locked.lesson();
         if (lesson.getContentStatus() == ContentStatus.ARCHIVED) {
             throw new ResponseStatusException(BAD_REQUEST, "This lesson is already archived.");
+        }
+        if (locked.coursePackage().getContentStatus() == ContentStatus.PUBLISHED
+                && lesson.getContentStatus() == ContentStatus.PUBLISHED
+                && publishedLessonCount(locked.coursePackage()) <= 1) {
+            throw new ResponseStatusException(CONFLICT,
+                    "A published class needs at least one published lesson. Archive the class instead.");
         }
         lesson.setStatusBeforeArchive(lesson.getContentStatus());
         lesson.setContentStatus(ContentStatus.ARCHIVED);
@@ -499,10 +481,28 @@ public class LessonEditorService {
             throw new ResponseStatusException(BAD_REQUEST, "Only an archived lesson can be restored.");
         }
         ContentStatus before = lesson.getStatusBeforeArchive();
-        lesson.setContentStatus(before == null ? ContentStatus.DRAFT : before);
+        ContentStatus restoredStatus = before == null ? ContentStatus.DRAFT : before;
+        if (restoredStatus == ContentStatus.PUBLISHED) {
+            requirePublishedCapacity(locked.coursePackage());
+        }
+        lesson.setContentStatus(restoredStatus);
         lesson.setStatusBeforeArchive(null);
         access.audit(admin, "ADMIN_LESSON_RESTORE", lesson, "Admin restored a lesson.");
         return assembler.view(locked.coursePackage(), lesson);
+    }
+
+    private void requirePublishedCapacity(CoursePackage coursePackage) {
+        if (coursePackage.getContentStatus() == ContentStatus.PUBLISHED
+                && publishedLessonCount(coursePackage) >= ClassAuthoringService.MAX_LESSONS_TO_PUBLISH) {
+            throw new ResponseStatusException(CONFLICT, "A published class can have at most 6 published lessons.");
+        }
+    }
+
+    private long publishedLessonCount(CoursePackage coursePackage) {
+        return content.lessonsByUnit(content.units(coursePackage)).values().stream()
+                .flatMap(List::stream)
+                .filter(candidate -> candidate.getContentStatus() == ContentStatus.PUBLISHED)
+                .count();
     }
 
     /**
@@ -512,7 +512,7 @@ public class LessonEditorService {
     private AdminClassViews.LessonEditor saved(EditTarget target) {
         Lesson working = target.version();
         boolean isRevision = working.getRevisionOf() != null;
-        if (isRevision && !revisions.hasChanges(working)) {
+        if (isRevision && !revisionDiff.hasChanges(working)) {
             revisions.deleteLessonTree(working);
             return assembler.view(target.coursePackage(), target.lesson(), target.lesson(), false);
         }

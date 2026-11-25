@@ -26,6 +26,20 @@ const REFRESH_ENDPOINT = '/auth/refresh'
 const AUTH_SESSION_ENDPOINTS = new Set(['/auth/login', '/auth/logout', '/auth/me', REFRESH_ENDPOINT])
 /** The check behind the maintenance page: its own 503 is never reported, so the check cannot start itself again. */
 const HEALTH_ENDPOINT = '/health'
+/**
+ * Public endpoints that do not require an authenticated session and must not send a bearer token or have their
+ * already-committed 2xx responses canceled if another tab signs in or out while the request is in flight.
+ */
+const PUBLIC_UNAUTHENTICATED_ENDPOINTS = new Set([
+  '/auth/register/student',
+  '/auth/forgot-password',
+  '/auth/reset-password',
+  '/auth/reset-password/check',
+  '/auth/confirm-email',
+  '/auth/confirm-signup-email',
+  '/auth/admin-invite/check',
+  '/auth/admin-invite/accept',
+])
 const REFRESH_LOCK_NAME = 'mandarin-spark.auth-refresh'
 /** A 401 this soon after another tab started a refresh may come from that tab rotating the shared cookie. */
 const RECENT_OTHER_TAB_REFRESH_MS = 10_000
@@ -65,6 +79,28 @@ export function getAccessToken(): string | null {
 
 export function bearer(token: string): string {
   return `Bearer ${token}`
+}
+
+/** Whether a trusted API path is a public unauthenticated endpoint (no bearer header or session-version cancellation). */
+function isPublicUnauthenticatedPath(path: string): boolean {
+  return path === HEALTH_ENDPOINT || PUBLIC_UNAUTHENTICATED_ENDPOINTS.has(path) || path.startsWith('/public/')
+}
+
+/** Normalized `sub` claim of a 3-part JWT, or null for non-JWT test tokens or unreadable payloads. */
+function jwtSubject(token: string | null): string | null {
+  if (!token) return null
+  const parts = token.split('.')
+  if (parts.length !== 3 || !parts[1]) return null
+  try {
+    const normalized = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+    const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4)
+    const binary = atob(padded)
+    const bytes = Uint8Array.from(binary, (ch) => ch.charCodeAt(0))
+    const payload = JSON.parse(new TextDecoder().decode(bytes)) as { sub?: unknown }
+    return typeof payload.sub === 'string' && payload.sub.trim() ? payload.sub.trim().toLowerCase() : null
+  } catch {
+    return null
+  }
 }
 
 /** The resolved path within this API, or null when the request goes elsewhere. */
@@ -160,16 +196,42 @@ async function withRefreshLock<T>(task: () => Promise<T>): Promise<T> {
  * (Web Locks), so the next tab presents the cookie the previous one has just received. An ended session returns null.
  * A transport or service failure rejects, leaving the session available for retry.
  */
-export async function refreshAccessToken(rejectedAuthorization?: string | null): Promise<string | null> {
-  if (refreshPromise) return refreshPromise
-  if (rejectedAuthorization !== undefined && accessToken && rejectedAuthorization !== bearer(accessToken)) {
+export async function refreshAccessToken(
+  rejectedAuthorization?: string | null,
+  options?: { fresh?: boolean },
+): Promise<string | null> {
+  const version = authSessionVersion
+  if (options?.fresh && refreshPromise) {
+    await refreshPromise.catch(() => null)
+    if (version !== authSessionVersion) return null
+  }
+  if (refreshPromise) {
+    return refreshPromise
+  }
+  if (
+    !options?.fresh &&
+    rejectedAuthorization !== undefined &&
+    accessToken &&
+    rejectedAuthorization !== bearer(accessToken)
+  ) {
     return sessionOwner() === null ? null : accessToken
   }
-  const version = authSessionVersion
+  const expectedSubject = jwtSubject(accessToken)
   const pending = withRefreshLock(() => refreshOnce(version))
     .then((token) => {
       if (version !== authSessionVersion) return null
-      accessToken = sessionOwner() === null ? null : token
+      if (sessionOwner() === null) {
+        accessToken = null
+        return null
+      }
+      // Guard against silent cross-account credential swap when another tab overwrote the shared refresh cookie
+      // and localStorage notifications were unavailable, delayed, or cleared.
+      const nextSubject = jwtSubject(token)
+      if (expectedSubject !== null && nextSubject !== null && expectedSubject !== nextSubject) {
+        accessToken = null
+        return null
+      }
+      accessToken = token
       return accessToken
     })
     .catch((error: unknown) => {
@@ -189,8 +251,9 @@ export async function refreshAccessToken(rejectedAuthorization?: string | null):
 http.interceptors.request.use(
   (config: RetriableRequestConfig) => {
     const path = trustedApiPath(config)
-    // Public health probes span sign-ins and report the state of the service to every account.
-    if (path === null || path === HEALTH_ENDPOINT) {
+    // External origins and public unauthenticated endpoints (including health probes and single-use email/reset links)
+    // must not carry bearer credentials or have already-committed responses canceled by cross-tab session changes.
+    if (path === null || isPublicUnauthenticatedPath(path)) {
       config.withCredentials = false
       config.headers.delete(AUTHORIZATION_HEADER)
     } else {
@@ -241,7 +304,7 @@ http.interceptors.response.use(
     const path = trustedApiPath(request)
     if (path === null || path === HEALTH_ENDPOINT) throw error
     reportServiceDown(status)
-    if (status !== 401 || AUTH_SESSION_ENDPOINTS.has(path)) throw error
+    if (status !== 401 || AUTH_SESSION_ENDPOINTS.has(path) || isPublicUnauthenticatedPath(path)) throw error
 
     const version = request._authSessionVersion
     if (version !== authSessionVersion) throw error

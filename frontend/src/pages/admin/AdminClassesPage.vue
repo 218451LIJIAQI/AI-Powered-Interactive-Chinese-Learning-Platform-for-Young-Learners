@@ -1,8 +1,8 @@
 <template>
   <div class="page-stack">
-    <PageHeaderBlock :title="t('nav.classes')" hide-title />
+    <h1 class="sr-only">{{ t('nav.classes') }}</h1>
     <!-- New class sits at the right end of the tab row, like New activity and Invite admin (A3.01). -->
-    <AdminContentTabs>
+    <AdminContentTabs :skip-classes="!filtered">
       <button class="btn btn-primary" type="button" data-testid="admin-classes-new" @click="openNewClass">
         <IconGlyph name="plus" :size="16" />{{ t('adminClasses.newClass.title') }}
       </button>
@@ -24,21 +24,20 @@
               maxlength="200"
               autocomplete="off"
               :placeholder="t('adminClasses.list.searchPlaceholder')"
-              data-testid="admin-classes-search"
             />
           </span>
         </div>
         <div class="field">
           <label class="field-label" for="admin-classes-type">{{ t('adminClasses.list.type') }}</label>
           <select id="admin-classes-type" v-model="type" class="select" data-testid="admin-classes-type">
-            <option :value="null">{{ t('adminClasses.list.allTypes') }}</option>
+            <option value="">{{ t('adminClasses.list.allTypes') }}</option>
             <option v-for="value in TYPES" :key="value" :value="value">{{ t(`adminClasses.types.${value}`) }}</option>
           </select>
         </div>
         <div class="field">
           <label class="field-label" for="admin-classes-status">{{ t('adminClasses.list.status') }}</label>
           <select id="admin-classes-status" v-model="status" class="select" data-testid="admin-classes-status">
-            <option :value="null">{{ t('adminClasses.list.allStatuses') }}</option>
+            <option value="">{{ t('adminClasses.list.allStatuses') }}</option>
             <option v-for="value in CONTENT_STATUSES" :key="value" :value="value">
               {{ t(`adminClasses.statuses.${value}`) }}
             </option>
@@ -55,7 +54,6 @@
       <StatePanel
         v-else-if="resource.error.value"
         tone="error"
-        icon="alert"
         :title="t('adminClasses.list.loadErrorTitle')"
         :message="resource.error.value"
         @retry="resource.reload"
@@ -85,7 +83,7 @@
                 v-for="row in items"
                 :key="`${row.classId}-${row.type}-${row.id}`"
                 data-testid="admin-classes-row"
-                @click="router.push(rowRoute(row))"
+                @click="openRow(row)"
               >
                 <td class="admin-cell-strong admin-cell-line" :title="row.title">{{ row.title }}</td>
                 <td>
@@ -166,13 +164,7 @@
       @close="newClassOpen = false"
     >
       <form :id="newClassFormId" novalidate @submit.prevent="createClass">
-        <DataNotice :error="topicsError">
-          <template #actions>
-            <button class="btn btn-secondary btn-sm" type="button" @click="reloadTopics">
-              {{ t('common.retry') }}
-            </button>
-          </template>
-        </DataNotice>
+        <DataNotice :error="topicsError" @retry="reloadTopics" />
         <ClassDetailsFields
           v-model="newClass"
           :themes="themes"
@@ -180,7 +172,7 @@
           :disabled="creating"
           :title-error="titleError"
           autofocus
-          @title-blur="checkTitleOnBlur"
+          @title-blur="validateTitle"
         />
         <p v-if="createError" class="field-error" role="alert">{{ createError }}</p>
       </form>
@@ -218,11 +210,10 @@ import { computed, onMounted, ref, useId, watch } from 'vue'
 import { RouterLink, useRoute, useRouter, type RouteLocationRaw } from 'vue-router'
 
 import { adminClassesApi } from '@/api/adminClasses'
-import { reloadContentCounts } from '@/components/admin/adminContentCounts'
+import { reloadContentCounts, syncContentCount } from '@/components/admin/adminContentCounts'
 import AdminContentTabs from '@/components/admin/AdminContentTabs.vue'
 import { contentStatusTone } from '@/components/admin/adminDisplay'
 import { useIsUnmounted } from '@/composables/useIsUnmounted'
-import { pageFromQuery, pageQuery } from '@/utils/pageQuery'
 import { useClassFormOptions } from '@/components/admin/useClassFormOptions'
 import ClassDetailsFields from '@/components/classes/ClassDetailsFields.vue'
 import AppOverlay from '@/components/common/AppOverlay.vue'
@@ -232,7 +223,6 @@ import IconGlyph from '@/components/common/IconGlyph.vue'
 import PaginationBar from '@/components/common/PaginationBar.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
 import StatusPill from '@/components/common/StatusPill.vue'
-import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
 import { useFieldCheck } from '@/composables/useFieldCheck'
 import { useLocalMessages } from '@/composables/useLocalMessages'
@@ -244,7 +234,7 @@ import { CONTENT_STATUSES, type ContentStatus } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
 import { classDetailsForm, classDetailsPayload } from '@/utils/classes'
 import { formatShortDate } from '@/utils/format'
-import { firstQueryText, queryOption } from '@/utils/queryText'
+import { firstQueryText, pageFromQuery, pageQuery, queryOption } from '@/utils/routeQuery'
 import '@/styles/admin-shared.css'
 import '@/styles/ops-admin.css'
 
@@ -265,15 +255,15 @@ const {
   restore: restoreSearch,
   clear: clearSearch,
 } = useDebouncedSearch(firstQueryText(route.query.q))
-const type = ref<AdminContentType | null>(queryOption(route.query.type, TYPES) ?? null)
-const status = ref<ContentStatus | null>(queryOption(route.query.status, CONTENT_STATUSES) ?? null)
+const type = ref<AdminContentType | ''>(queryOption(route.query.type, TYPES) ?? '')
+const status = ref<ContentStatus | ''>(queryOption(route.query.status, CONTENT_STATUSES) ?? '')
 const page = ref(pageFromQuery(route.query.page))
 
 const resource = useResource(() =>
   adminClassesApi.list({
     keyword: keyword.value || undefined,
-    type: type.value ?? undefined,
-    status: status.value ?? undefined,
+    type: type.value || undefined,
+    status: status.value || undefined,
     page: page.value,
     size: PAGE_SIZE,
   }),
@@ -284,8 +274,8 @@ function writeAddress(): void {
   void router.replace({
     query: {
       q: keyword.value || undefined,
-      type: type.value ?? undefined,
-      status: status.value ?? undefined,
+      type: type.value || undefined,
+      status: status.value || undefined,
       page: pageQuery(page.value),
     },
   })
@@ -305,19 +295,32 @@ watch([() => route.query.q, () => route.query.type, () => route.query.status, ()
   if (route.name !== 'admin-classes') return
   followAddress(pageFromQuery(route.query.page), () => {
     restoreSearch(firstQueryText(route.query.q))
-    type.value = queryOption(route.query.type, TYPES) ?? null
-    status.value = queryOption(route.query.status, CONTENT_STATUSES) ?? null
+    type.value = queryOption(route.query.type, TYPES) ?? ''
+    status.value = queryOption(route.query.status, CONTENT_STATUSES) ?? ''
   })
 })
 
-const filtered = computed(() => Boolean(keyword.value) || type.value !== null || status.value !== null)
+const filtered = computed(() => Boolean(keyword.value || type.value || status.value))
 /** Only the search box narrows the list: the empty state then offers "Clear search", not "Clear filters". */
-const searchOnly = computed(() => Boolean(keyword.value) && type.value === null && status.value === null)
+const searchOnly = computed(() => Boolean(keyword.value) && !type.value && !status.value)
+
+watch(
+  resource.data,
+  (loaded) => {
+    if (loaded && !filtered.value) syncContentCount('classes', loaded.totalItems)
+  },
+  { immediate: true },
+)
 
 function clearFilters(): void {
   clearSearch()
-  type.value = null
-  status.value = null
+  type.value = ''
+  status.value = ''
+}
+
+function openRow(row: AdminContentRow): void {
+  if (window.getSelection()?.toString()) return
+  void router.push(rowRoute(row))
 }
 
 /** A class row opens its class page; a lesson row opens the lesson in its editor. Drafts open the same pages. */
@@ -348,7 +351,6 @@ const newClassTitle = computed(() => newClass.value.title)
 const {
   error: titleError,
   validate: validateTitle,
-  validateOnBlur: checkTitleOnBlur,
   reset: resetTitleError,
 } = useFieldCheck(newClassTitle, (value) => (value.trim() ? null : t('adminClasses.form.titleMissing')))
 

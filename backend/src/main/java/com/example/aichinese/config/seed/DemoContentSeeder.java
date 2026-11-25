@@ -1,6 +1,7 @@
 package com.example.aichinese.config.seed;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -71,7 +72,7 @@ public class DemoContentSeeder implements CommandLineRunner {
         user.setPasswordHash(passwordEncoder.encode(studentPassword));
         user.setPreferredLanguage(LanguageCodes.ENGLISH);
         user.setActive(active);
-        user.setRoles(Set.of(studentRole));
+        user.setRoles(new HashSet<>(Set.of(studentRole)));
         user.setCreatedAt(joinedAt);
         // A demo address has no inbox to open a confirmation link in, so it counts as confirmed at sign-up.
         user.setEmailVerifiedAt(joinedAt.plusMinutes(5));

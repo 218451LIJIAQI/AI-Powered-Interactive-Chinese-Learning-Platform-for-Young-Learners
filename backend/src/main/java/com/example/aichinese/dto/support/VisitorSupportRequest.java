@@ -3,8 +3,10 @@ package com.example.aichinese.dto.support;
 import static com.example.aichinese.dto.DtoNormalization.redactLength;
 import static com.example.aichinese.dto.DtoNormalization.redactValue;
 import static com.example.aichinese.dto.DtoNormalization.strip;
+import static com.example.aichinese.dto.DtoNormalization.stripMultiline;
 
 import com.example.aichinese.entity.enums.SupportTopic;
+import com.example.aichinese.util.AiInputSanitizer;
 import com.example.aichinese.util.LanguageCodes;
 
 import jakarta.validation.constraints.Email;
@@ -33,7 +35,7 @@ public record VisitorSupportRequest(
 
     public VisitorSupportRequest {
         email = strip(email);
-        message = strip(message);
+        message = AiInputSanitizer.sanitizeUnbounded(stripMultiline(message));
         language = LanguageCodes.normalize(language);
     }
 

@@ -1,6 +1,6 @@
 <template>
   <div class="page-stack">
-    <PageHeaderBlock :title="t('adminAi.usageTitle')" hide-title />
+    <h1 class="sr-only">{{ t('adminAi.usageTitle') }}</h1>
     <AdminAiTabs />
     <DataNotice :error="exportError" />
 
@@ -15,7 +15,6 @@
       v-else-if="summaryResource.error.value"
       heading-tag="h2"
       tone="error"
-      icon="alert"
       :title="t('adminAi.usageError')"
       :message="summaryResource.error.value"
       @retry="summaryResource.reload"
@@ -30,9 +29,9 @@
       </div>
     </dl>
 
-    <div class="admin-ai-usage">
+    <div class="admin-ai-usage" :class="{ 'has-summary': Boolean(summary) }">
       <section class="panel admin-table-card">
-        <div class="admin-section-head">
+        <div class="section-header">
           <h2 :id="`${baseId}-log`" class="card-title">{{ t('adminAi.requestLog') }}</h2>
           <button
             class="btn btn-secondary"
@@ -49,16 +48,16 @@
         <div class="admin-filters">
           <div class="field">
             <label class="field-label" :for="`${baseId}-feature`">{{ t('adminAi.feature') }}</label>
-            <select :id="`${baseId}-feature`" v-model="filters.featureType" class="select" @change="filterLog">
+            <select :id="`${baseId}-feature`" v-model="featureType" class="select">
               <option value="">{{ t('adminAi.allFeatures') }}</option>
-              <option v-for="feature in AI_FEATURES" :key="feature" :value="feature">
+              <option v-for="feature in AI_USAGE_FEATURES" :key="feature" :value="feature">
                 {{ aiFeatureLabel(feature, t) }}
               </option>
             </select>
           </div>
           <div class="field">
             <label class="field-label" :for="`${baseId}-result`">{{ t('adminAi.result') }}</label>
-            <select :id="`${baseId}-result`" v-model="filters.status" class="select" @change="filterLog">
+            <select :id="`${baseId}-result`" v-model="status" class="select">
               <option value="">{{ t('adminAi.allResults') }}</option>
               <option v-for="(meta, result) in RESULT_META" :key="result" :value="result">
                 {{ t(meta.labelKey) }}
@@ -67,9 +66,9 @@
           </div>
           <div class="field">
             <label class="field-label" :for="`${baseId}-role`">{{ t('adminAi.role') }}</label>
-            <select :id="`${baseId}-role`" v-model="filters.userRole" class="select" @change="filterLog">
+            <select :id="`${baseId}-role`" v-model="userRole" class="select">
               <option value="">{{ t('adminAi.allRoles') }}</option>
-              <option v-for="role in USER_ROLES" :key="role" :value="role">{{ t(ROLE_KEYS[role]) }}</option>
+              <option v-for="role in USER_ROLES" :key="role" :value="role">{{ t(`roles.${role}`) }}</option>
             </select>
           </div>
         </div>
@@ -83,7 +82,6 @@
         <StatePanel
           v-else-if="logResource.error.value"
           tone="error"
-          icon="alert"
           :title="t('adminAi.logError')"
           :message="logResource.error.value"
           @retry="logResource.reload"
@@ -101,18 +99,42 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="row in rows" :key="row.id">
-                  <td class="admin-cell-date">{{ formatDateTime(row.createdAt) }}</td>
-                  <td class="admin-cell-strong">{{ row.userName }}</td>
-                  <td>
-                    <span v-if="isRole(row.userRole)" class="tag is-outline">{{ t(ROLE_KEYS[row.userRole]) }}</span>
-                    <span v-else aria-hidden="true">—</span>
-                  </td>
-                  <td class="admin-cell-muted">{{ aiFeatureLabel(row.featureKey, t) }}</td>
-                  <td :title="row.errorSummary ?? undefined">
-                    <StatusPill :label="t(RESULT_META[row.status].labelKey)" :tone="RESULT_META[row.status].tone" />
-                  </td>
-                </tr>
+                <template v-for="row in rows" :key="row.id">
+                  <tr>
+                    <td class="admin-cell-date">{{ formatDateTime(row.createdAt) }}</td>
+                    <td class="admin-cell-strong">{{ row.userName }}</td>
+                    <td>
+                      <span v-if="isRole(row.userRole)" class="tag is-outline">{{ t(`roles.${row.userRole}`) }}</span>
+                      <span v-else aria-hidden="true">—</span>
+                    </td>
+                    <td class="admin-cell-muted">{{ aiFeatureLabel(row.featureKey, t) }}</td>
+                    <td :title="row.errorSummary ?? undefined">
+                      <span class="admin-ai-result-cell">
+                        <StatusPill :label="t(RESULT_META[row.status].labelKey)" :tone="RESULT_META[row.status].tone" />
+                        <button
+                          v-if="row.errorSummary"
+                          class="btn btn-ghost btn-icon btn-sm"
+                          type="button"
+                          :aria-label="t('adminAi.errorDetail')"
+                          :title="t('adminAi.errorDetail')"
+                          :aria-expanded="expandedErrorId === row.id"
+                          :aria-controls="`${baseId}-err-${row.id}`"
+                          :data-testid="`admin-ai-error-toggle-${row.id}`"
+                          @click="toggleError(row.id)"
+                        >
+                          <IconGlyph name="info" :size="14" />
+                        </button>
+                      </span>
+                    </td>
+                  </tr>
+                  <tr
+                    v-if="row.errorSummary && expandedErrorId === row.id"
+                    :id="`${baseId}-err-${row.id}`"
+                    class="admin-ai-log-detail"
+                  >
+                    <td colspan="5">{{ row.errorSummary }}</td>
+                  </tr>
+                </template>
               </tbody>
             </table>
           </div>
@@ -129,8 +151,14 @@
           tone="empty"
           icon="search"
           :title="t('adminAi.noRequests')"
-          :message="t('adminAi.noRequestsHint')"
-        />
+          :message="hasFilters ? t('adminAi.noRequestsHint') : t('adminAi.noRequestsEmpty')"
+        >
+          <template v-if="hasFilters" #actions>
+            <button class="btn btn-secondary" type="button" data-testid="admin-ai-usage-clear" @click="clearFilters">
+              {{ t('common.clearFilters') }}
+            </button>
+          </template>
+        </StatePanel>
         <p class="callout is-compact">
           <IconGlyph name="shield" :size="16" />
           <span>{{ t('adminAi.logNote') }}</span>
@@ -147,7 +175,7 @@
               <span>{{ aiFeatureLabel(row.featureKey, t) }}</span>
               <span>{{ formatNumber(row.requests) }} · {{ percentOf(row.requests) }}</span>
             </span>
-            <span class="admin-share-bar" aria-hidden="true">
+            <span class="progress-bar is-sm" aria-hidden="true">
               <span :style="{ width: `${ratioPercent(row.requests, summary.totalRequests)}%` }" />
             </span>
           </li>
@@ -159,7 +187,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, useId } from 'vue'
+import { computed, ref, useId, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 import { adminAiApi } from '@/api/ai'
 import { aiFeatureLabel } from '@/components/admin/adminDisplay'
@@ -170,16 +199,15 @@ import IconGlyph from '@/components/common/IconGlyph.vue'
 import PaginationBar from '@/components/common/PaginationBar.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
 import StatusPill, { type PillTone } from '@/components/common/StatusPill.vue'
-import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
-import { useResource, useServerPage } from '@/composables/useResource'
+import { usePageFilters, useResource, useServerPage } from '@/composables/useResource'
 import { useCsvExport } from '@/components/admin/useCsvExport'
 import { adminAiMessages } from '@/plugins/adminAiMessages'
 import { opsLabelMessages } from '@/plugins/opsLabelMessages'
 import type { AdminAiUsageFilters } from '@/types/ai'
-import { AI_FEATURES, USER_ROLES, type AiResultStatus, type UserRole } from '@/types/api'
+import { AI_RESULT_STATUSES, AI_USAGE_FEATURES, USER_ROLES, type AiResultStatus, type UserRole } from '@/types/api'
 import { formatDateTime, formatNumber, formatPercent, ratioPercent } from '@/utils/format'
-import { ROLE_KEYS } from '@/utils/opsLabels'
+import { pageFromQuery, pageQuery, queryOption } from '@/utils/routeQuery'
 import '@/styles/admin-shared.css'
 import '@/styles/ops-admin.css'
 
@@ -195,6 +223,8 @@ const RESULT_META: Readonly<Record<AiResultStatus, { labelKey: string; tone: Pil
 const PAGE_SIZE = 10
 
 const { t } = useLocalMessages({ adminAi: adminAiMessages, opsLabels: opsLabelMessages })
+const route = useRoute()
+const router = useRouter()
 
 /** A role of today's platform; an older request may name one that no longer exists, which shows no tag. */
 function isRole(role: string | null): role is UserRole {
@@ -204,21 +234,71 @@ const baseId = useId()
 
 const summaryResource = useResource(adminAiApi.usageSummary)
 const summary = summaryResource.data
-const filters = reactive<Required<AdminAiUsageFilters>>({ featureType: '', status: '', userRole: '' })
-const page = ref(0)
-const logResource = useResource(() => adminAiApi.usageLogs(filters, page.value, PAGE_SIZE))
-const { items: rows, displayedPage, totalPages, goToPage } = useServerPage(logResource, page)
+const featureType = ref<AdminAiUsageFilters['featureType']>(queryOption(route.query.feature, AI_USAGE_FEATURES) ?? '')
+const status = ref<AdminAiUsageFilters['status']>(queryOption(route.query.status, AI_RESULT_STATUSES) ?? '')
+const userRole = ref<AdminAiUsageFilters['userRole']>(queryOption(route.query.role, USER_ROLES) ?? '')
+const page = ref(pageFromQuery(route.query.page))
+const expandedErrorId = ref<number | null>(null)
+
+const currentFilters = computed<Required<AdminAiUsageFilters>>(() => ({
+  featureType: featureType.value ?? '',
+  status: status.value ?? '',
+  userRole: userRole.value ?? '',
+}))
+const hasFilters = computed(() => Boolean(featureType.value || status.value || userRole.value))
+
+const logResource = useResource(() => adminAiApi.usageLogs(currentFilters.value, page.value, PAGE_SIZE))
+
+function writeAddress(): void {
+  void router.replace({
+    query: {
+      feature: featureType.value || undefined,
+      status: status.value || undefined,
+      role: userRole.value || undefined,
+      page: pageQuery(page.value),
+    },
+  })
+}
+
+const {
+  items: rows,
+  displayedPage,
+  totalPages,
+  goToPage,
+} = useServerPage(logResource, page, {
+  stepBackFromEmpty: true,
+  onPageChange: writeAddress,
+})
+const followAddress = usePageFilters([featureType, status, userRole], page, logResource, () => {
+  expandedErrorId.value = null
+  writeAddress()
+})
+
+watch([() => route.query.feature, () => route.query.status, () => route.query.role, () => route.query.page], () => {
+  if (route.name !== 'admin-ai-usage') return
+  followAddress(pageFromQuery(route.query.page), () => {
+    featureType.value = queryOption(route.query.feature, AI_USAGE_FEATURES) ?? ''
+    status.value = queryOption(route.query.status, AI_RESULT_STATUSES) ?? ''
+    userRole.value = queryOption(route.query.role, USER_ROLES) ?? ''
+  })
+})
+
+function clearFilters(): void {
+  featureType.value = ''
+  status.value = ''
+  userRole.value = ''
+}
+
+function toggleError(id: number): void {
+  expandedErrorId.value = expandedErrorId.value === id ? null : id
+}
+
 const { exporting, exportError, toast, exportCsv } = useCsvExport({
-  load: () => adminAiApi.exportUsageLogs(filters),
+  load: () => adminAiApi.exportUsageLogs(currentFilters.value),
   fileName: 'ai-usage-log.csv',
   successMessage: () => t('adminAi.csvDownloaded'),
   failureMessage: () => t('adminAi.csvError'),
 })
-
-function filterLog(): void {
-  logResource.data.value = null
-  goToPage(0)
-}
 
 /** Share of all requests, e.g. "33.3%". */
 function percentOf(count: number): string {

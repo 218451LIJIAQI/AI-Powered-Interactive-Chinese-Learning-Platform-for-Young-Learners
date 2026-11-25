@@ -21,20 +21,19 @@ import jakarta.persistence.LockModeType;
 public interface SupportRequestRepository extends JpaRepository<SupportRequest, Long> {
 
     /**
-     * What deleting the account removes: its own requests and the ones sent from its address through the public Help
-     * page (no account; the address in any letter case).
+     * What deleting a verified account removes: its own requests and the ones sent from its address through the public
+     * Help page (no account; MySQL utf8mb4_0900_ai_ci matches any letter case while still using the email index).
      */
     @Query("""
             select r.id from SupportRequest r
-            where r.requester.id = :userId or (r.requester is null and lower(r.requesterEmail) = lower(:email))
+            where r.requester.id = :userId or (r.requester is null and r.requesterEmail = lower(:email))
             order by r.id asc
             """)
     List<Long> findIdsSentBy(@Param("userId") Long userId, @Param("email") String email);
 
-    /** Locks only these rows in deterministic id order so concurrent writes cannot deadlock. */
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select r from SupportRequest r where r.id in :ids order by r.id asc")
-    List<SupportRequest> findLockedByIdIn(@Param("ids") Collection<Long> ids);
+    /** What deleting an unverified account removes: only requests created directly by the signed-in account. */
+    @Query("select r.id from SupportRequest r where r.requester.id = :userId order by r.id asc")
+    List<Long> findIdsByRequesterId(@Param("userId") Long userId);
 
     @Lock(LockModeType.PESSIMISTIC_READ)
     @Query("select r.id from SupportRequest r where r.id = :id")
@@ -64,23 +63,33 @@ public interface SupportRequestRepository extends JpaRepository<SupportRequest, 
     @Query("select coalesce(max(r.number), 0) from SupportRequest r")
     int findHighestNumber();
 
-    /** Answered requests past their auto-close deadline, returned in ascending id order for ordered locking. */
+    /** Bounded slice of answered requests past their auto-close deadline, in ascending id order for ordered locking. */
     @Query("""
             select r.id from SupportRequest r
             where r.status = com.example.aichinese.entity.enums.SupportRequestStatus.ANSWERED
               and r.closesAt <= :now
             order by r.id asc
             """)
-    List<Long> findExpiredIds(@Param("now") LocalDateTime now);
+    List<Long> findExpiredIds(@Param("now") LocalDateTime now, Pageable pageable);
 
-    /** Acquires primary-key write locks in ascending id order before bulk auto-close so updates match deletion's lock order. */
+    /** Acquires primary-key write locks in ascending id order for account deletion and bulk auto-close. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select r.id from SupportRequest r where r.id in :ids order by r.id asc")
     List<Long> lockIdsInOrder(@Param("ids") Collection<Long> ids);
 
+    /** Re-verifies which already-locked requests are still answered and past their auto-close deadline. */
+    @Query("""
+            select r.id from SupportRequest r
+            where r.id in :ids
+              and r.status = com.example.aichinese.entity.enums.SupportRequestStatus.ANSWERED
+              and r.closesAt <= :now
+            order by r.id asc
+            """)
+    List<Long> findExpiredIdsIn(@Param("ids") Collection<Long> ids, @Param("now") LocalDateTime now);
+
     /**
-     * Answered requests nobody replied to within 7 days of the last support reply become solved.
-     * Relies on MySQL left-to-right {@code SET} evaluation: {@code r.solvedAt = r.closesAt} must stay before
+     * Marks already-locked expired requests solved via primary key only (avoiding secondary-index scans across the
+     * backlog). Relies on MySQL left-to-right {@code SET} evaluation: {@code r.solvedAt = r.closesAt} must stay before
      * {@code r.closesAt = null}.
      */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
@@ -92,8 +101,6 @@ public interface SupportRequestRepository extends JpaRepository<SupportRequest, 
                 r.closesAt = null,
                 r.updatedAt = :now
             where r.id in :ids
-              and r.status = com.example.aichinese.entity.enums.SupportRequestStatus.ANSWERED
-              and r.closesAt <= :now
             """)
-    int closeExpiredByIds(@Param("ids") Collection<Long> ids, @Param("now") LocalDateTime now);
+    int closeLockedByIds(@Param("ids") Collection<Long> ids, @Param("now") LocalDateTime now);
 }

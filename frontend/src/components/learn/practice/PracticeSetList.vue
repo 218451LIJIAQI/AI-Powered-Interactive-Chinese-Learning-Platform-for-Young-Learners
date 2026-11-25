@@ -46,11 +46,12 @@
             <RouterLink
               class="practice-set-row"
               :to="practiceSetRoute(type, set.id)"
+              :title="set.title"
               :aria-current="set.id === selectedId ? 'true' : undefined"
               :data-testid="`set-${set.id}`"
             >
               <span class="practice-set-row-copy">
-                <span class="practice-set-row-title">{{ set.title }}</span>
+                <span class="practice-set-row-title"><CjkText :text="set.title" /></span>
                 <span class="practice-set-row-meta">{{ metaOf(set) }}</span>
               </span>
               <StatusPill v-if="set.done" :label="t('practice.statusCompleted')" tone="success" />
@@ -69,13 +70,12 @@ import { RouterLink } from 'vue-router'
 
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import StatusPill from '@/components/common/StatusPill.vue'
+import CjkText from '@/components/learning/CjkText.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
-import { PRACTICE_ACTIVITIES } from '@/config/practiceActivities'
+import { PRACTICE_ACTIVITIES, practiceSetRoute } from '@/config/practiceActivities'
 import { practiceMessages } from '@/plugins/practiceMessages'
 import type { PracticeSetSummary, PracticeType } from '@/types/learn'
 import { hskLevelName } from '@/utils/hsk'
-
-import { practiceSetRoute } from './practiceTypes'
 
 /**
  * The sets of one activity, beside the stage: a search, then one group per level (HSK 1 Basic, HSK 2 Survival, HSK 3
@@ -146,7 +146,7 @@ function toggle(key: string): void {
   else toggled.add(key)
 }
 
-/** "6 questions · +18 XP"; a tracing set is one character, so only its XP. */
+/** "6 questions · +18 XP"; tracing sets are measured in strokes (omitted on summaries), so only their XP shows. */
 function metaOf(set: PracticeSetSummary): string {
   const xp = t('practice.xpTag', { xp: set.xpReward })
   if (props.type === 'TRACING') return xp

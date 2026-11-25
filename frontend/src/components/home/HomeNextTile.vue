@@ -1,47 +1,47 @@
 <template>
-  <section class="home-next" :class="{ 'is-done': !next }" aria-labelledby="home-next-title" data-testid="home-next">
-    <template v-if="next">
+  <section class="home-next" :class="{ 'is-done': !tile }" aria-labelledby="home-next-title" data-testid="home-next">
+    <template v-if="tile">
       <div class="home-next-body">
         <div class="home-next-copy">
-          <p class="page-eyebrow">{{ eyebrow }}</p>
+          <p class="page-eyebrow">{{ tile.eyebrow }}</p>
           <h2 id="home-next-title" class="home-next-title">
-            <template v-if="firstTime">
-              {{ next.unitTitle }} · <span class="hanzi" lang="zh-CN">{{ next.unitTitleZh }}</span>
+            <template v-if="tile.unitIntro">
+              {{ tile.next.unitTitle }} · <span class="hanzi" lang="zh-CN">{{ tile.next.unitTitleZh }}</span>
             </template>
-            <template v-else>{{ next.title }}</template>
+            <template v-else>{{ tile.next.title }}</template>
           </h2>
-          <p class="home-next-meta">{{ metaLine }}</p>
+          <p class="home-next-meta">{{ tile.metaLine }}</p>
         </div>
-        <ol class="home-steps" :aria-label="stepsLabel">
+        <ol class="home-steps" :aria-label="tile.stepsLabel">
           <li
-            v-for="stop in next.stops"
+            v-for="stop in tile.stops"
             :key="stop.id"
             :class="{ 'is-done': stop.state === 'DONE', 'is-current': stop.current }"
             :aria-current="stop.current ? 'step' : undefined"
           >
-            <span class="sr-only">{{ stopLabel(stop) }}</span>
+            <span class="sr-only">{{ stop.label }}</span>
             <span class="home-step" aria-hidden="true">
               <IconGlyph v-if="stop.state === 'DONE'" name="check" :size="16" />
               <template v-else>{{ stop.position }}</template>
             </span>
           </li>
         </ol>
-        <!-- Home's one next-step action: amber, like Continue on Learn and Start review on Practice. -->
+        <!-- Home's one next-step action: amber, like Start on Learn. -->
         <RouterLink
           class="btn btn-accent btn-lg"
-          :to="{ name: 'student-learn-lesson', params: { lessonId: next.lessonId } }"
+          :to="{ name: 'student-learn-lesson', params: { lessonId: tile.next.lessonId } }"
           data-testid="home-continue"
         >
-          {{ actionLabel }}
+          {{ tile.actionLabel }}
           <IconGlyph name="chevronRight" :size="18" />
         </RouterLink>
       </div>
       <!-- The lesson's character on practice paper, with what it means. -->
-      <figure class="home-next-show" :aria-hidden="!next.phrase || undefined">
-        <span class="hanzi-tile home-next-tile" lang="zh-CN" aria-hidden="true">{{ next.character ?? '学' }}</span>
-        <figcaption v-if="next.phrase" class="home-next-phrase">
-          <span class="cjk-text" lang="zh-CN">{{ next.phrase.hanzi }}</span>
-          <span>{{ phraseLine }}</span>
+      <figure class="home-next-show" :aria-hidden="!tile.next.phrase || undefined">
+        <span class="hanzi-tile home-next-tile" lang="zh-CN" aria-hidden="true">{{ tile.next.character ?? '学' }}</span>
+        <figcaption v-if="tile.next.phrase" class="home-next-phrase">
+          <span class="cjk-text" lang="zh-CN">{{ tile.next.phrase.hanzi }}</span>
+          <span>{{ tile.phraseLine }}</span>
         </figcaption>
       </figure>
     </template>
@@ -83,71 +83,65 @@ const props = defineProps<{
 
 const { t } = useLocalMessages({ studentHome: studentHomeMessages })
 
-/** A checkpoint closes its level: it is named by the level, and its steps are the level's units. */
-const isCheckpoint = computed(() => props.next?.kind === 'CHECKPOINT')
-
-/** "In your plan" only for a unit the running plan has; otherwise the lesson is simply next in Learn. */
-const eyebrow = computed(() => {
-  const next = props.next
-  if (!next) return ''
-  const inPlan = props.hasPlan && next.inPlan
-  if (props.firstTime) {
-    return t(inPlan ? 'studentHome.firstInPlan' : 'studentHome.startHere', { number: next.unitNumber })
-  }
-  if (isCheckpoint.value) {
-    return t(inPlan ? 'studentHome.checkpointInPlan' : 'studentHome.checkpointInLearn', { level: next.level })
-  }
-  return t(inPlan ? 'studentHome.nextInPlan' : 'studentHome.nextInLearn', {
-    number: next.unitNumber,
-    title: next.unitTitle,
-  })
-})
-
-const stepsLabel = computed(() => {
-  const next = props.next
-  if (!next) return ''
-  return isCheckpoint.value
-    ? t('studentHome.levelPathLabel', { level: next.level })
-    : t('studentHome.unitPathLabel', { number: next.unitNumber })
-})
-
-/** The steps already show where the lesson sits in its unit, so the line says only how long it takes. */
-const metaLine = computed(() => {
-  const next = props.next
-  if (!next) return ''
-  if (props.firstTime) {
-    return next.quickReview
-      ? t('studentHome.reviewUnit', { count: next.stops.length, minutes: next.unitMinutesLeft })
-      : t('studentHome.startUnitCopy', { count: next.stops.length, minutes: next.minutes })
-  }
-  return t(isCheckpoint.value ? 'studentHome.checkpointMeta' : 'studentHome.lessonMeta', {
-    minutes: next.minutes,
-    xp: next.xpReward,
-  })
-})
-
-const phraseLine = computed(() => {
-  const phrase = props.next?.phrase
-  if (!phrase) return ''
-  if (props.firstTime) {
-    return t(props.next?.quickReview ? 'studentHome.youKnowThis' : 'studentHome.firstWord', { meaning: phrase.meaning })
-  }
-  return t('studentHome.youllLearn', { meaning: phrase.meaning })
-})
-
-const actionLabel = computed(() => {
-  const next = props.next
-  if (!next) return ''
-  if (props.firstTime) return t('studentHome.startUnit', { number: next.unitNumber })
-  return isCheckpoint.value ? t('studentHome.takeCheckpoint') : t('studentHome.startLesson')
-})
-
-function stopLabel(stop: HomeNextLesson['stops'][number]): string {
-  if (isCheckpoint.value) {
+function stopLabel(stop: HomeNextLesson['stops'][number], isCheckpoint: boolean): string {
+  if (isCheckpoint) {
     return t(stop.state === 'DONE' ? 'studentHome.unitStopDone' : 'studentHome.unitStopOpen', { number: stop.position })
   }
   if (stop.state === 'DONE') return t('studentHome.stopDone', { position: stop.position })
   if (stop.current) return t('studentHome.stopCurrent', { position: stop.position })
   return t('studentHome.stopLocked', { position: stop.position })
 }
+
+const tile = computed(() => {
+  const next = props.next
+  if (!next) return null
+  const isCheckpoint = next.kind === 'CHECKPOINT'
+  const unitIntro = props.firstTime && !isCheckpoint
+  const inPlan = props.hasPlan && next.inPlan
+
+  const stepsLabel = isCheckpoint
+    ? t('studentHome.levelPathLabel', { level: next.level })
+    : t('studentHome.unitPathLabel', { number: next.unitNumber })
+  const stops = next.stops.map((stop) => ({ ...stop, label: stopLabel(stop, isCheckpoint) }))
+
+  if (unitIntro) {
+    const phraseLine = next.phrase
+      ? t(next.quickReview ? 'studentHome.youKnowThis' : 'studentHome.firstWord', { meaning: next.phrase.meaning })
+      : ''
+    const metaLine = next.quickReview
+      ? t('studentHome.reviewUnit', { count: next.stops.length, minutes: next.unitMinutesLeft })
+      : t('studentHome.startUnitCopy', { count: next.stops.length, minutes: next.minutes })
+    return {
+      next,
+      unitIntro: true,
+      eyebrow: t(inPlan ? 'studentHome.firstInPlan' : 'studentHome.startHere', { number: next.unitNumber }),
+      stepsLabel,
+      metaLine,
+      phraseLine,
+      actionLabel: t('studentHome.startUnit', { number: next.unitNumber }),
+      stops,
+    }
+  }
+
+  const eyebrow = isCheckpoint
+    ? t(inPlan ? 'studentHome.checkpointInPlan' : 'studentHome.checkpointInLearn', { level: next.level })
+    : t(inPlan ? 'studentHome.nextInPlan' : 'studentHome.nextInLearn', {
+        number: next.unitNumber,
+        title: next.unitTitle,
+      })
+
+  return {
+    next,
+    unitIntro: false,
+    eyebrow,
+    stepsLabel,
+    metaLine: t(isCheckpoint ? 'studentHome.checkpointMeta' : 'studentHome.lessonMeta', {
+      minutes: next.minutes,
+      xp: next.xpReward,
+    }),
+    phraseLine: next.phrase ? t('studentHome.youllLearn', { meaning: next.phrase.meaning }) : '',
+    actionLabel: t(isCheckpoint ? 'studentHome.takeCheckpoint' : 'studentHome.startLesson'),
+    stops,
+  }
+})
 </script>

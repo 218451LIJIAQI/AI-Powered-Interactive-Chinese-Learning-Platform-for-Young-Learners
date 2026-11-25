@@ -20,17 +20,15 @@
       </div>
 
       <div class="practice-trace-board">
-        <div
-          class="practice-trace-pad"
-          :style="{ aspectRatio: `${glyphs.length} / 1`, maxWidth: `${glyphs.length * PAD_CELL}px` }"
-        >
+        <div class="practice-trace-pad" :class="{ 'is-scrollable': glyphs.length > 2 }" :style="padFrameStyle">
           <TracingPad
             v-model:strokes="strokes"
             class="practice-trace-canvas"
+            :style="canvasStyle"
             :characters="characters"
             :show-model="showModel"
             :cell-size="PAD_CELL"
-            :disabled="run.busy.value"
+            :disabled="run.busy.value || completed"
             :label="t('practice.tracePadLabel', { characters })"
           />
         </div>
@@ -38,7 +36,7 @@
           <button
             class="btn btn-secondary btn-sm"
             type="button"
-            :disabled="run.busy.value"
+            :disabled="run.busy.value || completed"
             :aria-disabled="!strokes.length"
             @click="undo"
           >
@@ -47,7 +45,7 @@
           <button
             class="btn btn-secondary btn-sm"
             type="button"
-            :disabled="run.busy.value"
+            :disabled="run.busy.value || completed"
             :aria-disabled="!strokes.length"
             @click="clear"
           >
@@ -65,7 +63,7 @@
         <button
           class="btn btn-primary"
           type="button"
-          :disabled="!ready || run.busy.value"
+          :disabled="!ready || run.busy.value || completed"
           :aria-busy="run.busy.value"
           data-testid="tracing-done"
           @click="finish"
@@ -85,10 +83,11 @@ import IconGlyph from '@/components/common/IconGlyph.vue'
 import TracingPad from '@/components/learning/TracingPad.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { practiceMessages } from '@/plugins/practiceMessages'
-import type { PracticeResult, PracticeSet } from '@/types/learn'
+import type { PracticeSet } from '@/types/learn'
 import { tracingGlyphs, type StrokePoint } from '@/utils/tracing'
 
 import PracticeHint from './PracticeHint.vue'
+import type { PracticeCompletion } from './practiceTypes'
 import { usePracticeRun } from './usePracticeRun'
 import { hintReportContext, useStuckHint } from './useStuckHint'
 
@@ -98,9 +97,10 @@ import { hintReportContext, useStuckHint } from './useStuckHint'
  * the faint glyph on the pad. An independent set reveals it when the learner opens the hint.
  */
 const props = defineProps<{ set: PracticeSet }>()
-const emit = defineEmits<{ finished: [result: PracticeResult, recap: string] }>()
+const emit = defineEmits<{ finished: [completion: PracticeCompletion] }>()
 
 const PAD_CELL = 300
+const MIN_MULTI_CELL = 180
 
 const { t } = useLocalMessages({ practice: practiceMessages })
 const run = usePracticeRun(() => props.set, t)
@@ -111,6 +111,23 @@ const glyphs = computed(() => tracingGlyphs(item.value.hanzi!))
 const characters = computed(() => glyphs.value.join(''))
 const required = computed(() => props.set.strokeCount!)
 const strokes = ref<StrokePoint[][]>([])
+const completed = ref(false)
+
+// Keep multi-character sets (3–10 glyphs) at a usable writing size by scrolling horizontally instead of shrinking cells.
+const padFrameStyle = computed(() =>
+  glyphs.value.length > 2
+    ? { maxWidth: `${glyphs.value.length * PAD_CELL}px` }
+    : { aspectRatio: `${glyphs.value.length} / 1`, maxWidth: `${glyphs.value.length * PAD_CELL}px` },
+)
+const canvasStyle = computed(() =>
+  glyphs.value.length > 2
+    ? {
+        minWidth: `${glyphs.value.length * MIN_MULTI_CELL}px`,
+        aspectRatio: `${glyphs.value.length} / 1`,
+        height: 'auto',
+      }
+    : undefined,
+)
 
 /**
  * A word of several characters counts its strokes per character ("Character 1 of 2 · 0 of 4 strokes") when the set
@@ -162,10 +179,11 @@ function clear(): void {
 const showModel = computed(() => props.set.stage !== 'INDEPENDENT' || hint.used.value)
 
 async function finish(): Promise<void> {
-  if (!ready.value) return
+  if (!ready.value || completed.value) return
   const result = await run.complete([], strokes.value.length)
   if (!result) return
-  const word = [item.value.pinyin, item.value.meaning].filter(Boolean).join(' · ')
-  emit('finished', result, word)
+  completed.value = true
+  const recap = [item.value.pinyin, item.value.meaning].filter(Boolean).join(' · ')
+  emit('finished', { result, recap })
 }
 </script>

@@ -7,7 +7,7 @@ import type { XiaomeiMemoryNote, XiaomeiScenario, XiaomeiSummary, XiaomeiTurn } 
 import { resolveApiError } from '@/utils/apiError'
 import { serverMessageOr } from '@/utils/serverMessages'
 
-export interface UseXiaomeiSummaryMemoryOptions {
+interface UseXiaomeiSummaryMemoryOptions {
   getConversation: () => number
   getScenario: () => XiaomeiScenario
   getTurns: () => XiaomeiTurn[]

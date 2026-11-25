@@ -1,14 +1,15 @@
 <template>
-  <div class="plan-setup">
+  <div ref="stageRef" class="plan-setup">
     <FocusTopBar
       :label="t('plan.check.label')"
       :close-label="t('plan.retake.leaveLabel')"
-      :close-disabled="saving"
+      :close-disabled="phase.kind === 'saving'"
       :progress="progress"
       :progress-label="t('plan.retake.title')"
       @close="close"
     />
     <h1 class="sr-only">{{ t('plan.retake.title') }}</h1>
+    <p class="sr-only" role="status">{{ statusAnnouncement }}</p>
 
     <StatePanel
       v-if="overview.loading.value"
@@ -22,7 +23,6 @@
       v-else-if="overview.error.value"
       heading-tag="h2"
       tone="error"
-      icon="alert"
       :title="t('plan.page.loadError')"
       :message="overview.error.value"
       spacious
@@ -43,14 +43,15 @@
     </StatePanel>
 
     <LevelCheckRunner
-      v-else-if="!finished"
+      v-else-if="phase.kind === 'checking'"
+      :key="runKey"
       :start-level="planSummary.level"
       :paused="leaving"
       @progress="onProgress"
-      @finished="save"
+      @finished="(sent, _result, token) => save(sent, token)"
     />
     <StatePanel
-      v-else-if="saving"
+      v-else-if="phase.kind === 'saving'"
       heading-tag="h2"
       tone="loading"
       :title="t('plan.retake.saving')"
@@ -58,16 +59,32 @@
       spacious
     />
     <StatePanel
-      v-else-if="saveError"
+      v-else-if="phase.kind === 'error'"
       heading-tag="h2"
       tone="error"
-      icon="alert"
       :title="t('plan.retake.saveError')"
-      :message="saveError"
+      :message="phase.message"
       spacious
-      @retry="save(answers)"
-    />
-    <LevelCheckDone v-else-if="outcome" :title="outcome.title" :lead="outcome.lead" />
+    >
+      <template #actions>
+        <button
+          v-if="mustRestartCheck"
+          class="btn btn-primary"
+          type="button"
+          data-testid="retake-restart"
+          @click="restartCheck"
+        >
+          {{ t('plan.retake.startAgain') }}
+        </button>
+        <button v-else class="btn btn-primary" type="button" @click="save(phase.answers, phase.runToken)">
+          {{ t('common.retry') }}
+        </button>
+      </template>
+    </StatePanel>
+    <section v-else-if="outcome" class="plan-center" data-testid="level-check-done">
+      <h2 ref="doneHeading" class="focus-headline" tabindex="-1">{{ outcome.title }}</h2>
+      <p v-if="outcome.lead" class="plan-center-lead" data-testid="level-check-lead">{{ outcome.lead }}</p>
+    </section>
 
     <FocusFooter v-if="outcome">
       <template v-if="outcome.targetReached" #start>
@@ -102,7 +119,7 @@
 import '@/styles/learn-shared.css'
 import '@/styles/plan-setup.css'
 
-import { computed, ref } from 'vue'
+import { computed, ref, shallowRef, watch } from 'vue'
 import { RouterLink, useRouter, type RouteLocationRaw } from 'vue-router'
 
 import { getAuthSessionVersion } from '@/api/http'
@@ -111,7 +128,6 @@ import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
 import FocusFooter from '@/components/layout/FocusFooter.vue'
 import FocusTopBar from '@/components/layout/FocusTopBar.vue'
-import LevelCheckDone from '@/components/plan/LevelCheckDone.vue'
 import LevelCheckRunner from '@/components/plan/LevelCheckRunner.vue'
 import { ladderRung, LEVEL_KEYS } from '@/components/plan/planLabels'
 import { useIsUnmounted } from '@/composables/useIsUnmounted'
@@ -120,8 +136,10 @@ import { useLocalMessages } from '@/composables/useLocalMessages'
 import { useResource } from '@/composables/useResource'
 import { planSetupMessages } from '@/plugins/planSetupMessages'
 import { planSummaryMessages } from '@/plugins/planSummaryMessages'
-import type { LevelCheckAnswer, RetakeResult } from '@/types/plan'
-import { resolveApiError } from '@/utils/apiError'
+import type { LevelCheckAnswer } from '@/types/learn'
+import type { RetakeResult } from '@/types/plan'
+import { apiErrorStatus, resolveApiError } from '@/utils/apiError'
+import { restoreFocusIfDropped } from '@/utils/focus'
 import { ratioPercent } from '@/utils/format'
 
 /**
@@ -134,21 +152,29 @@ const router = useRouter()
 const { t, locale } = useLocalMessages({ plan: [planSummaryMessages, planSetupMessages] })
 const overview = useResource(planApi.overview)
 
+type RetakePhase =
+  | { kind: 'checking' }
+  | { kind: 'saving' }
+  | { kind: 'error'; answers: LevelCheckAnswer[]; runToken: string | null; message: string; status: number | null }
+  | { kind: 'done'; result: RetakeResult }
+
 const planSummary = computed(() => overview.data.value?.plan ?? null)
 const answered = ref(0)
 const max = ref(8)
-const answers = ref<LevelCheckAnswer[]>([])
-const saving = ref(false)
-const saveError = ref<string | null>(null)
-const result = ref<RetakeResult | null>(null)
-/** The questions are over once their answers are sent: saving, failed to save, or saved. */
-const finished = computed(() => saving.value || saveError.value !== null || result.value !== null)
+const runKey = ref(0)
+const phase = shallowRef<RetakePhase>({ kind: 'checking' })
+const stageRef = ref<HTMLElement | null>(null)
+const doneHeading = ref<HTMLElement | null>(null)
+/** Expired runToken (400) or concurrent plan change (409) cannot succeed by resending the same answers. */
+const mustRestartCheck = computed(
+  () => phase.value.kind === 'error' && (phase.value.status === 400 || phase.value.status === 409),
+)
 const leaving = ref(false)
 const isUnmounted = useIsUnmounted()
 
 const progress = computed(() => {
-  if (!planSummary.value) return null
-  return finished.value ? 100 : ratioPercent(answered.value + 0.5, max.value)
+  if (overview.loading.value || overview.error.value || !planSummary.value) return null
+  return phase.value.kind !== 'checking' ? 100 : ratioPercent(answered.value + 0.5, max.value)
 })
 
 /**
@@ -156,9 +182,9 @@ const progress = computed(() => {
  * to compare with.
  */
 const outcome = computed(() => {
-  const value = result.value
   const before = planSummary.value
-  if (!value || !before) return null
+  if (phase.value.kind !== 'done' || !before) return null
+  const value = phase.value.result
   const level = t(LEVEL_KEYS[value.level])
   const rung = ladderRung(value.level)
   const previous = ladderRung(before.level)
@@ -179,7 +205,32 @@ const outcome = computed(() => {
 
 /** Back to the plan, which confirms a new level. */
 const planRoute = computed<RouteLocationRaw>(() =>
-  result.value?.changed ? { name: 'student-plan', query: { updated: 'level' } } : { name: 'student-plan' },
+  phase.value.kind === 'done' && phase.value.result.changed
+    ? { name: 'student-plan', query: { updated: 'level' } }
+    : { name: 'student-plan' },
+)
+
+const statusAnnouncement = computed(() => {
+  if (outcome.value) return [outcome.value.title, outcome.value.lead].filter(Boolean).join(' ')
+  return phase.value.kind === 'error' ? phase.value.message : ''
+})
+
+watch(
+  phase,
+  (next) => {
+    if (next.kind === 'done' && outcome.value) {
+      void restoreFocusIfDropped(
+        () => doneHeading.value,
+        () => !isUnmounted(),
+      )
+    } else if (next.kind === 'error') {
+      void restoreFocusIfDropped(
+        () => stageRef.value?.querySelector<HTMLElement>('.state-panel button'),
+        () => !isUnmounted(),
+      )
+    }
+  },
+  { flush: 'post' },
 )
 
 function onProgress(count: number, total: number): void {
@@ -187,37 +238,47 @@ function onProgress(count: number, total: number): void {
   max.value = total
 }
 
-async function save(sent: LevelCheckAnswer[]): Promise<void> {
-  if (saving.value) return
+function restartCheck(): void {
+  const shouldReloadPlan = phase.value.kind === 'error' && phase.value.status === 409
+  phase.value = { kind: 'checking' }
+  answered.value = 0
+  runKey.value += 1
+  if (shouldReloadPlan) void overview.reload()
+}
+
+async function save(sent: LevelCheckAnswer[], token: string | null = null): Promise<void> {
+  if (phase.value.kind === 'saving') return
   const version = getAuthSessionVersion()
   const stillCurrent = () => !isUnmounted() && version === getAuthSessionVersion()
   leaving.value = false
-  answers.value = sent
-  saving.value = true
-  saveError.value = null
+  phase.value = { kind: 'saving' }
   try {
-    const saved = await planApi.retake(sent, locale.value)
+    const saved = await planApi.retake(sent, locale.value, token)
     if (saved.changed && version === getAuthSessionVersion()) invalidateHintSettings()
     if (!stillCurrent()) return
-    result.value = saved
+    phase.value = { kind: 'done', result: saved }
   } catch (reason) {
     if (stillCurrent()) {
-      saveError.value = resolveApiError(reason, t('plan.retake.saveError'))
+      phase.value = {
+        kind: 'error',
+        answers: sent,
+        runToken: token,
+        message: resolveApiError(reason, t('plan.retake.saveError')),
+        status: apiErrorStatus(reason),
+      }
     }
-  } finally {
-    if (stillCurrent()) saving.value = false
   }
 }
 
 /** Once the server has saved the result, closing takes the learner back to the plan. */
 function close(): void {
-  if (saving.value) return
-  if (result.value || !planSummary.value) void router.push(planRoute.value)
+  if (phase.value.kind === 'saving') return
+  if (phase.value.kind === 'done' || !planSummary.value) void router.push(planRoute.value)
   else leaving.value = true
 }
 
 function leave(): void {
-  if (saving.value) return
+  if (phase.value.kind === 'saving') return
   leaving.value = false
   void router.push({ name: 'student-plan' })
 }

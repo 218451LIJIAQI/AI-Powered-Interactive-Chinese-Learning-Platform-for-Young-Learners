@@ -12,7 +12,7 @@
       >
         <IconGlyph name="sidebar" :size="18" />
       </button>
-      <span class="topbar-section" data-testid="topbar-section">{{ sectionLabel }}</span>
+      <span class="topbar-section">{{ sectionLabel }}</span>
     </div>
 
     <div class="topbar-actions">
@@ -38,6 +38,7 @@
         class="topbar-user"
         :class="{ 'is-active': route.path === accountPath }"
         :aria-current="route.path === accountPath ? 'page' : undefined"
+        :aria-label="t('dashboard.openAccount', { name: displayName })"
         :title="t('dashboard.openAccount', { name: displayName })"
         data-testid="topbar-account"
       >

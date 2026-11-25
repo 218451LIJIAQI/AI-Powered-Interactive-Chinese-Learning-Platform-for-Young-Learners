@@ -1,5 +1,5 @@
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { RouterView } from 'vue-router'
 
 import { testRouter, mountAtRoute } from '@/test/routes'
@@ -103,10 +103,6 @@ describe('StudentSetupPage', () => {
     api.skip.mockResolvedValue(undefined)
     api.confirm.mockResolvedValue(plan)
     api.dailyGoal.mockResolvedValue({ dailyGoalXp: 20 })
-  })
-
-  afterEach(() => {
-    vi.useRealTimers()
   })
 
   it('walks from the goal through the level check to the plan and its path', async () => {
@@ -571,7 +567,7 @@ describe('StudentSetupPage', () => {
 
     await primary(wrapper)
     expect(router.currentRoute.value.name).toBe('student-setup')
-    expect(wrapper.get('.plan-start-error').text()).toContain(
+    expect(wrapper.get('[data-testid="plan-start-error"]').text()).toContain(
       'This plan was built more than a day ago. Build it again.',
     )
     await wrapper.get('[data-testid="setup-build-again"]').trigger('click')
@@ -579,7 +575,7 @@ describe('StudentSetupPage', () => {
 
     expect(api.build).toHaveBeenCalledTimes(2)
     expect(api.build.mock.calls[1][0]).toEqual(api.build.mock.calls[0][0])
-    expect(wrapper.find('.plan-start-error').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="plan-start-error"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="plan-result"]').exists()).toBe(true)
     await primary(wrapper)
     await primary(wrapper)
@@ -602,7 +598,7 @@ describe('StudentSetupPage', () => {
     await wrapper.get('[data-testid="setup-pick-new-date"]').trigger('click')
 
     const dialog = () => wrapper.get('[data-testid="edit-goal-dialog"]')
-    expect(wrapper.find('.plan-start-error').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="plan-start-error"]').exists()).toBe(false)
     expect(wrapper.get('[data-testid="save-rebuild"]').attributes('disabled')).toBeDefined()
     await dialog().get('[data-testid="date-none"]').trigger('click')
     await wrapper.get('[data-testid="save-rebuild"]').trigger('click')
@@ -620,7 +616,7 @@ describe('StudentSetupPage', () => {
     await primary(wrapper)
 
     await primary(wrapper)
-    expect(wrapper.get('.plan-start-error').text()).toBe('Your path could not be started. Try again.')
+    expect(wrapper.get('[data-testid="plan-start-error"]').text()).toBe('Your path could not be started. Try again.')
     expect(wrapper.find('[data-testid="setup-build-again"]').exists()).toBe(false)
     expect(wrapper.get('[data-testid="setup-primary"]').text()).toBe('Start my path')
   })
@@ -658,7 +654,6 @@ describe('StudentSetupPage', () => {
 
     expect(router.currentRoute.value.name).toBe('student-plan')
     expect(api.skip).toHaveBeenCalledOnce()
-    wrapper.unmount()
   })
 
   it('keeps the destination already opening when a setup skip finishes', async () => {
@@ -706,9 +701,9 @@ describe('StudentSetupPage', () => {
     pending.resolve(learningPlan())
     await flushPromises()
 
-    expect(wrapper.find('.is-building').exists()).toBe(false)
+    expect(wrapper.find('.plan-building-steps').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="plan-result"]').exists()).toBe(true)
     expect(wrapper.find('[role="alert"]').text()).toBe('We could not save that. Try again.')
-    wrapper.unmount()
   })
 
   it('sends a skip only once when confirmation clicks arrive before the button is disabled', async () => {
@@ -726,7 +721,6 @@ describe('StudentSetupPage', () => {
 
     expect(callsWhilePending).toBe(1)
     expect(router.currentRoute.value.name).toBe('student-home')
-    wrapper.unmount()
   })
 
   it('refreshes setup options today when picking a new date after day rollover', async () => {
@@ -748,7 +742,6 @@ describe('StudentSetupPage', () => {
     expect(api.options).toHaveBeenCalledTimes(2)
     await wrapper.get('[data-testid="edit-goal-dialog"] [data-testid="date-field"]').trigger('click')
     expect(wrapper.get('[data-day="2026-06-15"]').attributes('disabled')).toBeDefined()
-    wrapper.unmount()
   })
 
   it('leaves directly to Home without calling skip when × is clicked after an initial load failure', async () => {
@@ -818,5 +811,94 @@ describe('StudentSetupPage', () => {
     expect(api.build).toHaveBeenCalledOnce()
     expect(wrapper.find('[data-testid="edit-goal-dialog"]').exists()).toBe(true)
     expect(wrapper.get('[data-testid="save-rebuild"]').attributes('disabled')).toBeDefined()
+    expect(api.options).toHaveBeenCalledTimes(2)
+  })
+
+  it('falls back to building a fresh setup draft when editing the goal hits 409 Build your learning plan first', async () => {
+    api.updateGoal.mockRejectedValueOnce({
+      response: { status: 409, data: { message: 'Build your learning plan first.' } },
+    })
+    api.build
+      .mockResolvedValueOnce(learningPlan())
+      .mockResolvedValueOnce(learningPlan({ goal: { ...learningPlan().goal, title: 'Fresh rebuilt draft' } }))
+    const { wrapper } = await mountPage()
+    await buildTravelPlan(wrapper)
+
+    await wrapper.get('[data-testid="setup-secondary"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="edit-goal-dialog"] [data-testid="date-none"]').trigger('click')
+    await wrapper.get('[data-testid="save-rebuild"]').trigger('click')
+    await waitForBuildAnimation()
+
+    expect(api.updateGoal).toHaveBeenCalledOnce()
+    expect(api.build).toHaveBeenCalledTimes(2)
+    expect(api.build.mock.calls[1]![0].goal.deadline).toBeNull()
+    expect(wrapper.get('[data-testid="plan-result"]').text()).toContain('Fresh rebuilt draft')
+  })
+
+  it('rebuilds a >24h draft via updateGoal when the learner completed the level check, avoiding an expired runToken', async () => {
+    api.next.mockResolvedValueOnce(checkStep()).mockResolvedValueOnce(checkDone())
+    api.confirm
+      .mockRejectedValueOnce({
+        response: { status: 409, data: { message: 'This plan was built more than a day ago. Build it again.' } },
+      })
+      .mockResolvedValueOnce(learningPlan())
+    api.updateGoal.mockResolvedValueOnce(learningPlan({ goal: { ...learningPlan().goal, title: 'Refreshed draft' } }))
+    const { wrapper } = await mountPage()
+    await answerTheGoal(wrapper)
+    await pick(wrapper, 'self-level-choices', 'BEGINNER_1')
+    await primary(wrapper)
+    await checkChoice(wrapper, 1)
+    await wrapper.get('[data-testid="continue"]').trigger('click')
+    await flushPromises()
+    await primary(wrapper)
+    await primary(wrapper)
+    await waitForBuildAnimation()
+
+    await primary(wrapper)
+    await primary(wrapper)
+    await wrapper.get('[data-testid="setup-build-again"]').trigger('click')
+    await waitForBuildAnimation()
+
+    expect(api.build).toHaveBeenCalledOnce()
+    expect(api.updateGoal).toHaveBeenCalledOnce()
+    expect(wrapper.get('[data-testid="plan-result"]').text()).toContain('Refreshed draft')
+  })
+
+  it('offers Start level check again when building fails with 400 Start the level check again', async () => {
+    api.next.mockResolvedValueOnce(checkStep()).mockResolvedValueOnce(checkDone()).mockResolvedValueOnce(checkStep())
+    api.build.mockRejectedValueOnce({
+      response: { status: 400, data: { message: 'Start the level check again.' } },
+    })
+    const { wrapper } = await mountPage()
+    await answerTheGoal(wrapper)
+    await pick(wrapper, 'self-level-choices', 'BEGINNER_1')
+    await primary(wrapper)
+    await checkChoice(wrapper, 1)
+    await wrapper.get('[data-testid="continue"]').trigger('click')
+    await flushPromises()
+    await primary(wrapper)
+    await primary(wrapper)
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="setup-restart-check"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="setup-edit-pace"]').exists()).toBe(false)
+    await wrapper.get('[data-testid="setup-restart-check"]').trigger('click')
+    await flushPromises()
+
+    expect(api.next).toHaveBeenCalledTimes(3)
+    expect(wrapper.find('[data-testid="level-check-done"]').exists()).toBe(false)
+  })
+
+  it('disables Save and rebuild when no goal field changed and omits duplicate No date inside the calendar', async () => {
+    const { wrapper } = await mountPage()
+    await buildTravelPlan(wrapper)
+
+    await wrapper.get('[data-testid="setup-secondary"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="save-rebuild"]').attributes('disabled')).toBeDefined()
+
+    await wrapper.get('[data-testid="edit-goal-dialog"] [data-testid="date-field"]').trigger('click')
+    expect(wrapper.find('[data-testid="calendar-no-date"]').exists()).toBe(false)
   })
 })

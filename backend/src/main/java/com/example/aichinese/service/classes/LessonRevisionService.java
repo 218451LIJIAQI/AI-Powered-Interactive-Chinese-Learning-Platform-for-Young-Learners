@@ -1,7 +1,6 @@
 package com.example.aichinese.service.classes;
 
 import java.time.LocalDateTime;
-import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -31,11 +30,11 @@ import com.example.aichinese.repository.LessonKeyPhraseRepository;
 import com.example.aichinese.repository.LessonRepository;
 import com.example.aichinese.repository.MatchingGameItemRepository;
 import com.example.aichinese.repository.QuizAttemptAnswerRepository;
-import com.example.aichinese.repository.QuizAttemptRepository;
 import com.example.aichinese.repository.QuizOptionRepository;
 import com.example.aichinese.repository.QuizQuestionRepository;
 import com.example.aichinese.repository.QuizRepository;
 import com.example.aichinese.repository.RecordedLessonVideoRepository;
+import com.example.aichinese.repository.VideoProgressRepository;
 import com.example.aichinese.service.FileStorageService;
 import com.example.aichinese.service.classes.ClassContentSupport.ActivityKey;
 
@@ -68,8 +67,8 @@ public class LessonRevisionService {
     private final QuizRepository quizRepository;
     private final QuizQuestionRepository quizQuestionRepository;
     private final QuizOptionRepository quizOptionRepository;
-    private final QuizAttemptRepository quizAttemptRepository;
     private final QuizAttemptAnswerRepository quizAttemptAnswerRepository;
+    private final VideoProgressRepository videoProgressRepository;
     private final FileStorageService fileStorage;
 
     /** Creates the first working copy of a published lesson under the editor's class lock. */
@@ -79,14 +78,15 @@ public class LessonRevisionService {
         revision.setRevisionOf(lesson);
         revision.setModule(lesson.getModule());
         revision.setUnitPosition(lesson.getUnitPosition());
-        copyDetails(lesson, revision);
+        revision.setTitle(lesson.getTitle());
         revision.setContentStatus(ContentStatus.DRAFT);
         Lesson saved = lessonRepository.save(revision);
 
         for (LessonKeyPhrase phrase : content.keyPhrases(lesson.getId())) {
             keyPhraseRepository.save(copyPhrase(phrase, saved));
         }
-        for (RecordedLessonVideo video : videoRepository.findByLessonIdAndActiveTrueOrderBySortOrderAscIdAsc(lesson.getId())) {
+        for (RecordedLessonVideo video : videoRepository
+                .findByLessonIdInAndActiveTrueOrderBySortOrderAscIdAsc(List.of(lesson.getId()))) {
             copyVideo(video, saved);
         }
         for (LessonActivity activity : content.activities(lesson.getId())) {
@@ -176,7 +176,7 @@ public class LessonRevisionService {
     public boolean applyRevision(Lesson revision) {
         Lesson lesson = revision.getRevisionOf();
         boolean changed = LessonRevisionDiff.detailsChanged(lesson, revision);
-        copyDetails(revision, lesson);
+        lesson.setTitle(revision.getTitle());
 
         List<LessonKeyPhrase> revisionPhrases = content.keyPhrases(revision.getId());
         if (!content.keyPhraseViews(lesson.getId()).equals(ClassContentSupport.keyPhraseViewsOf(revisionPhrases))) {
@@ -202,9 +202,15 @@ public class LessonRevisionService {
 
     /** A copy still points at the published video it came from; a new video replaces that one. */
     private boolean applyVideos(Lesson revision, Lesson lesson) {
-        boolean changed = diff.videoChanged(lesson, revision);
+        List<RecordedLessonVideo> revisionVideos = videoRepository
+                .findByLessonIdInAndActiveTrueOrderBySortOrderAscIdAsc(List.of(revision.getId()));
+        List<RecordedLessonVideo> liveVideos = videoRepository
+                .findByLessonIdInAndActiveTrueOrderBySortOrderAscIdAsc(List.of(lesson.getId()));
+        boolean changed = LessonRevisionDiff.videoChanged(
+                liveVideos.isEmpty() ? null : liveVideos.getFirst(),
+                revisionVideos.isEmpty() ? null : revisionVideos.getFirst());
         Set<Long> kept = new HashSet<>();
-        for (RecordedLessonVideo copy : videoRepository.findByLessonIdAndActiveTrueOrderBySortOrderAscIdAsc(revision.getId())) {
+        for (RecordedLessonVideo copy : revisionVideos) {
             if (copy.getRevisionSourceId() != null) {
                 kept.add(copy.getRevisionSourceId());
             } else {
@@ -212,9 +218,18 @@ public class LessonRevisionService {
                 kept.add(copy.getId());
             }
         }
-        for (RecordedLessonVideo video : videoRepository.findByLessonIdAndActiveTrueOrderBySortOrderAscIdAsc(lesson.getId())) {
+        for (RecordedLessonVideo video : liveVideos) {
             if (!kept.contains(video.getId())) {
-                video.setActive(false);
+                if (!videoProgressRepository.existsByRecordedVideoId(video.getId())) {
+                    UploadedFile supersededFile = video.getUploadedFile();
+                    videoRepository.delete(video);
+                    videoRepository.flush();
+                    if (supersededFile != null) {
+                        fileStorage.deleteUnusedRecordedVideo(supersededFile);
+                    }
+                } else {
+                    video.setActive(false);
+                }
             }
         }
         return changed;
@@ -262,10 +277,10 @@ public class LessonRevisionService {
                 changed = true;
                 continue;
             }
-            if (!questionsLocked(source) && !diff.sameQuestions(source, copy)) {
+            if (!diff.questionsLocked(source) && !diff.sameQuestions(source, copy)) {
                 // Serialize question replacement with in-flight learner submits (which take PESSIMISTIC_READ on the quiz).
                 entityManager.lock(source, LockModeType.PESSIMISTIC_WRITE);
-                if (!questionsLocked(source)) {
+                if (!diff.questionsLocked(source)) {
                     replaceQuestions(source, copy);
                     changed = true;
                 }
@@ -277,15 +292,6 @@ public class LessonRevisionService {
             }
         }
         return changed;
-    }
-
-    /**
-     * Questions learners already answered stay as they are: those of a quiz with a submitted attempt, and those of a
-     * working copy of such a quiz (the editor locks them, and publishing never replaces them).
-     */
-    boolean questionsLocked(Quiz quiz) {
-        Long publishedId = quiz.getRevisionSourceId() == null ? quiz.getId() : quiz.getRevisionSourceId();
-        return quizAttemptRepository.existsByQuizIdAndSubmittedTrue(publishedId);
     }
 
     /**
@@ -336,19 +342,13 @@ public class LessonRevisionService {
         quizQuestionRepository.flush();
     }
 
-    /** Deletes a question with its options. */
-    void deleteQuestion(QuizQuestion question) {
-        deleteOptions(List.of(question));
-        quizQuestionRepository.delete(question);
-    }
-
-    void deleteOptions(List<QuizQuestion> questions) {
+    private void deleteOptions(List<QuizQuestion> questions) {
         if (questions.isEmpty()) {
             return;
         }
         quizOptionRepository.deleteAll(quizOptionRepository.findInDisplayOrder(
                 questions.stream().map(QuizQuestion::getId).toList()));
-        // Delete the options before the questions or before inserting their replacement options.
+        // Delete the options before deleting the questions.
         quizOptionRepository.flush();
     }
 
@@ -357,37 +357,14 @@ public class LessonRevisionService {
         keyPhraseRepository.flush();
     }
 
-    void deleteMatchingItems(Long gameId) {
+    private void deleteMatchingItems(Long gameId) {
         matchingGameItemRepository.deleteAll(content.matchingItems(gameId));
         matchingGameItemRepository.flush();
     }
 
-    void deleteFlashcardItems(Long flashcardId) {
+    private void deleteFlashcardItems(Long flashcardId) {
         flashcardItemRepository.deleteAll(content.flashcardItems(flashcardId));
         flashcardItemRepository.flush();
-    }
-
-    /** Whether a working copy differs from its published lesson in anything learners would see. */
-    @Transactional(readOnly = true)
-    public boolean hasChanges(Lesson revision) {
-        return diff.hasChanges(revision);
-    }
-
-    /** Published lesson ids whose working copy differs from the live lesson. */
-    @Transactional(readOnly = true)
-    public Set<Long> changedLessonIds(Collection<Lesson> revisions) {
-        return diff.changedLessonIds(revisions);
-    }
-
-    /** Whether the published order can still identify the corresponding questions in an untouched copy. */
-    boolean sameQuestions(List<QuizQuestion> first, List<QuizQuestion> second) {
-        return diff.sameQuestions(first, second);
-    }
-
-    private static void copyDetails(Lesson from, Lesson to) {
-        to.setTitle(from.getTitle());
-        to.setSummary(from.getSummary());
-        to.setEstimatedDurationMinutes(from.getEstimatedDurationMinutes());
     }
 
     private static LessonKeyPhrase copyPhrase(LessonKeyPhrase phrase, Lesson lesson) {

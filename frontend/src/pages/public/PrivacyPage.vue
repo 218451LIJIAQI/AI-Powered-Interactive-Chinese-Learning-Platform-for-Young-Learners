@@ -8,13 +8,14 @@ import { computed } from 'vue'
 import LegalDocument from '@/components/public/LegalDocument.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import {
-  aiProviderNameKey,
   configuredTavusDeploymentId,
+  resolveAiProviderLabel,
   usePublicPlatformSettings,
 } from '@/composables/usePublicPlatformSettings'
+import { aiDisclosureMessages } from '@/plugins/aiDisclosureMessages'
 import { legalMessages } from '@/plugins/legalMessages'
 
-const { t } = useLocalMessages({ legal: legalMessages })
+const { t } = useLocalMessages({ legal: legalMessages, aiDisclosure: aiDisclosureMessages })
 const { aiProvider } = usePublicPlatformSettings()
 const hasLiveVideo = Boolean(configuredTavusDeploymentId())
 
@@ -40,12 +41,10 @@ const aiCopy = computed(() => {
   switch (ai.kind) {
     case 'openai':
       return t('legal.privacy.aiOpenAi')
-    case 'other': {
-      const nameKey = aiProviderNameKey(ai.provider)
-      return t('legal.privacy.aiOther', { provider: nameKey ? t(`legal.${nameKey}`) : ai.provider })
-    }
+    case 'other':
+      return t('legal.privacy.aiOther', { provider: resolveAiProviderLabel(ai.provider, t) })
     case 'off':
-      return t('legal.privacy.aiOff')
+      return t('aiDisclosure.off')
     default:
       return t('legal.privacy.aiUnknown')
   }
@@ -54,8 +53,8 @@ const aiCopy = computed(() => {
 /** Pronunciation scoring and configured live calls have their own providers and can work without the text service. */
 const aiParagraphs = computed(() => [
   aiCopy.value,
-  t('legal.privacy.aiPronunciation'),
-  ...(hasLiveVideo ? [t('legal.privacy.aiLiveVideo')] : []),
+  t('aiDisclosure.pronunciation'),
+  ...(hasLiveVideo ? [t('aiDisclosure.liveVideo')] : []),
   ...(aiProvider.value.kind === 'off' ? [] : [t('legal.privacy.aiXiaomei')]),
 ])
 

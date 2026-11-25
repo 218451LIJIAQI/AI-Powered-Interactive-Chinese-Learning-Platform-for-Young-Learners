@@ -1,5 +1,6 @@
 package com.example.aichinese.controller;
 
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -33,7 +34,9 @@ public class HealthController {
         ApiResponse<HealthResponse> body = dbUp
                 ? ApiResponse.success("Service is running", health)
                 : ApiResponse.failure("Service is degraded", health);
-        return ResponseEntity.status(dbUp ? HttpStatus.OK : HttpStatus.SERVICE_UNAVAILABLE).body(body);
+        return ResponseEntity.status(dbUp ? HttpStatus.OK : HttpStatus.SERVICE_UNAVAILABLE)
+                .cacheControl(CacheControl.noStore())
+                .body(body);
     }
 
     /** {@code status} is UP when the server and the database work; an unconfigured AI provider is not an outage. */

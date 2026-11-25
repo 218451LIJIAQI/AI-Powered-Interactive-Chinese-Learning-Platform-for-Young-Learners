@@ -4,13 +4,13 @@
       v-if="setList.length || sets.loading.value"
       :sets="setList"
       :selected-id="selectedId"
-      :loading="sets.loading.value"
+      :loading="sets.loading.value && !setList.length"
       :type="type"
     />
 
     <section class="practice-stage" :aria-labelledby="selected ? `${baseId}-title` : undefined">
       <StatePanel
-        v-if="sets.loading.value"
+        v-if="sets.loading.value && !setList.length"
         class="practice-stage-state"
         heading-tag="h2"
         tone="loading"
@@ -23,7 +23,6 @@
         class="practice-stage-state"
         heading-tag="h2"
         tone="error"
-        icon="alert"
         :title="t('practice.setsError')"
         :message="sets.error.value"
         @retry="sets.reload"
@@ -46,13 +45,12 @@
           v-if="detail.error.value"
           class="practice-stage-state"
           tone="error"
-          icon="alert"
           :title="t('practice.setError')"
           :message="detail.error.value"
           @retry="retryDetail"
         />
         <StatePanel
-          v-else-if="detail.loading.value || detail.data.value?.id !== selected.id"
+          v-else-if="(!completion && detail.loading.value) || detail.data.value?.id !== selected.id"
           class="practice-stage-state"
           tone="loading"
           :title="t('practice.setLoading')"
@@ -97,14 +95,14 @@ import { useLocalMessages } from '@/composables/useLocalMessages'
 import { useRecordById, useResource } from '@/composables/useResource'
 import { PRACTICE_ACTIVITIES } from '@/config/practiceActivities'
 import { practiceMessages } from '@/plugins/practiceMessages'
-import type { PracticeResult, PracticeSetSummary, PracticeType } from '@/types/learn'
+import type { PracticeSetSummary, PracticeType } from '@/types/learn'
 import { parseRecordId } from '@/utils/recordId'
 
 import AnswerPlayer from './AnswerPlayer.vue'
 import FlashcardsPlayer from './FlashcardsPlayer.vue'
 import MatchingPlayer from './MatchingPlayer.vue'
 import PracticeSetList from './PracticeSetList.vue'
-import type { RunTally } from './practiceTypes'
+import type { PracticeCompletion } from './practiceTypes'
 import SetDoneCard from './SetDoneCard.vue'
 import TracingPlayer from './TracingPlayer.vue'
 import { useRankUpLater } from './useRankUpLater'
@@ -146,7 +144,7 @@ const selected = computed<PracticeSetSummary | null>(() => {
 const selectedId = computed(() => selected.value?.id ?? null)
 const detail = useRecordById(selectedId, (id) => practiceApi.set(props.type, id))
 
-const completion = shallowRef<{ result: PracticeResult; recap: string; tally: RunTally | null } | null>(null)
+const completion = shallowRef<PracticeCompletion | null>(null)
 const { rankingUp, dismiss: dismissRankUp } = useRankUpLater(() => completion.value?.result.xp ?? null)
 /** Practise again is reading the set again. */
 const restarting = ref(false)
@@ -175,7 +173,7 @@ watch(selectedId, () => {
 })
 
 /** A player sends its result with what only it saw: a recap (Matching, Tracing) or a tally (answered items). */
-async function onFinished(result: PracticeResult, recap = '', tally: RunTally | null = null): Promise<void> {
+async function onFinished(done: PracticeCompletion): Promise<void> {
   // Keep the finished set on screen: the reloaded list marks it done, which would move the default choice on.
   const finishedId = selected.value!.id
   if (parseRecordId(route.query.set) !== finishedId) {
@@ -183,7 +181,7 @@ async function onFinished(result: PracticeResult, recap = '', tally: RunTally | 
     if (failure) return
   }
   if (selectedId.value !== finishedId) return
-  completion.value = { result, recap, tally }
+  completion.value = done
   void sets.reload()
 }
 

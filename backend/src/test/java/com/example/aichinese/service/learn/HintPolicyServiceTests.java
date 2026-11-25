@@ -13,6 +13,7 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
+import com.example.aichinese.config.SecurityProperties;
 import com.example.aichinese.dto.learn.HintDto;
 import com.example.aichinese.entity.ServedHint;
 import com.example.aichinese.entity.StudentProfile;
@@ -23,8 +24,9 @@ import com.example.aichinese.repository.ServedHintRepository;
 import com.example.aichinese.repository.SystemSettingRepository;
 import com.example.aichinese.service.AuditLogService;
 import com.example.aichinese.service.StudentLearningAccessService;
+import com.example.aichinese.support.ConfigFixtures;
 
-/** Unit tests for {@link HintPolicyService} hint recording and retry deduplication rules. */
+/** Unit tests for {@link HintPolicyService} and its {@link HintRunSigner} token signing rules. */
 class HintPolicyServiceTests {
 
     private final SystemSettingRepository settingRepository = mock(SystemSettingRepository.class);
@@ -54,14 +56,29 @@ class HintPolicyServiceTests {
                 .thenReturn(false)
                 .thenReturn(true);
 
-        HintDto.Step firstRetryHint = service.hintInRun(student, scope, itemRef, run, ladder, lastAnswered);
-        HintDto.Step repeatedRetryHint = service.hintInRun(student, scope, itemRef, run, ladder, lastAnswered);
+        HintDto.Step firstRetryHint = service.hintInRun(student, scope, itemRef, run, ladder, studentId -> lastAnswered);
+        HintDto.Step repeatedRetryHint = service.hintInRun(student, scope, itemRef, run, ladder, studentId -> lastAnswered);
 
         assertThat(firstRetryHint).isEqualTo(ladder.getFirst());
         assertThat(repeatedRetryHint).isEqualTo(ladder.getFirst());
         // Recorded once for the post-answer retry, not duplicated on repeated opens before the retry answer.
         verify(servedHintRepository).save(any(ServedHint.class));
         verify(servedHintRepository, never()).existsByStudentIdAndItemRefAndRunId(7L, itemRef, "run-1");
+    }
+
+    @Test
+    void twoCopiesOfTheSameLessonOpenedOnTheSameClockTickHaveDistinctRunIds() {
+        SecurityProperties settings = ConfigFixtures.securityProperties("unit-test-hint-signing-key", 60_000L, false);
+        HintRunSigner signer = new HintRunSigner(settings);
+        LocalDateTime start = LocalDateTime.of(2026, 11, 21, 9, 0);
+        String scope = "LESSON#42#";
+        String first = signer.sign(7L, scope, start);
+        String second = signer.sign(7L, scope, start);
+
+        String firstId = signer.requireId(7L, scope, start, first);
+        String secondId = signer.requireId(7L, scope, start, second);
+        assertThat(firstId).isNotNull().isNotEqualTo(secondId);
+        assertThat(secondId).isNotNull();
     }
 
     private static StudentProfile student(long id) {

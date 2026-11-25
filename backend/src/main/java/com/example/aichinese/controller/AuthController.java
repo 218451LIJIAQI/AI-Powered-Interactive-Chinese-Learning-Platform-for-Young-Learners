@@ -1,6 +1,5 @@
 package com.example.aichinese.controller;
 
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -54,10 +53,7 @@ public class AuthController {
             HttpServletRequest httpRequest) {
         String clientIp = clientIpResolver.resolve(httpRequest);
         publicAuthRequestLimiter.checkLoginAllowed(clientIp);
-        AuthSessionResponse session = authService.login(
-                request,
-                clientIp,
-                httpRequest.getHeader(HttpHeaders.USER_AGENT));
+        AuthSessionResponse session = authService.login(request, clientIp);
         return refreshCookies.sessionResponse(httpRequest, "Login successful.", session);
     }
 
@@ -65,10 +61,7 @@ public class AuthController {
     public ResponseEntity<ApiResponse<AuthResponse>> refresh(HttpServletRequest httpRequest) {
         String clientIp = clientIpResolver.resolve(httpRequest);
         publicAuthRequestLimiter.checkRefreshAllowed(clientIp);
-        AuthSessionResponse session = authService.refreshSession(
-                refreshCookies.readRefreshToken(httpRequest),
-                clientIp,
-                httpRequest.getHeader(HttpHeaders.USER_AGENT));
+        AuthSessionResponse session = authService.refreshSession(refreshCookies.readRefreshToken(httpRequest));
         return refreshCookies.sessionResponse(httpRequest, "Session refreshed successfully.", session);
     }
 

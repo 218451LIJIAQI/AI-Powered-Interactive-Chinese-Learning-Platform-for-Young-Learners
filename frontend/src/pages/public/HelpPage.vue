@@ -60,7 +60,7 @@
           :aria-labelledby="`${topic.id}-title`"
         >
           <h2 :id="`${topic.id}-title`" class="card-title">{{ topic.title }}</h2>
-          <ul class="row-list help-questions">
+          <ul class="row-list is-flush help-questions">
             <li v-for="item in topic.items" :key="item.id">
               <div class="row-list-copy">
                 <h3 class="row-list-title">{{ item.question }}</h3>
@@ -125,7 +125,7 @@
                   :placeholder="t('help.emailPlaceholder')"
                   :aria-invalid="Boolean(emailError)"
                   :aria-describedby="emailError ? 'help-email-error' : undefined"
-                  @blur="checkEmailOnBlur"
+                  @blur="validateEmail"
                 />
                 <p v-if="emailError" id="help-email-error" class="field-error">
                   <IconGlyph name="alert" :size="14" />{{ t(emailError) }}
@@ -158,7 +158,7 @@
                 :placeholder="t('help.messagePlaceholder')"
                 :aria-invalid="Boolean(messageError)"
                 :aria-describedby="messageError ? 'help-message-error help-message-hint' : 'help-message-hint'"
-                @blur="checkMessageOnBlur"
+                @blur="validateMessage"
               />
               <p v-if="messageError" id="help-message-error" class="field-error">
                 <IconGlyph name="alert" :size="14" />{{ t(messageError) }}
@@ -179,6 +179,7 @@
                 :aria-busy="sending"
                 :aria-describedby="sendError ? 'help-send-error' : undefined"
                 data-testid="help-send"
+                @mousedown.prevent
               >
                 {{ sendLabel }}
               </button>
@@ -194,22 +195,24 @@
 import { computed, nextTick, reactive, ref, shallowRef, toRef, useTemplateRef, watch, watchPostEffect } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
-import { publicOpsApi } from '@/api/ops'
+import { publicApi } from '@/api/services'
 import AppToast from '@/components/common/AppToast.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import { usePublicSectionNav } from '@/components/public/usePublicSectionNav'
-import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
+import PageHeaderBlock from '@/components/layout/PageHeaderBlock.vue'
 import { useFieldCheck } from '@/composables/useFieldCheck'
 import { useLocalMessages } from '@/composables/useLocalMessages'
+import { configuredTavusDeploymentId } from '@/composables/usePublicPlatformSettings'
 import { useToast } from '@/composables/useToast'
 import { helpMessages } from '@/plugins/helpMessages'
 import { opsLabelMessages } from '@/plugins/opsLabelMessages'
 import { appLocale } from '@/plugins/i18n'
-import type { SupportTopic } from '@/types/ops'
-import { resolveApiError } from '@/utils/apiError'
+import type { SelectableSupportTopic } from '@/types/ops'
+import { isNetworkError, resolveApiError } from '@/utils/apiError'
 import { isValidEmail } from '@/utils/email'
+import { restoreFocusIfDropped } from '@/utils/focus'
 import { SUPPORT_TOPICS, SUPPORT_TOPIC_KEYS } from '@/utils/opsLabels'
-import { queryOption } from '@/utils/queryText'
+import { queryOption } from '@/utils/routeQuery'
 import { truncateText } from '@/utils/truncateText'
 
 // The server's limits (VisitorSupportRequest): the fields stop typed and pasted text there.
@@ -238,7 +241,7 @@ const { toast, showToast } = useToast()
 
 const search = ref('')
 const query = computed(() => search.value.trim())
-const { activeId, pinSection, sync } = usePublicSectionNav(
+const { activeId, pinSection } = usePublicSectionNav(
   () => (query.value ? [] : railTopics),
   useTemplateRef<HTMLElement>('rail'),
   () => route.hash,
@@ -247,6 +250,14 @@ const shownQuery = computed(() =>
   query.value.length > SHOWN_QUERY_LENGTH ? `${truncateText(query.value, SHOWN_QUERY_LENGTH)}…` : query.value,
 )
 
+const hasLiveVideo = Boolean(configuredTavusDeploymentId())
+
+function itemAnswer(item: (typeof TOPICS)[number]['items'][number]): string {
+  if (item !== 'aiData') return t(`help.${item}Answer`)
+  const parts = [t('help.aiDataAnswer'), ...(hasLiveVideo ? [t('help.aiDataLiveVideo')] : []), t('help.aiDataCaution')]
+  return parts.join(appLocale.value === 'zh-CN' ? '' : ' ')
+}
+
 const localizedTopics = computed(() =>
   TOPICS.map((topic) => ({
     id: topic.id,
@@ -254,7 +265,7 @@ const localizedTopics = computed(() =>
     items: topic.items.map((item) => ({
       id: item,
       question: t(`help.${item}Question`),
-      answer: t(`help.${item}Answer`),
+      answer: itemAnswer(item),
       guidanceLink: item === 'aiData' ? t('help.aiDataLink') : undefined,
     })),
   })),
@@ -299,7 +310,6 @@ const messageInput = useTemplateRef<HTMLTextAreaElement>('messageInput')
 function clearSearch(): void {
   search.value = ''
   searchInput.value?.focus()
-  void nextTick(sync)
 }
 
 // The message form, for everyone (support answers by e-mail). It starts empty, on the topic a link asks for.
@@ -313,7 +323,7 @@ watchPostEffect(() => {
  * The topic a link opens the form on (`/help?topic=SAFETY#contact`: the Safety centre's "Report a concern"), when it is
  * one the form offers; anything else is ignored.
  */
-const form = reactive({ email: '', topic: 'ACCOUNT' as SupportTopic, message: '' })
+const form = reactive({ email: '', topic: 'ACCOUNT' as SelectableSupportTopic, message: '' })
 watch(
   () => route.query.topic,
   (value) => {
@@ -324,20 +334,14 @@ watch(
 )
 
 // The errors are message keys, so an error shown under a field follows a language switch.
-const {
-  error: emailError,
-  validate: validateEmail,
-  validateOnBlur: checkEmailOnBlur,
-} = useFieldCheck(toRef(form, 'email'), (value) => {
+const { error: emailError, validate: validateEmail } = useFieldCheck(toRef(form, 'email'), (value) => {
   const email = value.trim()
   if (!email) return 'help.emailRequired'
   return isValidEmail(email) ? null : 'help.emailInvalid'
 })
-const {
-  error: messageError,
-  validate: validateMessage,
-  validateOnBlur: checkMessageOnBlur,
-} = useFieldCheck(toRef(form, 'message'), (value) => (value.trim() ? null : 'help.messageRequired'))
+const { error: messageError, validate: validateMessage } = useFieldCheck(toRef(form, 'message'), (value) =>
+  value.trim() ? null : 'help.messageRequired',
+)
 const hasErrors = computed(() => Boolean(emailError.value || messageError.value))
 const sending = ref(false)
 /** Why the last send failed; the banner's text is built from it, so it follows a language switch. */
@@ -349,10 +353,7 @@ const sendAnotherButton = useTemplateRef<HTMLButtonElement>('sendAnotherButton')
 const sendError = computed(() => {
   if (!sendFailure.value) return null
   const { reason } = sendFailure.value
-  const errorLike = reason as { request?: unknown; response?: unknown; code?: unknown } | null
-  // Only true no-response non-timeout transport errors ask the visitor to check their connection.
-  const isNetworkFailure = Boolean(errorLike?.request) && !errorLike?.response && errorLike?.code !== 'ECONNABORTED'
-  const cause = isNetworkFailure ? t('help.checkConnection') : resolveApiError(reason, t('help.sendFailedRetry'))
+  const cause = isNetworkError(reason) ? t('help.checkConnection') : resolveApiError(reason, t('help.sendFailedRetry'))
   return t('help.sendFailed', { reason: cause })
 })
 const sendLabel = computed(() => {
@@ -374,7 +375,7 @@ async function submit(): Promise<void> {
   }
   sending.value = true
   try {
-    const answer = await publicOpsApi.sendHelpMessage({
+    const answer = await publicApi.sendHelpMessage({
       email: form.email.trim().toLowerCase(),
       topic: form.topic,
       message: form.message.trim(),
@@ -390,17 +391,19 @@ async function submit(): Promise<void> {
   } finally {
     sending.value = false
   }
-  await nextTick()
   if (sentEmail.value !== null) {
-    // The form made way for the confirmation in the same card; the toast reads the result out, and the focus waits
-    // on the next step there.
-    sendAnotherButton.value?.focus()
+    // The form made way for the confirmation in the same card; move focus to the next step only if focus was inside
+    // the contact card or dropped to body (never steal focus if the visitor moved elsewhere while sending).
+    await nextTick()
+    const active = document.activeElement
+    if (!active || active === document.body || !active.isConnected || contactSection.value?.contains(active)) {
+      sendAnotherButton.value?.focus()
+    }
     return
   }
   // The button is disabled while it sends, and the browser takes the focus from it: it gets the focus back (now
   // "Try again", in view where the visitor is). A visitor who sent the form from a field (Enter) stays there.
-  const active = document.activeElement
-  if (!active || active === document.body) sendButton.value?.focus()
+  await restoreFocusIfDropped(() => sendButton.value)
 }
 
 /** Back to the form, in the same place: the address and topic stay, the message starts empty. */

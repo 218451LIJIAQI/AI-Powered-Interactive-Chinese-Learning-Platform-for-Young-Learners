@@ -36,10 +36,18 @@ public class ScheduledJobRunner {
         LocalDateTime serverNow = LocalDateTime.ofInstant(clock.instant(), ZoneId.systemDefault());
         Integer result = transactionTemplate.execute(status -> {
             if (lastRun.isEmpty()) {
-                settingRepository.lockOrCreateEmpty(key);
+                settingRepository.lockOrCreateEmpty(key, serverNow);
             }
             return settingRepository.advanceValue(key, day, serverNow) == 0 ? 0 : job.getAsInt();
         });
         return result == null ? 0 : result;
+    }
+
+    /**
+     * Claims {@code period} in a short transaction and releases the {@code system_settings} row lock immediately, so
+     * multi-batch jobs can process recipients in bounded chunks outside the settings lock.
+     */
+    public boolean claimPeriod(String key, LocalDate period, Clock clock) {
+        return runOnce(key, period, clock, () -> 1) > 0;
     }
 }

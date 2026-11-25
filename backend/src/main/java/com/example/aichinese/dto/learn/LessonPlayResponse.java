@@ -1,5 +1,7 @@
 package com.example.aichinese.dto.learn;
 
+import static com.example.aichinese.dto.DtoNormalization.redactValue;
+
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -19,4 +21,14 @@ public record LessonPlayResponse(
         List<QuestionView> questions,
         LocalDateTime runStartedAt,
         String runSignature) {
+
+    @Override
+    public String toString() {
+        return "LessonPlayResponse[title=" + title
+                + ", kind=" + kind
+                + ", passPercent=" + passPercent
+                + ", questions=" + (questions == null ? 0 : questions.size())
+                + ", runStartedAt=" + runStartedAt
+                + ", runSignature=" + redactValue(runSignature) + "]";
+    }
 }

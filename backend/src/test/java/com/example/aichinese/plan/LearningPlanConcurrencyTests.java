@@ -1,13 +1,12 @@
 package com.example.aichinese.plan;
 
+import static com.example.aichinese.support.ConcurrentTransactions.withAfterMethod;
 import static com.example.aichinese.support.ConcurrentTransactions.withEarlierRead;
 import static com.example.aichinese.support.ConcurrentTransactions.withPausedOperation;
 import static com.example.aichinese.support.LearningApiTestClient.ADMIN_EMAIL;
 import static com.example.aichinese.support.LearningApiTestClient.uniqueEmail;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 
 import java.sql.Timestamp;
@@ -23,11 +22,9 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.server.ResponseStatusException;
 
 import com.example.aichinese.dto.learn.LevelCheckNextRequest;
 import com.example.aichinese.dto.learn.LevelCheckNextRequest.Answer;
@@ -79,7 +76,7 @@ class LearningPlanConcurrencyTests extends ApiIntegrationTest {
     @MockitoBean
     private PlanAdvisor advisor;
 
-    @MockitoSpyBean
+    @Autowired
     private LevelCheckService levelCheck;
 
     private SecurityUserDetails principal;
@@ -96,7 +93,7 @@ class LearningPlanConcurrencyTests extends ApiIntegrationTest {
     @ParameterizedTest
     @ValueSource(strings = { "deleted", "signed_out", "disabled" })
     void draftCannotSaveAfterTheAccountOrSessionEnds(String action) {
-        assertThatThrownBy(() -> duringDraft(this::build, () -> {
+        assertHttpError(() -> duringDraft(this::build, () -> {
             switch (action) {
                 case "deleted" -> deletion.delete(principal, principal.getUsername());
                 case "signed_out" -> auth.logout(principal);
@@ -104,8 +101,7 @@ class LearningPlanConcurrencyTests extends ApiIntegrationTest {
                         principal.getUserId(), "Account no longer available");
                 default -> throw new AssertionError(action);
             }
-        })).isInstanceOfSatisfying(ResponseStatusException.class,
-                failure -> assertThat(failure.getStatusCode().value()).isEqualTo(401));
+        }), 401);
         assertThat(jdbc.queryForObject("select count(*) from learning_plans where student_id = ?",
                 Long.class, studentId)).isZero();
         assertThat(studentProfileRepository.findById(studentId).orElseThrow().getPlanSetupState())
@@ -116,16 +112,14 @@ class LearningPlanConcurrencyTests extends ApiIntegrationTest {
     @ValueSource(strings = { "goal", "retake" })
     void delayedDraftCannotReplaceANewerGoal(String action) throws Exception {
         build();
-        List<Answer> correct = finishCheck(true);
-        assertThatThrownBy(() -> duringDraft(() -> {
+        FinishedCheck correct = finishCheck(true);
+        assertHttpError(() -> duringDraft(() -> {
             switch (action) {
                 case "goal" -> updateGoal("An earlier goal", PlanPace.HOURS_2_PLUS);
                 case "retake" -> retake(correct);
                 default -> throw new AssertionError(action);
             }
-        }, () -> updateGoal(LATEST, PlanPace.UNDER_30_MIN)))
-                .isInstanceOfSatisfying(ResponseStatusException.class,
-                        failure -> assertThat(failure.getStatusCode().value()).isEqualTo(409));
+        }, () -> updateGoal(LATEST, PlanPace.UNDER_30_MIN)), 409);
         LearningPlan saved = current();
         assertThat(saved.getVersion()).isEqualTo(2);
         assertThat(saved.getGoalText()).isEqualTo(LATEST);
@@ -137,17 +131,13 @@ class LearningPlanConcurrencyTests extends ApiIntegrationTest {
     @Test
     void buildIsRefusedOnceAPlanIsAlreadyActive() {
         build();
-        assertThatThrownBy(() -> buildDraft(LATEST, PlanPace.UNDER_30_MIN))
-                .isInstanceOfSatisfying(ResponseStatusException.class,
-                        failure -> assertThat(failure.getStatusCode().value()).isEqualTo(409));
+        assertHttpError(() -> buildDraft(LATEST, PlanPace.UNDER_30_MIN), 409);
         assertThat(plans.findFirstByStudentIdAndConfirmedFalseOrderByVersionDesc(studentId)).isEmpty();
     }
 
     @Test
     void aFirstDraftCannotReplaceAPlanStartedWhileItWasWaiting() {
-        assertThatThrownBy(() -> duringDraft(this::build, () -> build(LATEST, PlanPace.UNDER_30_MIN)))
-                .isInstanceOfSatisfying(ResponseStatusException.class,
-                        failure -> assertThat(failure.getStatusCode().value()).isEqualTo(409));
+        assertHttpError(() -> duringDraft(this::build, () -> build(LATEST, PlanPace.UNDER_30_MIN)), 409);
         LearningPlan saved = current();
         assertThat(saved.getVersion()).isEqualTo(1);
         assertThat(saved.getGoalText()).isEqualTo(LATEST);
@@ -158,12 +148,10 @@ class LearningPlanConcurrencyTests extends ApiIntegrationTest {
     void aPendingDraftCannotBringBackASkippedSetup(boolean editing) {
         if (editing) buildDraft(ORIGINAL, PlanPace.HOURS_1_TO_2);
 
-        assertThatThrownBy(() -> duringDraft(() -> {
+        assertHttpError(() -> duringDraft(() -> {
             if (editing) updateGoal(LATEST, PlanPace.UNDER_30_MIN);
             else buildDraft(ORIGINAL, PlanPace.HOURS_1_TO_2);
-        }, () -> service.skip(principal)))
-                .isInstanceOfSatisfying(ResponseStatusException.class,
-                        failure -> assertThat(failure.getStatusCode().value()).isEqualTo(409));
+        }, () -> service.skip(principal)), 409);
 
         assertThat(plans.findFirstByStudentIdAndConfirmedFalseOrderByVersionDesc(studentId)).isEmpty();
         assertThat(studentProfileRepository.findById(studentId).orElseThrow().getPlanSetupState())
@@ -174,10 +162,8 @@ class LearningPlanConcurrencyTests extends ApiIntegrationTest {
     void aDelayedGoalDraftCannotReplaceANewerDraft() {
         buildDraft(ORIGINAL, PlanPace.HOURS_1_TO_2);
 
-        assertThatThrownBy(() -> duringDraft(() -> updateGoal("An earlier goal", PlanPace.HOURS_2_PLUS),
-                () -> updateGoal(LATEST, PlanPace.UNDER_30_MIN)))
-                .isInstanceOfSatisfying(ResponseStatusException.class,
-                        failure -> assertThat(failure.getStatusCode().value()).isEqualTo(409));
+        assertHttpError(() -> duringDraft(() -> updateGoal("An earlier goal", PlanPace.HOURS_2_PLUS),
+                () -> updateGoal(LATEST, PlanPace.UNDER_30_MIN)), 409);
 
         LearningPlan saved = plans.findFirstByStudentIdAndConfirmedFalseOrderByVersionDesc(studentId).orElseThrow();
         assertThat(saved.getGoalText()).isEqualTo(LATEST);
@@ -188,11 +174,9 @@ class LearningPlanConcurrencyTests extends ApiIntegrationTest {
     @ValueSource(booleans = { true, false })
     void goalDraftCannotOverwriteANewerLevelCheck(boolean higherLevel) throws Exception {
         build();
-        List<Answer> answers = finishCheck(higherLevel);
-        assertThatThrownBy(() -> duringDraft(() -> updateGoal("An earlier goal", PlanPace.HOURS_2_PLUS),
-                () -> retake(answers)))
-                .isInstanceOfSatisfying(ResponseStatusException.class,
-                        failure -> assertThat(failure.getStatusCode().value()).isEqualTo(409));
+        FinishedCheck check = finishCheck(higherLevel);
+        assertHttpError(() -> duringDraft(() -> updateGoal("An earlier goal", PlanPace.HOURS_2_PLUS),
+                () -> retake(check)), 409);
         LearningPlan saved = current();
         assertThat(saved.getGoalText()).isEqualTo(ORIGINAL);
         assertThat(saved.getLevelCheckedAt()).isNotNull();
@@ -205,20 +189,13 @@ class LearningPlanConcurrencyTests extends ApiIntegrationTest {
     void unchangedLevelRetakeCannotWriteAfterDeletionOrANewerGoal(boolean deleted) throws Exception {
         build();
         Long originalId = current().getId();
-        List<Answer> answers = finishCheck(false);
-        AtomicBoolean first = new AtomicBoolean(true);
-        assertThatThrownBy(() -> withPausedOperation(pause -> {
-            doAnswer(invocation -> {
-                Object result = invocation.callRealMethod();
-                if (first.getAndSet(false)) pause.run();
-                return result;
-            }).when(levelCheck).evaluate(any(), any());
-            retake(answers);
-        }, () -> {
-            if (deleted) deletion.delete(principal, principal.getUsername());
-            else updateGoal(LATEST, PlanPace.UNDER_30_MIN);
-        })).isInstanceOfSatisfying(ResponseStatusException.class,
-                failure -> assertThat(failure.getStatusCode().value()).isEqualTo(deleted ? 401 : 409));
+        FinishedCheck check = finishCheck(false);
+        assertHttpError(() -> withPausedOperation(
+                pause -> withAfterMethod(levelCheck, "evaluate", pause, () -> retake(check)),
+                () -> {
+                    if (deleted) deletion.delete(principal, principal.getUsername());
+                    else updateGoal(LATEST, PlanPace.UNDER_30_MIN);
+                }), deleted ? 401 : 409);
         assertThat(plans.findById(originalId).orElseThrow().getLevelCheckedAt()).isNull();
         assertThat(current().getGoalText()).isEqualTo(deleted ? null : LATEST);
     }
@@ -300,24 +277,28 @@ class LearningPlanConcurrencyTests extends ApiIntegrationTest {
         service.updateGoal(principal, new PlanRequests.UpdateGoalRequest(goal(words, pace), "en"));
     }
 
-    private void retake(List<Answer> answers) {
-        service.retake(principal, new PlanRequests.RetakeRequest(answers, "en"));
+    private record FinishedCheck(List<Answer> answers, String runToken) {
+    }
+
+    private void retake(FinishedCheck check) {
+        service.retake(principal, new PlanRequests.RetakeRequest(check.answers(), "en", check.runToken()));
     }
 
     private LearningPlan current() {
         return plans.findFirstByStudentIdAndActiveTrueOrderByVersionDesc(studentId).orElseThrow();
     }
 
-    private List<Answer> finishCheck(boolean correct) {
+    private FinishedCheck finishCheck(boolean correct) {
         List<Answer> answers = new ArrayList<>();
-        var step = levelCheck.next(new LevelCheckNextRequest(MandarinLevel.NEW_TO_MANDARIN, answers));
+        var step = levelCheck.next(principal, new LevelCheckNextRequest(MandarinLevel.NEW_TO_MANDARIN, answers, null));
         while (!step.done()) {
             Long questionId = step.next().id();
             Long optionId = correct ? rightLevelCheckOption(questionId) : null;
             answers.add(new Answer(questionId, optionId));
-            step = levelCheck.next(new LevelCheckNextRequest(MandarinLevel.NEW_TO_MANDARIN, answers));
+            step = levelCheck.next(principal,
+                    new LevelCheckNextRequest(MandarinLevel.NEW_TO_MANDARIN, answers, step.runToken()));
         }
-        return answers;
+        return new FinishedCheck(answers, step.runToken());
     }
 
     private static PlanRequests.GoalInput goal(String words, PlanPace pace) {
@@ -325,6 +306,6 @@ class LearningPlanConcurrencyTests extends ApiIntegrationTest {
     }
 
     private static PlanRequests.LevelCheckInput skippedCheck() {
-        return new PlanRequests.LevelCheckInput(PlanSelfLevel.NEW_TO_MANDARIN, true, List.of());
+        return new PlanRequests.LevelCheckInput(PlanSelfLevel.NEW_TO_MANDARIN, true, List.of(), null);
     }
 }

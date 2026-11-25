@@ -14,10 +14,11 @@
           type="email"
           autocomplete="email"
           required
+          maxlength="150"
           :placeholder="t('recovery.emailPlaceholder')"
           :aria-invalid="Boolean(emailError)"
           :aria-describedby="emailError ? 'forgot-email-error' : undefined"
-          @blur="checkEmailOnBlur"
+          @blur="validateEmail"
         />
         <p v-if="emailError" id="forgot-email-error" class="field-error">
           <IconGlyph name="alert" :size="14" />{{ t(emailError) }}
@@ -48,6 +49,7 @@
         :aria-busy="submitting"
         :aria-describedby="sendFailure ? 'forgot-send-error' : sent ? 'forgot-sent' : undefined"
         data-testid="forgot-submit"
+        @mousedown.prevent
       >
         <span>{{ submitLabel }}</span>
         <IconGlyph v-if="!sent" name="chevronRight" :size="18" />
@@ -76,6 +78,7 @@ import { useToast } from '@/composables/useToast'
 import { recoveryMessages } from '@/plugins/recoveryMessages'
 import { resolveApiError } from '@/utils/apiError'
 import { isValidEmail } from '@/utils/email'
+import { restoreFocusIfDropped } from '@/utils/focus'
 import { getSessionStorage, safeGetItem, safeRemoveItem, storageKeys } from '@/utils/storage'
 
 const { t } = useLocalMessages({ recovery: recoveryMessages })
@@ -89,11 +92,9 @@ const sent = ref(false)
 const submitting = ref(false)
 const sendFailure = shallowRef<{ reason: unknown } | null>(null)
 
-const {
-  error: emailError,
-  validate: validateEmail,
-  validateOnBlur: checkEmailOnBlur,
-} = useFieldCheck(email, (value) => (isValidEmail(value.trim()) ? null : 'recovery.emailInvalid'))
+const { error: emailError, validate: validateEmail } = useFieldCheck(email, (value) =>
+  isValidEmail(value.trim()) ? null : 'recovery.emailInvalid',
+)
 
 const submitLabel = computed(() => {
   if (submitting.value) return t('common.sending')
@@ -134,10 +135,7 @@ async function submit(): Promise<void> {
     if (normalizedEmail.value === address) sendFailure.value = { reason }
   } finally {
     submitting.value = false
-    if (hadButtonFocus) {
-      await nextTick()
-      if (!document.activeElement || document.activeElement === document.body) submitButton.value?.focus()
-    }
+    if (hadButtonFocus) await restoreFocusIfDropped(() => submitButton.value)
   }
 }
 </script>

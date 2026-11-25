@@ -1,7 +1,7 @@
-import { expect, test, type Locator, type Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 
 import { GOAL_BONUS_XP, numberIn, passRankUp, sidebarStatus, signInAmira } from './studentSupport'
-import { expectFocusMode, expectLeaveStep, sidebar } from './support'
+import { expect, expectFocusMode, expectLeaveStep, sidebar, test } from './support'
 
 test.describe('Practice', () => {
   test.describe.configure({ mode: 'serial' })
@@ -154,6 +154,7 @@ test.describe('Practice', () => {
   test('Matching pairs words with meanings, grades the board and shows the finished result', async ({ page }) => {
     await signInAmira(page, '/student/practice/matching')
     const sets = page.getByRole('navigation', { name: 'Practice sets' })
+    await sets.getByRole('button', { name: /^HSK 1 \(Basic\)/ }).click()
     await sets.getByRole('link', { name: /^Numbers Match/ }).click()
     await expect(page).toHaveURL(/\/student\/practice\/matching\?set=\d+$/)
     await expect(page.getByText('0 of 4 paired · click a word, then its meaning')).toBeVisible()
@@ -197,9 +198,10 @@ test.describe('Practice', () => {
     const filters = mistakes.getByRole('group', { name: 'Show mistakes from' })
     await expect(filters.getByRole('button')).toHaveText([`All · ${total}`, 'Learn · 2', `Practice · ${total - 2}`])
     await expect(filters.getByRole('button', { name: `All · ${total}` })).toHaveAttribute('aria-pressed', 'true')
-    // Six rows at most, the newest first; the review takes them all.
-    await expect(mistakes.getByRole('listitem')).toHaveCount(Math.min(total, 6))
-    if (total > 6) await expect(mistakes).toContainText(`+${total - 6} more`)
+    // Six rows at most, the newest first; the review takes them all (6 seeded + 机场 from the flashcard test).
+    expect(total).toBeGreaterThan(6)
+    await expect(mistakes.getByRole('listitem')).toHaveCount(6)
+    await expect(mistakes).toContainText(`+${total - 6} more`)
     // What the review takes: up to 20 mistakes, about half a minute each.
     await expect(mistakes).toContainText(`· about ${Math.ceil(Math.min(total, 20) / 2)} min · +10 XP`)
 

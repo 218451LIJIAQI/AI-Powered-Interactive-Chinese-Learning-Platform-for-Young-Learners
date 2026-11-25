@@ -2,10 +2,8 @@ package com.example.aichinese.config.seed;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 import org.junit.jupiter.api.Test;
@@ -83,19 +81,12 @@ class LevelCheckContentTests {
      */
     @Test
     void earlierSkillsNeverRevealAnswersToLaterPinyinQuestions() {
-        Map<LevelCheckSkill, Integer> skillOrder = new EnumMap<>(LevelCheckSkill.class);
-        LevelCheckSkill[] values = LevelCheckSkill.values();
-        for (int index = 0; index < values.length; index++) {
-            skillOrder.put(values[index], index);
-        }
-        int pinyinIndex = skillOrder.get(LevelCheckSkill.PINYIN);
-
         Set<String> exposedHanziWithPinyin = new HashSet<>();
         for (Request question : QUESTIONS) {
             if (question.status() != PublishStatus.PUBLISHED) {
                 continue;
             }
-            if (skillOrder.get(question.skill()) < pinyinIndex
+            if (question.skill().compareTo(LevelCheckSkill.PINYIN) < 0
                     && question.hanzi() != null && !question.hanzi().isBlank()
                     && question.pinyin() != null && !question.pinyin().isBlank()) {
                 exposedHanziWithPinyin.add(question.hanzi().strip());

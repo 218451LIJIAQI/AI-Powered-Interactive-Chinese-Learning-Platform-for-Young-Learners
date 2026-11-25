@@ -1,5 +1,7 @@
 package com.example.aichinese.dto.learn;
 
+import static com.example.aichinese.dto.DtoNormalization.redactLength;
+
 import com.example.aichinese.dto.PageResponse;
 import com.example.aichinese.entity.enums.LearnQuestionType;
 import com.example.aichinese.entity.enums.MistakeSource;
@@ -30,5 +32,15 @@ public record MistakeListResponse(
             String correctAnswer,
             boolean sureWrong,
             boolean stillLearning) {
+
+        @Override
+        public String toString() {
+            return "Row[id=" + id
+                    + ", source=" + source
+                    + ", type=" + type
+                    + ", yourAnswer=" + redactLength(yourAnswer)
+                    + ", sureWrong=" + sureWrong
+                    + ", stillLearning=" + stillLearning + "]";
+        }
     }
 }

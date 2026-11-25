@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/auth'
 
 import { resolveNavigation } from './guard'
 import { applyDocumentTitle } from './pageTitle'
+import { sessionExpiredRedirect } from './redirects'
 import { routes } from './routes'
 
 const SAFE_HASH_SELECTOR_PATTERN = /^#[A-Za-z][A-Za-z0-9_-]*$/
@@ -31,13 +32,7 @@ router.beforeEach((to) => resolveNavigation(to, useAuthStore()))
 
 // Defense in depth: if another tab signs out or a background 401 invalidates the session while a protected
 // route's lazy chunk is still downloading, catch it right before commit instead of mounting DashboardLayout unauthenticated.
-router.beforeResolve((to) => {
-  const requiredRoles = to.meta.roles
-  if (requiredRoles?.length && !useAuthStore().isAuthenticated) {
-    return { name: 'auth', query: { redirect: to.fullPath, reason: 'expired' } }
-  }
-  return true
-})
+router.beforeResolve((to) => (useAuthStore().isAuthenticated ? true : (sessionExpiredRedirect(to) ?? true)))
 
 // FRLANG02: the tab title follows the committed route and the interface language (App.vue re-applies it on change).
 router.afterEach((to, _from, failure) => {
@@ -48,4 +43,4 @@ router.onError(() => {
   clearClassNotice()
 })
 
-export { router, routes }
+export { router }

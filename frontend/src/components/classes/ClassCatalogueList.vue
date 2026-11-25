@@ -14,7 +14,6 @@
     v-else-if="resource.error.value"
     heading-tag="h2"
     tone="error"
-    icon="alert"
     :title="t('classCatalogue.loadErrorTitle')"
     :message="resource.error.value"
     @retry="resource.reload"
@@ -67,13 +66,13 @@ import FilterChips from '@/components/common/FilterChips.vue'
 import PaginationBar from '@/components/common/PaginationBar.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
 import { pauseDuringNavigation } from '@/composables/usePageNavigation'
-import { useClassCatalogue } from '@/composables/useClassCatalogue'
+import { useClassCatalogue } from './useClassCatalogue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { classCatalogueMessages } from '@/plugins/classCatalogueMessages'
 import { classesMessages } from '@/plugins/classesMessages'
 import type { PageResponse } from '@/types/api'
 import type { CatalogueQuery, ClassCard } from '@/types/classes'
-import { pageFromQuery, pageQuery } from '@/utils/pageQuery'
+import { pageFromQuery, pageQuery } from '@/utils/routeQuery'
 import '@/styles/classes.css'
 
 const props = withDefaults(

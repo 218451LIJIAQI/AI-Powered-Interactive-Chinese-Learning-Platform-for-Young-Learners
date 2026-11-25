@@ -1,6 +1,6 @@
 <template>
   <div class="page-stack">
-    <PageHeaderBlock :title="t('adminHome.pageTitle')" hide-title />
+    <h1 class="sr-only">{{ t('nav.dashboard') }}</h1>
 
     <!-- Loading: the cards' outline with placeholder lines (A1.06); the sidebar and header stay usable. -->
     <section
@@ -28,10 +28,9 @@
       v-else-if="!data"
       heading-tag="h2"
       tone="error"
-      icon="alert"
       spacious
       :title="t('adminHome.loadError')"
-      :message="dashboard.error.value ?? ''"
+      :message="dashboard.error.value"
       @retry="dashboard.reload"
     />
     <section v-else class="admin-home" aria-labelledby="admin-home-attention-title">
@@ -44,7 +43,7 @@
           :aria-labelledby="`admin-home-queue-${queue.key}`"
           :data-testid="`admin-home-queue-${queue.key}`"
         >
-          <header class="admin-section-head">
+          <header class="section-header">
             <h3 :id="`admin-home-queue-${queue.key}`" class="card-title title-with-count">
               <span class="admin-queue-icon"><IconGlyph :name="queue.icon" :size="19" /></span>
               {{ queue.title }}
@@ -82,13 +81,12 @@ import { computed } from 'vue'
 import { RouterLink, type RouteLocationRaw } from 'vue-router'
 
 import { adminOverviewApi } from '@/api/ops'
-import { reportReasonKey } from '@/components/ai/aiHelper'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
-import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { useResource } from '@/composables/useResource'
 import { adminDashboardMessages } from '@/plugins/adminDashboardMessages'
+import { reportReasonKey } from '@/plugins/aiSafetyMessages'
 import { formatBadgeCount, formatRelativeTime, formatShortDate } from '@/utils/format'
 import '@/styles/admin-shared.css'
 import '@/styles/ops-admin.css'
@@ -163,7 +161,10 @@ const queues = computed<Queue[]>(() => {
         key: `support-${request.id}`,
         title: request.subject,
         meta: t('adminHome.supportMeta', {
-          requester: request.requesterRole === 'VISITOR' ? t('adminHome.supportVisitor') : request.requesterName,
+          requester:
+            request.requesterRole === 'VISITOR'
+              ? t('adminHome.supportVisitor')
+              : (request.requesterName ?? t('adminHome.supportVisitor')),
           time: formatRelativeTime(request.updatedAt),
         }),
         to: { name: 'admin-support', query: { request: request.id } },

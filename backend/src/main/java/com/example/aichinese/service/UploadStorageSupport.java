@@ -52,12 +52,17 @@ final class UploadStorageSupport {
     private static final Set<String> MP4_BRANDS = Set.of(
             "isom",
             "iso2",
+            "iso5",
+            "iso6",
             "mp41",
             "mp42",
+            "mp71",
             "avc1",
+            "hev1",
+            "hvc1",
+            "av01",
             "dash",
             "m4v ",
-            "m4a ",
             "3gp4",
             "3gp5",
             "3gp6",
@@ -176,16 +181,15 @@ final class UploadStorageSupport {
         }
     }
 
-    /** Deletes after the metadata transaction commits, keeping the file if that transaction rolls back. */
-    static void deleteManagedFile(String configuredDirectory, UploadedFile uploadedFile) {
-        if (uploadedFile == null) {
-            return;
+    /** Captures upload identity and stored filename before bulk deletes detach potentially lazy proxies. */
+    record ManagedFileRef(Long id, String storedFileName) {
+        static ManagedFileRef of(UploadedFile file) {
+            return new ManagedFileRef(file.getId(), file.getStoredFileName());
         }
-        deleteManagedFiles(configuredDirectory, List.of(uploadedFile));
     }
 
     /** Resolves the managed directory once and schedules one after-commit deletion callback for the whole batch. */
-    static void deleteManagedFiles(String configuredDirectory, Collection<UploadedFile> uploadedFiles) {
+    static void deleteManagedFileRefs(String configuredDirectory, Collection<ManagedFileRef> uploadedFiles) {
         if (uploadedFiles == null || uploadedFiles.isEmpty()) {
             return;
         }
@@ -202,13 +206,13 @@ final class UploadStorageSupport {
             return;
         }
         List<Path> paths = new ArrayList<>(uploadedFiles.size());
-        for (UploadedFile uploadedFile : uploadedFiles) {
-            if (uploadedFile == null || !StringUtils.hasText(uploadedFile.getStoredFileName())) {
+        for (ManagedFileRef uploadedFile : uploadedFiles) {
+            if (uploadedFile == null || !StringUtils.hasText(uploadedFile.storedFileName())) {
                 continue;
             }
-            Optional<Path> target = tryResolveManagedPath(baseDirectory, uploadedFile.getStoredFileName());
+            Optional<Path> target = tryResolveManagedPath(baseDirectory, uploadedFile.storedFileName());
             if (target.isEmpty()) {
-                log.warn("Rejected invalid stored file name while deleting upload {}.", uploadedFile.getId());
+                log.warn("Rejected invalid stored file name while deleting upload {}.", uploadedFile.id());
             } else {
                 paths.add(target.get());
             }
@@ -284,11 +288,18 @@ final class UploadStorageSupport {
         return Optional.empty();
     }
 
-    private static Path realDirectory(Path directory, HttpStatus failureStatus, String failureMessage) {
+    private static Path realDirectory(Path directory, HttpStatus missingStatus, String missingMessage) {
         try {
             return directory.toRealPath();
+        } catch (NoSuchFileException exception) {
+            throw new ResponseStatusException(missingStatus, missingMessage, exception);
         } catch (IOException exception) {
-            throw new ResponseStatusException(failureStatus, failureMessage, exception);
+            log.warn("Could not access upload directory: {}", exception.getClass().getSimpleName());
+            ExceptionLogUtils.debugOrigin(log, exception);
+            throw new ResponseStatusException(
+                    INTERNAL_SERVER_ERROR,
+                    missingStatus == INTERNAL_SERVER_ERROR ? missingMessage : "Stored upload could not be accessed.",
+                    exception);
         }
     }
 
@@ -331,19 +342,41 @@ final class UploadStorageSupport {
         return expected.equals(actual);
     }
 
-    private static boolean hasFtypBox(byte[] bytes) {
-        return hasAsciiAt(bytes, 4, "ftyp");
+    /**
+     * Parses an ISO 14496-12 {@code ftyp} box (4-byte big-endian size, {@code "ftyp"}, 4-byte major brand, 4-byte
+     * minor version, and zero or more 4-byte compatible brands) and tests whether its major brand or any compatible
+     * brand inside the prefix matches {@code predicate}.
+     */
+    private static boolean hasFtypBrand(byte[] bytes, Predicate<String> brandPredicate) {
+        if (bytes.length < 16 || !hasAsciiAt(bytes, 4, "ftyp")) {
+            return false;
+        }
+        long boxSize = ((bytes[0] & 0xFFL) << 24)
+                | ((bytes[1] & 0xFFL) << 16)
+                | ((bytes[2] & 0xFFL) << 8)
+                | (bytes[3] & 0xFFL);
+        if (boxSize < 16 || (boxSize - 16) % 4 != 0) {
+            return false;
+        }
+        String majorBrand = readFourCc(bytes, 8);
+        if (brandPredicate.test(majorBrand)) {
+            return true;
+        }
+        int end = (int) Math.min(boxSize, bytes.length);
+        for (int offset = 16; offset + 4 <= end; offset += 4) {
+            if (brandPredicate.test(readFourCc(bytes, offset))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean isWebm(byte[] prefix) {
         return startsWith(prefix, 0x1A, 0x45, 0xDF, 0xA3) && new String(prefix, StandardCharsets.US_ASCII).contains("webm");
     }
 
-    private static String readBrand(byte[] bytes) {
-        if (bytes.length < 12) {
-            return "";
-        }
-        return new String(bytes, 8, 4, StandardCharsets.US_ASCII).toLowerCase(Locale.ROOT);
+    private static String readFourCc(byte[] bytes, int offset) {
+        return new String(bytes, offset, 4, StandardCharsets.US_ASCII).toLowerCase(Locale.ROOT);
     }
 
     /** What one kind of upload accepts, with its message for each failed check (all share the "too large" one). */
@@ -366,11 +399,11 @@ final class UploadStorageSupport {
         PNG(Set.of(".png"), Set.of("image/png"),
                 prefix -> startsWith(prefix, 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)),
         MP4(Set.of(".mp4"), Set.of("video/mp4"),
-                prefix -> hasFtypBox(prefix) && MP4_BRANDS.contains(readBrand(prefix))),
+                prefix -> hasFtypBrand(prefix, MP4_BRANDS::contains)),
         WEBM_VIDEO(Set.of(".webm"), Set.of("video/webm"), UploadStorageSupport::isWebm),
         WEBM_AUDIO(Set.of(".webm"), Set.of("audio/webm"), UploadStorageSupport::isWebm),
         QUICKTIME(Set.of(".mov"), Set.of("video/quicktime"),
-                prefix -> hasFtypBox(prefix) && "qt  ".equals(readBrand(prefix))),
+                prefix -> hasFtypBrand(prefix, "qt  "::equals)),
         WAV(Set.of(".wav"), Set.of("audio/wav", "audio/x-wav"),
                 prefix -> hasAsciiAt(prefix, 0, "RIFF") && hasAsciiAt(prefix, 8, "WAVE")),
         MP3(Set.of(".mp3", ".mpeg"), Set.of("audio/mpeg", "audio/mp3"),

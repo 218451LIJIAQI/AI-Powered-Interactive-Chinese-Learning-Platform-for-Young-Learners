@@ -1,7 +1,7 @@
 type UploadKind = 'audio' | 'image' | 'video'
 
 /** Why the server would refuse a chosen file. */
-export type UploadFileIssue = 'fileType' | 'fileEmpty' | 'fileTooLarge'
+type UploadFileIssue = 'fileType' | 'fileEmpty' | 'fileTooLarge'
 
 interface UploadFormat {
   extensions: string[]

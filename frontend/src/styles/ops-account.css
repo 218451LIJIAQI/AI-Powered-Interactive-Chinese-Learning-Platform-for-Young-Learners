@@ -43,7 +43,7 @@
   font-size: var(--type-caption-size);
   font-weight: var(--font-weight-strong);
   letter-spacing: 0.04em;
-  line-height: 18px;
+  line-height: var(--line-height-normal);
   text-transform: uppercase;
 }
 
@@ -58,11 +58,6 @@
 .notifications-list > li {
   align-items: flex-start;
   justify-content: flex-start;
-}
-
-.notifications-list > li:focus-visible {
-  outline: var(--border-width-focus) solid var(--focus-ring-color);
-  outline-offset: var(--focus-ring-offset);
 }
 
 .notifications-item-message {
@@ -94,14 +89,6 @@
 .notifications-list > li.is-unread .notifications-type {
   background: var(--tint-bg);
   color: var(--tint-fg);
-}
-
-.notifications-list > li:first-child {
-  padding-top: 0;
-}
-
-.notifications-list > li:last-child {
-  padding-bottom: 0;
 }
 
 .notifications-item-copy p {
@@ -172,14 +159,6 @@
   cursor: pointer;
 }
 
-.account-preferences > li:first-child {
-  padding-top: 0;
-}
-
-.account-preferences > li:last-child {
-  padding-bottom: 0;
-}
-
 .account-preferences .tag {
   flex: 0 0 auto;
   white-space: nowrap;
@@ -228,15 +207,17 @@
   flex: 0 0 auto;
 }
 
-@media (max-width: 40rem) {
+@media (max-width: 42rem) {
   .notifications-list > li {
     flex-wrap: wrap;
   }
 
+  .notifications-item-copy {
+    flex: 1 1 calc(100% - 36px - var(--space-4));
+  }
+
   .notifications-list .row-list-actions {
-    flex: 1 0 100%;
     flex-wrap: wrap;
-    justify-content: flex-end;
-    min-width: 0;
+    margin-inline-start: calc(36px + var(--space-4));
   }
 }

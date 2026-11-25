@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { expectRequests, installAxiosCapture, restoreAxiosAdapterAfterEach } from '@/test/axiosCapture'
-import type { HintReport, LevelCheckQuestionPayload, PracticeSetPayload } from '@/types/learn'
+import type { LevelCheckQuestionPayload, PracticeSetPayload } from '@/types/learn'
 
 import { adminLearningApi, hintApi, learnApi, levelCheckApi, mistakesApi, practiceApi, xpApi } from './learn'
 
@@ -22,13 +22,6 @@ const QUESTION: LevelCheckQuestionPayload = {
     { text: 'Hello', correct: true, explanation: null },
     { text: 'Goodbye', correct: false, explanation: null },
   ],
-}
-
-const HINT_REPORT: HintReport = {
-  reasonCategory: 'INCORRECT_CONTENT',
-  description: null,
-  promptSnapshot: 'LISTENING #14 / 2 · /student/practice/listening?set=14',
-  aiResponseSnapshot: 'It isn’t answer 2: 你好 (nǐ hǎo).',
 }
 
 const SET: PracticeSetPayload = {
@@ -60,12 +53,12 @@ describe('Learn API', () => {
       [() => practiceApi.candidates(3, 'w1', 'nihao'), 'POST /students/practice/typing/sets/3/candidates'],
       [() => hintApi.settings(), 'GET /students/hint-settings'],
       [() => hintApi.setMode('OFF'), 'PUT /students/hint-settings'],
-      [() => hintApi.report(HINT_REPORT), 'POST /ai/reports'],
       [() => mistakesApi.list(null, 20), 'GET /students/mistakes'],
       [() => mistakesApi.review(), 'GET /students/mistakes/review'],
       [() => mistakesApi.check({ questionId: 4, answer: null }), 'POST /students/mistakes/review/check'],
       [() => mistakesApi.complete([]), 'POST /students/mistakes/review/complete'],
       [() => mistakesApi.hint(4, null), 'POST /students/mistakes/review/hint'],
+      [() => xpApi.rewards(), 'GET /students/rewards'],
       [() => xpApi.today(), 'GET /students/today'],
       [() => xpApi.dailyGoal(), 'GET /students/daily-goal'],
       [() => xpApi.setDailyGoal(20), 'PUT /students/daily-goal'],
@@ -88,14 +81,6 @@ describe('Learn API', () => {
       { questionId: 4, runStartedAt: null, runSignature: null },
       { itemKey: 'w1', ...RUN },
     ])
-  })
-
-  it('reports a hint as an AI answer of the HINT feature, with what it was for and the hint itself', async () => {
-    const calls = installAxiosCapture()
-
-    await hintApi.report(HINT_REPORT)
-
-    expect(calls[0]!.data).toEqual({ featureKey: 'HINT', ...HINT_REPORT })
   })
 
   it('names every Mistakes source and only a chosen Progress month in the query', async () => {

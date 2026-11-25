@@ -17,13 +17,17 @@ public final class LanguageCodes {
     /** Validation regex matching a supported interface language code (use with {@code stripToNull} when optional). */
     public static final String SUPPORTED_PATTERN = "^(en|ms|zh-CN)$";
 
+    private static final int MAX_RAW_LANGUAGE_LENGTH = 32;
     private static final Set<String> SUPPORTED = Set.of(ENGLISH, MALAY, CHINESE_SIMPLIFIED);
 
     private LanguageCodes() {
     }
 
-    /** The stripped value when it is a supported code; {@code null} when it is blank or anything else. */
+    /** The stripped value when it is a supported code; {@code null} when it is blank, oversized, or anything else. */
     public static String normalize(String value) {
+        if (value == null || value.length() > MAX_RAW_LANGUAGE_LENGTH) {
+            return null;
+        }
         String trimmed = TextUtils.trimToNull(value);
         return trimmed != null && SUPPORTED.contains(trimmed) ? trimmed : null;
     }

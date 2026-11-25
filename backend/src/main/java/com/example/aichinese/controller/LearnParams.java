@@ -9,6 +9,7 @@ import java.time.format.DateTimeParseException;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.example.aichinese.entity.enums.ContentStatus;
+import com.example.aichinese.entity.enums.EnumLookups;
 import com.example.aichinese.entity.enums.MistakeSource;
 import com.example.aichinese.entity.enums.PracticeType;
 
@@ -37,7 +38,7 @@ final class LearnParams {
         if (value == null || value.isBlank()) {
             return null;
         }
-        return ContentStatus.tryFrom(value)
+        return EnumLookups.tryFrom(ContentStatus.class, value)
                 .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Unknown status."));
     }
 
@@ -46,7 +47,7 @@ final class LearnParams {
         if (value == null || value.isBlank() || "all".equalsIgnoreCase(value.strip())) {
             return null;
         }
-        return MistakeSource.tryFrom(value)
+        return EnumLookups.tryFrom(MistakeSource.class, value)
                 .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Unknown mistake source."));
     }
 

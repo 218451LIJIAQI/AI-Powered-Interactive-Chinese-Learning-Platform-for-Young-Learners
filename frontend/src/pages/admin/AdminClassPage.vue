@@ -56,13 +56,7 @@
         </template>
       </PageHeaderBlock>
 
-      <DataNotice :error="actionError ?? resource.error.value">
-        <template v-if="!actionError && resource.error.value" #actions>
-          <button class="btn btn-secondary btn-sm" type="button" @click="resource.reload">
-            {{ t('common.retry') }}
-          </button>
-        </template>
-      </DataNotice>
+      <DataNotice :error="actionError ?? resource.error.value" :on-retry="actionError ? undefined : resource.reload" />
       <p v-if="page.status === 'DRAFT'" :id="noticeId" class="callout" role="note" data-testid="class-notice">
         <IconGlyph name="info" :size="18" />
         <span>
@@ -89,13 +83,7 @@
 
       <section v-else class="panel authoring-card" aria-labelledby="admin-class-details-title">
         <h2 id="admin-class-details-title" class="card-title">{{ t('adminClasses.details.title') }}</h2>
-        <DataNotice :error="topicsError">
-          <template #actions>
-            <button class="btn btn-secondary btn-sm" type="button" @click="reloadTopics">
-              {{ t('common.retry') }}
-            </button>
-          </template>
-        </DataNotice>
+        <DataNotice :error="topicsError" @retry="reloadTopics" />
         <form :id="formId" novalidate @submit.prevent="saveDetails">
           <ClassDetailsFields
             v-model="form"
@@ -103,7 +91,7 @@
             :learn-units="learnUnits"
             :disabled="!editable || saving"
             :title-error="titleError"
-            @title-blur="checkTitleOnBlur"
+            @title-blur="validateTitle"
           />
         </form>
         <div v-if="editable" class="class-details-actions">
@@ -114,6 +102,7 @@
             :disabled="saving || !detailsDirty || Boolean(titleError)"
             :aria-busy="saving"
             data-testid="save-details"
+            @mousedown.prevent
           >
             {{ t('adminClasses.details.save') }}
           </button>
@@ -230,7 +219,7 @@ import IconGlyph from '@/components/common/IconGlyph.vue'
 import RouteTabs, { type RouteTab } from '@/components/common/RouteTabs.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
 import StatusPill from '@/components/common/StatusPill.vue'
-import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
+import PageHeaderBlock from '@/components/layout/PageHeaderBlock.vue'
 import { useEditorLeaveGuard } from '@/composables/useEditorLeaveGuard'
 import { useFieldCheck } from '@/composables/useFieldCheck'
 import { useLocalMessages } from '@/composables/useLocalMessages'
@@ -330,7 +319,6 @@ const formTitle = computed(() => form.value.title)
 const {
   error: titleError,
   validate: validateTitle,
-  validateOnBlur: checkTitleOnBlur,
   reset: resetTitleError,
 } = useFieldCheck(formTitle, (value) => (value.trim() ? null : t('adminClasses.form.titleMissing')))
 
@@ -339,20 +327,13 @@ function fillDetails(current: AdminClassPage): void {
   resetTitleError()
 }
 
-/** Whether the form holds `details`, compared as the server stores them: trimmed, an empty description is none. */
-function formMatches(details: AdminClassPage): boolean {
-  const typed = classDetailsPayload(form.value)
-  return (
-    typed.title === details.title &&
-    typed.description === details.description &&
-    typed.categoryId === (details.category?.id ?? null) &&
-    typed.bestAfterUnit === details.bestAfterUnit
-  )
-}
-
-/** Details typed but not saved. */
-const detailsSnapshot = computed(() => JSON.stringify(classDetailsPayload(form.value)))
-const detailsDirty = computed(() => editable.value && page.value !== null && !formMatches(page.value))
+/** Details typed but not saved, compared as the server stores them: trimmed, an empty description is none. */
+const detailsPayload = computed(() => classDetailsPayload(form.value))
+const detailsSnapshot = computed(() => JSON.stringify(detailsPayload.value))
+const savedDetailsSnapshot = computed(() =>
+  page.value ? JSON.stringify(classDetailsPayload(classDetailsForm(page.value))) : null,
+)
+const detailsDirty = computed(() => editable.value && detailsSnapshot.value !== savedDetailsSnapshot.value)
 
 /**
  * A class opened fills the form. A unit added or renamed on the Lessons tab also answers with the whole class: the
@@ -395,16 +376,11 @@ const { leaveTarget, leaveTo, leaveWithoutSaving } = useEditorLeaveGuard(
 )
 
 /**
- * Runs one write of the open class; only the class still open may show its result. A write from a dialog shows its
- * error in the dialog; any other one under the header. Answers whether it succeeded.
+ * Runs one write transaction of the open class; only the class still open may apply UI effects. A write from a dialog
+ * shows its error in the dialog; any other one under the header.
  */
-async function run(
-  fallback: string,
-  done: string,
-  action: (id: number) => Promise<AdminClassPage | null>,
-  options: { keepDialogOpen?: boolean } = {},
-): Promise<boolean> {
-  if (saving.value || !page.value || classId.value === null || page.value.id !== classId.value) return false
+async function run(fallback: string, action: (id: number, isCurrent: () => boolean) => Promise<void>): Promise<void> {
+  if (saving.value || !page.value || classId.value === null || page.value.id !== classId.value) return
   const id = classId.value
   const version = pageVersion
   const fromDialog = dialog.value !== null
@@ -412,18 +388,12 @@ async function run(
   actionError.value = null
   dialogError.value = null
   try {
-    const result = await action(id)
-    if (version !== pageVersion) return false
-    if (result) resource.replace(result)
-    if (done) showToast(done)
-    if (!options.keepDialogOpen) dialog.value = null
-    return true
+    await action(id, () => version === pageVersion)
   } catch (reason) {
-    if (version !== pageVersion) return false
+    if (version !== pageVersion) return
     const message = resolveApiError(reason, fallback)
     if (fromDialog && dialog.value !== null) dialogError.value = message
     else actionError.value = message
-    return false
   } finally {
     if (version === pageVersion) saving.value = false
   }
@@ -432,19 +402,21 @@ async function run(
 /** Saved at once, also on a published class: learners see the new details right away (X1.01). */
 async function saveDetails(): Promise<void> {
   if (saving.value || !detailsDirty.value || !validateTitle()) return
-  const version = pageVersion
   const submittedSnapshot = detailsSnapshot.value
-  const payload = classDetailsPayload(form.value)
-  savingDetailsSnapshot.value = submittedSnapshot
-  try {
-    const saved = await run(t('adminClasses.details.error'), t('adminClasses.details.saved'), (id) =>
-      adminClassesApi.saveDetails(id, payload),
-    )
-    // The form shows the details as they were saved (trimmed) unless newer edits were typed while saving.
-    if (saved && page.value && detailsSnapshot.value === submittedSnapshot) fillDetails(page.value)
-  } finally {
-    if (version === pageVersion) savingDetailsSnapshot.value = null
-  }
+  const payload = detailsPayload.value
+  await run(t('adminClasses.details.error'), async (id, isCurrent) => {
+    savingDetailsSnapshot.value = submittedSnapshot
+    try {
+      const saved = await adminClassesApi.saveDetails(id, payload)
+      if (!isCurrent()) return
+      resource.replace(saved)
+      showToast(t('adminClasses.details.saved'))
+      // The form shows the details as they were saved (trimmed) unless newer edits were typed while saving.
+      if (detailsSnapshot.value === submittedSnapshot) fillDetails(saved)
+    } finally {
+      if (isCurrent()) savingDetailsSnapshot.value = null
+    }
+  })
 }
 
 // Publish, archive, restore, delete
@@ -462,31 +434,45 @@ const publishChecklist = computed(() => {
   ]
 })
 
-async function saveDirtyDetailsBeforeDialogAction(): Promise<boolean> {
+async function saveDirtyDetails(id: number, isCurrent: () => boolean): Promise<boolean> {
   if (!detailsDirty.value) return true
   if (!validateTitle()) {
     dialogError.value = titleError.value
     return false
   }
-  const payload = classDetailsPayload(form.value)
-  const saved = await run(t('adminClasses.details.error'), '', (id) => adminClassesApi.saveDetails(id, payload), {
-    keepDialogOpen: true,
-  })
-  if (!saved) return false
-  if (page.value) fillDetails(page.value)
-  return true
+  try {
+    const saved = await adminClassesApi.saveDetails(id, detailsPayload.value)
+    if (!isCurrent()) return false
+    resource.replace(saved)
+    fillDetails(saved)
+    return true
+  } catch (reason) {
+    if (isCurrent()) dialogError.value = resolveApiError(reason, t('adminClasses.details.error'))
+    return false
+  }
 }
 
 async function publish(): Promise<void> {
-  if (saving.value || !(await saveDirtyDetailsBeforeDialogAction())) return
-  const title = page.value?.title ?? ''
-  await run(t('adminClasses.publish.error'), t('adminClasses.publish.done', { title }), adminClassesApi.publish)
+  await run(t('adminClasses.publish.error'), async (id, isCurrent) => {
+    if (!(await saveDirtyDetails(id, isCurrent))) return
+    const published = await adminClassesApi.publish(id)
+    if (!isCurrent()) return
+    resource.replace(published)
+    dialog.value = null
+    showToast(t('adminClasses.publish.done', { title: published.title }))
+  })
 }
 
 async function archive(): Promise<void> {
-  if (saving.value || !(await saveDirtyDetailsBeforeDialogAction())) return
-  const archived = await run(t('adminClasses.archive.error'), t('adminClasses.archive.done'), adminClassesApi.archive)
-  if (archived && page.value) fillDetails(page.value)
+  await run(t('adminClasses.archive.error'), async (id, isCurrent) => {
+    if (!(await saveDirtyDetails(id, isCurrent))) return
+    const archived = await adminClassesApi.archive(id)
+    if (!isCurrent()) return
+    resource.replace(archived)
+    fillDetails(archived)
+    dialog.value = null
+    showToast(t('adminClasses.archive.done'))
+  })
 }
 
 /**
@@ -494,11 +480,13 @@ async function archive(): Promise<void> {
  * as a draft before classes were authored here comes back a draft, and the toast says which.
  */
 async function restore(): Promise<void> {
-  const title = page.value?.title ?? ''
-  const restored = await run(t('adminClasses.page.restoreError'), '', adminClassesApi.restore)
-  if (!restored) return
-  const asDraft = page.value?.status === 'DRAFT'
-  showToast(t(asDraft ? 'adminClasses.page.restoredDraft' : 'adminClasses.page.restored', { title }))
+  await run(t('adminClasses.page.restoreError'), async (id, isCurrent) => {
+    const restored = await adminClassesApi.restore(id)
+    if (!isCurrent()) return
+    resource.replace(restored)
+    const asDraft = restored.status === 'DRAFT'
+    showToast(t(asDraft ? 'adminClasses.page.restoredDraft' : 'adminClasses.page.restored', { title: restored.title }))
+  })
 }
 
 /**
@@ -514,25 +502,23 @@ const deleteMessage = computed(() => {
   const allDrafts = lessons.every((lesson) => lesson.status === 'DRAFT')
   return t('adminClasses.remove.messageUnitsLessons', {
     units: unitsText,
-    lessons: t(allDrafts ? 'adminClasses.remove.draftLessons' : 'adminClasses.remove.lessons', lessons.length),
+    lessons: t(allDrafts ? 'adminClasses.remove.draftLessons' : 'adminClasses.page.lessons', lessons.length),
   })
 })
 
 async function remove(): Promise<void> {
-  const title = page.value?.title ?? ''
-  const version = pageVersion
-  const done = await run(t('adminClasses.remove.error'), '', adminClassesApi.remove, { keepDialogOpen: true })
-  if (!done || version !== pageVersion) return
-  saving.value = true
-  try {
-    await leaveTo({ name: 'admin-classes', query: { deleted: title } })
-  } catch (reason) {
-    if (version === pageVersion) {
-      dialog.value = null
-      actionError.value = resolveApiError(reason)
+  await run(t('adminClasses.remove.error'), async (id, isCurrent) => {
+    const title = page.value?.title ?? ''
+    await adminClassesApi.remove(id)
+    if (!isCurrent()) return
+    try {
+      await leaveTo({ name: 'admin-classes', query: { deleted: title } })
+    } catch (reason) {
+      if (isCurrent()) {
+        dialog.value = null
+        actionError.value = resolveApiError(reason)
+      }
     }
-  } finally {
-    if (version === pageVersion) saving.value = false
-  }
+  })
 }
 </script>

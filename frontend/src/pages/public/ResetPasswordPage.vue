@@ -10,9 +10,7 @@
       <h1 class="auth-title">{{ isInvite ? t('recovery.inviteExpiredTitle') : t('recovery.expiredTitle') }}</h1>
       <p class="callout is-warning" role="alert" data-testid="link-invalid">
         <IconGlyph name="alert" :size="18" />
-        <span>
-          <strong>{{ invalidMessage }}</strong>
-        </span>
+        <span>{{ invalidMessage }}</span>
       </p>
       <RouterLink v-if="!isInvite" class="btn btn-primary btn-lg btn-block" to="/forgot-password">
         {{ t('recovery.requestNewLink') }}
@@ -23,13 +21,17 @@
     <!-- The check itself failed (offline, busy server): the link may well still work. -->
     <div v-else-if="state === 'unchecked'" class="auth-form">
       <h1 class="auth-title">{{ t('recovery.checkFailedTitle') }}</h1>
-      <p class="callout is-danger" role="alert" data-testid="link-unchecked">
+      <p class="callout is-danger" role="alert">
         <IconGlyph name="alert" :size="18" />
-        <span>
-          <strong>{{ resolveApiError(checkFailure, t('recovery.checkFailed')) }}</strong>
-        </span>
+        <span>{{ resolveApiError(checkFailure, t('recovery.checkFailed')) }}</span>
       </p>
-      <button class="btn btn-primary btn-lg btn-block" type="button" data-testid="link-retry" @click="checkLink">
+      <button
+        ref="retryButton"
+        class="btn btn-primary btn-lg btn-block"
+        type="button"
+        data-testid="link-retry"
+        @click="checkLink"
+      >
         {{ t('common.retry') }}
       </button>
     </div>
@@ -41,13 +43,9 @@
         {{ isInvite ? t('recovery.inviteFor', { email: linkEmail }) : t('recovery.resetFor', { email: linkEmail }) }}
       </p>
 
-      <p v-if="submitFailure" class="callout is-danger" role="alert">
+      <p v-if="submitError" class="callout is-danger" role="alert">
         <IconGlyph name="alert" :size="18" />
-        <span>
-          <strong>{{
-            resolveApiError(submitFailure.reason, isInvite ? t('recovery.inviteFailed') : t('recovery.resetFailed'))
-          }}</strong>
-        </span>
+        <span>{{ submitError }}</span>
       </p>
 
       <div v-if="isInvite" class="field">
@@ -64,8 +62,9 @@
           :placeholder="t('recovery.fullNamePlaceholder')"
           :aria-invalid="Boolean(nameError)"
           :aria-describedby="nameError ? 'invite-name-error' : undefined"
+          @blur="validateName"
         />
-        <p v-if="nameError" id="invite-name-error" class="field-error" role="alert">
+        <p v-if="nameError" id="invite-name-error" class="field-error">
           <IconGlyph name="alert" :size="14" />{{ t(nameError) }}
         </p>
       </div>
@@ -116,10 +115,12 @@
       </ul>
 
       <button
+        ref="submitButton"
         class="btn btn-primary btn-lg btn-block"
         type="submit"
-        :disabled="!passwordReady || submitting"
+        :disabled="!passwordReady || (isInvite && Boolean(nameError)) || submitting"
         :aria-busy="submitting"
+        @mousedown.prevent
       >
         <span>{{ submitLabel }}</span>
         <IconGlyph name="chevronRight" :size="18" />
@@ -138,20 +139,21 @@ import { computed, nextTick, onMounted, ref, shallowRef } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { getAuthSessionVersion } from '@/api/http'
-import { publicOpsApi } from '@/api/ops'
 import { authApi } from '@/api/services'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import AuthShell from '@/components/public/AuthShell.vue'
-import PasswordInput from '@/components/public/PasswordInput.vue'
+import PasswordInput from '@/components/common/PasswordInput.vue'
 import { useFieldCheck } from '@/composables/useFieldCheck'
 import { useIsUnmounted } from '@/composables/useIsUnmounted'
 import { useLocalMessages } from '@/composables/useLocalMessages'
+import { finishSessionEndNavigation } from '@/composables/usePageNavigation'
 import { recoveryMessages } from '@/plugins/recoveryMessages'
 import { useAuthStore } from '@/stores/auth'
 import { appLocale } from '@/plugins/i18n'
 import { apiErrorStatus, resolveApiError } from '@/utils/apiError'
+import { restoreFocusIfDropped } from '@/utils/focus'
 import { isWithinPasswordByteLimit, meetsPasswordMinimum } from '@/utils/password'
-import { firstQueryText, withoutQueryKeys } from '@/utils/queryText'
+import { firstQueryText, withoutQueryKeys } from '@/utils/routeQuery'
 
 const route = useRoute()
 const router = useRouter()
@@ -173,14 +175,17 @@ const linkEmail = ref('')
 /** Why the link could not be checked (state `unchecked`): the server's or the connection's message. */
 const checkFailure = shallowRef<unknown>()
 const fullName = ref('')
-// The name is checked when the form is sent; typing one clears the message.
+// The name is checked on blur and on submit; typing one clears the message.
 const { error: nameError, validate: validateName } = useFieldCheck(fullName, (name) =>
   name.trim() ? null : 'recovery.nameRequired',
 )
 const password = ref('')
 const confirmPassword = ref('')
 const submitting = ref(false)
+const mutationCompleted = ref(false)
 const submitFailure = shallowRef<{ reason: unknown } | null>(null)
+const retryButton = ref<HTMLButtonElement | null>(null)
+const submitButton = ref<HTMLButtonElement | null>(null)
 const isUnmounted = useIsUnmounted()
 let checkVersion = 0
 
@@ -202,6 +207,13 @@ const submitLabel = computed(() => {
   if (isInvite) return submitting.value ? t('recovery.inviteCreating') : t('recovery.inviteSubmit')
   return submitting.value ? t('recovery.resetting') : t('recovery.resetSubmit')
 })
+const submitError = computed(() => {
+  if (!submitFailure.value) return null
+  const fallback = mutationCompleted.value
+    ? t('common.errorTitle')
+    : t(isInvite ? 'recovery.inviteFailed' : 'recovery.resetFailed')
+  return resolveApiError(submitFailure.value.reason, fallback)
+})
 
 /**
  * Asks whether the link still works. Only the server's refusal (400) means it no longer does; a check that failed on
@@ -213,9 +225,10 @@ async function checkLink(): Promise<void> {
     return
   }
   const version = ++checkVersion
+  const hadRetryFocus = Boolean(retryButton.value && document.activeElement === retryButton.value)
   state.value = 'checking'
   try {
-    const link = isInvite ? await publicOpsApi.checkAdminInvite(token) : await publicOpsApi.checkResetLink(token)
+    const link = isInvite ? await authApi.checkAdminInvite(token) : await authApi.checkResetLink(token)
     if (isUnmounted() || version !== checkVersion) return
     linkEmail.value = link.email
     state.value = 'ready'
@@ -227,6 +240,17 @@ async function checkLink(): Promise<void> {
       state.value = 'unchecked'
       checkFailure.value = reason
     }
+  }
+  if (!isUnmounted() && version === checkVersion && hadRetryFocus) {
+    await restoreFocusIfDropped(
+      () =>
+        state.value === 'unchecked'
+          ? retryButton.value
+          : state.value === 'ready'
+            ? document.getElementById(isInvite ? 'invite-full-name' : 'reset-password')
+            : document.querySelector<HTMLElement>('.auth-form a.btn, .auth-switch a'),
+      () => !isUnmounted() && version === checkVersion,
+    )
   }
 }
 
@@ -243,28 +267,46 @@ async function submit(): Promise<void> {
   submitting.value = true
   const sessionVersion = getAuthSessionVersion()
   const request = { token, password: password.value, confirmPassword: confirmPassword.value }
+  const target = { name: 'auth', query: isInvite ? { invite: 'done' } : { reset: 'done' } }
+  let endedSession = false
   try {
-    if (isInvite) {
-      // The new admin account takes the language of this page, as a sign-up does: its sign-in and e-mails use it.
-      await publicOpsApi.acceptAdminInvite({
-        ...request,
-        fullName: fullName.value.trim(),
-        preferredLanguage: appLocale.value,
-      })
-    } else {
-      await authApi.resetPassword(request)
+    if (!mutationCompleted.value) {
+      if (isInvite) {
+        // The new admin account takes the language of this page, as a sign-up does: its sign-in and e-mails use it.
+        await authApi.acceptAdminInvite({
+          ...request,
+          fullName: fullName.value.trim(),
+          preferredLanguage: appLocale.value,
+        })
+      } else {
+        await authApi.resetPassword(request)
+      }
+      mutationCompleted.value = true
+      if (sessionVersion !== getAuthSessionVersion()) return
+      if (!isInvite && auth.currentUser?.email.toLowerCase() === linkEmail.value.toLowerCase()) {
+        // The server revoked this account's sessions with the password reset.
+        auth.clearSessionInAllTabs()
+        endedSession = true
+      } else if (!isUnmounted() && auth.currentUser) {
+        if (!(await auth.logout())) return
+        endedSession = true
+      }
+      if (isUnmounted() && !endedSession) return
     }
-    if (sessionVersion !== getAuthSessionVersion()) return
-    if (!isInvite && auth.currentUser?.email.toLowerCase() === linkEmail.value.toLowerCase()) {
-      // The server revoked this account's sessions with the password reset.
-      auth.clearSessionInAllTabs()
-    } else if (!isUnmounted() && auth.currentUser && !(await auth.logout())) return
 
-    if (!isUnmounted()) await router.push({ name: 'auth', query: isInvite ? { invite: 'done' } : { reset: 'done' } })
+    await finishSessionEndNavigation(router, target, !isUnmounted())
   } catch (reason) {
-    if (!isUnmounted() && sessionVersion === getAuthSessionVersion()) submitFailure.value = { reason }
+    if (!isUnmounted() && (mutationCompleted.value || sessionVersion === getAuthSessionVersion())) {
+      submitFailure.value = { reason }
+    }
   } finally {
     if (!isUnmounted()) submitting.value = false
+  }
+  if (submitFailure.value) {
+    await restoreFocusIfDropped(
+      () => submitButton.value,
+      () => !isUnmounted(),
+    )
   }
 }
 </script>

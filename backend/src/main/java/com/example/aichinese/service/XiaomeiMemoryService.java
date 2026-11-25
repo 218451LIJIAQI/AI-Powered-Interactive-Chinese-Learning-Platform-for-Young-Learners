@@ -11,6 +11,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -25,12 +26,13 @@ import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.XiaomeiMemoryNote;
 import com.example.aichinese.entity.enums.PlanReason;
 import com.example.aichinese.repository.LearningPlanRepository;
+import com.example.aichinese.repository.LearningPlanRepository.XiaomeiPlanGoal;
 import com.example.aichinese.repository.XiaomeiMemoryNoteRepository;
-import com.example.aichinese.repository.projection.XiaomeiPlanGoal;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.account.CurrentAccount;
 import com.example.aichinese.util.AiInputSanitizer;
 import com.example.aichinese.util.PersonalDataRedactor;
+import com.example.aichinese.util.TextUtils;
 
 import lombok.RequiredArgsConstructor;
 
@@ -49,11 +51,11 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class XiaomeiMemoryService {
 
-    static final int MAX_NOTES = 5;
+    private static final int MAX_NOTES = 5;
     static final int MAX_FACTS_PER_CHAT = 2;
     /** How long a forgotten chat note can be brought back (the Undo of "Forget"). */
-    static final Duration UNDO_WINDOW = Duration.ofMinutes(10);
-    static final String NOTE_NOT_FOUND = "Xiaomei no longer remembers this.";
+    private static final Duration UNDO_WINDOW = Duration.ofMinutes(10);
+    private static final String NOTE_NOT_FOUND = "Xiaomei no longer remembers this.";
 
     /** An address, a link, a redaction placeholder or a run of five digits or more (a postcode, an account number). */
     private static final Pattern CONTACT_DETAIL =
@@ -61,7 +63,6 @@ public class XiaomeiMemoryService {
     private static final Pattern HAN_NAME = Pattern.compile("\\p{IsHan}+");
     /** Splits a learner's display name into contiguous Han and non-Han letter runs, ignoring punctuation. */
     private static final Pattern NAME_TOKENS = Pattern.compile("\\p{IsHan}+|[\\p{L}&&[^\\p{IsHan}]]+");
-    private static final Pattern SPACES = Pattern.compile("\\s+", Pattern.UNICODE_CHARACTER_CLASS);
     /** A final full stop (or exclamation mark) does not make a note another note. */
     private static final Pattern FINAL_STOP = Pattern.compile("[.。!！]+$");
     /** A usable fact must contain at least one letter or digit (rejects punctuation-only notes like "." or "!!!"). */
@@ -155,7 +156,7 @@ public class XiaomeiMemoryService {
                 .filter(XiaomeiMemoryService::hasPromptDescription)
                 .orElse(null);
         boolean goalRemembered = goal != null && notes.stream()
-                .noneMatch(note -> goal.isNoteOf(note) && note.getForgottenAt() != null);
+                .noneMatch(note -> isPlanGoalNote(goal, note) && note.getForgottenAt() != null);
         String described = goalRemembered ? goalForPrompt(goal) : null;
         if (described != null) {
             parts.add("the goal of their learning plan is \"" + described + "\"");
@@ -182,15 +183,16 @@ public class XiaomeiMemoryService {
      * phone or ID number, a long number, a link or a word of the content-safety list.
      */
     String usableFact(String fact, String learnerName) {
-        String text = AiInputSanitizer.sanitize(fact, AiInputSanitizer.DEFAULT_SHORT_INPUT_LIMIT);
+        String text = TextUtils.collapseWhitespaceToNull(
+                AiInputSanitizer.sanitize(fact, AiInputSanitizer.DEFAULT_SHORT_INPUT_LIMIT));
         if (text == null) {
             return null;
         }
-        text = SPACES.matcher(text).replaceAll(" ");
         String normalizedText = Normalizer.normalize(text, Normalizer.Form.NFKC);
         boolean unsafe = text.length() > XiaomeiMemoryNote.MAX_TEXT_LENGTH
                 || !LETTER_OR_DIGIT.matcher(normalizedText).find()
                 || !text.equals(PersonalDataRedactor.redact(text))
+                || !normalizedText.equals(PersonalDataRedactor.redact(normalizedText))
                 || CONTACT_DETAIL.matcher(normalizedText).find()
                 || contentSafetyService.containsSensitiveContent(text)
                 || namesTheLearner(normalizedText, learnerName);
@@ -225,7 +227,7 @@ public class XiaomeiMemoryService {
             if (!note.isPlanGoal()) {
                 continue;
             }
-            if (goal != null && goal.isNoteOf(note) && !noted) {
+            if (goal != null && isPlanGoalNote(goal, note) && !noted) {
                 noted = true;
             } else {
                 noteRepository.delete(note);
@@ -235,6 +237,11 @@ public class XiaomeiMemoryService {
         if (goal != null && !noted) {
             notes.add(noteRepository.save(newNote(user, goal.goalTitle(), goal.reason())));
         }
+    }
+
+    private static boolean isPlanGoalNote(XiaomeiPlanGoal goal, XiaomeiMemoryNote note) {
+        return note.isPlanGoal() && goal.reason() == note.getPlanReason()
+                && Objects.equals(goal.goalTitle(), note.getText());
     }
 
     /** At most {@link #MAX_NOTES} remembered notes: the oldest chat notes not in {@code keep} make way for good. */
@@ -259,7 +266,7 @@ public class XiaomeiMemoryService {
     }
 
     /** The goal as Xiaomei is told it: the title, or what the reason means; null when it says nothing ("other"). */
-    static String goalForPrompt(String goalTitle, PlanReason reason) {
+    private static String goalForPrompt(String goalTitle, PlanReason reason) {
         if (goalTitle != null && !goalTitle.isBlank()) {
             return goalTitle.strip();
         }
@@ -302,10 +309,10 @@ public class XiaomeiMemoryService {
 
     /** Two notes are the same note whatever their case, spacing and final full stop. */
     private static String key(String text) {
-        if (text == null) {
+        String spaced = TextUtils.collapseWhitespaceToNull(text);
+        if (spaced == null) {
             return null;
         }
-        String spaced = SPACES.matcher(text.strip()).replaceAll(" ");
         return FINAL_STOP.matcher(spaced).replaceAll("").toLowerCase(Locale.ROOT);
     }
 

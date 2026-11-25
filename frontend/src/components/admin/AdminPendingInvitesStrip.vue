@@ -1,18 +1,13 @@
 <template>
-  <DataNotice :error="invites.error.value" :error-title="t('adminUsers.invitesLoadFailed')">
-    <template #actions>
-      <button type="button" class="btn btn-secondary btn-sm" @click="invites.reload">
-        {{ t('common.retry') }}
-      </button>
-    </template>
-  </DataNotice>
+  <DataNotice :error="invites.error.value" :error-title="t('adminUsers.invitesLoadFailed')" @retry="retryInvites" />
   <div
     v-if="!invites.error.value && pendingInvites.length"
+    ref="stripRef"
     class="callout admin-users-invites"
     data-testid="admin-users-invites"
   >
     <IconGlyph name="mail" :size="16" />
-    <div class="admin-users-invites-copy">
+    <div class="admin-list-head">
       <strong>{{ t('adminUsers.invitesPending', { count: pendingInvites.length }, pendingInvites.length) }}</strong>
       <span v-for="invite in pendingInvites" :key="invite.id" class="admin-users-invite">
         <span class="admin-meta">
@@ -46,13 +41,20 @@
     </div>
   </div>
   <!-- Under the strip, not in it: an invite accepted meanwhile leaves the strip, and the reason stays. -->
-  <p v-if="actionError" class="field-error" role="alert" data-testid="admin-users-invite-error">
+  <p
+    v-if="actionError"
+    ref="errorRef"
+    class="field-error"
+    role="alert"
+    tabindex="-1"
+    data-testid="admin-users-invite-error"
+  >
     {{ actionError }}
   </p>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 
 import { adminUsersApi } from '@/api/ops'
 import DataNotice from '@/components/common/DataNotice.vue'
@@ -62,8 +64,9 @@ import { useLocalMessages } from '@/composables/useLocalMessages'
 import { useResource } from '@/composables/useResource'
 import { adminUsersMessages } from '@/plugins/adminUsersMessages'
 import type { AdminInvite } from '@/types/ops'
-import { apiErrorStatus, resolveApiError } from '@/utils/apiError'
+import { apiErrorStatus, hasServerMessage, resolveApiError } from '@/utils/apiError'
 import { formatDateTime } from '@/utils/format'
+import { SERVER_MESSAGE } from '@/utils/serverMessages'
 
 interface InviteChange {
   id: number
@@ -73,7 +76,7 @@ interface InviteChange {
 const emit = defineEmits<{
   toast: [message: string, action?: { readonly label: string; readonly run: () => void }]
   hideToast: []
-  /** Emitted when a 409 shows an invite was already accepted so the parent can refresh the accounts list. */
+  /** Emitted when a 409 (already accepted) or 400 (already registered) shows the invitee already has an account so the parent can refresh the accounts list. */
   accepted: []
 }>()
 
@@ -85,6 +88,13 @@ const invites = useResource(adminUsersApi.invites)
 const pendingInvites = computed(() => invites.data.value ?? [])
 const busy = ref<InviteChange | null>(null)
 const actionError = ref<string | null>(null)
+const stripRef = ref<HTMLElement | null>(null)
+const errorRef = ref<HTMLElement | null>(null)
+
+function retryInvites(): void {
+  invites.data.value = null
+  void invites.reload()
+}
 
 /** Called by the parent after Invite admin sends a fresh invitation. */
 function reloadAfterInvite(): void {
@@ -93,6 +103,16 @@ function reloadAfterInvite(): void {
 }
 
 defineExpose({ reloadAfterInvite })
+
+async function restoreFocusIfDropped(): Promise<void> {
+  await nextTick()
+  if (isUnmounted()) return
+  const active = document.activeElement
+  if (active && active !== document.body && !(active instanceof HTMLElement && active.matches(':disabled'))) return
+  const firstAction = stripRef.value?.querySelector<HTMLButtonElement>('button:not(:disabled)')
+  if (firstAction) firstAction.focus({ preventScroll: true })
+  else errorRef.value?.focus({ preventScroll: true })
+}
 
 async function changeInvite(
   pending: InviteChange,
@@ -113,12 +133,18 @@ async function changeInvite(
   } catch (failure) {
     if (isUnmounted()) return
     actionError.value = resolveApiError(failure, failed)
-    // Gone (404) or already accepted (409): the strip was out of date. An accepted invite is a new admin in the list.
+    // Gone (404), conflict (409: accepted or expired), or already registered (400): refresh the strip.
     const status = apiErrorStatus(failure)
-    if (status === 404 || status === 409) void invites.reload()
-    if (status === 409) emit('accepted')
+    const alreadyRegistered = status === 400 && hasServerMessage(failure, SERVER_MESSAGE.EMAIL_ALREADY_REGISTERED)
+    const alreadyAccepted = status === 409 && hasServerMessage(failure, SERVER_MESSAGE.INVITE_ACCEPTED)
+    if (status === 404 || status === 409 || alreadyRegistered) void invites.reload()
+    // Only an accepted/registered invite adds an account to the users table; an expired invite does not.
+    if (alreadyAccepted || alreadyRegistered) emit('accepted')
   } finally {
-    if (!isUnmounted()) busy.value = null
+    if (!isUnmounted()) {
+      busy.value = null
+      void restoreFocusIfDropped()
+    }
   }
 }
 

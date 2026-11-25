@@ -50,7 +50,7 @@ describe('LessonQuestionDrawer', () => {
     expect(wrapper.text()).toContain('Answers · tick the right one')
     expect(wrapper.get('.lesson-answer-row.is-head').text()).toBe('AnswerRight or wrongFeedback')
     expect(wrapper.findAll('[data-testid="answer-row"]')).toHaveLength(4)
-    expect(wrapper.find('input[aria-label="Hint"]').exists()).toBe(false)
+    expect(wrapper.findAll('label').map((label) => label.text())).not.toContainEqual(expect.stringMatching(/hint/i))
   })
 
   it('writes the feedback of each answer, and says which answer is right (A3.19)', async () => {
@@ -163,6 +163,7 @@ describe('LessonQuestionDrawer', () => {
     await wrapper.get('select').setValue(type)
     await wrapper.get('textarea').setValue('Which word do you hear?')
     await wrapper.get('input[aria-label="Answer 1"]').setValue('Tea')
+    await wrapper.get('input[aria-label="Answer 2"]').setValue('Water')
     const save = () => wrapper.get('[data-testid="question-save"]')
 
     const field = wrapper.findAll('.field').find((candidate) => candidate.text().startsWith(label))!
@@ -191,5 +192,22 @@ describe('LessonQuestionDrawer', () => {
       correctAnswerText: '是',
       options: [],
     })
+  })
+
+  it('requires at least 2 non-blank options for option-based questions and preserves custom options across TRUE_FALSE switches', async () => {
+    const wrapper = mountDrawer(null)
+    await wrapper.get('textarea').setValue('Which word means tea?')
+    await wrapper.get('input[aria-label="Answer 1"]').setValue('茶')
+    expect(wrapper.get('[data-testid="question-save"]').attributes('disabled')).toBeDefined()
+
+    await wrapper.get('input[aria-label="Answer 2"]').setValue('水')
+    expect(wrapper.get('[data-testid="question-save"]').attributes('disabled')).toBeUndefined()
+
+    await wrapper.get('select').setValue('TRUE_FALSE')
+    expect(wrapper.findAll('[data-testid="answer-row"]')).toHaveLength(2)
+
+    await wrapper.get('select').setValue('MULTIPLE_CHOICE')
+    expect(wrapper.get<HTMLInputElement>('input[aria-label="Answer 1"]').element.value).toBe('茶')
+    expect(wrapper.get<HTMLInputElement>('input[aria-label="Answer 2"]').element.value).toBe('水')
   })
 })

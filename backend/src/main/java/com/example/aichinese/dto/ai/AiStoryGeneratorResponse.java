@@ -13,7 +13,8 @@ public record AiStoryGeneratorResponse(
         List<AiStoryLineResponse> lines,
         List<VocabularyItem> vocabularyList,
         List<ComprehensionQuestion> comprehensionQuestions,
-        AiRequestStatus status) {
+        AiRequestStatus status,
+        String message) {
 
     @Override
     public String toString() {
@@ -22,7 +23,8 @@ public record AiStoryGeneratorResponse(
                 + ", lines=" + (lines == null ? 0 : lines.size())
                 + ", vocabularyList=" + (vocabularyList == null ? 0 : vocabularyList.size())
                 + ", comprehensionQuestions=" + (comprehensionQuestions == null ? 0 : comprehensionQuestions.size())
-                + ", status=" + status + "]";
+                + ", status=" + status
+                + ", message=" + redactLength(message) + "]";
     }
 
     public record VocabularyItem(

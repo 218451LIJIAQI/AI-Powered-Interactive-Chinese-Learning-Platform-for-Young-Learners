@@ -191,7 +191,7 @@ class AiSessionConcurrencyTests extends ApiIntegrationTest {
         Object outcome;
         ExecutorService workers = Executors.newVirtualThreadPerTaskExecutor();
         try {
-            var future = workers.submit(() -> ai.chat(principal, new AiChatRequest("How do I say hello?", "en", null)));
+            var future = workers.submit(() -> completeChat(new AiChatRequest("How do I say hello?", "en", null)));
             try {
                 outcome = future.get(10, TimeUnit.SECONDS);
             } catch (ExecutionException failure) {
@@ -219,12 +219,16 @@ class AiSessionConcurrencyTests extends ApiIntegrationTest {
 
     private void request(String feature) {
         switch (feature) {
-            case "chat" -> ai.chat(principal, new AiChatRequest("How do I say hello?", "en", null));
+            case "chat" -> completeChat(new AiChatRequest("How do I say hello?", "en", null));
             case "photo" -> checks.check(principal, new AiPracticeCheckService.CheckRequest("HANDWRITING",
                     new MockMultipartFile("file", "writing.png", "image/png", TestUploadFixtures.minimalPng()), "你好", null, "en"));
             case "quiz" -> ai.quizGenerator(principal, new AiQuizGeneratorRequest("Greetings", "Beginner", 1, "en"));
             default -> throw new AssertionError(feature);
         }
+    }
+
+    private AiChatResponse completeChat(AiChatRequest request) {
+        return ai.completeChat(principal, ai.prepareChat(principal, request));
     }
 
     private void endSession(String action) {

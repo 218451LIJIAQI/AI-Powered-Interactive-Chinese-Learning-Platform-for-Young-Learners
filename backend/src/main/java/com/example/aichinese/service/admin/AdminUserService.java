@@ -20,6 +20,7 @@ import com.example.aichinese.dto.admin.AdminUserDetailResponse;
 import com.example.aichinese.dto.admin.AdminUserListItemResponse;
 import com.example.aichinese.entity.AuditLog;
 import com.example.aichinese.entity.User;
+import com.example.aichinese.entity.enums.EnumLookups;
 import com.example.aichinese.entity.enums.NotificationType;
 import com.example.aichinese.entity.enums.RoleName;
 import com.example.aichinese.repository.AuditLogRepository;
@@ -45,7 +46,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class AdminUserService {
 
-    private static final String ACTION_DEACTIVATE = "ADMIN_USER_DEACTIVATE";
+    public static final String ACTION_DEACTIVATE = "ADMIN_USER_DEACTIVATE";
     private static final String ACTION_REACTIVATE = "ADMIN_USER_REACTIVATE";
 
     private final UserRepository userRepository;
@@ -84,6 +85,12 @@ public class AdminUserService {
         if (admin.getId().equals(target.getId())) {
             throw new ResponseStatusException(BAD_REQUEST, "You cannot deactivate your own admin account.");
         }
+        if (target.getDeletedAt() != null) {
+            throw new ResponseStatusException(BAD_REQUEST, "A deleted account can't be deactivated.");
+        }
+        if (target.getRoles().isEmpty()) {
+            throw new ResponseStatusException(BAD_REQUEST, "This account has no role any more, so it can't be deactivated.");
+        }
         if (!target.isActive()) {
             return toDetail(currentUser, target);
         }
@@ -94,7 +101,7 @@ public class AdminUserService {
         passwordResetTokenRepository.retireOpenTokensForUser(target.getId(), now);
         emailChangeTokenRepository.retireOpenTokensForUser(target.getId(), now);
         auditLogService.record(admin, ACTION_DEACTIVATE,
-                new AuditTarget(AuditLogQueryService.TARGET_USER, target.getId(), target.getDisplayName()), reason,
+                new AuditTarget(AuditLogService.TARGET_USER, target.getId(), target.getDisplayName()), reason,
                 "Admin deactivated the account: signed out, sign-in blocked.");
         return toDetail(currentUser, target);
     }
@@ -120,14 +127,15 @@ public class AdminUserService {
         target.setActive(true);
         notificationService.safeCreateNotification(
                 target,
-                NotificationType.SYSTEM,
-                "Your account is active again",
-                "An admin reactivated your account. Welcome back.",
-                AuditLogQueryService.TARGET_USER,
-                target.getId(),
-                null);
+                NotificationService.draft(
+                        NotificationType.SYSTEM,
+                        "Your account is active again",
+                        "An admin reactivated your account. Welcome back.",
+                        AuditLogService.TARGET_USER,
+                        target.getId(),
+                        null));
         auditLogService.record(admin, ACTION_REACTIVATE,
-                new AuditTarget(AuditLogQueryService.TARGET_USER, target.getId(), target.getDisplayName()), reason,
+                new AuditTarget(AuditLogService.TARGET_USER, target.getId(), target.getDisplayName()), reason,
                 "Admin reactivated the account; it can sign in again.");
         return toDetail(currentUser, target);
     }
@@ -147,7 +155,7 @@ public class AdminUserService {
         AdminUserDetailResponse.StatusChange deactivation = (user.isActive() || user.getDeletedAt() != null) ? null
                 : auditLogRepository
                 .findFirstByTargetTypeAndTargetIdAndActionTypeOrderByCreatedAtDescIdDesc(
-                        AuditLogQueryService.TARGET_USER, user.getId(), ACTION_DEACTIVATE)
+                        AuditLogService.TARGET_USER, user.getId(), ACTION_DEACTIVATE)
                 .map(AdminUserService::toStatusChange)
                 .orElse(null);
         return new AdminUserDetailResponse(
@@ -156,6 +164,7 @@ public class AdminUserService {
                 user.getEmail(),
                 role(user),
                 user.isActive(),
+                user.getDeletedAt() != null,
                 user.getCreatedAt(),
                 deactivation,
                 self,
@@ -185,7 +194,7 @@ public class AdminUserService {
         if (role == null || role.isBlank()) {
             return null;
         }
-        return RoleName.tryFrom(role)
+        return EnumLookups.tryFrom(RoleName.class, role)
                 .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Invalid user role filter."));
     }
 }

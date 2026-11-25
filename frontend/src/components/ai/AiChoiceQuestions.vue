@@ -50,6 +50,7 @@
     :correct-options="correctOptions"
     :ruled-out="ruledOut"
     :checked="checked"
+    :paused="paused"
     @rule-out="(index, option) => (ruledOut[index] = option)"
   />
 
@@ -92,6 +93,8 @@ const props = defineProps<{
   columns?: 1 | 2
   /** Enable the Quick quiz's optional hints. */
   hints?: boolean
+  /** Pause the hint timer while the parent regenerates a new quiz. */
+  paused?: boolean
 }>()
 
 const { t } = useLocalMessages({ aiHelper: aiGeneratorMessages })

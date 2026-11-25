@@ -6,7 +6,44 @@ interface BlobDownloadPayload {
 }
 
 const MAX_DOWNLOAD_FILE_NAME_LENGTH = 180
+/** How long an opened file's object URL stays valid (the new tab has loaded it by then). */
+const PREVIEW_URL_LIFETIME_MS = 60_000
 const WINDOWS_RESERVED_DEVICE_NAMES = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i
+
+/** PDFs, PNGs and JPEGs can open in a preview tab. */
+export function canPreviewFile(blob: Blob): boolean {
+  const [mimeType] = blob.type.split(';', 1)
+  return ['application/pdf', 'image/png', 'image/jpeg'].includes(mimeType.trim().toLowerCase())
+}
+
+/**
+ * Opens an authorised file (a support screenshot) in a new tab when the browser can show it (PDF, PNG, JPG) and saves
+ * it otherwise. The tab is opened before the download starts, inside the click, so pop-up blockers allow it.
+ */
+export async function openFileDownload(load: () => Promise<BlobDownloadPayload>, fallbackName: string): Promise<void> {
+  const tab = window.open('', '_blank')
+  if (tab) tab.opener = null
+  let previewed = false
+  let download: BlobDownloadPayload
+  try {
+    download = await load()
+    if (tab && !tab.closed && canPreviewFile(download.blob)) {
+      const url = URL.createObjectURL(download.blob)
+      try {
+        tab.location.href = url
+      } catch (error) {
+        URL.revokeObjectURL(url)
+        throw error
+      }
+      window.setTimeout(() => URL.revokeObjectURL(url), PREVIEW_URL_LIFETIME_MS)
+      previewed = true
+      return
+    }
+  } finally {
+    if (!previewed && tab && !tab.closed) tab.close()
+  }
+  saveBlobDownload(download, fallbackName)
+}
 
 /**
  * Saves a fetched file through a hidden download link, under its own name or else `fallbackName`, made safe for every

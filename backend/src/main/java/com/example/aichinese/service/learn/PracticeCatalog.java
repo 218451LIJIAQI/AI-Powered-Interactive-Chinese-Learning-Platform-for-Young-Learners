@@ -59,7 +59,7 @@ import jakarta.persistence.EntityManager;
 @Component
 public class PracticeCatalog {
 
-    static final String ITEM_REQUIRED = "Add at least one item to this set.";
+    private static final String ITEM_REQUIRED = "Add at least one item to this set.";
     /** Max distractor meanings included alongside the right meaning in Mistakes review choice questions. */
     private static final int CHOICE_DECOYS = 3;
     private static final int MAX_TRACING_CHARACTERS = 10;
@@ -109,7 +109,7 @@ public class PracticeCatalog {
     }
 
     /** Older published sets can still be played if their material supports the activity. */
-    public boolean isPlayable(PracticeType type, SetContent content) {
+    boolean isPlayable(PracticeType type, SetContent content) {
         return !content.items().isEmpty() && types.get(type).playable(content);
     }
 
@@ -158,7 +158,9 @@ public class PracticeCatalog {
         set.setLearningStage(request.stage());
         set.setHskLevel(request.hskLevel());
         set.setXpReward(RewardRules.practiceSetXp(type, request.hskLevel(), request.items().size()));
-        set.setUpdatedAt(LocalDateTime.now());
+        if (set.getId() != null) {
+            set.setUpdatedAt(LocalDateTime.now());
+        }
         support.write(set, request, entityManager);
     }
 
@@ -176,10 +178,22 @@ public class PracticeCatalog {
         return node.hasNonNull(field) ? trimToNull(node.get(field).asText()) : null;
     }
 
-    private static List<ChoiceOption> cleanOptions(List<ChoiceOption> options) {
-        return options.stream()
-                .map(option -> new ChoiceOption(trimToNull(option.text()), trimToNull(option.pinyin())))
-                .toList();
+    private static PracticeItemData wordItem(String hanzi, String pinyin, String meaning) {
+        return new PracticeItemData(hanzi, pinyin, meaning, null, null, null, null, List.of(), null, null, null);
+    }
+
+    private static PracticeItemData tileItem(String hanzi, String pinyin, String meaning, String distractors) {
+        return new PracticeItemData(hanzi, pinyin, meaning, null, null, null, null, List.of(), null, null, distractors);
+    }
+
+    private static PracticeItemData flashcardItem(
+            String hanzi, String pinyin, String meaning, String example, String exampleMeaning) {
+        return new PracticeItemData(hanzi, pinyin, meaning, null, null, example, exampleMeaning, List.of(), null, null, null);
+    }
+
+    private static PracticeItemData listeningItem(
+            String prompt, String audioText, List<ChoiceOption> options, Integer correctIndex, String explanation) {
+        return new PracticeItemData(null, null, null, prompt, audioText, null, null, options, correctIndex, explanation, null);
     }
 
     /**
@@ -301,9 +315,8 @@ public class PracticeCatalog {
         @Override
         List<Item> items(Flashcard entity) {
             return itemRepository.findByFlashcardIdOrderBySortOrderAscIdAsc(entity.getId()).stream()
-                    .map(card -> new Item(String.valueOf(card.getId()), new PracticeItemData(card.getHanzi(),
-                            card.getPinyin(), card.getMeaning(), null, null, card.getExample(),
-                            card.getExampleMeaning(), List.of(), null, null, null), null))
+                    .map(card -> new Item(String.valueOf(card.getId()), flashcardItem(card.getHanzi(),
+                            card.getPinyin(), card.getMeaning(), card.getExample(), card.getExampleMeaning()), null))
                     .toList();
         }
 
@@ -313,11 +326,11 @@ public class PracticeCatalog {
                     request.items(), FlashcardItem::new, itemRepository, (card, position, data) -> {
                         card.setFlashcard(saved);
                         card.setSortOrder(position);
-                        card.setHanzi(trimToNull(data.hanzi()));
-                        card.setPinyin(trimToNull(data.pinyin()));
-                        card.setMeaning(trimToNull(data.meaning()));
-                        card.setExample(trimToNull(data.example()));
-                        card.setExampleMeaning(trimToNull(data.exampleMeaning()));
+                        card.setHanzi(data.hanzi());
+                        card.setPinyin(data.pinyin());
+                        card.setMeaning(data.meaning());
+                        card.setExample(data.example());
+                        card.setExampleMeaning(data.exampleMeaning());
                     });
         }
     }
@@ -362,8 +375,7 @@ public class PracticeCatalog {
                 String prompt = textOf(node, "question");
                 String audio = textOf(node, "audioText");
                 String explanation = textOf(node, "explanation");
-                PracticeItemData data = new PracticeItemData(null, null, null, prompt, audio, null, null, options,
-                        found < 0 ? null : found, explanation, null);
+                PracticeItemData data = listeningItem(prompt, audio, options, found < 0 ? null : found, explanation);
                 GradableItem gradable = new GradableItem(AnswerKind.CHOICE, null, prompt, null, null, null, audio,
                         options, List.of(), answer, explanation);
                 items.add(new Item(String.valueOf(index++), data, gradable));
@@ -376,14 +388,14 @@ public class PracticeCatalog {
             ObjectNode root = JsonNodeFactory.instance.objectNode();
             ArrayNode questions = root.putArray("questions");
             for (PracticeItemData data : request.items()) {
-                List<ChoiceOption> options = cleanOptions(data.options());
+                List<ChoiceOption> options = data.options();
                 ObjectNode question = questions.addObject();
-                question.put("question", trimToNull(data.prompt()));
-                question.put("audioText", trimToNull(data.audioText()));
+                question.put("question", data.prompt());
+                question.put("audioText", data.audioText());
                 question.set("options", LearnAnswers.optionsNode(options));
                 question.put("answer", options.get(data.correctIndex()).text());
-                if (!isBlankOrSpaces(data.explanation())) {
-                    question.put("explanation", trimToNull(data.explanation()));
+                if (data.explanation() != null) {
+                    question.put("explanation", data.explanation());
                 }
             }
             entity.setQuestionPayload(root.toString());
@@ -443,8 +455,7 @@ public class PracticeCatalog {
 
         @Override
         List<Item> items(TracingExercise entity) {
-            return List.of(new Item("0", new PracticeItemData(entity.getTargetCharacter(), entity.getPinyin(),
-                    entity.getMeaning(), null, null, null, null, List.of(), null, null, null), null));
+            return List.of(new Item("0", wordItem(entity.getTargetCharacter(), entity.getPinyin(), entity.getMeaning()), null));
         }
 
         @Override
@@ -502,9 +513,9 @@ public class PracticeCatalog {
         @Override
         void applyFields(TracingExercise entity, PracticeSetRequest request) {
             PracticeItemData data = request.items().getFirst();
-            entity.setTargetCharacter(trimToNull(data.hanzi()));
-            entity.setPinyin(trimToNull(data.pinyin()));
-            entity.setMeaning(trimToNull(data.meaning()));
+            entity.setTargetCharacter(data.hanzi());
+            entity.setPinyin(data.pinyin());
+            entity.setMeaning(data.meaning());
             entity.setStrokeCount(request.strokeCount());
             entity.setCharacterStrokes(request.characterStrokes().isEmpty()
                     ? null
@@ -553,9 +564,8 @@ public class PracticeCatalog {
                     .map(sentence -> {
                         List<String> tiles = new ArrayList<>(LearnAnswers.tiles(sentence.getDragText()));
                         tiles.addAll(LearnAnswers.tiles(sentence.getDistractors()));
-                        PracticeItemData data = new PracticeItemData(sentence.getDragText(), sentence.getPinyin(),
-                                sentence.getTargetZone(), null, null, null, null, List.of(), null, null,
-                                sentence.getDistractors());
+                        PracticeItemData data = tileItem(sentence.getDragText(), sentence.getPinyin(),
+                                sentence.getTargetZone(), sentence.getDistractors());
                         GradableItem gradable = new GradableItem(AnswerKind.BUILD, LearnQuestionType.TRANSLATE_BUILD,
                                 null, LearnAnswers.joinTiles(sentence.getDragText()), sentence.getPinyin(),
                                 sentence.getTargetZone(), null, List.of(), shuffled(tiles, sentence.getId()),
@@ -572,8 +582,8 @@ public class PracticeCatalog {
                         sentence.setDragDropActivity(saved);
                         sentence.setSortOrder(position);
                         sentence.setDragText(String.join(" ", LearnAnswers.tiles(data.hanzi())));
-                        sentence.setTargetZone(trimToNull(data.meaning()));
-                        sentence.setPinyin(trimToNull(data.pinyin()));
+                        sentence.setTargetZone(data.meaning());
+                        sentence.setPinyin(data.pinyin());
                         List<String> distractors = LearnAnswers.tiles(data.distractors());
                         sentence.setDistractors(distractors.isEmpty() ? null : String.join(" ", distractors));
                     });
@@ -632,8 +642,7 @@ public class PracticeCatalog {
             List<String> allMeanings = pairs.stream().map(MatchingGameItem::getRightText).toList();
             return pairs.stream()
                     .map(pair -> {
-                        PracticeItemData data = new PracticeItemData(pair.getLeftText(), pair.getPinyin(),
-                                pair.getRightText(), null, null, null, null, List.of(), null, null, null);
+                        PracticeItemData data = wordItem(pair.getLeftText(), pair.getPinyin(), pair.getRightText());
                         List<ChoiceOption> choices = meaningChoices(pair.getRightText(), allMeanings, pair.getId());
                         GradableItem gradable = new GradableItem(AnswerKind.CHOICE, LearnQuestionType.MEANING, null,
                                 pair.getLeftText(), pair.getPinyin(), pair.getRightText(), null, choices, List.of(),
@@ -649,9 +658,9 @@ public class PracticeCatalog {
                     request.items(), MatchingGameItem::new, itemRepository, (pair, position, data) -> {
                         pair.setMatchingGame(saved);
                         pair.setSortOrder(position);
-                        pair.setLeftText(trimToNull(data.hanzi()));
-                        pair.setRightText(trimToNull(data.meaning()));
-                        pair.setPinyin(trimToNull(data.pinyin()));
+                        pair.setLeftText(data.hanzi());
+                        pair.setRightText(data.meaning());
+                        pair.setPinyin(data.pinyin());
                     });
         }
     }
@@ -721,8 +730,7 @@ public class PracticeCatalog {
                 List<ChoiceOption> candidates = shuffled(words, seed).stream()
                         .map(word -> new ChoiceOption(word, null))
                         .toList();
-                PracticeItemData data = new PracticeItemData(hanzi, pinyin, meaning, null, null, null, null,
-                        List.of(), null, null, decoys);
+                PracticeItemData data = tileItem(hanzi, pinyin, meaning, decoys);
                 GradableItem gradable = new GradableItem(AnswerKind.CHOICE, LearnQuestionType.HANZI, null, hanzi,
                         pinyin, meaning, null, candidates, List.of(), hanzi, null);
                 items.add(new Item(String.valueOf(index++), data, gradable));
@@ -736,9 +744,9 @@ public class PracticeCatalog {
             ArrayNode words = root.putArray("words");
             for (PracticeItemData data : request.items()) {
                 ObjectNode word = words.addObject();
-                word.put("meaning", trimToNull(data.meaning()));
-                word.put("hanzi", trimToNull(data.hanzi()));
-                word.put("pinyin", trimToNull(data.pinyin()));
+                word.put("meaning", data.meaning());
+                word.put("hanzi", data.hanzi());
+                word.put("pinyin", data.pinyin());
                 word.put("decoys", String.join(" ", distinctTiles(data.distractors())));
             }
             entity.setWordPayload(root.toString());

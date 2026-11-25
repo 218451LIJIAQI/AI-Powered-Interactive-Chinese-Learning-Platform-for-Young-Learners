@@ -15,6 +15,7 @@ export const adminAuditMessages = {
     userChipRemove: 'Remove the filter: by or about {name}',
     userUnknown: 'account #{id}',
     invalidRange: 'The From date must be on or before the To date.',
+    outOfRange: 'Date filter is out of the supported range.',
     tableLabel: 'Audit entries',
     colEvent: 'Event',
     category: 'Category',
@@ -40,6 +41,7 @@ export const adminAuditMessages = {
     immutable: 'Audit entries can’t be edited or deleted.',
     openTarget: 'Open {target}',
     entryLoading: 'Loading the entry',
+    entryLoadingHint: 'Getting the entry details.',
     entryError: 'This entry could not be loaded',
   },
   ms: {
@@ -57,6 +59,7 @@ export const adminAuditMessages = {
     userChipRemove: 'Buang penapis: oleh atau tentang {name}',
     userUnknown: 'akaun #{id}',
     invalidRange: 'Tarikh Dari mestilah pada atau sebelum tarikh Hingga.',
+    outOfRange: 'Penapis tarikh berada di luar julat yang disokong.',
     tableLabel: 'Entri audit',
     colEvent: 'Peristiwa',
     category: 'Kategori',
@@ -82,6 +85,7 @@ export const adminAuditMessages = {
     immutable: 'Entri audit tidak boleh disunting atau dipadam.',
     openTarget: 'Buka {target}',
     entryLoading: 'Memuatkan entri',
+    entryLoadingHint: 'Mendapatkan butiran entri.',
     entryError: 'Entri ini tidak dapat dimuatkan',
   },
   'zh-CN': {
@@ -99,6 +103,7 @@ export const adminAuditMessages = {
     userChipRemove: '移除筛选：{name} 的操作及与其相关的记录',
     userUnknown: '账号 #{id}',
     invalidRange: '开始日期必须早于或等于结束日期。',
+    outOfRange: '日期筛选超出支持的范围。',
     tableLabel: '审计记录',
     colEvent: '事件',
     category: '类别',
@@ -124,6 +129,7 @@ export const adminAuditMessages = {
     immutable: '审计记录无法编辑或删除。',
     openTarget: '打开 {target}',
     entryLoading: '正在加载记录',
+    entryLoadingHint: '正在获取记录详情。',
     entryError: '无法加载此记录',
   },
-}
+} as const

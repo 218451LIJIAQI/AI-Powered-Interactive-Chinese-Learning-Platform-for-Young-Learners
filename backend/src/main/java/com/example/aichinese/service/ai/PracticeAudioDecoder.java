@@ -3,6 +3,7 @@ package com.example.aichinese.service.ai;
 import java.io.IOException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -25,8 +26,12 @@ class PracticeAudioDecoder {
     private static final int MAX_SECONDS = 300;
     private static final int MAX_BYTES = MAX_SECONDS * BYTES_PER_SECOND;
     private static final int TIMEOUT_SECONDS = 15;
+    private static final int MAX_CONCURRENT_DECODES = Math.clamp(Runtime.getRuntime().availableProcessors(), 2, 8);
+    private static final int PERMIT_TIMEOUT_SECONDS = 5;
 
     private final AiProperties properties;
+    /** Bulkhead limiting concurrent FFmpeg processes and in-memory PCM buffers. */
+    private final Semaphore decodePermits = new Semaphore(MAX_CONCURRENT_DECODES, true);
 
     byte[] pcm(PracticeUpload audio) throws DecodeException {
         if (audio == null || audio.contentType() == null || audio.data() == null || audio.data().length == 0) {
@@ -38,6 +43,25 @@ class PracticeAudioDecoder {
             case "audio/mpeg", "audio/mp3" -> "mp3";
             default -> throw new DecodeException(TencentPronunciationClient.Failure.UNREADABLE_AUDIO);
         };
+        boolean acquired;
+        try {
+            acquired = decodePermits.tryAcquire(PERMIT_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new DecodeException(TencentPronunciationClient.Failure.DECODER_UNAVAILABLE);
+        }
+        if (!acquired) {
+            log.warn("FFmpeg audio decoder busy; rejecting upload after {}s wait.", PERMIT_TIMEOUT_SECONDS);
+            throw new DecodeException(TencentPronunciationClient.Failure.DECODER_UNAVAILABLE);
+        }
+        try {
+            return decodeWithFfmpeg(audio, format);
+        } finally {
+            decodePermits.release();
+        }
+    }
+
+    private byte[] decodeWithFfmpeg(PracticeUpload audio, String format) throws DecodeException {
         Process decoder;
         try {
             // Decoding stops one second past the limit, so a longer recording reads as too long instead of being cut.

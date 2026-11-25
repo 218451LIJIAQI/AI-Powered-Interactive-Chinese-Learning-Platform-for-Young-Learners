@@ -3,7 +3,7 @@
     <h2 :id="`${baseId}-title`" ref="heading" class="focus-title" tabindex="-1">{{ t('learn.instructionSay') }}</h2>
 
     <div class="learn-question-prompt">
-      <ListenButtons :text="hanzi" prompt />
+      <ListenButtons :text="hanzi" prompt @play="stopPlayback" />
       <div class="learn-question-word">
         <p class="hanzi learn-question-hanzi" lang="zh-CN">{{ hanzi }}</p>
         <p v-if="caption" class="learn-question-pinyin">{{ caption }}</p>
@@ -14,6 +14,7 @@
       <div v-if="recorder.supported" class="btn-group">
         <button
           v-if="recorder.isRecording.value"
+          ref="stopButton"
           class="btn btn-secondary"
           type="button"
           data-testid="say-stop"
@@ -24,9 +25,10 @@
         </button>
         <button
           v-else
+          ref="recordButton"
           class="btn btn-secondary"
           type="button"
-          :disabled="recorder.isBusy.value"
+          :aria-disabled="recorder.isBusy.value || undefined"
           :aria-busy="recorder.isBusy.value"
           data-testid="say-record"
           @click="requestRecording"
@@ -36,6 +38,7 @@
         </button>
         <button
           v-if="recorder.previewUrl.value && !recorder.isBusy.value"
+          ref="playButton"
           class="btn btn-secondary"
           type="button"
           :aria-pressed="playing"
@@ -55,6 +58,7 @@
         @play="playing = true"
         @pause="playing = false"
         @ended="playing = false"
+        @error="onPlaybackError"
       />
       <!-- While recording: keep the ticking clock outside the live region so screen readers are not interrupted every second. -->
       <p v-if="recorder.isRecording.value" class="learn-say-note">
@@ -128,6 +132,9 @@ const caption = computed(() => [props.pinyin, props.meaning].filter(Boolean).joi
 // Playing the recording back
 
 const heading = ref<HTMLHeadingElement | null>(null)
+const stopButton = ref<HTMLButtonElement | null>(null)
+const recordButton = ref<HTMLButtonElement | null>(null)
+const playButton = ref<HTMLButtonElement | null>(null)
 const player = ref<HTMLAudioElement | null>(null)
 const playing = ref(false)
 const playbackFailed = ref(false)
@@ -137,6 +144,19 @@ onMounted(() => {
     heading.value?.focus()
   }
 })
+
+// Hand focus across the Record <-> Stop button swap when the active button unmounts so keyboard users do not drop to <body>.
+watch(
+  recorder.isRecording,
+  (recording) => {
+    const active = document.activeElement
+    if (!active || active === document.body || !active.isConnected) {
+      if (recording) stopButton.value?.focus()
+      else (playButton.value ?? recordButton.value)?.focus()
+    }
+  },
+  { flush: 'post' },
+)
 
 async function togglePlayback(): Promise<void> {
   const audio = player.value
@@ -158,10 +178,17 @@ async function togglePlayback(): Promise<void> {
 }
 
 function stopPlayback(): void {
-  if (player.value && !player.value.paused) player.value.pause()
+  player.value?.pause()
+  playing.value = false
+}
+
+function onPlaybackError(): void {
+  playing.value = false
+  playbackFailed.value = true
 }
 
 function requestRecording(): void {
+  if (recorder.isBusy.value) return
   stopSpeaking()
   stopPlayback()
   void mic.request()
@@ -170,7 +197,6 @@ function requestRecording(): void {
 // A new recording replaces the one being played.
 watch(recorder.previewUrl, () => {
   stopPlayback()
-  playing.value = false
   playbackFailed.value = false
 })
 

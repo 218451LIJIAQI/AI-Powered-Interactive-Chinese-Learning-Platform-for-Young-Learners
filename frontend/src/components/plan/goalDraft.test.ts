@@ -1,9 +1,8 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { learningPlan } from '@/test/planFixtures'
 
 import {
-  DEFAULT_PACE,
   deadlinePassed,
   deadlineReady,
   draftFromPlan,
@@ -17,10 +16,6 @@ import {
 } from './goalDraft'
 
 describe('goal draft', () => {
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
   it('keeps "Not sure yet" on its own', () => {
     expect(toggledGoals(['ORDER_FOOD'], 'NOT_SURE')).toEqual(['NOT_SURE'])
     expect(toggledGoals(['NOT_SURE'], 'ORDER_FOOD')).toEqual(['ORDER_FOOD'])
@@ -34,7 +29,6 @@ describe('goal draft', () => {
   })
 
   it('starts with 1–2 hours a day and no date chosen yet', () => {
-    expect(DEFAULT_PACE).toBe('HOURS_1_TO_2')
     expect(emptyDraft()).toMatchObject({ pace: 'HOURS_1_TO_2', deadline: undefined })
     expect(deadlineReady(emptyDraft())).toBe(false)
     expect(() => goalInput(emptyDraft())).toThrow()

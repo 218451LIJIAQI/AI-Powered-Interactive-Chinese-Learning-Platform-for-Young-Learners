@@ -1,5 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 
 import { pickAiQuizOption } from '@/test/helpers'
@@ -35,10 +35,6 @@ describe('AiQuizHint (SparkBot hints in the Quick quiz)', () => {
     hintSettings.value = settings()
   })
 
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
   it('offers a hint only once the learner has been stuck for the wait of their level', async () => {
     const wrapper = mountQuiz()
     expect(wrapper.find('[data-testid="ai-quiz-hint-offer"]').exists()).toBe(false)
@@ -60,7 +56,8 @@ describe('AiQuizHint (SparkBot hints in the Quick quiz)', () => {
     expect(card.get('.ai-hint-title').text()).toBe('SparkBot hint')
     expect(card.get('.ai-hint-text').text()).toBe('Question 1: it isn’t “我是老师。”.')
     // The AI quiz has no XP, so the card says nothing about it (S8.19).
-    expect(card.find('.ai-hint-note').exists()).toBe(false)
+    expect(card.text()).not.toMatch(/\bXP\b/i)
+    expect(card.findAll('p')).toHaveLength(2)
     const options = wrapper.findAll('.ai-question')[0]!.findAll('.ai-option')
     expect(options[1]!.classes()).toContain('is-ruled-out')
     expect(options[1]!.get<HTMLInputElement>('input').element.disabled).toBe(true)

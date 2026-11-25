@@ -115,7 +115,7 @@ const warnedUnknownIcons = new Set<string>()
 /** Also holds the unit icons the backend sends as `iconKey` (see `LearnPathContent`). */
 const iconMap = {
   home: House,
-  about: Sparkles,
+  sparkles: Sparkles,
   shield: ShieldCheck,
   learn: BookOpen,
   practice: Compass,

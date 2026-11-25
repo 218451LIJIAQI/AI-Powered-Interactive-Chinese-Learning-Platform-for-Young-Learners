@@ -1,5 +1,5 @@
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { RouterView } from 'vue-router'
 
 import { buttonNamed, deferred, pageOf, rateFlashcard } from '@/test/helpers'
@@ -81,10 +81,6 @@ describe('StudentPracticePage', () => {
     api.mistakes.mockResolvedValue({ page: pageOf([]), all: 0, learn: 0, practice: 0 })
   })
 
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
   it('has no hub: the seven tabs, today’s goal and the first tab open straight away', async () => {
     api.sets.mockResolvedValue([summary(4, 'Numbers cards', true), summary(5, 'Greetings cards')])
     api.set.mockResolvedValue(flashcardSet())
@@ -150,7 +146,10 @@ describe('StudentPracticePage', () => {
     expect(wrapper.text()).toContain('Card 1 of 2')
     expect(wrapper.get('[data-testid="previous-card"]').attributes('aria-disabled')).toBe('true')
     expect(wrapper.get('[data-testid="flip"]').text()).toBe('Show meaning')
-    expect(wrapper.find('[data-testid="mark-reviewed"]').exists()).toBe(false)
+    expect(wrapper.findAll('.practice-footer button').map((button) => button.text())).toEqual([
+      'Previous',
+      'Show meaning',
+    ])
     expect(wrapper.find('[data-testid="rate-card"]').exists()).toBe(false)
     // The back: the meaning, then [Still learning] [Got it], which move on.
     await wrapper.get('[data-testid="flip"]').trigger('click')
@@ -237,7 +236,7 @@ describe('StudentPracticePage', () => {
 
     expect(wrapper.text()).toContain('Listening · 2 questions')
     expect(wrapper.text()).toContain('Question 1 of 2')
-    expect(wrapper.find('[data-testid="in-a-row"]').exists()).toBe(false)
+    expect(wrapper.find('.practice-combo').exists()).toBe(false)
     expect(wrapper.text()).toContain('How sure are you?')
 
     await wrapper.get('[data-testid="option-0"]').trigger('click')
@@ -589,7 +588,6 @@ describe('StudentPracticePage', () => {
     expect(wrapper.find('[data-testid="flashcards-player"]').exists()).toBe(true)
     expect(api.sets).toHaveBeenCalledOnce()
     stop()
-    wrapper.unmount()
   })
 
   it('does not reload an abandoned activity when pinning redirects to another page', async () => {
@@ -612,6 +610,19 @@ describe('StudentPracticePage', () => {
     expect(wrapper.findComponent(StudentPracticePage).exists()).toBe(false)
     expect(api.sets).toHaveBeenCalledOnce()
     stop()
-    wrapper.unmount()
+  })
+
+  it('retries a failed daily goal fetch when switching practice tabs', async () => {
+    api.today.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(today())
+    api.sets.mockResolvedValue([summary(5, 'Greetings cards')])
+    api.set.mockResolvedValue(flashcardSet())
+    const { wrapper, router } = await mountAt('/student/practice/flashcards')
+
+    expect(wrapper.find('[data-testid="daily-goal"]').exists()).toBe(false)
+    await router.push('/student/practice/listening')
+    await flushPromises()
+
+    expect(api.today).toHaveBeenCalledTimes(2)
+    expect(wrapper.get('[data-testid="daily-goal"]').text()).toContain('20 / 30 XP')
   })
 })

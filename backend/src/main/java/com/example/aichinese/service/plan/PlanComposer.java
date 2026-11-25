@@ -59,6 +59,9 @@ public final class PlanComposer {
     static final int MAX_PLAN_CLASSES = 3;
     private static final Pattern WORD = Pattern.compile("[\\p{L}\\p{N}]+");
 
+    private static final Comparator<PlanCatalogue.ClassOption> JOINED_FIRST =
+            Comparator.comparing((PlanCatalogue.ClassOption option) -> !option.joined());
+
     private PlanComposer() {
     }
 
@@ -266,26 +269,33 @@ public final class PlanComposer {
         // Each class follows the Learn unit it backs up; a class without a unit of the plan (or without any unit) goes
         // with the first unit.
         Map<PlanCatalogue.ClassOption, Long> anchors = classAnchors(goal, candidates, draft, learnSteps);
-        List<PlanCatalogue.ClassOption> unplaced = anchors.keySet().stream()
-                .filter(option -> learnSteps.stream().noneMatch(step -> step.refId().equals(anchors.get(option))))
-                .toList();
-        List<Step> steps = new ArrayList<>();
-        if (learnSteps.isEmpty()) {
-            unplaced.stream()
-                    .sorted(Comparator.comparing((PlanCatalogue.ClassOption option) -> !option.joined()))
-                    .forEach(option -> steps.add(classStep(goal, option, reasons, 1, contentWeeks)));
+        Long firstLearnId = learnSteps.isEmpty() ? null : learnSteps.getFirst().refId();
+        Map<Long, List<PlanCatalogue.ClassOption>> classesByUnit = new LinkedHashMap<>();
+        for (Step learn : learnSteps) {
+            classesByUnit.put(learn.refId(), new ArrayList<>());
         }
-        for (int index = 0; index < learnSteps.size(); index++) {
-            Step learn = learnSteps.get(index);
-            steps.add(learn);
-            List<PlanCatalogue.ClassOption> here = new ArrayList<>(anchors.keySet().stream()
-                    .filter(option -> learn.refId().equals(anchors.get(option)))
-                    .toList());
-            if (index == 0) {
-                here.addAll(unplaced);
+        List<PlanCatalogue.ClassOption> unplaced = new ArrayList<>();
+        anchors.forEach((option, anchorId) -> {
+            List<PlanCatalogue.ClassOption> bucket = anchorId == null ? null : classesByUnit.get(anchorId);
+            if (bucket != null) {
+                bucket.add(option);
+            } else if (firstLearnId != null) {
+                classesByUnit.get(firstLearnId).add(option);
+            } else {
+                unplaced.add(option);
             }
-            here.sort(Comparator.comparing((PlanCatalogue.ClassOption option) -> !option.joined()));
-            here.forEach(option -> steps.add(classStep(goal, option, reasons, learn.weekFrom(), contentWeeks)));
+        });
+        List<Step> steps = new ArrayList<>(learnSteps.size() + anchors.size());
+        if (learnSteps.isEmpty()) {
+            unplaced.sort(JOINED_FIRST);
+            unplaced.forEach(option -> steps.add(classStep(goal, option, reasons, 1, contentWeeks)));
+        } else {
+            for (Step learn : learnSteps) {
+                steps.add(learn);
+                List<PlanCatalogue.ClassOption> here = classesByUnit.get(learn.refId());
+                here.sort(JOINED_FIRST);
+                here.forEach(option -> steps.add(classStep(goal, option, reasons, learn.weekFrom(), contentWeeks)));
+            }
         }
 
         // Weeks and the deadline.
@@ -331,25 +341,31 @@ public final class PlanComposer {
                     .forEach(option -> anchors.put(option, ruleAnchor(goal, candidates.units(), learnSteps, option)));
             return anchors;
         }
-        int joinedCount = (int) candidates.classes().stream().filter(PlanCatalogue.ClassOption::joined).count();
+        Map<Long, PlanCatalogue.ClassOption> byId = new LinkedHashMap<>();
+        int joinedCount = 0;
+        for (PlanCatalogue.ClassOption option : candidates.classes()) {
+            byId.put(option.id(), option);
+            if (option.joined()) {
+                joinedCount++;
+            }
+        }
         int optionalCap = Math.max(0, MAX_PLAN_CLASSES - joinedCount);
         int optionalPicked = 0;
         Long anchor = null;
         for (DraftStep step : draft.get().steps()) {
             if (step.kind() == PlanStepKind.LEARN_UNIT) {
                 anchor = step.refId();
-            } else {
-                Optional<PlanCatalogue.ClassOption> option = candidates.classes().stream()
-                        .filter(candidate -> candidate.id().equals(step.refId()))
-                        .findFirst();
-                if (option.isPresent() && !anchors.containsKey(option.get()) && anchors.size() < MAX_PLAN_CLASSES) {
-                    if (option.get().joined()) {
-                        anchors.put(option.get(), anchor);
-                    } else if (optionalPicked < optionalCap) {
-                        anchors.put(option.get(), anchor);
-                        optionalPicked++;
-                    }
-                }
+                continue;
+            }
+            PlanCatalogue.ClassOption option = byId.get(step.refId());
+            if (option == null || anchors.containsKey(option) || anchors.size() >= MAX_PLAN_CLASSES) {
+                continue;
+            }
+            if (option.joined()) {
+                anchors.put(option, anchor);
+            } else if (optionalPicked < optionalCap) {
+                anchors.put(option, anchor);
+                optionalPicked++;
             }
         }
         // Keep every joined class even when SparkBot left it out; optionalCap reserved slots for them above.

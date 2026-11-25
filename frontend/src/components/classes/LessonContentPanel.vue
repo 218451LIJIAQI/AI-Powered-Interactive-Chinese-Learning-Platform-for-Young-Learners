@@ -25,11 +25,20 @@
             <label class="field-label" for="lesson-unit">
               {{ t('lessonEditor.details.unit') }}<span class="required-mark" aria-hidden="true">*</span>
             </label>
-            <select id="lesson-unit" v-model="unitId" class="select" :disabled="!editor.editable">
+            <select
+              id="lesson-unit"
+              v-model="unitId"
+              class="select"
+              :disabled="!editor.editable"
+              :aria-describedby="editor.status === 'PUBLISHED' && editor.editable ? 'lesson-unit-hint' : undefined"
+            >
               <option v-for="unit in editor.units" :key="unit.id" :value="unit.id">
                 {{ unitNames.get(unit.id) }}
               </option>
             </select>
+            <p v-if="editor.status === 'PUBLISHED' && editor.editable" id="lesson-unit-hint" class="field-hint">
+              {{ t('lessonEditor.details.unitMoveLive') }}
+            </p>
           </div>
         </div>
       </section>
@@ -39,40 +48,47 @@
           <h2 id="lesson-phrases-title" class="card-title">{{ t('lessonEditor.phrases.title') }}</h2>
           <button
             v-if="editor.editable && keyPhrases.length < 30"
+            ref="addPhraseButton"
             type="button"
             class="btn btn-secondary btn-sm"
-            @click="emit('addPhrase')"
+            @click="addPhrase($event)"
           >
             <IconGlyph name="plus" :size="16" />{{ t('lessonEditor.phrases.add') }}
           </button>
         </div>
         <p v-if="!keyPhrases.length" class="type-caption">{{ t('lessonEditor.phrases.empty') }}</p>
-        <div v-else class="lesson-phrases" role="group" :aria-label="t('lessonEditor.phrases.label')">
+        <div
+          v-else
+          ref="phrasesGroup"
+          class="lesson-phrases"
+          role="group"
+          :aria-label="t('lessonEditor.phrases.label')"
+        >
           <div class="lesson-phrase-row is-head" aria-hidden="true">
             <span />
             <span v-for="column in phraseColumns" :key="column.key">{{ column.label }}</span>
             <span />
           </div>
-          <div v-for="(phrase, index) in keyPhrases" :key="index" class="lesson-phrase-row">
+          <div v-for="(phrase, index) in keyPhrases" :key="index" class="lesson-phrase-row" data-row-item>
             <span class="authoring-tile" aria-hidden="true">{{ index + 1 }}</span>
             <label v-for="column in phraseColumns" :key="column.key" class="lesson-phrase-field">
               <span class="lesson-phrase-label">{{ column.label }}</span>
               <input
-                :value="phrase[column.key]"
+                v-model="phrase[column.key]"
                 class="input"
                 :class="{ 'cjk-text': column.key === 'chinese' }"
                 :maxlength="column.maxlength"
                 :readonly="!editor.editable"
                 :aria-label="`${t('lessonEditor.phrases.rowLabel', { number: index + 1 })}: ${column.label}`"
-                @input="emit('updatePhrase', index, column.key, ($event.target as HTMLInputElement).value)"
               />
             </label>
             <button
               v-if="editor.editable"
               type="button"
               class="btn btn-ghost btn-icon btn-sm"
+              data-row-remove
               :aria-label="t('lessonEditor.phrases.remove', { number: index + 1 })"
-              @click="emit('removePhrase', index)"
+              @click="removePhrase(index, $event)"
             >
               <IconGlyph name="trash" :size="16" />
             </button>
@@ -95,11 +111,13 @@
         </span>
         <button
           v-if="editor.editable"
+          ref="removeVideoButton"
           type="button"
           class="btn btn-ghost btn-sm"
           :disabled="videoBusy"
           :aria-busy="removingVideo || undefined"
           :aria-label="t('lessonEditor.video.removeLabel', { title: editor.video.title })"
+          :aria-describedby="videoError ? 'lesson-video-error' : undefined"
           @click="removeVideo"
         >
           {{ t('lessonEditor.video.remove') }}
@@ -111,6 +129,7 @@
         </label>
         <input
           id="lesson-video-file"
+          ref="videoFileInput"
           class="input"
           type="file"
           :accept="uploadAccept('video')"
@@ -129,7 +148,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 
 import { lessonEditorApi } from '@/api/adminClasses'
 import IconGlyph from '@/components/common/IconGlyph.vue'
@@ -138,28 +157,28 @@ import { lessonEditorMessages } from '@/plugins/lessonEditorMessages'
 import type { LessonEditor } from '@/types/adminClasses'
 import type { KeyPhrase } from '@/types/classes'
 import { resolveApiError } from '@/utils/apiError'
+import { focusAfterRowAdd, focusAfterRowRemove } from '@/utils/focusRowList'
 import { formatClock, formatFileSize } from '@/utils/format'
 import { truncateText } from '@/utils/truncateText'
 import { uploadAccept, uploadFileIssue } from '@/utils/uploadFormat'
 import { probeVideoDuration } from '@/utils/videoMetadata'
 
+import { useLessonPanelGuard } from './useLessonPanelGuard'
+
 const VIDEO_TITLE_MAX_LENGTH = 200
 
 const title = defineModel<string>('title', { required: true })
 const unitId = defineModel<number | null>('unitId', { required: true })
+const keyPhrases = defineModel<KeyPhrase[]>('keyPhrases', { required: true })
 
 const props = defineProps<{
   editor: LessonEditor
-  keyPhrases: readonly KeyPhrase[]
   unitNames: ReadonlyMap<number, string>
   titleError: string | null
   writePending: boolean
 }>()
 const emit = defineEmits<{
   blurTitle: []
-  addPhrase: []
-  removePhrase: [index: number]
-  updatePhrase: [index: number, field: keyof KeyPhrase, value: string]
   updated: [editor: LessonEditor]
   notice: [message: string]
   /** Emitted synchronously when a video upload or removal starts/ends so the editor's tab guard waits for it. */
@@ -177,8 +196,11 @@ const phraseColumns = computed(
     ] as const,
 )
 
-let panelVersion = 0
 let uploadController: AbortController | null = null
+const addPhraseButton = ref<HTMLButtonElement | null>(null)
+const phrasesGroup = ref<HTMLDivElement | null>(null)
+const removeVideoButton = ref<HTMLButtonElement | null>(null)
+const videoFileInput = ref<HTMLInputElement | null>(null)
 const videoOperation = ref<'upload' | 'remove' | null>(null)
 const videoBusy = computed(() => props.writePending || videoOperation.value !== null)
 const uploadingVideo = computed(() => videoOperation.value === 'upload')
@@ -196,44 +218,72 @@ function abortUpload(): void {
   uploadController = null
 }
 
-watch(videoOperation, (operation) => emit('saving', operation !== null), { flush: 'sync' })
-watch(videoLimit, () => {
-  videoError.value = null
-})
-watch(
-  () => props.editor.lessonId,
-  () => {
-    panelVersion++
-    abortUpload()
+const guard = useLessonPanelGuard({
+  lessonId: () => props.editor.lessonId,
+  saving: () => videoOperation.value !== null,
+  onSaving: (saving) => emit('saving', saving),
+  onCleanup: abortUpload,
+  onReset: () => {
     videoOperation.value = null
     videoError.value = null
   },
-  { flush: 'sync' },
-)
-onBeforeUnmount(() => {
-  panelVersion++
-  abortUpload()
-  if (videoOperation.value !== null) emit('saving', false)
 })
+
+function addPhrase(event: MouseEvent): void {
+  const wasFocused = event.currentTarget === document.activeElement
+  keyPhrases.value.push({ chinese: '', pinyin: '', meaning: '' })
+  focusAfterRowAdd(
+    () => phrasesGroup.value,
+    () => addPhraseButton.value,
+    wasFocused,
+  )
+}
+
+function removePhrase(index: number, event: MouseEvent): void {
+  const moveFocus = event.currentTarget === document.activeElement
+  keyPhrases.value.splice(index, 1)
+  focusAfterRowRemove(
+    () => phrasesGroup.value,
+    () => addPhraseButton.value,
+    index,
+    moveFocus,
+  )
+}
 
 async function writeVideo(
   operation: 'upload' | 'remove',
   done: string,
-  write: (id: number, version: number) => Promise<LessonEditor | null>,
+  write: (id: number, isCurrent: () => boolean) => Promise<LessonEditor | null>,
 ): Promise<void> {
-  const version = panelVersion
+  const hadControlFocus =
+    document.activeElement === removeVideoButton.value || document.activeElement === videoFileInput.value
   videoOperation.value = operation
   videoError.value = null
-  try {
-    const next = await write(props.editor.lessonId, version)
-    if (!next || version !== panelVersion) return
-    emit('updated', next)
-    emit('notice', done)
-  } catch (reason) {
-    if (version === panelVersion) videoError.value = resolveApiError(reason, t('lessonEditor.video.error'))
-  } finally {
-    if (version === panelVersion) videoOperation.value = null
-  }
+  await guard.run(
+    async (isCurrent) => {
+      const next = await write(props.editor.lessonId, isCurrent)
+      if (!next || !isCurrent()) return
+      emit('updated', next)
+      emit('notice', done)
+    },
+    {
+      onError: (reason) => {
+        videoError.value = resolveApiError(
+          reason,
+          t(operation === 'remove' ? 'lessonEditor.video.removeError' : 'lessonEditor.video.error'),
+        )
+      },
+      onFinally: () => {
+        videoOperation.value = null
+        if (!hadControlFocus) return
+        void nextTick(() => {
+          if (document.activeElement && document.activeElement !== document.body) return
+          if (operation === 'remove' && props.editor.video) removeVideoButton.value?.focus()
+          else videoFileInput.value?.focus()
+        })
+      },
+    },
+  )
 }
 
 async function pickVideo(event: Event): Promise<void> {
@@ -251,9 +301,9 @@ async function pickVideo(event: Event): Promise<void> {
           : t('lessonEditor.video.tooLarge', { max: formatFileSize(videoLimit.value!) })
     return
   }
-  await writeVideo('upload', t('lessonEditor.video.saved'), async (id, version) => {
+  await writeVideo('upload', t('lessonEditor.video.saved'), async (id, isCurrent) => {
     const seconds = await probeVideoDuration(file)
-    if (version !== panelVersion) return null
+    if (!isCurrent()) return null
     const videoTitle = truncateText(file.name.replace(/\.[^.]+$/, '') || file.name, VIDEO_TITLE_MAX_LENGTH)
     abortUpload()
     const controller = new AbortController()

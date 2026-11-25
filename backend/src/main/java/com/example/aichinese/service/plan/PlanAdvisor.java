@@ -18,6 +18,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.AiFeatureKey;
+import com.example.aichinese.entity.enums.EnumLookups;
 import com.example.aichinese.entity.enums.MandarinLevel;
 import com.example.aichinese.entity.enums.PlanPace;
 import com.example.aichinese.entity.enums.PlanStepKind;
@@ -62,9 +63,9 @@ public class PlanAdvisor {
             LocalDate today) {
         String prompt = prompt(goal, placement, candidates, today, language);
         try {
-            var result = gateway.execute(AiGateway.AiCall.json(user, AiFeatureKey.LEARNING_PLAN, language, prompt,
-                            json -> AiJson.hasText(json, "summary") && json.get("steps") instanceof List<?>)
-                    .withSession(sessionId));
+            var result = gateway.execute(AiGateway.AiCall.json(
+                    user, sessionId, AiFeatureKey.LEARNING_PLAN, language, prompt,
+                    json -> AiJson.hasText(json, "summary") && json.get("steps") instanceof List<?>));
             if (!result.succeeded()) {
                 return Optional.empty();
             }
@@ -166,7 +167,7 @@ public class PlanAdvisor {
     }
 
     /** The band the learner picked, as the setup shows it ("1–2 hours a day"), never minutes of our own. */
-    static String timeBand(PlanPace pace) {
+    private static String timeBand(PlanPace pace) {
         return switch (pace) {
             case UNDER_30_MIN -> "under 30 minutes a day";
             case MINUTES_30_TO_60 -> "30–60 minutes a day";
@@ -215,7 +216,7 @@ public class PlanAdvisor {
                 steps.add(new PlanComposer.DraftStep(kind, refId, clip(AiJson.text(item, "reason"), MAX_REASON)));
             }
         }
-        MandarinLevel target = MandarinLevel.tryFrom(AiJson.text(json, "targetLevel")).orElse(null);
+        MandarinLevel target = EnumLookups.tryFrom(MandarinLevel.class, AiJson.text(json, "targetLevel")).orElse(null);
         boolean unrealistic = "true".equalsIgnoreCase(String.valueOf(json.get("unrealistic")));
         return new PlanComposer.AiDraft(
                 clip(AiJson.text(json, "goalTitle"), MAX_TITLE),

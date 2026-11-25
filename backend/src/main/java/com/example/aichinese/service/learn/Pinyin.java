@@ -11,7 +11,7 @@ import java.util.regex.Pattern;
  * Pinyin as it is typed: without tone marks, spaces or apostrophes, with {@code ü} written {@code v} (the keyboard
  * convention, so 女 is {@code nv}). Tone numbers ({@code xie4xie5}) are dropped as well.
  */
-public final class Pinyin {
+final class Pinyin {
 
     private static final Pattern UMLAUT = Pattern.compile("[üǖǘǚǜ]");
     private static final Pattern NON_ASCII_LOWER = Pattern.compile("[^a-z]");
@@ -25,7 +25,7 @@ public final class Pinyin {
      * "Xièxie" and "xie xie" both type as "xiexie"; "lǜ" as "lv". The text is composed first, so a "ü" written as "u"
      * with a combining diaeresis (as some keyboards and pasted text give it) is still "v".
      */
-    public static String typed(String value) {
+    static String typed(String value) {
         if (value == null) {
             return "";
         }
@@ -38,7 +38,7 @@ public final class Pinyin {
      * Tone numbers and word separators give explicit boundaries. Inside an unseparated word, estimate the
      * syllables from its consonants and vowels for hints such as "two syllables" for "xièxie".
      */
-    public static List<String> syllables(String value) {
+    static List<String> syllables(String value) {
         if (value == null) {
             return List.of();
         }
@@ -50,7 +50,7 @@ public final class Pinyin {
     }
 
     /** The initial of a typed syllable ("zh", "x", or "" for a syllable that starts with a vowel). */
-    public static String initial(String typedSyllable) {
+    static String initial(String typedSyllable) {
         for (String two : TWO_CHAR_INITIALS) {
             if (typedSyllable.startsWith(two)) {
                 return two;

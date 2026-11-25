@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.AfterEach;
@@ -27,6 +28,8 @@ import com.example.aichinese.dto.ai.AiChatResponse;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.AiRequestStatus;
 import com.example.aichinese.exception.GlobalExceptionHandler;
+import com.example.aichinese.security.PublicAuthRequestLimiter;
+import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.AiPracticeCheckService;
 import com.example.aichinese.service.AiResponseReportService;
 import com.example.aichinese.service.AiService;
@@ -49,7 +52,8 @@ class AiControllerChatStreamTests {
     private final AiChatStreamRunner streamRunner = new AiChatStreamRunner(aiService);
     private final MockMvc mockMvc = MockMvcBuilders
             .standaloneSetup(new AiController(aiService, streamRunner, mock(AiHelperStatusService.class),
-                    mock(XiaomeiService.class), mock(AiPracticeCheckService.class), mock(AiResponseReportService.class)))
+                    mock(XiaomeiService.class), mock(AiPracticeCheckService.class), mock(AiResponseReportService.class),
+                    mock(PublicAuthRequestLimiter.class)))
             .setMessageConverters(
                     new StringHttpMessageConverter(StandardCharsets.UTF_8),
                     new MappingJackson2HttpMessageConverter())
@@ -123,6 +127,48 @@ class AiControllerChatStreamTests {
         assertThat(streamBody())
                 .doesNotContain("event:delta")
                 .contains("event:complete", "AI tutor is currently unavailable.", "\"status\":\"UNAVAILABLE\"");
+    }
+
+    @Test
+    void longRepliesWithSurrogatePairsSplitCleanlyAcrossMultipleDeltaEvents() throws Exception {
+        String reply = "🎉你好世界！".repeat(8) + "𠀀𠀁𠀂";
+        when(aiService.prepareChat(any(), any())).thenReturn(PREPARED);
+        when(aiService.completeChat(any(), any())).thenReturn(
+                new AiChatResponse(9L, 44L, reply, AiRequestStatus.SUCCESS));
+
+        String body = streamBody();
+        assertThat(body.split("event:delta", -1).length - 1).isGreaterThan(1);
+        assertThat(body)
+                .contains("🎉", "𠀀𠀁𠀂", "event:complete", "\"status\":\"SUCCESS\"")
+                .doesNotContain("\uFFFD");
+    }
+
+    @Test
+    void exceedingPerUserConcurrentStreamLimitReturns429Synchronously() throws Exception {
+        User learner = new User();
+        learner.setId(77L);
+        learner.setEmail("stream-cap@example.com");
+        SecurityUserDetails principal = new SecurityUserDetails(learner);
+        AiService.PreparedChat prepared = new AiService.PreparedChat(learner, "en", "Hello", null, java.util.List.of());
+        CountDownLatch started = new CountDownLatch(3);
+        CountDownLatch release = new CountDownLatch(1);
+        when(aiService.completeChat(any(), any())).thenAnswer(invocation -> {
+            started.countDown();
+            release.await(5, TimeUnit.SECONDS);
+            return new AiChatResponse(1L, 2L, "Done", AiRequestStatus.SUCCESS);
+        });
+
+        try {
+            for (int i = 0; i < 3; i++) {
+                streamRunner.stream(principal, prepared);
+            }
+            assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> streamRunner.stream(principal, prepared))
+                    .isInstanceOfSatisfying(ResponseStatusException.class,
+                            failure -> assertThat(failure.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS));
+        } finally {
+            release.countDown();
+        }
     }
 
     @Test

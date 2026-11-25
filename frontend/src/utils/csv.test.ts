@@ -15,7 +15,8 @@ describe('CSV text', () => {
     )
   })
 
-  it('joins rows with CRLF', () => {
+  it('joins rows with CRLF and returns empty string for an empty dataset', () => {
+    expect(toCsv([])).toBe('')
     expect(toCsv([['Metric', 'Value'], ['Users', 15], []])).toBe('Metric,Value\r\nUsers,15\r\n\r\n')
   })
 })

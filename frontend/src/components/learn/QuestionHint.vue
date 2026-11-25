@@ -4,7 +4,7 @@
     :type="isListeningQuestion(question) ? 'LISTENING' : null"
     :options="question.options.map((option) => option.text)"
     :report-context="reportContext"
-    :own-toast="ownToast"
+    :own-toast="false"
     @reported="emit('reported')"
   >
     <p v-if="question.answerKind === 'CHOICE'" class="focus-footer-note">
@@ -22,9 +22,7 @@ import { isListeningQuestion } from './listeningQuestion'
 import PracticeHint from './practice/PracticeHint.vue'
 import type { StuckHint } from './practice/useStuckHint'
 
-withDefaults(defineProps<{ question: QuestionView; hint: StuckHint; reportContext: string; ownToast?: boolean }>(), {
-  ownToast: true,
-})
+defineProps<{ question: QuestionView; hint: StuckHint; reportContext: string }>()
 const emit = defineEmits<{ reported: [] }>()
 const { t } = useI18n({ useScope: 'global' })
 </script>

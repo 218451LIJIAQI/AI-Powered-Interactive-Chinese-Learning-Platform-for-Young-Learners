@@ -67,7 +67,6 @@ import jakarta.servlet.http.Cookie;
  *   <li>Reset tokens are single-use, 60-minute TTL, only the hash is
  *       stored.</li>
  *   <li>{@code /me} carries {@code Cache-Control: no-store}.</li>
- *   <li>There is no teacher sign-up.</li>
  *   <li>Logout ends the browser's session (its refresh tokens and the JWTs
  *       that name it) at once; other devices stay signed in.</li>
  * </ul>
@@ -79,7 +78,6 @@ class AuthControllerIntegrationTests extends ApiIntegrationTest {
     private static final String REFRESH_COOKIE_NAME = "mandarin_spark_refresh";
     private static final String REFRESH_COOKIE_PREFIX = REFRESH_COOKIE_NAME + "=";
     private static final String SET_COOKIE_HEADER = "Set-Cookie";
-    private static final String REGISTER_TEACHER_PATH = "/api/v1/auth/register/teacher";
     private static final String REFRESH_PATH = "/api/v1/auth/refresh";
     private static final String LOGOUT_PATH = "/api/v1/auth/logout";
     private static final String ME_PATH = "/api/v1/auth/me";
@@ -122,20 +120,6 @@ class AuthControllerIntegrationTests extends ApiIntegrationTest {
         assertThat(user.getPasswordHash()).isNotBlank();
         assertThat(studentProfileRepository.findByUserId(user.getId())).isPresent();
         assertThat(result.getResponse().getContentAsString()).doesNotContain("password_hash");
-    }
-
-    /** Only learners sign up: the teacher sign-up is gone and creates no account. */
-    @Test
-    void theTeacherSignUpIsGone() throws Exception {
-        String email = uniqueEmail("teacher");
-
-        mockMvc.perform(teacherRegistration(email))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.success").value(false));
-        mockMvc.perform(teacherRegistration(email).header("Authorization", "Bearer " + api.adminToken()))
-                .andExpect(status().isNotFound());
-
-        assertThat(userRepository.findByEmailWithRoles(email)).isEmpty();
     }
 
     @Test
@@ -399,22 +383,6 @@ class AuthControllerIntegrationTests extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.success").value(false));
     }
 
-    @Test
-    void shouldRejectExistingTokenAfterExplicitLogout() throws Exception {
-        String email = uniqueEmail("logout-token");
-        String token = api.registerStudent(email);
-
-        mockMvc.perform(api.authPost(LOGOUT_PATH, token))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true));
-
-        assertThat(activeRefreshTokenIds(user(email))).isEmpty();
-
-        mockMvc.perform(api.authGet(ME_PATH, token))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.success").value(false));
-    }
-
     /**
      * Account › This device: "Sign out" ends this browser's session only (its access token and refresh cookie); the
      * account's other devices stay signed in. The session says when this browser signed in.
@@ -432,9 +400,12 @@ class AuthControllerIntegrationTests extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.data.signedInAt").isString());
 
         mockMvc.perform(api.authPost(LOGOUT_PATH, laptopToken))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
 
-        mockMvc.perform(api.authGet(ME_PATH, laptopToken)).andExpect(status().isUnauthorized());
+        mockMvc.perform(api.authGet(ME_PATH, laptopToken))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false));
         mockMvc.perform(refresh(refreshCookieValue(laptop))).andExpect(status().isUnauthorized());
         mockMvc.perform(api.authGet(ME_PATH, accessToken(phone))).andExpect(status().isOk());
         mockMvc.perform(refresh(refreshCookieValue(phone)))
@@ -454,7 +425,7 @@ class AuthControllerIntegrationTests extends ApiIntegrationTest {
 
         assertThat(result.getResponse().getContentAsString())
                 .contains("\"studentProfile\":null")
-                .doesNotContain("teacherProfile", "passwordHash", "password_hash");
+                .doesNotContain("passwordHash", "password_hash");
     }
 
     @Test
@@ -797,16 +768,6 @@ class AuthControllerIntegrationTests extends ApiIntegrationTest {
         assertThat(lockoutAudit.getTargetType()).isEqualTo("User");
         assertThat(lockoutAudit.getTargetId()).isNull();
         assertThat(lockoutAudit.getDescription()).contains("repeated failed attempts").doesNotContain(email, clientIp);
-    }
-
-    /** The teacher sign-up as the earlier version of the site sent it. */
-    private MockHttpServletRequestBuilder teacherRegistration(String email) throws Exception {
-        return api.jsonPost(REGISTER_TEACHER_PATH, null, Map.of(
-                "fullName", "Teacher One",
-                "email", email,
-                "password", USER_PASSWORD,
-                "confirmPassword", USER_PASSWORD,
-                "bio", "Friendly Mandarin teacher with ten years of classes."));
     }
 
     private MvcResult login(String email) throws Exception {

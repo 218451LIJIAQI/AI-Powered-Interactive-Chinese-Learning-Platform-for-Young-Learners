@@ -1,15 +1,13 @@
 import { flushPromises } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ref } from 'vue'
 
-import { navigationCountsKey } from '@/composables/navigationCounts'
 import { i18n } from '@/plugins/i18n'
 import { deferred, pageOf } from '@/test/helpers'
 import { mountAtRoute } from '@/test/routes'
-import type { AdminAiResponseReportResponse, PageResponse } from '@/types/api'
+import type { AdminAiResponseReportResponse } from '@/types/ai'
+import type { PageResponse } from '@/types/api'
 
 const api = vi.hoisted(() => ({ reports: vi.fn(), report: vi.fn(), reviewReport: vi.fn() }))
-const reloadNavCounts = vi.hoisted(() => vi.fn())
 const progress = vi.hoisted(() => ({ notifyProgressChanged: vi.fn() }))
 
 vi.mock('@/api/ai', () => ({ adminAiApi: api }))
@@ -44,9 +42,7 @@ const RESOLVED_REPORT: AdminAiResponseReportResponse = {
 }
 
 async function mountPage(path = '/admin/ai') {
-  const { wrapper } = await mountAtRoute(AdminAiReportsPage, path, {
-    provide: { [navigationCountsKey]: { latest: ref(null), reload: reloadNavCounts } },
-  })
+  const { wrapper } = await mountAtRoute(AdminAiReportsPage, path)
   return wrapper
 }
 
@@ -58,10 +54,8 @@ function decisionButtons(wrapper: Awaited<ReturnType<typeof mountPage>>) {
 describe('AdminAiReportsPage', () => {
   beforeEach(() => {
     Object.values(api).forEach((fn) => fn.mockReset())
-    reloadNavCounts.mockReset()
     api.reports.mockResolvedValue(pageOf([OPEN_REPORT, RESOLVED_REPORT]))
     api.report.mockResolvedValue(RESOLVED_REPORT)
-    reloadNavCounts.mockResolvedValue(undefined)
   })
 
   it('shows the first report with what the student asked, what the AI answered and their note', async () => {
@@ -154,7 +148,6 @@ describe('AdminAiReportsPage', () => {
     expect(api.reviewReport).toHaveBeenCalledWith(7, 'RESOLVED', 'You are right, it is xièxie.')
     expect(api.reports).toHaveBeenCalledTimes(2)
     expect(progress.notifyProgressChanged).toHaveBeenCalledTimes(1)
-    expect(reloadNavCounts).not.toHaveBeenCalled()
     expect(wrapper.get('[data-testid="toast"]').text()).toBe('Report resolved. Amira sees your note.')
   })
 
@@ -193,7 +186,7 @@ describe('AdminAiReportsPage', () => {
 
     expect(wrapper.get('.data-notice[role="alert"]').text()).toContain('This AI report is already closed.')
     expect(api.reports).toHaveBeenCalledTimes(2)
-    expect(reloadNavCounts).toHaveBeenCalledTimes(1)
+    expect(progress.notifyProgressChanged).toHaveBeenCalledTimes(1)
     const detail = wrapper.get('[data-testid="admin-ai-report-detail"]')
     expect(detail.find('.admin-ai-decision').exists()).toBe(false)
     expect(detail.text()).toContain('Dismissed by Admin Tan')
@@ -269,7 +262,7 @@ describe('AdminAiReportsPage', () => {
   it.each(['success', 'failure'])(
     'preserves a different report draft after an earlier decision %s',
     async (outcome) => {
-      const decision = deferred<void>()
+      const decision = deferred<AdminAiResponseReportResponse>()
       api.reviewReport.mockReturnValue(decision.promise)
       api.reports.mockResolvedValue(pageOf([OPEN_REPORT, { ...OPEN_REPORT, id: 8, studentName: 'Ben' }]))
       const wrapper = await mountPage()
@@ -278,20 +271,21 @@ describe('AdminAiReportsPage', () => {
       await wrapper.get('[data-testid="admin-ai-report-8"]').trigger('click')
       await wrapper.get('textarea').setValue('Unsent note for Ben.')
 
-      if (outcome === 'success') decision.resolve()
-      else decision.reject(new Error('The earlier decision failed'))
+      if (outcome === 'success') decision.resolve({ ...OPEN_REPORT, status: 'RESOLVED' })
+      else decision.reject({ response: { status: 400, data: { message: 'The earlier decision failed' } } })
       await flushPromises()
 
       expect(wrapper.get<HTMLTextAreaElement>('textarea').element.value).toBe('Unsent note for Ben.')
       expect(wrapper.find('.data-notice[role="alert"]').exists()).toBe(false)
       expect(wrapper.text()).not.toContain('The earlier decision failed')
+      expect(wrapper.text()).not.toContain('The decision could not be saved.')
       expect(wrapper.get('[data-testid="admin-ai-report-8"]').attributes('aria-current')).toBe('true')
       expect(api.reviewReport).toHaveBeenCalledWith(7, 'RESOLVED', 'Note for Amira.')
     },
   )
 
   it('shows the decision error when switching away and back to the same report before rejection', async () => {
-    const decision = deferred<void>()
+    const decision = deferred<AdminAiResponseReportResponse>()
     api.reviewReport.mockReturnValue(decision.promise)
     api.reports.mockResolvedValue(pageOf([OPEN_REPORT, { ...OPEN_REPORT, id: 8, studentName: 'Ben' }]))
     const wrapper = await mountPage()

@@ -1,19 +1,16 @@
-import { computed, nextTick, onScopeDispose, ref, watch, type ComputedRef, type Ref } from 'vue'
+import { nextTick, onScopeDispose, ref, watch, type ComputedRef, type Ref } from 'vue'
 
 import type { useMandarinSpeech } from '@/composables/useMandarinSpeech'
 import { useMicPermission } from '@/composables/useMicPermission'
 
-export interface UseXiaomeiVoiceReplyOptions {
+interface UseXiaomeiVoiceReplyOptions {
   speech: ReturnType<typeof useMandarinSpeech>
-  hasLiveVideo: ComputedRef<boolean>
   canStartMic: ComputedRef<boolean>
-  typedMode?: Ref<boolean>
+  typedMode: Ref<boolean>
   isActiveOnScreen: () => boolean
   onError: (message: string | null) => void
   onSendVoice: (text: string) => void
-  onOpenLiveVideo: () => void
   focusDraft: () => void
-  focusMic: () => void
   t: (key: string) => string
 }
 
@@ -22,15 +19,10 @@ export interface UseXiaomeiVoiceReplyOptions {
  * typed fallback switching, and recognition event watchers.
  */
 export function useXiaomeiVoiceReply(options: UseXiaomeiVoiceReplyOptions) {
-  const { speech } = options
+  const { speech, typedMode } = options
   const notHeard = ref(false)
-  const typedMode = options.typedMode ?? ref(false)
   const listenSeconds = ref(0)
   let listenTimer: ReturnType<typeof setInterval> | undefined
-
-  const listening = speech.listening
-  const hasMicMode = computed(() => options.hasLiveVideo.value || speech.canListen)
-  const typing = computed(() => typedMode.value || !hasMicMode.value)
 
   const mic = useMicPermission(startListening)
 
@@ -45,22 +37,6 @@ export function useXiaomeiVoiceReply(options: UseXiaomeiVoiceReplyOptions) {
     notHeard.value = false
     await nextTick()
     options.focusDraft()
-  }
-
-  async function retryMicrophone(): Promise<void> {
-    if (!options.canStartMic.value) return
-    typedMode.value = false
-    options.onError(null)
-    useMicrophone()
-    await nextTick()
-    options.focusMic()
-  }
-
-  function useMicrophone(): void {
-    if (listening.value) return sendHeard()
-    if (!options.canStartMic.value) return
-    if (options.hasLiveVideo.value) options.onOpenLiveVideo()
-    else void mic.request()
   }
 
   function startListening(): void {
@@ -83,7 +59,7 @@ export function useXiaomeiVoiceReply(options: UseXiaomeiVoiceReplyOptions) {
   function handleRecognitionError(problem: NonNullable<typeof speech.recognitionError.value>): void {
     clearListenTimer()
     if (problem === 'noSpeech') {
-      notHeard.value = true
+      sendHeard()
       return
     }
     speech.cancelListening()
@@ -99,7 +75,7 @@ export function useXiaomeiVoiceReply(options: UseXiaomeiVoiceReplyOptions) {
     { flush: 'sync' },
   )
 
-  watch(listening, (active) => {
+  watch(speech.listening, (active) => {
     clearListenTimer()
     if (active) {
       listenSeconds.value = 0
@@ -114,15 +90,9 @@ export function useXiaomeiVoiceReply(options: UseXiaomeiVoiceReplyOptions) {
 
   return {
     mic,
-    listening,
     listenSeconds,
     notHeard,
-    typedMode,
-    hasMicMode,
-    typing,
     chooseTyping,
-    retryMicrophone,
-    useMicrophone,
     sendHeard,
   }
 }

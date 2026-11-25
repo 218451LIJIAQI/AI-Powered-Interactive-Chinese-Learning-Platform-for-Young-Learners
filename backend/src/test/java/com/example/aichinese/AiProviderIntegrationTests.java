@@ -262,7 +262,7 @@ class AiProviderIntegrationTests extends ApiIntegrationTest {
                 && !body.contains("LISTEN_CHOOSE") && !body.contains("MATCH_WORD_IMAGE"));
 
         // The quiz holds 3 of its 5 questions: the draft writes the 2 places left.
-        JsonNode questions = api.readyLesson(adminToken, lessonId, "Places").path("quizzes").get(0).path("questions");
+        JsonNode questions = api.readyLesson(adminToken, lessonId).path("quizzes").get(0).path("questions");
         for (int index = 0; index < 2; index++) {
             mockMvc.perform(api.authDelete("/api/v1/admin/lessons/" + lessonId + "/questions/"
                             + questions.get(index).path("id").asLong(), adminToken))
@@ -276,7 +276,7 @@ class AiProviderIntegrationTests extends ApiIntegrationTest {
 
         // A full quiz gets no draft (and its request reaches no provider).
         Long fullLessonId = api.draftLesson(adminToken, api.unit(adminToken, classId, "Unit 2"), "Full");
-        api.readyLesson(adminToken, fullLessonId, "Full");
+        api.readyLesson(adminToken, fullLessonId);
         int requestsBefore = REQUESTS.size();
         mockMvc.perform(api.jsonPost(QUIZ_DRAFT, adminToken, Map.of("lessonId", fullLessonId, "topic", "Anything")))
                 .andExpect(status().isBadRequest())
@@ -300,7 +300,8 @@ class AiProviderIntegrationTests extends ApiIntegrationTest {
     void recordingsAndPhotosAreScoredSavedAsResultsOnlyAndCounted() throws Exception {
         String email = uniqueEmail("provider-check");
         String studentToken = api.registerStudent(email);
-        Lesson lesson = lessonOpenedBy(studentProfile(email));
+        OpenedClassLesson opened = lessonOpenedBy(studentToken, studentProfile(email));
+        Lesson lesson = opened.lesson();
         var issue = new PronunciationFeedback.Issue("谢", PronunciationFeedback.IssueKind.TONE_MISMATCH, 4, 2);
         var tone = new PronunciationFeedback.ToneComparison("谢", 4, 2);
         var assessment = new PronunciationFeedback(85, 82, 100, List.of(issue), List.of(tone));
@@ -351,6 +352,19 @@ class AiProviderIntegrationTests extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.data.available").value(true))
                 .andExpect(jsonPath("$.data.speechCheckAvailable").value(true))
                 .andExpect(jsonPath("$.data.usedToday").value(2));
+
+        // Leaving the class hides its lesson from linkable lessons and rejects linking it on a new check.
+        mockMvc.perform(api.authPost("/api/v1/students/classes/" + opened.classId() + "/leave", studentToken))
+                .andExpect(status().isOk());
+        mockMvc.perform(api.authGet("/api/v1/ai/practice-checks/lessons", studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").isEmpty());
+        mockMvc.perform(api.authMultipart("/api/v1/ai/practice-checks", studentToken)
+                        .file(new MockMultipartFile("file", "character.png", "image/png", TestUploadFixtures.minimalPng()))
+                        .param("type", "HANDWRITING")
+                        .param("targetText", "好")
+                        .param("lessonId", String.valueOf(lesson.getId())))
+                .andExpect(status().isNotFound());
     }
 
     @Test
@@ -388,16 +402,20 @@ class AiProviderIntegrationTests extends ApiIntegrationTest {
         return chatMessageRepository.findBySessionIdOrderByCreatedAtDescIdDesc(sessionId, Pageable.unpaged());
     }
 
-    /** A published class lesson that {@code student} has opened (so a check may name it). */
-    private Lesson lessonOpenedBy(StudentProfile student) throws Exception {
-        Lesson lesson = lessonRepository
-                .findById(api.publishedClass(api.adminToken(), "Class: Greetings " + uniqueSuffix(), "Greetings", "你好 means hello.").lessonId())
-                .orElseThrow();
+    private record OpenedClassLesson(long classId, Lesson lesson) {
+    }
+
+    /** A published class lesson that {@code student} joined and opened (so a check may name it). */
+    private OpenedClassLesson lessonOpenedBy(String studentToken, StudentProfile student) throws Exception {
+        var published = api.publishedClass(
+                api.adminToken(), "Class: Greetings " + uniqueSuffix(), "Greetings");
+        api.join(studentToken, published.classId());
+        Lesson lesson = lessonRepository.findById(published.lessonId()).orElseThrow();
         LessonProgress progress = new LessonProgress();
         progress.setStudent(student);
         progress.setLesson(lesson);
         lessonProgressRepository.save(progress);
-        return lesson;
+        return new OpenedClassLesson(published.classId(), lesson);
     }
 
     private static List<Path> uploadedFiles() throws IOException {
@@ -438,7 +456,7 @@ class AiProviderIntegrationTests extends ApiIntegrationTest {
                     "feedback":"The 女 component is wide.","tip":"Make 女 narrower to leave room for 子."}""";
         }
         if (body.contains("has ended the conversation")) {
-            // Facts to remember as a model may write them: one to keep, one with a contact detail, one too many.
+            // Facts to remember as a model may write them: two to keep, one with a contact detail, one too many.
             return """
                     {"goodbye":{"chinese":"谢谢你！下次再聊。","pinyin":"Xièxie nǐ! Xià cì zài liáo.","translation":"Thanks!"},\
                     "feedback":"Nice work! Next time give a reason with 因为.",\
@@ -462,6 +480,7 @@ class AiProviderIntegrationTests extends ApiIntegrationTest {
                     {"questionText":"No options","questionType":"MULTIPLE_CHOICE","correctAnswer":"x"},\
                     {"questionText":"Repeated labels","options":["library"," library "],"correctAnswer":"library"},\
                     {"questionText":"我在___学习。","questionType":"fill-blank","correctAnswer":"图书馆"},\
+                    {"questionText":"Three-option T/F","questionType":"TRUE_FALSE","options":["True","False","Maybe"],"correctAnswer":"True"},\
                     {"questionText":"食堂 is a canteen.","questionType":"TRUE_FALSE","options":["True","False"],"correctAnswer":"True"},\
                     {"questionText":"Picture","questionType":"MATCH_WORD_IMAGE","options":["a","b"],"correctAnswer":"a"}]}""";
         }

@@ -16,7 +16,7 @@ import { useI18n } from 'vue-i18n'
 import { publicClassesApi } from '@/api/classes'
 import ClassCatalogueCard from '@/components/classes/ClassCatalogueCard.vue'
 import ClassCatalogueList from '@/components/classes/ClassCatalogueList.vue'
-import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
+import PageHeaderBlock from '@/components/layout/PageHeaderBlock.vue'
 
 const { t } = useI18n({ useScope: 'global' })
 </script>

@@ -21,6 +21,7 @@ import com.example.aichinese.dto.learn.PracticeItemAnswer;
 import com.example.aichinese.dto.learn.PracticeItemData;
 import com.example.aichinese.dto.learn.PracticeSetResponse;
 import com.example.aichinese.dto.learn.PracticeSetsResponse;
+import com.example.aichinese.dto.learn.TypingCandidatesDto;
 import com.example.aichinese.entity.PracticeAnswer;
 import com.example.aichinese.entity.PracticeCompletion;
 import com.example.aichinese.entity.StudentProfile;
@@ -76,11 +77,7 @@ public class PracticeService {
 
     @Transactional(readOnly = true)
     public PracticeSetResponse set(SecurityUserDetails currentUser, PracticeType type, Long id) {
-        return set(accessService.requireStudent(currentUser), type, id);
-    }
-
-    @Transactional(readOnly = true)
-    public PracticeSetResponse set(StudentProfile student, PracticeType type, Long id) {
+        StudentProfile student = accessService.requireStudent(currentUser);
         PracticeActivityContent set = published(type, id);
         SetContent content = playableContent(type, set);
         List<String> matchingChoices = type == PracticeType.MATCHING
@@ -113,11 +110,7 @@ public class PracticeService {
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public AnswerCheckResponse check(
             SecurityUserDetails currentUser, PracticeType type, Long id, PracticeItemAnswer answer) {
-        return check(accessService.requireStudent(currentUser), type, id, answer);
-    }
-
-    @Transactional(isolation = Isolation.READ_COMMITTED)
-    public AnswerCheckResponse check(StudentProfile student, PracticeType type, Long id, PracticeItemAnswer answer) {
+        StudentProfile student = accessService.requireStudent(currentUser);
         PracticeActivityContent set = published(type, id);
         if (type == PracticeType.FLASHCARDS || type == PracticeType.TRACING) {
             throw new ResponseStatusException(BAD_REQUEST, "This activity has no answers to check.");
@@ -127,24 +120,26 @@ public class PracticeService {
         if (isUncountedSkip(type, answer)) {
             return result;
         }
+        // Serialize with PracticeService.hint() on the student row so an earlier hint cannot race with this check.
+        StudentProfile locked = accessService.lockProfile(student);
         String itemRef = mistakeRef(type, set, item);
-        LocalDateTime lastAnswered = answerRepository.findLastAnsweredAt(student.getId(), itemRef);
-        int hintSteps = servedHintRepository.findHighestStepAfter(student.getId(), HINT_REF + itemRef,
+        LocalDateTime lastAnswered = answerRepository.findLastAnsweredAt(locked.getId(), itemRef);
+        int hintSteps = servedHintRepository.findHighestStepAfter(locked.getId(), HINT_REF + itemRef,
                 lastAnswered == null ? NEVER : lastAnswered);
         AnswerConfidence confidence = type.asksConfidence() ? confidenceAfter(answer, hintSteps) : null;
         if (!result.correct()) {
-            mistakeService.record(student, MistakeSource.PRACTICE, itemRef, set.getTitle(),
+            mistakeService.recordLocked(locked, MistakeSource.PRACTICE, itemRef, set.getTitle(),
                     item.gradable(), answer.answer(), confidence == AnswerConfidence.SURE);
         }
         PracticeAnswer logged = new PracticeAnswer();
-        logged.setStudent(student);
+        logged.setStudent(locked);
         logged.setPracticeType(type);
         logged.setItemRef(itemRef);
         logged.setCorrect(result.correct());
         logged.setConfidence(confidence);
         logged.setHintSteps(hintSteps);
         answerRepository.save(logged);
-        return result;
+        return result.withEffectiveConfidence(confidence);
     }
 
     /**
@@ -157,13 +152,9 @@ public class PracticeService {
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public HintDto.Step hint(
             SecurityUserDetails currentUser, PracticeType type, Long id, HintDto.Request request) {
-        return hint(accessService.requireStudent(currentUser), type, id, request);
-    }
-
-    @Transactional(isolation = Isolation.READ_COMMITTED)
-    public HintDto.Step hint(StudentProfile student, PracticeType type, Long id, HintDto.Request request) {
-        hintPolicyService.requireHintsOn(student);
+        StudentProfile student = accessService.requireStudent(currentUser);
         if (type == PracticeType.FLASHCARDS) {
+            hintPolicyService.requireHintsOn(student);
             throw new ResponseStatusException(BAD_REQUEST, "There is no further hint for this item.");
         }
         PracticeActivityContent set = published(type, id);
@@ -182,17 +173,11 @@ public class PracticeService {
         if (type == PracticeType.MATCHING) {
             return hintPolicyService.pairInRun(student, scope, itemRef, run, ladder);
         }
-        // Scope duplicate-row suppression to after the item's last checked answer so retries ("Once more, to make sure")
-        // within the same run record a fresh post-answer hint for hintSteps and GUESS enforcement.
-        LocalDateTime lastAnswered = answerRepository.findLastAnsweredAt(student.getId(), mistakeRef(type, set, item));
-        return hintPolicyService.hintInRun(student, scope, itemRef, run, ladder, lastAnswered);
-    }
-
-    @Transactional(readOnly = true)
-    public HintDto.Candidates candidates(
-            SecurityUserDetails currentUser, Long id, HintDto.CandidatesRequest request) {
-        accessService.requireStudent(currentUser);
-        return candidates(id, request);
+        // Scope duplicate-row suppression to after the item's last checked answer (read after locking inside serveInRun)
+        // so retries ("Once more, to make sure") record a fresh post-answer hint for hintSteps and GUESS enforcement.
+        String ref = mistakeRef(type, set, item);
+        return hintPolicyService.hintInRun(student, scope, itemRef, run, ladder,
+                studentId -> answerRepository.findLastAnsweredAt(studentId, ref));
     }
 
     /**
@@ -200,14 +185,16 @@ public class PracticeService {
      * complete; the answer is one of them, never marked.
      */
     @Transactional(readOnly = true)
-    public HintDto.Candidates candidates(Long id, HintDto.CandidatesRequest request) {
+    public TypingCandidatesDto.Response candidates(
+            SecurityUserDetails currentUser, Long id, TypingCandidatesDto.Request request) {
+        accessService.requireStudent(currentUser);
         PracticeActivityContent set = published(PracticeType.TYPING, id);
         Item item = item(playableContent(PracticeType.TYPING, set), request.itemKey());
         String typed = Pinyin.typed(request.pinyin());
         if (typed.isEmpty() || !typed.equals(Pinyin.typed(item.data().pinyin()))) {
-            return new HintDto.Candidates(List.of());
+            return new TypingCandidatesDto.Response(List.of());
         }
-        return new HintDto.Candidates(item.gradable().options().stream().map(ChoiceOption::text).toList());
+        return new TypingCandidatesDto.Response(item.gradable().options().stream().map(ChoiceOption::text).toList());
     }
 
     /**
@@ -219,12 +206,7 @@ public class PracticeService {
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public PracticeCompleteResponse complete(
             SecurityUserDetails currentUser, PracticeType type, Long id, PracticeCompleteRequest request) {
-        return complete(accessService.requireStudent(currentUser), type, id, request);
-    }
-
-    @Transactional(isolation = Isolation.READ_COMMITTED)
-    public PracticeCompleteResponse complete(
-            StudentProfile student, PracticeType type, Long id, PracticeCompleteRequest request) {
+        StudentProfile student = accessService.requireStudent(currentUser);
         PracticeActivityContent set = published(type, id);
         SetContent content = playableContent(type, set);
         Map<String, String> answers =
@@ -254,6 +236,8 @@ public class PracticeService {
         completion.setActivityId(set.getId());
         completion.setCorrectCount(correctCount);
         completion.setItemCount(itemCount);
+        completion.setCreatedAt(session.sessionTimestamp());
+        completion.setUpdatedAt(session.sessionTimestamp());
         completionRepository.saveAndFlush(completion);
         if (finishedSet) {
             session.finishedLessonOrSet();

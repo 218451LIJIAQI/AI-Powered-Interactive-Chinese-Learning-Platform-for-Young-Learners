@@ -1,11 +1,15 @@
 package com.example.aichinese.support;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -14,6 +18,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.server.ResponseStatusException;
 
 import com.example.aichinese.dto.learn.ChoiceOption;
 import com.example.aichinese.entity.AuditLog;
@@ -33,6 +38,7 @@ import com.example.aichinese.repository.NotificationRepository;
 import com.example.aichinese.repository.StudentProfileRepository;
 import com.example.aichinese.repository.UserRepository;
 import com.example.aichinese.security.SecurityUserDetails;
+import com.example.aichinese.service.SecureTokens;
 import com.example.aichinese.service.learn.PracticeCatalog;
 import com.example.aichinese.service.learn.PracticeSetDirectory;
 import com.example.aichinese.util.PaginationUtils;
@@ -178,7 +184,7 @@ public abstract class ApiIntegrationTest {
 
     /** The id of the right option of a level-check question. */
     protected Long rightLevelCheckOption(long questionId) {
-        return levelCheckOptionRepository.findByQuestionIdOrderByPositionAsc(questionId).stream()
+        return levelCheckOptionRepository.findByQuestionIdOrderByPositionAscIdAsc(questionId).stream()
                 .filter(LevelCheckOption::isCorrect)
                 .findFirst()
                 .orElseThrow()
@@ -191,5 +197,26 @@ public abstract class ApiIntegrationTest {
         answer.put("questionId", questionId);
         answer.put("optionId", optionId);
         return answer;
+    }
+
+    /** The raw link only exists in the e-mail: give the user's open e-mail change link a known token. */
+    protected String knownEmailChangeToken(long userId) {
+        String rawToken = SecureTokens.newHexToken();
+        int updated = jdbc.update("update email_change_tokens set token_hash = ? where user_id = ? and used_at is null",
+                SecureTokens.sha256Hex(rawToken), userId);
+        assertThat(updated).isOne();
+        return rawToken;
+    }
+
+    protected static void assertHttpError(ThrowingCallable call, int status) {
+        assertThatThrownBy(call).isInstanceOfSatisfying(ResponseStatusException.class,
+                failure -> assertThat(failure.getStatusCode().value()).isEqualTo(status));
+    }
+
+    protected static void assertHttpError(ThrowingCallable call, int status, String reason) {
+        assertThatThrownBy(call).isInstanceOfSatisfying(ResponseStatusException.class, failure -> {
+            assertThat(failure.getStatusCode().value()).isEqualTo(status);
+            assertThat(failure.getReason()).isEqualTo(reason);
+        });
     }
 }

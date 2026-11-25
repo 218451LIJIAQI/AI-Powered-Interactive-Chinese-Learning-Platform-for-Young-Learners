@@ -2,6 +2,31 @@
   <AppOverlay :title="t('plan.date.title')" size="lg" test-id="goal-date-picker" @close="emit('close')">
     <div ref="calendar" class="plan-calendar" @keydown="onKeydown">
       <div class="plan-calendar-months">
+        <span class="sr-only" role="status" aria-live="polite" aria-atomic="true">{{ announcedRange }}</span>
+        <div class="plan-calendar-nav">
+          <button
+            class="btn btn-ghost btn-icon btn-sm"
+            type="button"
+            :disabled="!canGoBack"
+            :aria-label="t('plan.date.earlier')"
+            :title="t('plan.date.earlier')"
+            data-testid="calendar-earlier"
+            @click="moveWindow(-1)"
+          >
+            <IconGlyph name="chevronLeft" :size="16" />
+          </button>
+          <button
+            class="btn btn-ghost btn-icon btn-sm"
+            type="button"
+            :disabled="!canGoForward"
+            :aria-label="t('plan.date.later')"
+            :title="t('plan.date.later')"
+            data-testid="calendar-later"
+            @click="moveWindow(1)"
+          >
+            <IconGlyph name="chevronRight" :size="16" />
+          </button>
+        </div>
         <section
           v-for="(month, index) in months"
           :key="index"
@@ -10,28 +35,6 @@
         >
           <div class="plan-calendar-head">
             <h3 :id="`${baseId}-${month.key}`" class="plan-calendar-title">{{ month.title }}</h3>
-            <button
-              v-if="index === 0"
-              class="btn btn-ghost btn-icon btn-sm"
-              type="button"
-              :disabled="!canGoBack"
-              :aria-label="t('plan.date.earlier')"
-              data-testid="calendar-earlier"
-              @click="moveWindow(-1)"
-            >
-              <IconGlyph name="chevronLeft" :size="16" />
-            </button>
-            <button
-              v-if="index === months.length - 1"
-              class="btn btn-ghost btn-icon btn-sm"
-              type="button"
-              :disabled="!canGoForward"
-              :aria-label="t('plan.date.later')"
-              data-testid="calendar-later"
-              @click="moveWindow(1)"
-            >
-              <IconGlyph name="chevronRight" :size="16" />
-            </button>
           </div>
           <table class="plan-calendar-grid">
             <thead>
@@ -135,7 +138,7 @@ const props = withDefaults(
     today: string
     /** The date chosen so far, or null. */
     value: string | null
-    /** "No date" in the footer; the plan drawer leaves it to the chip beside its date field (X2.17). */
+    /** "No date" in the footer; compact forms (edit dialog and plan drawer) leave it to the chip beside the date field. */
     noDateChoice?: boolean
   }>(),
   { noDateChoice: true },
@@ -168,18 +171,32 @@ const pending = ref(props.value !== null && isPickable(props.value) ? props.valu
 const focusDay = ref(pending.value ?? earliest.value)
 /** The first month shown, as a count of months (year × 12 + month). */
 const firstMonth = ref(windowFor(focusDay.value))
+const announcedRange = ref('')
 
 watch(
   () => props.today,
   () => {
+    const activeDay = calendar.value?.contains(document.activeElement)
+      ? (document.activeElement as HTMLElement | null)?.dataset.day
+      : undefined
     if (pending.value !== null && !isPickable(pending.value)) pending.value = null
     if (focusDay.value < earliest.value) focusDay.value = earliest.value
     else if (focusDay.value > latest.value) focusDay.value = latest.value
     const maxStart = Math.max(todayMonth.value, lastMonth.value - (MONTHS_SHOWN - 1))
     if (firstMonth.value < todayMonth.value) firstMonth.value = todayMonth.value
     else if (firstMonth.value > maxStart) firstMonth.value = maxStart
+    if (!inWindow(focusDay.value)) {
+      const start = isoDay(monthStart(firstMonth.value))
+      focusDay.value = start < earliest.value ? earliest.value : start
+    }
+    if (activeDay && (!isPickable(activeDay) || activeDay !== focusDay.value)) void focusDate()
   },
 )
+
+watch(firstMonth, () => {
+  const shown = months.value
+  if (shown.length) announcedRange.value = `${shown[0]!.title} – ${shown[shown.length - 1]!.title}`
+})
 
 const canGoBack = computed(() => firstMonth.value > todayMonth.value)
 const canGoForward = computed(() => firstMonth.value + MONTHS_SHOWN - 1 < lastMonth.value)

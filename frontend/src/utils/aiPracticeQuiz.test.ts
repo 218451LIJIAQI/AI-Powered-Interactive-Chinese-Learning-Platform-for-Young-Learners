@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { AiStoryGeneratorResponse } from '@/types/api'
+import type { AiStoryGeneratorResponse } from '@/types/ai'
 
 import { draftAnswerIndex, matchesAnswer, storyVocabularyRows } from './aiPracticeQuiz'
 

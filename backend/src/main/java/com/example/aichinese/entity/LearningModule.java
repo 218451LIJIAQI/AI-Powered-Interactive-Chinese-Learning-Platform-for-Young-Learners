@@ -1,16 +1,20 @@
 package com.example.aichinese.entity;
 
-import com.example.aichinese.entity.base.PublishableContent;
+import com.example.aichinese.entity.base.BaseEntity;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.Index;
 import jakarta.persistence.Table;
+import lombok.Getter;
+import lombok.Setter;
 
-/** A unit of a class. The class holds its units through {@link PackageItem}. */
+/** A unit of a class. The class holds its units through {@link PackageItem}; visibility follows its lessons. */
+@Getter
+@Setter
 @Entity
-@Table(name = "learning_modules", indexes = {
-        @Index(name = "idx_learning_modules_status_updated", columnList = "content_status,updated_at"),
-        @Index(name = "idx_learning_modules_status_created_at", columnList = "content_status,created_at")
-})
-public class LearningModule extends PublishableContent {
+@Table(name = "learning_modules")
+public class LearningModule extends BaseEntity {
+
+    @Column(name = "title", nullable = false, length = 200)
+    private String title;
 }

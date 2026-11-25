@@ -20,7 +20,6 @@ export const practiceAnswerMessages = {
     audioNotCounted: 'The audio didn’t play, so it isn’t counted.',
     onceMore: 'Once more, to make sure',
 
-    hintOfferAsk: 'Want a hint? Ask SparkBot whenever you like.',
     hintsLeftInSet: '1 hint left in this set | {count} hints left in this set',
     hintNeverCostsXp: 'Hints never cost XP.',
     hintFailed: 'The hint could not be loaded. Please try again.',
@@ -28,7 +27,8 @@ export const practiceAnswerMessages = {
     hintRuleOut: 'It isn’t {option}: {word}.',
     hintRuleOutPinyin: 'It isn’t {option}: {word} ({pinyin}).',
     hintFirstSound: 'The answer starts with the sound “{sound}…”.',
-    hintListenFirst: 'Tap Slow and listen to the start: it begins with “{sound}…”.',
+    hintListenFirst: 'Click Slow and listen to the start: it begins with “{sound}…”.',
+    hintListenSlow: 'Click Slow and listen closely to the tones and syllables.',
     hintFirstLetter: 'The answer starts with “{letter}”.',
     hintTwoLeft: 'It’s {first} or {second}.',
     hintFirstTile: 'The sentence starts with {word}.',
@@ -68,7 +68,6 @@ export const practiceAnswerMessages = {
     audioNotCounted: 'Audio tidak dimainkan, jadi ia tidak dikira.',
     onceMore: 'Sekali lagi, untuk memastikan',
 
-    hintOfferAsk: 'Mahu petunjuk? Minta daripada SparkBot bila-bila masa.',
     hintsLeftInSet: '{count} petunjuk lagi dalam set ini',
     hintNeverCostsXp: 'Petunjuk tidak pernah mengurangkan XP.',
     hintFailed: 'Petunjuk tidak dapat dimuatkan. Sila cuba lagi.',
@@ -77,6 +76,7 @@ export const practiceAnswerMessages = {
     hintRuleOutPinyin: 'Bukan {option}: {word} ({pinyin}).',
     hintFirstSound: 'Jawapannya bermula dengan bunyi “{sound}…”.',
     hintListenFirst: 'Tekan Perlahan dan dengar permulaannya: ia bermula dengan “{sound}…”.',
+    hintListenSlow: 'Tekan Perlahan dan dengar nada serta suku katanya dengan teliti.',
     hintFirstLetter: 'Jawapannya bermula dengan “{letter}”.',
     hintTwoLeft: 'Sama ada {first} atau {second}.',
     hintFirstTile: 'Ayat ini bermula dengan {word}.',
@@ -87,7 +87,7 @@ export const practiceAnswerMessages = {
     hintTypeThis: 'Taip {pinyin}, kemudian pilih perkataan yang sesuai.',
     hintPair: '{word} ({pinyin}) bermaksud “{meaning}”.',
     hintPairNoPinyin: '{word} bermaksud “{meaning}”.',
-    hintStrokeCount: '{characters} ada {count} strok. Tulis satu strok demi satu strok.',
+    hintStrokeCount: '{characters} ada 1 strok. | {characters} ada {count} strok. Tulis satu strok demi satu strok.',
     hintStrokeOrder: 'Atas sebelum bawah, kiri sebelum kanan, dan melintang sebelum menegak.',
 
     wordOf: 'Perkataan {current} daripada {total}',
@@ -116,7 +116,6 @@ export const practiceAnswerMessages = {
     audioNotCounted: '音频没有播放，所以这题不计入。',
     onceMore: '再来一次，确认一下',
 
-    hintOfferAsk: '需要提示？随时可以问 SparkBot。',
     hintsLeftInSet: '这组还剩 {count} 次提示',
     hintNeverCostsXp: '看提示不会扣 XP。',
     hintFailed: '提示没有加载出来，请再试一次。',
@@ -125,6 +124,7 @@ export const practiceAnswerMessages = {
     hintRuleOutPinyin: '不是{option}：{word}（{pinyin}）。',
     hintFirstSound: '答案以“{sound}…”这个音开头。',
     hintListenFirst: '点“慢速”再听开头：它以“{sound}…”开头。',
+    hintListenSlow: '点“慢速”，仔细听每个音节和声调。',
     hintFirstLetter: '答案以“{letter}”开头。',
     hintTwoLeft: '是{first}或{second}。',
     hintFirstTile: '句子以“{word}”开头。',
@@ -135,7 +135,7 @@ export const practiceAnswerMessages = {
     hintTypeThis: '输入 {pinyin}，再选出合适的词。',
     hintPair: '{word}（{pinyin}）的意思是“{meaning}”。',
     hintPairNoPinyin: '{word} 的意思是“{meaning}”。',
-    hintStrokeCount: '{characters} 共 {count} 画。一笔一笔慢慢写。',
+    hintStrokeCount: '{characters} 只有 1 画。 | {characters} 共 {count} 画。一笔一笔慢慢写。',
     hintStrokeOrder: '先上后下，先左后右，先横后竖。',
 
     wordOf: '第 {current} / {total} 个词',

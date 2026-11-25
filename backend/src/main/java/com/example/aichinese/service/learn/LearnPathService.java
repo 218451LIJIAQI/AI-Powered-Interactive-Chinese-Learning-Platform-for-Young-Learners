@@ -105,15 +105,10 @@ public class LearnPathService {
     @Transactional(readOnly = true)
     public GuidebookResponse guidebook(SecurityUserDetails currentUser, Long unitId) {
         accessService.requireStudent(currentUser);
-        return guidebook(unitId);
-    }
-
-    @Transactional(readOnly = true)
-    public GuidebookResponse guidebook(Long unitId) {
         LearnUnit unit = unitRepository.findById(unitId)
                 .filter(found -> found.getPublishStatus() == PublishStatus.PUBLISHED)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "This unit is not on the learning path."));
-        List<GuidebookResponse.Phrase> phrases = phraseRepository.findByUnitIdOrderByPositionAsc(unitId).stream()
+        List<GuidebookResponse.Phrase> phrases = phraseRepository.findByUnitIdOrderByPositionAscIdAsc(unitId).stream()
                 .map(phrase -> new GuidebookResponse.Phrase(phrase.getHanzi(), phrase.getPinyin(), phrase.getMeaning()))
                 .toList();
         List<String> tips = unit.getGuidebookTips() == null
@@ -126,11 +121,7 @@ public class LearnPathService {
 
     @Transactional(readOnly = true)
     public LessonPlayResponse lesson(SecurityUserDetails currentUser, Long lessonId) {
-        return lesson(accessService.requireStudent(currentUser), lessonId);
-    }
-
-    @Transactional(readOnly = true)
-    public LessonPlayResponse lesson(StudentProfile student, Long lessonId) {
+        StudentProfile student = accessService.requireStudent(currentUser);
         LearnLesson lesson = openStop(model(student), lessonId).lesson();
         List<LearnQuestion> questions = playableQuestions(lessonId);
         HintPolicyService.Run run = hintPolicyService.startRun(student, hintScope(lessonId));
@@ -143,14 +134,10 @@ public class LearnPathService {
                 run.signature());
     }
 
-    @Transactional(isolation = Isolation.READ_COMMITTED)
-    public AnswerCheckResponse check(SecurityUserDetails currentUser, Long lessonId, QuestionAnswer answer) {
-        return check(accessService.requireStudent(currentUser), lessonId, answer);
-    }
-
     /** Instant feedback on one answer; a wrong (or skipped) answer is kept as a mistake. */
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    public AnswerCheckResponse check(StudentProfile student, Long lessonId, QuestionAnswer answer) {
+    public AnswerCheckResponse check(SecurityUserDetails currentUser, Long lessonId, QuestionAnswer answer) {
+        StudentProfile student = accessService.requireStudent(currentUser);
         StopNode stop = openStop(model(student), lessonId);
         LearnQuestion question = lessonQuestion(lessonId, answer.questionId());
         GradableItem item = gradable(question);
@@ -162,18 +149,14 @@ public class LearnPathService {
         return result;
     }
 
-    @Transactional(isolation = Isolation.READ_COMMITTED)
-    public HintDto.Step hint(SecurityUserDetails currentUser, Long lessonId, HintDto.QuestionRequest request) {
-        return hint(accessService.requireStudent(currentUser), lessonId, request);
-    }
-
     /**
      * The one hint for a question of an open lesson, as much as the student's level gives and held to its hints per
      * set for the run the server started when the lesson was read ({@code runStartedAt}, signed). Checkpoints test what
      * a level taught, so they have no hints, like the level check. Hints never change grading or XP.
      */
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    public HintDto.Step hint(StudentProfile student, Long lessonId, HintDto.QuestionRequest request) {
+    public HintDto.Step hint(SecurityUserDetails currentUser, Long lessonId, HintDto.QuestionRequest request) {
+        StudentProfile student = accessService.requireStudent(currentUser);
         hintPolicyService.requireHintsOn(student);
         StopNode stop = openStop(model(student), lessonId);
         if (stop.lesson().getLessonKind() == LearnLessonKind.CHECKPOINT) {
@@ -191,17 +174,13 @@ public class LearnPathService {
         return "LESSON#" + lessonId + "#";
     }
 
-    @Transactional(isolation = Isolation.READ_COMMITTED)
-    public LessonCompleteResponse complete(SecurityUserDetails currentUser, Long lessonId, LessonCompleteRequest request) {
-        return complete(accessService.requireStudent(currentUser), lessonId, request);
-    }
-
     /**
      * Grades every answer of the played stop. A lesson is finished whatever the score (its mistakes wait for review);
      * a checkpoint only from its pass mark. The first finish earns the stop's XP and opens the next stop.
      */
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    public LessonCompleteResponse complete(StudentProfile student, Long lessonId, LessonCompleteRequest request) {
+    public LessonCompleteResponse complete(SecurityUserDetails currentUser, Long lessonId, LessonCompleteRequest request) {
+        StudentProfile student = accessService.requireStudent(currentUser);
         // Acquire the student's XP lock before reading the path so concurrent completions serialize cleanly.
         XpService.XpSession session = xpService.begin(student);
         PathInputs inputs = pathInputs(session.student());
@@ -227,7 +206,7 @@ public class LearnPathService {
 
         LessonCompleteResponse.NextStop next = null;
         if (passed) {
-            recordCompletion(session.student(), lesson, accuracy);
+            recordCompletion(session.student(), lesson, accuracy, session.sessionTimestamp());
             session.award(XpService.SOURCE_LEARN_LESSON, lesson.getId(), lesson.getXpReward(), lesson.getTitle());
             session.finishedLessonOrSet();
             LearnPathModel after = inputs.withCompleted(lesson.getId());
@@ -266,7 +245,7 @@ public class LearnPathService {
                         RewardRules.CHECKPOINT_PASS_PERCENT,
                         stop.state()))
                 .orElse(null);
-        boolean locked = units.get(0).state() == UnitState.LOCKED;
+        boolean locked = units.stream().allMatch(unit -> unit.state() == UnitState.LOCKED);
         return new LearnPathResponse.Level(level, units.get(0).unit().getHskLevel(), locked, unitViews, checkpoint);
     }
 
@@ -374,8 +353,7 @@ public class LearnPathService {
         return stop;
     }
 
-    private void recordCompletion(StudentProfile student, LearnLesson lesson, int accuracy) {
-        LocalDateTime now = LocalDateTime.now();
+    private void recordCompletion(StudentProfile student, LearnLesson lesson, int accuracy, LocalDateTime now) {
         LearnLessonCompletion completion = completionRepository
                 .findLockedByStudentIdAndLessonId(student.getId(), lesson.getId())
                 .orElseGet(() -> {
@@ -383,11 +361,13 @@ public class LearnPathService {
                     created.setStudent(student);
                     created.setLesson(lesson);
                     created.setFirstCompletedAt(now);
+                    created.setCreatedAt(now);
                     return created;
                 });
         completion.setAttempts(completion.getAttempts() + 1);
         completion.setBestAccuracy(Math.max(completion.getBestAccuracy(), accuracy));
         completion.setLastCompletedAt(now);
+        completion.setUpdatedAt(now);
         completionRepository.saveAndFlush(completion);
     }
 

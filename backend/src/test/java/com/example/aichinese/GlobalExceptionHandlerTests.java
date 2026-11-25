@@ -1,8 +1,11 @@
 package com.example.aichinese;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.util.List;
+import java.util.Set;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -31,6 +34,7 @@ import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.springframework.web.method.annotation.ExceptionHandlerMethodResolver;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
@@ -42,6 +46,10 @@ import com.example.aichinese.dto.ApiResponse;
 import com.example.aichinese.exception.FriendlyErrorMessageResolver;
 import com.example.aichinese.exception.GlobalExceptionHandler;
 import com.example.aichinese.util.RequestIdHolder;
+
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.ConstraintViolationException;
+import org.hibernate.validator.internal.engine.path.PathImpl;
 
 /**
  * Unit tests for {@link GlobalExceptionHandler}: safe fallbacks for null/blank messages,
@@ -142,13 +150,9 @@ class GlobalExceptionHandlerTests {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(body(response).message()).isEqualTo(message);
-        for (String other : List.of(
-                "Internal ownership check failed for lesson 42.",
-                // The teacher-only features are gone with their message.
-                "Only approved teachers can use this teaching feature.")) {
-            assertThat(body(handler.handleResponseStatusException(new ResponseStatusException(HttpStatus.FORBIDDEN, other)))
-                    .message()).isEqualTo(FriendlyErrorMessageResolver.permissionDeniedMessage());
-        }
+        assertThat(body(handler.handleResponseStatusException(new ResponseStatusException(
+                HttpStatus.FORBIDDEN, "Internal ownership check failed for lesson 42.")))
+                .message()).isEqualTo(FriendlyErrorMessageResolver.permissionDeniedMessage());
     }
 
     @Test
@@ -315,6 +319,27 @@ class GlobalExceptionHandlerTests {
 
         assertThat(body.fieldErrors()).containsOnlyKeys("message");
         assertThat(body.fieldErrors().get("message")).containsExactly("Message is required.");
+    }
+
+    @Test
+    void constraintViolationExtractsLeafParameterOnAuthenticatedRoutesAndSuppressesPublicAuth() {
+        ConstraintViolation<?> violation = mock(ConstraintViolation.class);
+        when(violation.getPropertyPath()).thenReturn(PathImpl.createPathFromString("list.pageSize"));
+        when(violation.getMessage()).thenReturn("Must be at least 1.");
+        ConstraintViolationException exception = new ConstraintViolationException(Set.of(violation));
+
+        bindRequestPath(PROFILE_PATH);
+        ApiResponse<Void> authenticated = body(handler.handleConstraintViolationException(exception));
+        assertThat(authenticated.fieldErrors()).containsEntry("pageSize", List.of("Must be at least 1."));
+
+        bindRequestPath("/api/v1/auth/login");
+        ApiResponse<Void> publicAuth = body(handler.handleConstraintViolationException(exception));
+        assertThat(publicAuth.fieldErrors()).isEmpty();
+    }
+
+    @Test
+    void clientDisconnectReturnsNullWithoutErrorEnvelope() {
+        assertThat(handler.handleClientDisconnect(new AsyncRequestNotUsableException("Broken pipe"))).isNull();
     }
 
     private static void bindRequestPath(String path) {

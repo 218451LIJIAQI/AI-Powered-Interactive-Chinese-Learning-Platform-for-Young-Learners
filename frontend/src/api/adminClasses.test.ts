@@ -1,15 +1,13 @@
-import type { AxiosAdapter } from 'axios'
 import { describe, expect, it } from 'vitest'
 
-import { http } from '@/api/http'
-import { axiosResponse, expectRequests, installAxiosCapture, restoreAxiosAdapterAfterEach } from '@/test/axiosCapture'
+import { expectRequests, installAxiosCapture, restoreAxiosAdapterAfterEach } from '@/test/axiosCapture'
 
 import { adminClassesApi, adminQuizDraftApi, lessonEditorApi } from './adminClasses'
 
 restoreAxiosAdapterAfterEach()
 
 const DETAILS = { title: 'Hawker Food Mandarin', description: null, categoryId: 3, bestAfterUnit: 3 }
-const QUESTION = { questionType: 'MULTIPLE_CHOICE', questionText: 'What does 茶 mean?', points: 2 }
+const QUESTION = { questionType: 'MULTIPLE_CHOICE' as const, questionText: 'What does 茶 mean?', points: 2 }
 
 describe('admin class authoring API', () => {
   it('maps the classes list, the class page, its units and lessons', async () => {
@@ -32,7 +30,7 @@ describe('admin class authoring API', () => {
     await expectRequests([
       [() => lessonEditorApi.get(11), 'GET /admin/lessons/11'],
       [
-        () => lessonEditorApi.saveContent(11, { title: 'T', unitId: 70, minutes: null, summary: null, keyPhrases: [] }),
+        () => lessonEditorApi.saveContent(11, { title: 'T', unitId: 70, keyPhrases: [] }),
         'PUT /admin/lessons/11/content',
       ],
       [
@@ -57,6 +55,8 @@ describe('admin class authoring API', () => {
       [() => lessonEditorApi.deleteQuestion(11, 30), 'DELETE /admin/lessons/11/questions/30'],
       [() => lessonEditorApi.keepQuestion(11, 30), 'POST /admin/lessons/11/questions/30/keep'],
       [() => lessonEditorApi.publish(11), 'POST /admin/lessons/11/publish'],
+      [() => lessonEditorApi.archive(11), 'POST /admin/lessons/11/archive'],
+      [() => lessonEditorApi.restore(11), 'POST /admin/lessons/11/restore'],
       [() => lessonEditorApi.discardChanges(11), 'DELETE /admin/lessons/11/revision'],
       [() => adminQuizDraftApi.availability(), 'GET /admin/ai/quiz-draft/availability'],
       [
@@ -92,11 +92,7 @@ describe('admin class authoring API', () => {
 
   it('forwards the 30-minute timeout, AbortSignal and omitted null duration on saveVideo, and 45s timeout on quiz drafts', async () => {
     const controller = new AbortController()
-    const seen: Array<{ url?: string; timeout?: number; signal?: unknown; data?: unknown }> = []
-    http.defaults.adapter = (async (config) => {
-      seen.push({ url: config.url, timeout: config.timeout, signal: config.signal, data: config.data })
-      return axiosResponse(config, 200, { success: true, data: {} })
-    }) satisfies AxiosAdapter
+    const calls = installAxiosCapture()
 
     await lessonEditorApi.saveVideo(
       11,
@@ -111,10 +107,10 @@ describe('admin class authoring API', () => {
       languagePreference: 'en',
     })
 
-    expect(seen[0]?.timeout).toBe(1_800_000)
-    expect(seen[0]?.signal).toBe(controller.signal)
-    expect((seen[0]?.data as FormData).has('durationSeconds')).toBe(false)
-    expect(seen[1]?.url).toBe('/admin/ai/quiz-draft')
-    expect(seen[1]?.timeout).toBe(45_000)
+    expect(calls[0]?.timeout).toBe(1_800_000)
+    expect(calls[0]?.signal).toBe(controller.signal)
+    expect((calls[0]?.data as FormData).has('durationSeconds')).toBe(false)
+    expect(calls[1]?.url).toBe('/admin/ai/quiz-draft')
+    expect(calls[1]?.timeout).toBe(45_000)
   })
 })

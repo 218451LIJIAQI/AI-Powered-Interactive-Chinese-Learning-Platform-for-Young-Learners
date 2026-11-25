@@ -1,11 +1,21 @@
 import { computed, onScopeDispose, readonly, ref, shallowRef } from 'vue'
 
-import {
-  MAX_RECORDING_SECONDS,
-  RECORDER_MIME_TYPE,
-  RECORDING_FILE_TYPE,
-  recordingFileName,
-} from '@/utils/practiceUpload'
+/** Upper bound of a single browser recording. */
+export const MAX_RECORDING_SECONDS = 60
+/**
+ * The one format recorded in the browser: WEBM with Opus. Current Chrome, Edge and Firefox all record it, and the
+ * server accepts WEBM; any other browser falls back to choosing a file.
+ */
+export const RECORDER_MIME_TYPE = 'audio/webm;codecs=opus'
+/** Content type of the recorded file (the server checks the base type). */
+const RECORDING_FILE_TYPE = 'audio/webm'
+
+/** e.g. `pronunciation-20260518-0300.webm` (local time). */
+export function recordingFileName(now: Date = new Date()): string {
+  const pad = (value: number) => String(value).padStart(2, '0')
+  const stamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`
+  return `pronunciation-${stamp}.webm`
+}
 
 type AudioRecorderStatus = 'idle' | 'requesting' | 'recording' | 'recorded' | 'denied' | 'error'
 
@@ -97,9 +107,9 @@ export function useAudioRecorder() {
       return
     }
 
-    let created: MediaRecorder | null = null
     try {
-      created = new Recorder(stream, { mimeType: RECORDER_MIME_TYPE })
+      const created = new Recorder(stream, { mimeType: RECORDER_MIME_TYPE })
+      recorder = created
       const chunks: Blob[] = []
       created.ondataavailable = (event) => {
         if (event.data.size > 0) chunks.push(event.data)
@@ -108,23 +118,13 @@ export function useAudioRecorder() {
       created.onerror = () => {
         if (recorder !== created) return
         // A failed recorder can still deliver a final chunk and a stop event.
-        reset()
-        status.value = 'error'
+        teardown('error')
       }
-      // Assign before start() so synchronous onerror callbacks observe this active recorder.
-      recorder = created
       created.start()
-      // A synchronous onerror handler clears recorder via reset(); do not overwrite the failed state.
+      // A synchronous onerror handler clears recorder via teardown(); do not overwrite the failed state.
       if (recorder !== created) return
     } catch {
-      if (created) {
-        created.ondataavailable = null
-        created.onstop = null
-        created.onerror = null
-        if (recorder === created) recorder = null
-      }
-      stopTracks()
-      status.value = 'error'
+      teardown('error')
       return
     }
 
@@ -150,13 +150,11 @@ export function useAudioRecorder() {
     try {
       recorder.stop()
     } catch {
-      reset()
-      status.value = 'error'
+      teardown('error')
     }
   }
 
-  /** Discards the current recording (re-record) and releases the microphone. */
-  function reset(): void {
+  function teardown(nextStatus: AudioRecorderStatus): void {
     startAttempt += 1
     clearInterval(timer)
     const active = recorder
@@ -174,8 +172,13 @@ export function useAudioRecorder() {
     } finally {
       stopTracks()
       clearRecording()
-      status.value = 'idle'
+      status.value = nextStatus
     }
+  }
+
+  /** Discards the current recording (re-record) and releases the microphone. */
+  function reset(): void {
+    teardown('idle')
   }
 
   onScopeDispose(reset)

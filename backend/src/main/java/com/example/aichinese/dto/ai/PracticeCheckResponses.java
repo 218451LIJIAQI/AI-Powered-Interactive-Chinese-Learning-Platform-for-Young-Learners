@@ -23,7 +23,6 @@ public final class PracticeCheckResponses {
      */
     public record Check(
             Long id,
-            @Schema(allowableValues = { "RECORDING", "HANDWRITING" })
             PracticeCheckType type,
             String targetText,
             String lessonTitle,

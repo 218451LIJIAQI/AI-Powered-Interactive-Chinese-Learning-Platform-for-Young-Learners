@@ -32,14 +32,10 @@ public class ProgressOverviewService {
     private final LearnClock clock;
     private final StudentLearningAccessService accessService;
 
-    @Transactional(readOnly = true)
-    public ProgressOverviewResponse overview(SecurityUserDetails currentUser, YearMonth month) {
-        return overview(accessService.requireStudent(currentUser), month);
-    }
-
     /** @param month the calendar month to show; null (or outside the student's months) = this month */
     @Transactional(readOnly = true)
-    public ProgressOverviewResponse overview(StudentProfile student, YearMonth month) {
+    public ProgressOverviewResponse overview(SecurityUserDetails currentUser, YearMonth month) {
+        StudentProfile student = accessService.requireStudent(currentUser);
         LocalDate today = clock.today();
         LocalDate joinedOn = clock.dayOf(student.getCreatedAt());
         YearMonth first = YearMonth.from(joinedOn);
@@ -56,7 +52,7 @@ public class ProgressOverviewService {
                 totalXp,
                 level,
                 RewardRules.xpIntoLevel(totalXp),
-                level * RewardRules.XP_PER_LEVEL,
+                RewardRules.rankXp(level + 1),
                 streak.current(),
                 streak.best(),
                 new ProgressOverviewResponse.Calendar(

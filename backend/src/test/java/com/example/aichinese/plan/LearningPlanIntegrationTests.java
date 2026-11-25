@@ -3,6 +3,7 @@ package com.example.aichinese.plan;
 import static com.example.aichinese.support.LearningApiTestClient.PLAN;
 import static com.example.aichinese.support.LearningApiTestClient.SKIPPED_CHECK;
 import static com.example.aichinese.support.LearningApiTestClient.uniqueEmail;
+import static com.example.aichinese.support.LearningApiTestClient.uniqueSuffix;
 import static java.util.Collections.singletonMap;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -51,6 +52,7 @@ import jakarta.persistence.EntityManager;
  */
 class LearningPlanIntegrationTests extends ApiIntegrationTest {
 
+    private static final String HOME = "/api/v1/students/home";
     private static final String NEXT = "/api/v1/students/level-check/next";
 
     @Autowired
@@ -77,7 +79,7 @@ class LearningPlanIntegrationTests extends ApiIntegrationTest {
     @Test
     void aNewStudentStartsWithTheSetupAndMaySetItUpLater() throws Exception {
         String token = api.registerStudent(uniqueEmail("plan-new"));
-        mockMvc.perform(api.authGet("/api/v1/students/home", token))
+        mockMvc.perform(api.authGet(HOME, token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.setupState").value("NOT_STARTED"))
                 .andExpect(jsonPath("$.data.firstTime").value(true))
@@ -88,7 +90,8 @@ class LearningPlanIntegrationTests extends ApiIntegrationTest {
 
         mockMvc.perform(api.authPost(PLAN + "/skip", token))
                 .andExpect(status().isOk());
-        mockMvc.perform(api.authGet("/api/v1/students/home", token))
+        mockMvc.perform(api.authGet(HOME, token))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.setupState").value("SKIPPED"));
         mockMvc.perform(api.authGet(PLAN, token))
                 .andExpect(status().isOk())
@@ -132,7 +135,8 @@ class LearningPlanIntegrationTests extends ApiIntegrationTest {
         assertThat(plan.path("pace").path("maxMinutesPerDay").isNull()).isTrue();
         mockMvc.perform(api.authGet("/api/v1/students/daily-goal", token))
                 .andExpect(jsonPath("$.data.dailyGoalXp").value(20));
-        mockMvc.perform(api.authGet("/api/v1/students/home", token))
+        mockMvc.perform(api.authGet(HOME, token))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.setupState").value("COMPLETED"))
                 .andExpect(jsonPath("$.data.plan.week").value(1));
         Long userId = user(email).getId();
@@ -143,9 +147,10 @@ class LearningPlanIntegrationTests extends ApiIntegrationTest {
     @Test
     void theServerGradesTheLevelCheckAndAStrongResultStartsWithAQuickReview() throws Exception {
         String token = api.registerStudent(uniqueEmail("plan-strong"));
-        List<Map<String, Object>> answers = finishCheck(token, "BEGINNER_2");
+        FinishedCheck check = finishCheck(token, "BEGINNER_2");
         JsonNode plan = api.startPlan(token, goal("WORK", List.of("GREET_CUSTOMERS"), "HOURS_1_TO_2", List.of()),
-                Map.of("selfLevel", "THE_BASICS", "skipped", false, "answers", answers));
+                Map.of("selfLevel", "THE_BASICS", "skipped", false, "answers", check.answers(),
+                        "runToken", check.runToken()));
 
         assertThat(plan.path("level").path("placed").asText()).isEqualTo("BEGINNER_2");
         assertThat(plan.path("level").path("target").asText()).isEqualTo("BEGINNER_2");
@@ -166,12 +171,16 @@ class LearningPlanIntegrationTests extends ApiIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Finish the level check first."));
 
-        JsonNode first = next(token, "BEGINNER_1", List.of());
+        JsonNode first = next(token, "BEGINNER_1", List.of(), null);
         long questionId = first.path("next").path("id").asLong();
+        JsonNode afterOne = next(token, "BEGINNER_1",
+                List.of(levelCheckAnswer(questionId, rightLevelCheckOption(questionId))),
+                first.path("runToken").asText());
         mockMvc.perform(api.jsonPost(PLAN, token, Map.of(
                         "goal", goal("TRAVEL", List.of(), "UNDER_30_MIN", List.of()),
                         "levelCheck", Map.of("selfLevel", "A_LITTLE", "skipped", false,
-                                "answers", List.of(levelCheckAnswer(questionId, rightLevelCheckOption(questionId)))))))
+                                "answers", List.of(levelCheckAnswer(questionId, rightLevelCheckOption(questionId))),
+                                "runToken", afterOne.path("runToken").asText()))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Finish the level check first."));
     }
@@ -197,22 +206,20 @@ class LearningPlanIntegrationTests extends ApiIntegrationTest {
         String token = api.registerStudent(email);
         try (var ignored = hidePublishedQuestions()) {
             // Nothing to ask: the check is over at once, at the level it starts from.
-            JsonNode step = next(token, "BEGINNER_2", List.of());
+            JsonNode step = next(token, "BEGINNER_2", List.of(), null);
             assertThat(step.path("done").asBoolean()).isTrue();
             assertThat(step.path("result").path("level").asText()).isEqualTo("BEGINNER_2");
             assertThat(step.path("answeredCount").asInt()).isZero();
 
             // "The basics" starts the check at Beginner 2, so the plan is built there.
             JsonNode plan = api.startPlan(token, goal("WORK", List.of("GREET_CUSTOMERS"), "HOURS_1_TO_2", List.of()),
-                    Map.of("selfLevel", "THE_BASICS", "skipped", false, "answers", List.of()));
+                    Map.of("selfLevel", "THE_BASICS", "skipped", false, "answers", List.of(),
+                            "runToken", step.path("runToken").asText()));
             assertThat(plan.path("level").path("placed").asText()).isEqualTo("BEGINNER_2");
 
             // A retake starts at the plan's level; with nothing asked, the plan and its check stay as they are.
             LearningPlan before = activePlan(email);
-            JsonNode retake = api.data(mockMvc.perform(api.jsonPost(PLAN + "/level-check", token,
-                            Map.of("answers", List.of())))
-                    .andExpect(status().isOk())
-                    .andReturn());
+            JsonNode retake = retake(token, Map.of("answers", List.of()));
             assertThat(retake.path("level").asText()).isEqualTo("BEGINNER_2");
             assertThat(retake.path("changed").asBoolean()).isFalse();
             LearningPlan after = activePlan(email);
@@ -227,28 +234,19 @@ class LearningPlanIntegrationTests extends ApiIntegrationTest {
         String email = uniqueEmail("plan-retake-skills");
         String token = api.registerStudent(email);
         // A real check first: "don't know" and right answers in turn, so the plan has known and new skills.
-        List<Map<String, Object>> answers = new ArrayList<>();
-        JsonNode step = next(token, "BEGINNER_1", answers);
-        while (!step.path("done").asBoolean()) {
-            long questionId = step.path("next").path("id").asLong();
-            Long option = answers.size() % 2 == 0 ? null : rightLevelCheckOption(questionId);
-            answers.add(levelCheckAnswer(questionId, option));
-            step = next(token, "BEGINNER_1", answers);
-        }
+        FinishedCheck check = finishCheck(token, "BEGINNER_1", true);
         JsonNode built = api.startPlan(token, goal("TRAVEL", List.of("ORDER_FOOD"), "HOURS_1_TO_2", List.of()),
-                Map.of("selfLevel", "A_LITTLE", "skipped", false, "answers", answers));
+                Map.of("selfLevel", "A_LITTLE", "skipped", false, "answers", check.answers(),
+                        "runToken", check.runToken()));
         JsonNode level = built.path("level");
         assertThat(level.path("knownSkills").size()).isPositive();
         assertThat(level.path("newSkills").size()).isPositive();
 
         try (var ignored = hidePublishedQuestions()) {
-            JsonNode retake = api.data(mockMvc.perform(api.jsonPost(PLAN + "/level-check", token,
-                            Map.of("answers", List.of())))
-                    .andExpect(status().isOk())
-                    .andReturn());
+            JsonNode retake = retake(token, Map.of("answers", List.of()));
             assertThat(retake.path("level").asText()).isEqualTo(level.path("placed").asText());
             assertThat(retake.path("changed").asBoolean()).isFalse();
-            JsonNode kept = api.data(mockMvc.perform(api.authGet(PLAN, token)).andReturn()).path("level");
+            JsonNode kept = plan(token).path("level");
             assertThat(kept.path("knownSkills")).isEqualTo(level.path("knownSkills"));
             assertThat(kept.path("newSkills")).isEqualTo(level.path("newSkills"));
         }
@@ -302,9 +300,11 @@ class LearningPlanIntegrationTests extends ApiIntegrationTest {
         assertThat(plan.path("weeks").path("total").asInt()).isEqualTo(2);
         assertThat(plan.path("weeks").path("content").asInt()).isGreaterThan(2);
         mockMvc.perform(api.authGet(PLAN + "/overview", token))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.plan.milestoneDate").value(deadline))
                 .andExpect(jsonPath("$.data.plan.totalWeeks").value(2));
-        mockMvc.perform(api.authGet("/api/v1/students/home", token))
+        mockMvc.perform(api.authGet(HOME, token))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.plan.milestoneDate").value(deadline));
     }
 
@@ -323,7 +323,8 @@ class LearningPlanIntegrationTests extends ApiIntegrationTest {
         assertThat(draft.path("goal").path("reason").asText()).isEqualTo("TRAVEL");
         mockMvc.perform(api.authGet(PLAN, token)).andExpect(status().isOk()).andExpect(jsonPath("$.data").doesNotExist());
         mockMvc.perform(api.authGet(PLAN + "/overview", token)).andExpect(status().isOk()).andExpect(jsonPath("$.data.plan").doesNotExist());
-        mockMvc.perform(api.authGet("/api/v1/students/home", token))
+        mockMvc.perform(api.authGet(HOME, token))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.setupState").value("NOT_STARTED"))
                 .andExpect(jsonPath("$.data.plan").doesNotExist());
 
@@ -347,7 +348,8 @@ class LearningPlanIntegrationTests extends ApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andReturn());
         assertThat(started.path("goal").path("reason").asText()).isEqualTo("WORK");
-        mockMvc.perform(api.authGet("/api/v1/students/home", token))
+        mockMvc.perform(api.authGet(HOME, token))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.setupState").value("COMPLETED"))
                 .andExpect(jsonPath("$.data.plan.reason").value("WORK"));
         mockMvc.perform(api.authPost(PLAN + "/confirm", token))
@@ -373,7 +375,8 @@ class LearningPlanIntegrationTests extends ApiIntegrationTest {
         Long studentId = studentProfile(email).getId();
         assertThat(plansOf(studentId))
                 .isEmpty();
-        mockMvc.perform(api.authGet("/api/v1/students/home", token))
+        mockMvc.perform(api.authGet(HOME, token))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.setupState").value("SKIPPED"));
         mockMvc.perform(api.authPost(PLAN + "/confirm", token))
                 .andExpect(status().isConflict())
@@ -424,10 +427,11 @@ class LearningPlanIntegrationTests extends ApiIntegrationTest {
         pointsTransactionRepository.save(goal);
 
         mockMvc.perform(api.authGet(PLAN + "/overview", token))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.plan.week").value(2))
                 .andExpect(jsonPath("$.data.plan.daysBehind").value(2))
                 .andExpect(jsonPath("$.data.plan.status").value("BEHIND"));
-        JsonNode plan = api.data(mockMvc.perform(api.authGet(PLAN, token)).andExpect(status().isOk()).andReturn());
+        JsonNode plan = plan(token);
         assertThat(plan.path("progress").path("daysThisWeek").asInt()).isEqualTo(1);
         assertThat(plan.path("progress").path("daysBehind").asInt()).isEqualTo(2);
     }
@@ -468,19 +472,17 @@ class LearningPlanIntegrationTests extends ApiIntegrationTest {
                 .satisfies(plan -> assertThat(plan.getVersion()).isEqualTo(2));
 
         // Retake: every answer right from NEW_TO_MANDARIN places the student higher, so the plan is rebuilt.
-        List<Map<String, Object>> answers = finishCheck(token, "NEW_TO_MANDARIN");
-        JsonNode retake = api.data(mockMvc.perform(api.jsonPost(PLAN + "/level-check", token, Map.of("answers", answers)))
-                .andExpect(status().isOk())
-                .andReturn());
+        FinishedCheck firstRetake = finishCheck(token, "NEW_TO_MANDARIN");
+        JsonNode retake = retake(token, firstRetake);
         assertThat(retake.path("changed").asBoolean()).isTrue();
         assertThat(retake.path("level").asText()).isNotEqualTo("NEW_TO_MANDARIN");
         mockMvc.perform(api.authGet(PLAN + "/overview", token))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.plan.level").value(retake.path("level").asText()));
 
-        // The same answers again: the level stays, so does the plan version.
-        JsonNode again = api.data(mockMvc.perform(api.jsonPost(PLAN + "/level-check", token, Map.of("answers", answers)))
-                .andExpect(status().isOk())
-                .andReturn());
+        // A second retake starting from the new placed level with the same outcome: level and plan version stay.
+        FinishedCheck secondRetake = finishCheck(token, retake.path("level").asText());
+        JsonNode again = retake(token, secondRetake);
         assertThat(again.path("changed").asBoolean()).isFalse();
         assertThat(plansOf(studentId))
                 .hasSize(3);
@@ -528,7 +530,7 @@ class LearningPlanIntegrationTests extends ApiIntegrationTest {
     }
 
     @Test
-    void retakingOrUpdatingNeedsAPlan() throws Exception {
+    void retakingUpdatingOrPickingAClassNeedsAPlan() throws Exception {
         String token = api.registerStudent(uniqueEmail("plan-none"));
         mockMvc.perform(api.jsonPut(PLAN + "/goal", token, Map.of("goal", goal("TRAVEL", List.of(), "UNDER_30_MIN", List.of()))))
                 .andExpect(status().isConflict())
@@ -536,129 +538,128 @@ class LearningPlanIntegrationTests extends ApiIntegrationTest {
         mockMvc.perform(api.jsonPost(PLAN + "/level-check", token, Map.of("answers", List.of())))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message").value("Build your learning plan first."));
-    }
-
-    @Test
-    void classesComeFromTheCatalogueAndOnlyTheStudentReadsThePlan() throws Exception {
-        String adminToken = api.adminToken();
-        Long joinedClass = api.publishedClass(adminToken, "Food and Conversation Club").classId();
-        String token = api.registerStudent(uniqueEmail("plan-classes"));
-        api.join(token, joinedClass);
-        String membership = "/api/v1/students/classes/catalogue/membership";
-        Map<String, Object> goal = goal("EVERYDAY", List.of("ORDER_FOOD", "SHORT_CHATS"), "HOURS_1_TO_2", List.of());
-        JsonNode draft = api.data(mockMvc.perform(api.jsonPost(PLAN, token, Map.of("goal", goal, "levelCheck", SKIPPED_CHECK)))
-                .andExpect(status().isOk()).andReturn());
-        assertThat(draft.path("steps").valueStream()
-                .filter(step -> "CLASS".equals(step.path("kind").asText()))
-                .map(step -> step.path("refId").asLong())).contains(joinedClass);
-        mockMvc.perform(api.authGet(membership, token))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.plannedClassIds").isEmpty());
-
-        JsonNode plan = api.data(mockMvc.perform(api.authPost(PLAN + "/confirm", token))
-                .andExpect(status().isOk()).andReturn());
-        JsonNode confirmed = api.data(mockMvc.perform(api.authGet(membership, token))
-                .andExpect(status().isOk()).andReturn());
-        assertThat(confirmed.path("plannedClassIds").valueStream().map(JsonNode::asLong)).contains(joinedClass);
-
-        JsonNode classStep = plan.path("steps").valueStream()
-                .filter(step -> step.path("kind").asText().equals("CLASS") && step.path("refId").asLong() == joinedClass)
-                .findFirst()
-                .orElseThrow();
-        assertThat(classStep.path("status").asText()).isEqualTo("IN_MY_CLASSES");
-        assertThat(classStep.path("joined").asBoolean()).isTrue();
-        // Its next lesson, as My classes shows it ("Next: Meeting Classmates").
-        assertThat(classStep.path("nextLesson").path("kind").asText()).isEqualTo("LESSON");
-        assertThat(classStep.path("nextLesson").path("title").asText()).isEqualTo("Food and Conversation Club lesson");
-        assertThat(classStep.path("goals").toString()).contains("SHORT_CHATS");
-
-        mockMvc.perform(api.authGet(PLAN, adminToken))
-                .andExpect(status().isForbidden());
-    }
-
-    @Test
-    void theClassPickedFirstStaysWithThePlanAndHomeShowsIt() throws Exception {
-        String adminToken = api.adminToken();
-        String marketTitle = "Pick-first Market Mandarin";
-        String stationTitle = "Pick-first Culture Film Office Career";
-        Long market = api.publishedClass(adminToken, marketTitle).classId();
-        Long station = api.publishedClass(adminToken, stationTitle).classId();
-        Long elsewhere = api.publishedClass(adminToken, "Pick-first Elsewhere").classId();
-        String email = uniqueEmail("plan-pick");
-        String token = api.registerStudent(email);
-        api.startTravelPlan(token);
-        // The plan's optional classes are these two (other tests' classes are in the catalogue too).
-        LearningPlan saved = activePlan(email);
-        List<LearningPlanStep> steps = stepRepository.findByPlanIdOrderByPositionAsc(saved.getId());
-        stepRepository.deleteAll(steps.stream().filter(step -> step.getStepKind() == PlanStepKind.CLASS).toList());
-        int last = steps.stream().mapToInt(LearningPlanStep::getPosition).max().orElse(0);
-        stepRepository.saveAll(List.of(classStep(saved, market, last + 1), classStep(saved, station, last + 2)));
-        mockMvc.perform(api.authGet(PLAN + "/overview", token))
-                .andExpect(jsonPath("$.data.plan.optionalClass.title").value(marketTitle));
-
-        // "Pick this first" is kept with the plan, and Home names the picked class (S3.19/S3.20).
-        mockMvc.perform(api.jsonPut(PLAN + "/class-pick", token, Map.of("classId", station)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.pickedClassId").value(station));
-        mockMvc.perform(api.authGet(PLAN, token))
-                .andExpect(jsonPath("$.data.pickedClassId").value(station));
-        mockMvc.perform(api.authGet("/api/v1/students/home", token))
-                .andExpect(jsonPath("$.data.plan.optionalClass.title").value(stationTitle));
-
-        // Only a class of the plan can be picked; the pick stays as it was.
-        mockMvc.perform(api.jsonPut(PLAN + "/class-pick", token, Map.of("classId", elsewhere)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("Pick a class from your plan."));
-        assertThat(activePlan(email).getPickedClassId()).isEqualTo(station);
-
-        // No pick: the plan's own order again.
-        mockMvc.perform(api.jsonPut(PLAN + "/class-pick", token, singletonMap("classId", null)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.pickedClassId").doesNotExist());
-        mockMvc.perform(api.authGet(PLAN + "/overview", token))
-                .andExpect(jsonPath("$.data.plan.optionalClass.title").value(marketTitle));
-
-        // A rebuilt plan keeps the pick while the class is still in it, and drops it once the class leaves the plan.
-        mockMvc.perform(api.jsonPut(PLAN + "/class-pick", token, Map.of("classId", station)))
-                .andExpect(status().isOk());
-        mockMvc.perform(api.jsonPut(PLAN + "/goal", token,
-                        Map.of("goal", goal("WORK", List.of("ENJOY_MEDIA", "TALK_ABOUT_WORK"), "MINUTES_30_TO_60", List.of()))))
-                .andExpect(status().isOk());
-        LearningPlan kept = activePlan(email);
-        assertThat(kept.getVersion()).isEqualTo(saved.getVersion() + 1);
-        assertThat(stepRepository.findByPlanIdOrderByPositionAsc(kept.getId()))
-                .anyMatch(step -> step.getStepKind() == PlanStepKind.CLASS && station.equals(step.getRefId()));
-        assertThat(kept.getPickedClassId()).isEqualTo(station);
-
-        mockMvc.perform(api.jsonPut(PLAN + "/goal", token,
-                        Map.of("goal", goal("TRAVEL", List.of("ORDER_FOOD"), "MINUTES_30_TO_60", List.of()))))
-                .andExpect(status().isOk());
-        LearningPlan dropped = activePlan(email);
-        assertThat(dropped.getVersion()).isEqualTo(kept.getVersion() + 1);
-        assertThat(stepRepository.findByPlanIdOrderByPositionAsc(dropped.getId()))
-                .noneMatch(step -> step.getStepKind() == PlanStepKind.CLASS && station.equals(step.getRefId()));
-        assertThat(dropped.getPickedClassId()).isNull();
-    }
-
-    @Test
-    void aClassCanBePickedOnlyWithAPlan() throws Exception {
-        String token = api.registerStudent(uniqueEmail("plan-pick-none"));
         mockMvc.perform(api.jsonPut(PLAN + "/class-pick", token, Map.of("classId", 1)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message").value("Build your learning plan first."));
     }
 
-    private static LearningPlanStep classStep(LearningPlan plan, Long classId, int position) {
-        LearningPlanStep step = new LearningPlanStep();
-        step.setPlan(plan);
-        step.setPosition(position);
-        step.setStepKind(PlanStepKind.CLASS);
-        step.setRefId(classId);
-        step.setTitle("Class " + classId);
-        step.setGoalPicks("ORDER_FOOD");
-        step.setWeekFrom(2);
-        step.setWeekTo(3);
-        return step;
+    @Test
+    void classesComeFromTheCatalogueAndOnlyTheStudentReadsThePlan() throws Exception {
+        String adminToken = api.adminToken();
+        String classTitle = "Food and Conversation Club " + uniqueSuffix();
+        Long joinedClass = api.publishedClass(adminToken, classTitle).classId();
+        try {
+            String token = api.registerStudent(uniqueEmail("plan-classes"));
+            api.join(token, joinedClass);
+            String membership = "/api/v1/students/classes/catalogue/membership";
+            Map<String, Object> goal = goal("EVERYDAY", List.of("ORDER_FOOD", "SHORT_CHATS"), "HOURS_1_TO_2", List.of());
+            JsonNode draft = api.data(mockMvc.perform(api.jsonPost(PLAN, token, Map.of("goal", goal, "levelCheck", SKIPPED_CHECK)))
+                    .andExpect(status().isOk()).andReturn());
+            assertThat(draft.path("steps").valueStream()
+                    .filter(step -> "CLASS".equals(step.path("kind").asText()))
+                    .map(step -> step.path("refId").asLong())).contains(joinedClass);
+            mockMvc.perform(api.authGet(membership, token))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.plannedClassIds").isEmpty());
+
+            JsonNode plan = api.data(mockMvc.perform(api.authPost(PLAN + "/confirm", token))
+                    .andExpect(status().isOk()).andReturn());
+            JsonNode confirmed = api.data(mockMvc.perform(api.authGet(membership, token))
+                    .andExpect(status().isOk()).andReturn());
+            assertThat(confirmed.path("plannedClassIds").valueStream().map(JsonNode::asLong)).contains(joinedClass);
+
+            JsonNode classStep = plan.path("steps").valueStream()
+                    .filter(step -> step.path("kind").asText().equals("CLASS") && step.path("refId").asLong() == joinedClass)
+                    .findFirst()
+                    .orElseThrow();
+            assertThat(classStep.path("status").asText()).isEqualTo("IN_MY_CLASSES");
+            assertThat(classStep.path("joined").asBoolean()).isTrue();
+            // Its next lesson, as My classes shows it ("Next: Meeting Classmates").
+            assertThat(classStep.path("nextLesson").path("kind").asText()).isEqualTo("LESSON");
+            assertThat(classStep.path("nextLesson").path("title").asText()).isEqualTo(classTitle + " lesson");
+            assertThat(classStep.path("goals").toString()).contains("SHORT_CHATS");
+
+            mockMvc.perform(api.authGet(PLAN, adminToken))
+                    .andExpect(status().isForbidden());
+        } finally {
+            mockMvc.perform(api.authPost("/api/v1/admin/classes/" + joinedClass + "/archive", adminToken))
+                    .andExpect(status().isOk());
+        }
+    }
+
+    @Test
+    void theClassPickedFirstStaysWithThePlanAndHomeShowsIt() throws Exception {
+        String adminToken = api.adminToken();
+        String suffix = uniqueSuffix();
+        String marketTitle = "Pick-first Market Mandarin " + suffix;
+        String stationTitle = "Pick-first Culture Film Office Career " + suffix;
+        Long market = api.publishedClass(adminToken, marketTitle).classId();
+        Long station = api.publishedClass(adminToken, stationTitle).classId();
+        Long elsewhere = api.publishedClass(adminToken, "Pick-first Elsewhere " + suffix).classId();
+        try {
+            String email = uniqueEmail("plan-pick");
+            String token = api.registerStudent(email);
+            api.startTravelPlan(token);
+            // The plan's optional classes are these two (other tests' classes are in the catalogue too).
+            LearningPlan saved = activePlan(email);
+            List<LearningPlanStep> steps = stepRepository.findByPlanIdOrderByPositionAsc(saved.getId());
+            stepRepository.deleteAll(steps.stream().filter(step -> step.getStepKind() == PlanStepKind.CLASS).toList());
+            int last = steps.stream().mapToInt(LearningPlanStep::getPosition).max().orElse(0);
+            stepRepository.saveAll(List.of(classStep(saved, market, last + 1), classStep(saved, station, last + 2)));
+            mockMvc.perform(api.authGet(PLAN + "/overview", token))
+                    .andExpect(jsonPath("$.data.plan.optionalClass.title").value(marketTitle));
+
+            // "Pick this first" is kept with the plan, and Home names the picked class (S3.19/S3.20).
+            mockMvc.perform(api.jsonPut(PLAN + "/class-pick", token, Map.of("classId", station)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.pickedClassId").value(station));
+            mockMvc.perform(api.authGet(PLAN, token))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.pickedClassId").value(station));
+            mockMvc.perform(api.authGet(HOME, token))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.plan.optionalClass.title").value(stationTitle));
+
+            // Only a class of the plan can be picked; the pick stays as it was.
+            mockMvc.perform(api.jsonPut(PLAN + "/class-pick", token, Map.of("classId", elsewhere)))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.message").value("Pick a class from your plan."));
+            assertThat(activePlan(email).getPickedClassId()).isEqualTo(station);
+
+            // No pick: the plan's own order again.
+            mockMvc.perform(api.jsonPut(PLAN + "/class-pick", token, singletonMap("classId", null)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.pickedClassId").doesNotExist());
+            mockMvc.perform(api.authGet(PLAN + "/overview", token))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.plan.optionalClass.title").value(marketTitle));
+
+            // A rebuilt plan keeps the pick while the class is still in it, and drops it once the class leaves the plan.
+            mockMvc.perform(api.jsonPut(PLAN + "/class-pick", token, Map.of("classId", station)))
+                    .andExpect(status().isOk());
+            mockMvc.perform(api.jsonPut(PLAN + "/goal", token,
+                            Map.of("goal", goal("WORK", List.of("ENJOY_MEDIA", "TALK_ABOUT_WORK"), "MINUTES_30_TO_60", List.of()))))
+                    .andExpect(status().isOk());
+            LearningPlan kept = activePlan(email);
+            assertThat(kept.getVersion()).isEqualTo(saved.getVersion() + 1);
+            assertThat(stepRepository.findByPlanIdOrderByPositionAsc(kept.getId()))
+                    .anyMatch(step -> step.getStepKind() == PlanStepKind.CLASS && station.equals(step.getRefId()));
+            assertThat(kept.getPickedClassId()).isEqualTo(station);
+
+            mockMvc.perform(api.jsonPut(PLAN + "/goal", token,
+                            Map.of("goal", goal("TRAVEL", List.of("ORDER_FOOD"), "MINUTES_30_TO_60", List.of()))))
+                    .andExpect(status().isOk());
+            LearningPlan dropped = activePlan(email);
+            assertThat(dropped.getVersion()).isEqualTo(kept.getVersion() + 1);
+            assertThat(stepRepository.findByPlanIdOrderByPositionAsc(dropped.getId()))
+                    .noneMatch(step -> step.getStepKind() == PlanStepKind.CLASS && station.equals(step.getRefId()));
+            assertThat(dropped.getPickedClassId()).isNull();
+        } finally {
+            for (Long classId : List.of(market, station, elsewhere)) {
+                mockMvc.perform(api.authPost("/api/v1/admin/classes/" + classId + "/archive", adminToken))
+                        .andExpect(status().isOk());
+            }
+        }
     }
 
     @Test
@@ -676,7 +677,7 @@ class LearningPlanIntegrationTests extends ApiIntegrationTest {
         steps.forEach(step -> step.setGoalPicks("RETIRED_GOAL,ORDER_FOOD"));
         stepRepository.saveAll(steps);
 
-        JsonNode plan = api.data(mockMvc.perform(api.authGet(PLAN, token)).andExpect(status().isOk()).andReturn());
+        JsonNode plan = plan(token);
 
         assertThat(plan.path("goal").path("focus").toString()).isEqualTo("[\"LISTENING\"]");
         assertThat(plan.path("goal").path("picks").toString()).isEqualTo("[\"ORDER_FOOD\"]");
@@ -703,7 +704,7 @@ class LearningPlanIntegrationTests extends ApiIntegrationTest {
                 completion(student, lessons.get(0), now.minusDays(10)),
                 completion(student, lessons.get(1), now.minusDays(1))));
 
-        JsonNode plan = api.data(mockMvc.perform(api.authGet(PLAN, token)).andExpect(status().isOk()).andReturn());
+        JsonNode plan = plan(token);
 
         assertThat(plan.path("weeks").path("current").asInt()).isEqualTo(saved.getTotalWeeks());
         assertThat(plan.path("thisWeek").valueStream()
@@ -729,19 +730,12 @@ class LearningPlanIntegrationTests extends ApiIntegrationTest {
                 completion(student, lesson, now.minusHours(2)),
                 completion(student, chest, now.minusHours(1))));
 
-        JsonNode plan = api.data(mockMvc.perform(api.authGet(PLAN, token)).andExpect(status().isOk()).andReturn());
+        JsonNode plan = plan(token);
 
         assertThat(plan.path("thisWeek").valueStream()
                 .filter(task -> task.path("kind").asText().equals("LEARN_DONE"))
                 .map(task -> task.path("title").asText()))
                 .containsExactly(lesson.getTitle());
-    }
-
-    private LearnLesson firstStopOfKind(LearnLessonKind kind) {
-        return learnLessonRepository.findAll().stream()
-                .filter(stop -> stop.getLessonKind() == kind)
-                .findFirst()
-                .orElseThrow();
     }
 
     @Test
@@ -755,7 +749,7 @@ class LearningPlanIntegrationTests extends ApiIntegrationTest {
         saved.setStartsOn(clock.today().minusDays(10));
         planRepository.save(saved);
 
-        JsonNode plan = api.data(mockMvc.perform(api.authGet(PLAN, token)).andExpect(status().isOk()).andReturn());
+        JsonNode plan = plan(token);
 
         assertThat(plan.path("weeks").path("current").asInt()).isEqualTo(1);
         assertThat(plan.path("progress").path("status").asText()).isEqualTo("BEHIND");
@@ -784,11 +778,11 @@ class LearningPlanIntegrationTests extends ApiIntegrationTest {
         assertThat(done.path("units").valueStream().map(unit -> unit.path("state").asText())).containsOnly("DONE");
         assertThat(done.path("checkpoint").path("state").asText()).isEqualTo("AVAILABLE");
 
-        JsonNode plan = api.data(mockMvc.perform(api.authGet(PLAN, token)).andExpect(status().isOk()).andReturn());
+        JsonNode plan = plan(token);
         assertThat(learnSteps(plan).map(step -> step.path("status").asText())).containsOnly("DONE");
         assertThat(plan.path("progress").path("status").asText()).isEqualTo("COMPLETE");
         assertThat(learnNextTasks(plan)).containsExactly(checkpointId);
-        JsonNode home = api.data(mockMvc.perform(api.authGet("/api/v1/students/home", token)).andReturn()).path("next");
+        JsonNode home = home(token).path("next");
         assertThat(home.path("kind").asText()).isEqualTo("CHECKPOINT");
         assertThat(home.path("lessonId").asLong()).isEqualTo(checkpointId);
         assertThat(home.path("inPlan").asBoolean()).isFalse();
@@ -805,17 +799,11 @@ class LearningPlanIntegrationTests extends ApiIntegrationTest {
         assertThat(current.path("nextLesson").path("id").asLong()).isEqualTo(checkpointId);
         assertThat(current.path("nextLesson").path("kind").asText()).isEqualTo("CHECKPOINT");
         assertThat(learnNextTasks(rebuilt)).containsExactly(checkpointId);
-        mockMvc.perform(api.authGet("/api/v1/students/home", token))
+        mockMvc.perform(api.authGet(HOME, token))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.next.kind").value("CHECKPOINT"))
                 .andExpect(jsonPath("$.data.next.lessonId").value(checkpointId))
                 .andExpect(jsonPath("$.data.next.inPlan").value(true));
-    }
-
-    private static List<Long> learnNextTasks(JsonNode plan) {
-        return plan.path("thisWeek").valueStream()
-                .filter(task -> task.path("kind").asText().equals("LEARN_NEXT"))
-                .map(task -> task.path("lessonId").asLong())
-                .toList();
     }
 
     /** A unit is done when its required stops are; its bonus chest is optional, so the plan can be complete without it. */
@@ -824,26 +812,21 @@ class LearningPlanIntegrationTests extends ApiIntegrationTest {
         String email = uniqueEmail("plan-complete");
         String token = api.registerStudent(email);
         JsonNode built = api.startTravelPlan(token);
-        List<Long> planUnits = learnSteps(built).map(step -> step.path("refId").asLong()).toList();
-        List<JsonNode> units = learnPath(token).path("levels").valueStream()
-                .flatMap(level -> level.path("units").valueStream())
-                .filter(unit -> planUnits.contains(unit.path("id").asLong()))
-                .toList();
-        assertThat(units).hasSameSizeAs(planUnits);
+        List<JsonNode> stops = stopsInPlanUnits(token, built);
         // The plan's units have bonus chests, and they stay closed.
-        List<JsonNode> stops = units.stream().flatMap(unit -> unit.path("lessons").valueStream()).toList();
         assertThat(stops).anyMatch(stop -> stop.path("kind").asText().equals("BONUS"));
         List<Long> lessonIds = stops.stream()
                 .filter(stop -> !stop.path("kind").asText().equals("BONUS"))
                 .map(stop -> stop.path("id").asLong()).toList();
         finishLessons(email, lessonIds, LocalDateTime.now().minusHours(1));
 
-        JsonNode plan = api.data(mockMvc.perform(api.authGet(PLAN, token)).andExpect(status().isOk()).andReturn());
+        JsonNode plan = plan(token);
 
         assertThat(learnSteps(plan).map(step -> step.path("status").asText())).containsOnly("DONE");
         assertThat(plan.path("progress").path("percent").asInt()).isEqualTo(100);
         assertThat(plan.path("progress").path("status").asText()).isEqualTo("COMPLETE");
         mockMvc.perform(api.authGet(PLAN + "/overview", token))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.plan.percent").value(100))
                 .andExpect(jsonPath("$.data.plan.status").value("COMPLETE"));
     }
@@ -864,10 +847,8 @@ class LearningPlanIntegrationTests extends ApiIntegrationTest {
         saved.setDeadline(clock.today());
         planRepository.save(saved);
 
-        List<Map<String, Object>> answers = finishCheck(token, "NEW_TO_MANDARIN");
-        JsonNode retake = api.data(mockMvc.perform(api.jsonPost(PLAN + "/level-check", token, Map.of("answers", answers)))
-                .andExpect(status().isOk())
-                .andReturn());
+        FinishedCheck check = finishCheck(token, "NEW_TO_MANDARIN");
+        JsonNode retake = retake(token, check);
         assertThat(retake.path("changed").asBoolean()).isTrue();
 
         LearningPlan rebuilt = activePlan(email);
@@ -875,13 +856,11 @@ class LearningPlanIntegrationTests extends ApiIntegrationTest {
         assertThat(rebuilt.getDeadline()).isNull();
         assertThat(rebuilt.getMilestoneWeek()).isNull();
         assertThat(rebuilt.getTotalWeeks()).isEqualTo(rebuilt.getContentWeeks() + 1);
-        JsonNode plan = api.data(mockMvc.perform(api.authGet(PLAN, token)).andExpect(status().isOk()).andReturn());
+        JsonNode plan = plan(token);
         assertThat(plan.path("goal").path("deadline").isNull()).isTrue();
         assertThat(plan.path("milestone").isNull()).isTrue();
-        JsonNode overview = api.data(mockMvc.perform(api.authGet(PLAN + "/overview", token)).andReturn());
-        assertThat(overview.path("plan").path("deadline").isNull()).isTrue();
-        JsonNode home = api.data(mockMvc.perform(api.authGet("/api/v1/students/home", token)).andReturn());
-        assertThat(home.path("plan").path("deadline").isNull()).isTrue();
+        assertThat(overview(token).path("plan").path("deadline").isNull()).isTrue();
+        assertThat(home(token).path("plan").path("deadline").isNull()).isTrue();
     }
 
     /**
@@ -904,8 +883,7 @@ class LearningPlanIntegrationTests extends ApiIntegrationTest {
         }
         completionRepository.saveAll(completions);
 
-        JsonNode plan = api.data(mockMvc.perform(api.authGet(PLAN, token)).andExpect(status().isOk()).andReturn());
-        assertThat(plan.path("kept").path("lessons").asInt()).isEqualTo(2);
+        assertThat(plan(token).path("kept").path("lessons").asInt()).isEqualTo(2);
         assertThat(learnPath(token).path("completedLessons").asInt()).isEqualTo(2);
     }
 
@@ -939,22 +917,20 @@ class LearningPlanIntegrationTests extends ApiIntegrationTest {
     void homeSaysWhenTheNextLessonIsPastThePlansUnits() throws Exception {
         String email = uniqueEmail("plan-past-units");
         String token = api.registerStudent(email);
-        mockMvc.perform(api.authGet("/api/v1/students/home", token))
+        mockMvc.perform(api.authGet(HOME, token))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.next.inPlan").value(false));
         JsonNode built = api.startTravelPlan(token);
-        mockMvc.perform(api.authGet("/api/v1/students/home", token))
+        mockMvc.perform(api.authGet(HOME, token))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.next.unitNumber").value(1))
                 .andExpect(jsonPath("$.data.next.inPlan").value(true));
 
-        List<Long> planUnits = learnSteps(built).map(step -> step.path("refId").asLong()).toList();
-        List<Long> lessonIds = learnPath(token).path("levels").valueStream()
-                .flatMap(level -> level.path("units").valueStream())
-                .filter(unit -> planUnits.contains(unit.path("id").asLong()))
-                .flatMap(unit -> unit.path("lessons").valueStream())
+        List<Long> lessonIds = stopsInPlanUnits(token, built).stream()
                 .map(stop -> stop.path("id").asLong()).toList();
         finishLessons(email, lessonIds, LocalDateTime.now().minusHours(1));
 
-        JsonNode home = api.data(mockMvc.perform(api.authGet("/api/v1/students/home", token)).andReturn());
+        JsonNode home = home(token);
         JsonNode next = home.path("next");
         assertThat(next.path("unitNumber").asInt()).isGreaterThan(learnUnitNumbers(built).getLast());
         assertThat(next.path("inPlan").asBoolean()).isFalse();
@@ -963,10 +939,73 @@ class LearningPlanIntegrationTests extends ApiIntegrationTest {
 
     // Helpers
 
+    private JsonNode plan(String token) throws Exception {
+        return getOk(PLAN, token);
+    }
+
+    private JsonNode overview(String token) throws Exception {
+        return getOk(PLAN + "/overview", token);
+    }
+
+    private JsonNode home(String token) throws Exception {
+        return getOk(HOME, token);
+    }
+
     private JsonNode learnPath(String token) throws Exception {
-        return api.data(mockMvc.perform(api.authGet("/api/v1/students/learn/path", token))
+        return getOk("/api/v1/students/learn/path", token);
+    }
+
+    private JsonNode getOk(String path, String token) throws Exception {
+        return api.data(mockMvc.perform(api.authGet(path, token))
                 .andExpect(status().isOk())
                 .andReturn());
+    }
+
+    private JsonNode retake(String token, FinishedCheck check) throws Exception {
+        return retake(token, Map.of("answers", check.answers(), "runToken", check.runToken()));
+    }
+
+    private JsonNode retake(String token, Map<String, Object> body) throws Exception {
+        return api.data(mockMvc.perform(api.jsonPost(PLAN + "/level-check", token, body))
+                .andExpect(status().isOk())
+                .andReturn());
+    }
+
+    private List<JsonNode> stopsInPlanUnits(String token, JsonNode builtPlan) throws Exception {
+        List<Long> planUnits = learnSteps(builtPlan).map(step -> step.path("refId").asLong()).toList();
+        List<JsonNode> units = learnPath(token).path("levels").valueStream()
+                .flatMap(level -> level.path("units").valueStream())
+                .filter(unit -> planUnits.contains(unit.path("id").asLong()))
+                .toList();
+        assertThat(units).hasSameSizeAs(planUnits);
+        return units.stream().flatMap(unit -> unit.path("lessons").valueStream()).toList();
+    }
+
+    private static LearningPlanStep classStep(LearningPlan plan, Long classId, int position) {
+        LearningPlanStep step = new LearningPlanStep();
+        step.setPlan(plan);
+        step.setPosition(position);
+        step.setStepKind(PlanStepKind.CLASS);
+        step.setRefId(classId);
+        step.setTitle("Class " + classId);
+        step.setGoalPicks("ORDER_FOOD");
+        step.setWeekFrom(2);
+        step.setWeekTo(3);
+        return step;
+    }
+
+    private LearnLesson firstStopOfKind(LearnLessonKind kind) {
+        return learnLessonRepository.findAll().stream()
+                .filter(stop -> stop.getLessonKind() == kind)
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private static List<Long> learnNextTasks(JsonNode plan) {
+        return plan.path("thisWeek").valueStream()
+                .filter(task -> task.path("kind").asText().equals("LEARN_NEXT"))
+                .map(task -> task.path("lessonId").asLong())
+                .toList();
     }
 
     private LearningPlan activePlan(String email) {
@@ -1004,20 +1043,32 @@ class LearningPlanIntegrationTests extends ApiIntegrationTest {
         return goal;
     }
 
-    /** Answers the adaptive check to the end, every answer right. */
-    private List<Map<String, Object>> finishCheck(String token, String startLevel) throws Exception {
-        List<Map<String, Object>> answers = new ArrayList<>();
-        JsonNode step = next(token, startLevel, answers);
-        while (!step.path("done").asBoolean()) {
-            long questionId = step.path("next").path("id").asLong();
-            answers.add(levelCheckAnswer(questionId, rightLevelCheckOption(questionId)));
-            step = next(token, startLevel, answers);
-        }
-        return answers;
+    private record FinishedCheck(List<Map<String, Object>> answers, String runToken) {
     }
 
-    private JsonNode next(String token, String startLevel, List<Map<String, Object>> answers) throws Exception {
-        return api.data(mockMvc.perform(api.jsonPost(NEXT, token, Map.of("startLevel", startLevel, "answers", answers)))
+    /** Answers the adaptive check to the end, every answer right. */
+    private FinishedCheck finishCheck(String token, String startLevel) throws Exception {
+        return finishCheck(token, startLevel, false);
+    }
+
+    /** Answers the adaptive check to the end, optionally alternating "don't know" and right answers. */
+    private FinishedCheck finishCheck(String token, String startLevel, boolean alternateUnknown) throws Exception {
+        List<Map<String, Object>> answers = new ArrayList<>();
+        JsonNode step = next(token, startLevel, answers, null);
+        while (!step.path("done").asBoolean()) {
+            long questionId = step.path("next").path("id").asLong();
+            Long option = alternateUnknown && answers.size() % 2 == 0 ? null : rightLevelCheckOption(questionId);
+            answers.add(levelCheckAnswer(questionId, option));
+            step = next(token, startLevel, answers, step.path("runToken").asText());
+        }
+        return new FinishedCheck(answers, step.path("runToken").asText());
+    }
+
+    private JsonNode next(String token, String startLevel, List<Map<String, Object>> answers, String runToken) throws Exception {
+        Map<String, Object> body = runToken == null
+                ? Map.of("startLevel", startLevel, "answers", answers)
+                : Map.of("startLevel", startLevel, "answers", answers, "runToken", runToken);
+        return api.data(mockMvc.perform(api.jsonPost(NEXT, token, body))
                 .andExpect(status().isOk())
                 .andReturn());
     }

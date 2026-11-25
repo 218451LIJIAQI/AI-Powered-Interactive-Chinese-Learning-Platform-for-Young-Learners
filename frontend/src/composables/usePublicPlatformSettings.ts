@@ -37,9 +37,9 @@ export function usePublicPlatformSettings() {
   return { settings: readonly(settings), aiProvider }
 }
 
-/** The suffix naming a Chat Completions provider inside `aiDisclosureMessages`, or null for a name shown as configured. */
-export function aiProviderNameKey(provider: string): 'providerDeepseek' | 'providerCompatible' | null {
-  if (provider === 'deepseek') return 'providerDeepseek'
-  if (provider === 'openai-compatible') return 'providerCompatible'
-  return null
+/** Localised display name for a Chat Completions provider inside `aiDisclosureMessages`, or the configured identifier. */
+export function resolveAiProviderLabel(provider: string, t: (key: string) => string): string {
+  if (provider === 'deepseek') return t('aiDisclosure.providerDeepseek')
+  if (provider === 'openai-compatible') return t('aiDisclosure.providerCompatible')
+  return provider
 }

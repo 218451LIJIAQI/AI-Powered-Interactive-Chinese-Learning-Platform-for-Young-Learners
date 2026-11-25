@@ -41,6 +41,7 @@ function mountStep() {
 
 describe('SayStep (say a phrase from the lesson)', () => {
   beforeEach(() => {
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {})
     recorder.current = fakeRecorder()
     setPermission(null)
   })
@@ -115,13 +116,13 @@ describe('SayStep (say a phrase from the lesson)', () => {
     const stop = wrapper.get('[data-testid="say-stop"]')
     expect(stop.text()).toBe('Stop')
     const note = wrapper.get('.learn-say-note')
-    expect(note.text()).toBe('Recording… 0:02 · say 爸爸 now, then tap Stop. Not graded.')
+    expect(note.text()).toBe('Recording… 0:02 · say 爸爸 now, then click Stop. Not graded.')
     // The clock is not read out every second.
     expect(note.get('[aria-hidden="true"]').text()).toBe('0:02')
 
     recorder.current!.elapsedSeconds.value = 3
     await flushPromises()
-    expect(note.text()).toBe('Recording… 0:03 · say 爸爸 now, then tap Stop. Not graded.')
+    expect(note.text()).toBe('Recording… 0:03 · say 爸爸 now, then click Stop. Not graded.')
     await stop.trigger('click')
     expect(recorder.current!.stop).toHaveBeenCalledOnce()
   })
@@ -161,5 +162,27 @@ describe('SayStep (say a phrase from the lesson)', () => {
     expect(wrapper.get('.learn-say-note').text()).toBe(
       'This browser can’t record. Say it out loud and continue — this step isn’t graded.',
     )
+  })
+
+  it('hands focus across the Record and Stop swap and surfaces native audio element errors', async () => {
+    const wrapper = mount(SayStep, {
+      attachTo: document.body,
+      props: { hanzi: '爸爸', pinyin: 'bàba', meaning: 'dad' },
+      global: { stubs: { teleport: true } },
+    })
+
+    wrapper.get<HTMLButtonElement>('[data-testid="say-record"]').element.focus()
+    recorder.current!.status.value = 'recording'
+    await flushPromises()
+    expect(document.activeElement).toBe(wrapper.get('[data-testid="say-stop"]').element)
+
+    recorder.current!.status.value = 'recorded'
+    recorder.current!.previewUrl.value = 'blob:recording'
+    await flushPromises()
+    expect(document.activeElement).toBe(wrapper.get('[data-testid="say-play"]').element)
+
+    await wrapper.get('audio').trigger('error')
+    expect(wrapper.get('[role="alert"]').text()).toBe('Audio didn’t load')
+    wrapper.unmount()
   })
 })

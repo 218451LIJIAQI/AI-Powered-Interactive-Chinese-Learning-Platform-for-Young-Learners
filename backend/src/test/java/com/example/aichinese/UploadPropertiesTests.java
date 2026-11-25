@@ -31,7 +31,6 @@ class UploadPropertiesTests {
 
         properties.setDirectory("  " + UPLOAD_DIRECTORY + "  ");
         properties.setRecordedVideoDirectory("  " + VIDEO_DIRECTORY + "  ");
-        properties.setMaxFileSize(DataSize.ofKilobytes(1));
         properties.setSupportScreenshotMaxFileSize(DataSize.ofKilobytes(2));
         properties.setAiAudioMaxFileSize(DataSize.ofKilobytes(3));
         properties.setAiImageMaxFileSize(DataSize.ofKilobytes(4));
@@ -39,7 +38,6 @@ class UploadPropertiesTests {
 
         assertThat(properties.getDirectory()).isEqualTo(UPLOAD_DIRECTORY);
         assertThat(properties.getRecordedVideoDirectory()).isEqualTo(VIDEO_DIRECTORY);
-        assertThat(properties.getMaxFileSize().toBytes()).isEqualTo(KILOBYTE);
         assertThat(properties.getSupportScreenshotMaxFileSize().toBytes()).isEqualTo(KILOBYTE * 2);
         assertThat(properties.getAiAudioMaxFileSize().toBytes()).isEqualTo(KILOBYTE * 3);
         assertThat(properties.getAiImageMaxFileSize().toBytes()).isEqualTo(KILOBYTE * 4);
@@ -52,7 +50,6 @@ class UploadPropertiesTests {
 
         assertRejects(() -> properties.setDirectory(BLANK_DIRECTORY), DIRECTORY_MESSAGE);
         assertRejects(() -> properties.setRecordedVideoDirectory(BLANK_DIRECTORY), DIRECTORY_MESSAGE);
-        assertRejects(() -> properties.setMaxFileSize(DataSize.ofBytes(0)), FILE_SIZE_MESSAGE);
         assertRejects(() -> properties.setSupportScreenshotMaxFileSize(DataSize.ofBytes(0)), FILE_SIZE_MESSAGE);
         assertRejects(() -> properties.setAiAudioMaxFileSize(DataSize.ofBytes(0)), FILE_SIZE_MESSAGE);
         assertRejects(() -> properties.setAiImageMaxFileSize(DataSize.ofBytes(0)), FILE_SIZE_MESSAGE);

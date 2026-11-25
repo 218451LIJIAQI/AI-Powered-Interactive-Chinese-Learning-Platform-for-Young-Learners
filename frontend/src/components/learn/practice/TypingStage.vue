@@ -1,5 +1,5 @@
 <template>
-  <section class="practice-typing" :aria-labelledby="`${baseId}-meaning`">
+  <section class="practice-typing" :aria-labelledby="`${baseId}-meaning`" @keydown="onKey">
     <p class="practice-typing-label">{{ t('answer.typeItIn') }}</p>
     <p :id="`${baseId}-meaning`" class="practice-typing-meaning">“{{ meaning }}”</p>
 
@@ -11,16 +11,17 @@
       class="input practice-typing-input"
       type="text"
       autocomplete="off"
-      autocapitalize="off"
       spellcheck="false"
       maxlength="200"
       :placeholder="t('answer.typePlaceholder')"
       :disabled="locked"
       :aria-describedby="`${baseId}-help`"
       data-testid="typing-input"
-      @keydown="onKey"
     />
 
+    <p class="sr-only" role="status" aria-live="polite">
+      {{ candidates.length ? t('answer.candidates', { pinyin: typed.trim() }) : '' }}
+    </p>
     <div
       v-if="candidates.length"
       class="practice-candidates"
@@ -65,6 +66,7 @@ import { useLocalMessages } from '@/composables/useLocalMessages'
 import { practiceAnswerMessages } from '@/plugins/practiceAnswerMessages'
 import type { AnswerCheck } from '@/types/learn'
 import { resolveApiError } from '@/utils/apiError'
+import { hasHan } from '@/utils/cjkText'
 
 const CANDIDATE_DELAY_MS = 250
 
@@ -91,6 +93,15 @@ const candidateError = ref<string | null>(null)
 let lookup: ReturnType<typeof setTimeout> | undefined
 let request = 0
 
+function clearLookup(): void {
+  clearTimeout(lookup)
+  // Invalidate an in-flight lookup as soon as the input or item changes.
+  request += 1
+  candidates.value = []
+  noMatch.value = false
+  candidateError.value = null
+}
+
 onBeforeUnmount(() => {
   clearTimeout(lookup)
   request += 1
@@ -99,22 +110,27 @@ onBeforeUnmount(() => {
 watch(typed, (value) => {
   emit('poke')
   model.value = null
-  candidates.value = []
-  noMatch.value = false
-  candidateError.value = null
-  clearTimeout(lookup)
-  // Invalidate an in-flight lookup as soon as the text changes.
-  request += 1
+  clearLookup()
   if (value.trim()) lookup = setTimeout(loadCandidates, CANDIDATE_DELAY_MS)
 })
 
-watch([() => props.setId, () => props.itemKey], () => {
-  clearTimeout(lookup)
-  request += 1
-  candidates.value = []
-  noMatch.value = false
-  candidateError.value = null
-})
+watch([() => props.setId, () => props.itemKey], clearLookup)
+
+watch(
+  () => props.locked,
+  (locked, wasLocked) => {
+    if (
+      wasLocked &&
+      !locked &&
+      typed.value.trim() &&
+      !candidates.value.length &&
+      !noMatch.value &&
+      !candidateError.value
+    ) {
+      void loadCandidates()
+    }
+  },
+)
 
 watch(
   () => props.ruledOut,
@@ -137,8 +153,12 @@ async function loadCandidates(): Promise<void> {
     const words = await practiceApi.candidates(props.setId, props.itemKey, pinyin)
     if (mine !== request || props.locked) return
     candidates.value = words
-    // Say "no word" only for a spelling long enough to be meant as a whole word.
-    noMatch.value = words.length === 0 && pinyin.replace(/[^a-z]/gi, '').length >= 3
+    // Say "no word" immediately for Chinese characters (expects Pinyin) or for accented/plain spelling long enough to be a word.
+    const latinLength = pinyin
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z]/gi, '').length
+    noMatch.value = words.length === 0 && (hasHan(pinyin) || latinLength >= 3)
   } catch (reason) {
     if (mine === request && !props.locked) candidateError.value = resolveApiError(reason, t('answer.candidatesFailed'))
   }
@@ -151,7 +171,15 @@ function choose(word: string): void {
 }
 
 function onKey(event: KeyboardEvent): void {
-  if (event.isComposing || event.altKey || event.ctrlKey || event.metaKey) return
+  if (
+    event.isComposing ||
+    event.key === 'Process' ||
+    event.keyCode === 229 ||
+    event.altKey ||
+    event.ctrlKey ||
+    event.metaKey
+  )
+    return
   if (!/^[1-9]$/.test(event.key) || !candidates.value.length) return
   event.preventDefault()
   const word = candidates.value[Number(event.key) - 1]

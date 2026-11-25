@@ -44,21 +44,17 @@ class LessonEditorAssembler {
     private static final String MISSING_PINYIN = "PINYIN";
 
     private final ClassContentSupport content;
-    private final LessonRevisionService revisions;
+    private final LessonRevisionDiff diff;
     private final QuizOptionRepository quizOptionRepository;
     private final UploadProperties uploadProperties;
 
     /** The editor of the lesson, showing its working copy while it has one. */
     AdminClassViews.LessonEditor view(CoursePackage coursePackage, Lesson lesson) {
-        return view(coursePackage, lesson, content.revisionOf(lesson).orElse(lesson));
+        Lesson shown = content.revisionOf(lesson).orElse(lesson);
+        return view(coursePackage, lesson, shown, shown.getRevisionOf() != null && diff.hasChanges(shown));
     }
 
-    /** The editor of the lesson showing {@code shown}: the lesson itself or its working copy. */
-    AdminClassViews.LessonEditor view(CoursePackage coursePackage, Lesson lesson, Lesson shown) {
-        return view(coursePackage, lesson, shown, shown.getRevisionOf() != null && revisions.hasChanges(shown));
-    }
-
-    /** Overload used when the caller has already computed whether {@code shown} has unpublished changes. */
+    /** Overload used when the caller has already resolved {@code shown} and whether it has unpublished changes. */
     AdminClassViews.LessonEditor view(
             CoursePackage coursePackage, Lesson lesson, Lesson shown, boolean hasUnpublishedChanges) {
         boolean editable = coursePackage.getContentStatus() != ContentStatus.ARCHIVED
@@ -77,8 +73,6 @@ class LessonEditorAssembler {
                 hasUnpublishedChanges,
                 editable,
                 shown.getTitle(),
-                shown.getEstimatedDurationMinutes(),
-                shown.getSummary(),
                 parts.keyPhrases(),
                 parts.video(),
                 uploadProperties.getMaxVideoFileSize().toBytes(),
@@ -128,7 +122,7 @@ class LessonEditorAssembler {
     }
 
     private AdminClassViews.Quiz quizView(Quiz quiz) {
-        boolean locked = revisions.questionsLocked(quiz);
+        boolean locked = diff.questionsLocked(quiz);
         // A locked quiz's published questions can no longer change, so show the live questions even on a working copy.
         Long questionsQuizId = locked && quiz.getRevisionSourceId() != null ? quiz.getRevisionSourceId() : quiz.getId();
         List<QuizQuestion> questions = content.questions(questionsQuizId);
@@ -169,8 +163,11 @@ class LessonEditorAssembler {
         AdminClassViews.Checklist checklist() {
             boolean videoAdded = video != null;
             boolean keyPhrasesAdded = !keyPhrases.isEmpty();
-            boolean activitiesComplete = activities.stream().map(AdminClassViews.Activity::type).distinct().count()
-                    == ClassActivityType.values().length;
+            boolean activitiesComplete = activities.stream()
+                    .filter(activity -> activityHasMaterial(activity, keyPhrasesAdded))
+                    .map(AdminClassViews.Activity::type)
+                    .distinct()
+                    .count() == ClassActivityType.values().length;
             boolean quizzesReady = !quizzes.isEmpty() && quizzes.stream().allMatch(quiz -> quiz.questionsLocked()
                     || (quiz.questions().size() == LessonEditorService.QUIZ_QUESTIONS
                             && quiz.questions().stream().allMatch(LessonEditorAssembler::hasCorrectAnswer)));
@@ -213,16 +210,27 @@ class LessonEditorAssembler {
     }
 
     private static boolean hasCorrectAnswer(AdminClassViews.Question question) {
-        boolean optionBased = QuizQuestionType.tryFrom(question.type()).map(QuizQuestionType::isOptionBased).orElse(false);
-        if (!optionBased) {
+        QuizQuestionType type = QuizQuestionType.valueOf(question.type());
+        if (!type.isOptionBased()) {
             return notBlank(question.correctAnswerText());
         }
         List<AdminClassViews.QuestionOption> options = question.options();
+        if (type == QuizQuestionType.TRUE_FALSE ? options.size() != 2 : options.size() < 2) {
+            return false;
+        }
         Set<String> labels = options.stream()
                 .map(option -> TextUtils.stripFormSpaces(option.text()))
                 .collect(Collectors.toSet());
         return options.stream().filter(AdminClassViews.QuestionOption::correct).count() == 1
                 && labels.size() == options.size() && !labels.contains("");
+    }
+
+    private static boolean activityHasMaterial(AdminClassViews.Activity activity, boolean keyPhrasesAdded) {
+        return switch (ClassActivityType.valueOf(activity.type())) {
+            case FLASHCARDS -> !activity.cards().isEmpty() || keyPhrasesAdded;
+            case TRACING -> !activity.characters().isEmpty();
+            case MATCHING -> !activity.pairs().isEmpty();
+        };
     }
 
     private static boolean notBlank(String value) {

@@ -1,28 +1,21 @@
-import { defineComponent } from 'vue'
-import { mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { setAccessToken } from '@/api/http'
+import { withSetup } from '@/test/helpers'
 
 import { clearClassNotice, queueClassNotice, reconcileClassNoticeNavigation, useClassNotice } from './useClassNotice'
 
 function mountConsumer(
-  routeName?: string,
+  routeName: string,
   undoJoin?: { label: string; run: (classId: number, title?: string) => void },
 ) {
-  let state!: ReturnType<typeof useClassNotice>
-  const Host = defineComponent({
-    setup() {
-      state = useClassNotice(undoJoin, routeName)
-      return () => null
-    },
-  })
-  const wrapper = mount(Host)
+  const { result: state, wrapper } = withSetup(() => useClassNotice(routeName, undoJoin))
   return { wrapper, state }
 }
 
 afterEach(() => {
   clearClassNotice()
+  setAccessToken(null)
 })
 
 describe('useClassNotice', () => {
@@ -84,6 +77,10 @@ describe('useClassNotice', () => {
     expect(matched.state.toast.value).toBe('Joined.')
     matched.state.toastAction.value?.run()
     expect(undo).toHaveBeenCalledWith(7, 'Mandarin 101')
+    undo.mockClear()
+    setAccessToken('other-session')
+    matched.state.toastAction.value?.run()
+    expect(undo).not.toHaveBeenCalled()
     matched.wrapper.unmount()
   })
 })

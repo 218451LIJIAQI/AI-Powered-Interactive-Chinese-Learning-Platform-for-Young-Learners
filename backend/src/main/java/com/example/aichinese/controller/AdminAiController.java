@@ -28,7 +28,7 @@ import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.AiLogService;
 import com.example.aichinese.service.AiResponseReportService;
 import com.example.aichinese.service.AiService;
-import com.example.aichinese.service.ai.AiHelperStatusService;
+import com.example.aichinese.service.ai.AiAvailabilityService;
 import com.example.aichinese.service.PlatformSettingsService;
 import com.example.aichinese.service.learn.HintPolicyService;
 import com.example.aichinese.service.learn.LearnClock;
@@ -53,12 +53,14 @@ public class AdminAiController {
     private final PlatformSettingsService platformSettingsService;
     private final HintPolicyService hintPolicyService;
     private final AiService aiService;
-    private final AiHelperStatusService helperStatus;
+    private final AiAvailabilityService availabilityService;
     private final LearnClock clock;
 
+    /** Quiz authors see whether generation is available. Configuration diagnostics belong in the usage log. */
     @GetMapping("/quiz-draft/availability")
     public ApiResponse<AiAvailabilityResponse> quizDraftAvailability() {
-        return ApiResponse.success("AI availability retrieved successfully.", helperStatus.forQuizAuthor());
+        return ApiResponse.success("AI availability retrieved successfully.",
+                new AiAvailabilityResponse(availabilityService.getAvailability().available()));
     }
 
     /**

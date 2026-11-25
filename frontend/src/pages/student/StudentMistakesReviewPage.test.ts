@@ -1,5 +1,5 @@
 import { flushPromises } from '@vue/test-utils'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { setAccessToken } from '@/api/http'
 import { mountAtRoute } from '@/test/routes'
@@ -41,10 +41,6 @@ describe('StudentMistakesReviewPage (focus mode review)', () => {
     // A new sign-in, so the shared hint settings are read again: hints are off unless a test turns them on.
     setAccessToken(null)
     hintApi.settings.mockResolvedValue(null)
-  })
-
-  afterEach(() => {
-    vi.useRealTimers()
   })
 
   it('keeps the submitted choice pending and allows a new answer after a failed check', async () => {
@@ -238,7 +234,7 @@ describe('StudentMistakesReviewPage (focus mode review)', () => {
   })
 
   it.each([
-    ['listening set gets the listening wording', '一杯茶', 'Tap Slow and listen to the start: it begins with “y…”.'],
+    ['listening set gets the listening wording', '一杯茶', 'Click Slow and listen to the start: it begins with “y…”.'],
     ['choice keeps the plain wording', null, 'The answer starts with the sound “y…”.'],
   ])('words the hint of a mistake from a Practice %s, in the footer', async (_case, audioText, sentence) => {
     hintApi.settings.mockResolvedValue(hintSettings({ mode: 'ON_REQUEST' }))
@@ -306,5 +302,21 @@ describe('StudentMistakesReviewPage (focus mode review)', () => {
 
     expect(wrapper.text()).toContain('Nothing to review')
     expect(wrapper.find('[data-testid="check-bar"]').exists()).toBe(false)
+    expect(wrapper.find('.focus-topbar [role="progressbar"]').exists()).toBe(false)
+  })
+
+  it('offers Reload mistakes when a concurrent 404 reports that the mistake was cleared elsewhere', async () => {
+    api.check.mockRejectedValueOnce({ response: { status: 404, data: { message: 'Mistake was not found.' } } })
+    const wrapper = await mountPage()
+    await checkChoice(wrapper, 0)
+
+    const reload = wrapper.get('[data-testid="review-reload"]')
+    expect(reload.text()).toBe('Reload mistakes')
+    api.review.mockResolvedValueOnce({ questions: [], context: [], runStartedAt: RUN, runSignature: SIGNATURE })
+    await reload.trigger('click')
+    await flushPromises()
+
+    expect(api.review).toHaveBeenCalledTimes(2)
+    expect(wrapper.text()).toContain('Nothing to review')
   })
 })

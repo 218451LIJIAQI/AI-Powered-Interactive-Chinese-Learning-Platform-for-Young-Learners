@@ -20,8 +20,7 @@ import com.example.aichinese.entity.base.PracticeActivityContent;
 @Setter
 @Entity
 @Table(name = "typing_exercises", indexes = {
-        @Index(name = "idx_typing_exercises_status_updated", columnList = "content_status,updated_at"),
-        @Index(name = "idx_typing_exercises_hsk_level", columnList = "hsk_level")
+        @Index(name = "idx_typing_exercises_status_updated", columnList = "content_status,updated_at")
 })
 public class TypingExercise extends PracticeActivityContent {
 

@@ -15,6 +15,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -52,7 +53,20 @@ class AdminOverviewServiceTests {
                 ? clock.startOf(today.plusDays(1)).minusHours(2)
                 : clock.startOf(today).plusHours(2);
         assertThat(signedUp.toLocalDate()).isNotEqualTo(today);
-        when(userRepository.findCreatedAtBetween(any(), any())).thenReturn(List.of(signedUp));
+        LocalDateTime bucket = signedUp.withMinute((signedUp.getMinute() / 15) * 15).withSecond(0).withNano(0);
+        String bucketText = bucket.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        UserRepository.QuarterHourCount row = new UserRepository.QuarterHourCount() {
+            @Override
+            public String getBucket() {
+                return bucketText;
+            }
+
+            @Override
+            public long getCount() {
+                return 1L;
+            }
+        };
+        when(userRepository.countCreatedByQuarterHourBetween(any(), any())).thenReturn(List.of(row));
         when(userRepository.countCurrentAccounts()).thenReturn(new AdminAnalyticsResponse.UserCounts(1, 1, 0));
         stubLearningQuery(Long.class, 0L);
         stubLearningQuery(AdminOverviewService.QuizStatistics.class, new AdminOverviewService.QuizStatistics(null, 0L));
@@ -65,7 +79,8 @@ class AdminOverviewServiceTests {
         assertThat(analytics.registrations().getLast())
                 .isEqualTo(new AdminAnalyticsResponse.DayCount(today, 1));
         assertThat(analytics.newRegistrations()).isEqualTo(1);
-        verify(userRepository).findCreatedAtBetween(clock.startOf(today.minusDays(6)), clock.startOf(today.plusDays(1)));
+        verify(userRepository).countCreatedByQuarterHourBetween(
+                clock.startOf(today.minusDays(6)), clock.startOf(today.plusDays(1)));
     }
 
     private <T> void stubLearningQuery(Class<T> resultType, T result) {

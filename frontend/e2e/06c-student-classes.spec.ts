@@ -1,8 +1,8 @@
-import { expect, test, type Locator, type Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 
 import { E2E_ACCOUNTS } from './accounts'
 import { AMIRA, MY_CLASS, signInAmira, toast } from './studentSupport'
-import { API_BASE_URL, apiAuthHeaders, expectFocusMode, expectLeaveStep, sidebar } from './support'
+import { API_BASE_URL, bestEffortApi, expect, expectFocusMode, expectLeaveStep, sidebar, test } from './support'
 
 const CLASS_TO_JOIN = 'Serving Customers'
 
@@ -41,7 +41,10 @@ test.describe('Classes', () => {
     await expect(card.getByText('MC', { exact: true })).toBeVisible()
     await expect(card).not.toContainText(/teacher/i)
     await expect(card).not.toContainText(E2E_ACCOUNTS.admin.name)
-    await expect(card.getByRole('progressbar', { name: `Progress in ${MY_CLASS}: 40%` })).toBeVisible()
+    await expect(card.getByRole('progressbar', { name: `Progress in ${MY_CLASS}` })).toHaveAttribute(
+      'aria-valuenow',
+      '40',
+    )
     await expect(card).toContainText('2 of 5 lessons done')
     await expect(card.getByRole('link', { name: `Open class: ${MY_CLASS}` })).toBeVisible()
     await expect(card.getByRole('link', { name: 'Continue lesson: Meeting Classmates' })).toBeVisible()
@@ -68,7 +71,7 @@ test.describe('Classes', () => {
     // The classes of her plan say so.
     await themes.getByRole('button', { name: /^Travel · / }).click()
     for (const title of ['Travel Mandarin', 'Shopping and Prices']) {
-      const card = page.getByRole('article').filter({ has: page.getByRole('link', { name: title, exact: true }) })
+      const card = page.getByRole('article').filter({ has: page.getByRole('link', { name: `View class ${title}` }) })
       await expect(card).toContainText('In your plan')
     }
   })
@@ -91,11 +94,11 @@ test.describe('Classes', () => {
     await expect(page.getByRole('listitem').filter({ hasText: 'Greeting Customers' })).toBeVisible()
     await expect(page.getByRole('link', { name: /^Greeting Customers/ })).toHaveCount(0)
 
-    let joinedClass = false
-    let leftClass = false
+    await page.clock.install()
+    let needsLeave = false
     try {
       await page.getByRole('button', { name: 'Join class' }).click()
-      joinedClass = true
+      needsLeave = true
 
       // Joined at once; the toast offers Undo. Hold it open while the card assertions wait for the list to load.
       await expect(page).toHaveURL(/\/student\/classes$/)
@@ -114,17 +117,14 @@ test.describe('Classes', () => {
 
       await undo.click()
       await expect(page).toHaveURL(/\/student\/classes\/find$/)
-      leftClass = true
+      needsLeave = false
       await expect(page.getByRole('link', { name: `View class ${CLASS_TO_JOIN}` })).toBeVisible()
       await expect(sections(page).getByRole('link', { name: 'My classes 2' })).toBeVisible()
     } finally {
-      if (joinedClass && !leftClass) {
-        try {
-          const headers = await apiAuthHeaders(request, AMIRA)
-          await request.post(`${API_BASE_URL}/students/classes/${classId}/leave`, { headers })
-        } catch {
-          // Best-effort teardown: do not mask the primary test failure.
-        }
+      if (needsLeave) {
+        await bestEffortApi(request, AMIRA, (headers) =>
+          request.post(`${API_BASE_URL}/students/classes/${classId}/leave`, { headers }),
+        )
       }
     }
   })
@@ -132,11 +132,10 @@ test.describe('Classes', () => {
   test('Leave class asks first, and the class leaves My classes', async ({ page, request }) => {
     await signInAmira(page, '/student/classes/find')
     const classId = await viewFromFind(page, CLASS_TO_JOIN)
-    let joinedClass = false
-    let leftClass = false
+    let needsLeave = false
     try {
       await page.getByRole('button', { name: 'Join class' }).click()
-      joinedClass = true
+      needsLeave = true
       await expect(page).toHaveURL(/\/student\/classes$/)
       await myClass(page, CLASS_TO_JOIN)
         .getByRole('link', { name: `Open class: ${CLASS_TO_JOIN}` })
@@ -162,19 +161,16 @@ test.describe('Classes', () => {
       await leave.click()
       await dialog.getByRole('button', { name: 'Leave class' }).click()
       await expect(page).toHaveURL(/\/student\/classes$/)
-      leftClass = true
+      needsLeave = false
       await expect(toast(page, `You left ${CLASS_TO_JOIN}.`)).toBeVisible()
       await expect(sections(page).getByRole('link', { name: 'My classes 2' })).toBeVisible()
       await expect(myClass(page, MY_CLASS)).toBeVisible()
       await expect(myClass(page, CLASS_TO_JOIN)).toHaveCount(0)
     } finally {
-      if (joinedClass && !leftClass) {
-        try {
-          const headers = await apiAuthHeaders(request, AMIRA)
-          await request.post(`${API_BASE_URL}/students/classes/${classId}/leave`, { headers })
-        } catch {
-          // Best-effort teardown: do not mask the primary test failure.
-        }
+      if (needsLeave) {
+        await bestEffortApi(request, AMIRA, (headers) =>
+          request.post(`${API_BASE_URL}/students/classes/${classId}/leave`, { headers }),
+        )
       }
     }
   })
@@ -252,7 +248,7 @@ test.describe('Classes', () => {
     await expectFocusMode(page)
     await expect(page.getByRole('heading', { name: 'Lesson quiz: Meeting Classmates', level: 1 })).toBeAttached()
     await expect(page.getByText('Question 1 of 5', { exact: true })).toBeVisible()
-    await expect(page.getByRole('progressbar', { name: 'Lesson quiz: 0%' })).toBeVisible()
+    await expect(page.getByRole('progressbar', { name: 'Lesson quiz' })).toHaveAttribute('aria-valuenow', '0')
     // Each question is answered before the next one.
     await expect(page.getByRole('button', { name: 'Next', exact: true })).toBeDisabled()
     await page.getByRole('button', { name: 'Leave the quiz' }).click()
@@ -288,7 +284,10 @@ test.describe('Classes', () => {
       if (index < 4) await expect(nextQuestion).toBeDisabled()
       await page.getByRole('radiogroup').getByRole('radio', { name: answer }).click()
       await expect(page.getByRole('radio', { name: answer })).toBeChecked()
-      await expect(page.getByRole('progressbar', { name: `Lesson quiz: ${(index + 1) * 20}%` })).toBeVisible()
+      await expect(page.getByRole('progressbar', { name: 'Lesson quiz' })).toHaveAttribute(
+        'aria-valuenow',
+        String((index + 1) * 20),
+      )
       if (index < 4) await nextQuestion.click()
     }
     await expect(page.getByRole('status').filter({ hasText: 'All answered' })).toBeVisible()

@@ -8,8 +8,7 @@ import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "matching_games", indexes = {
-        @Index(name = "idx_matching_games_status_updated", columnList = "content_status,updated_at"),
-        @Index(name = "idx_matching_games_hsk_level", columnList = "hsk_level")
+        @Index(name = "idx_matching_games_status_updated", columnList = "content_status,updated_at")
 })
 public class MatchingGame extends LessonActivity {
 }

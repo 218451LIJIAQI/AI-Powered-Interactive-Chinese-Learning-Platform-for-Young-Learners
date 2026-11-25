@@ -99,13 +99,7 @@ class LessonRevisionDiff {
     }
 
     static boolean detailsChanged(Lesson lesson, Lesson revision) {
-        return !Objects.equals(lesson.getTitle(), revision.getTitle())
-                || !Objects.equals(lesson.getSummary(), revision.getSummary())
-                || !Objects.equals(lesson.getEstimatedDurationMinutes(), revision.getEstimatedDurationMinutes());
-    }
-
-    boolean videoChanged(Lesson lesson, Lesson revision) {
-        return videoChanged(content.video(lesson.getId()).orElse(null), content.video(revision.getId()).orElse(null));
+        return !Objects.equals(lesson.getTitle(), revision.getTitle());
     }
 
     static boolean videoChanged(RecordedLessonVideo before, RecordedLessonVideo after) {
@@ -113,6 +107,15 @@ class LessonRevisionDiff {
             return before != after;
         }
         return !Objects.equals(after.getRevisionSourceId(), before.getId());
+    }
+
+    /**
+     * Questions learners already answered stay as they are: those of a quiz with a submitted attempt, and those of a
+     * working copy of such a quiz (the editor locks them, and publishing never replaces them).
+     */
+    boolean questionsLocked(Quiz quiz) {
+        Long publishedId = quiz.getRevisionSourceId() == null ? quiz.getId() : quiz.getRevisionSourceId();
+        return quizAttemptRepository.existsByQuizIdAndSubmittedTrue(publishedId);
     }
 
     static boolean activityMetaOrTracingChanged(LessonActivity source, LessonActivity copy) {
@@ -316,25 +319,29 @@ class LessonRevisionDiff {
     }
 
     /** What learners see of a question and its answers: questions with equal contents are the same. */
-    private record OptionContent(String text, boolean correct, String feedback) {
+    record OptionContent(String text, boolean correct, String feedback) {
     }
 
-    private record QuestionContent(QuizQuestionType type, String text, String answer, String explanation, String hint,
+    record QuestionContent(QuizQuestionType type, String text, String answer, String explanation, String hint,
             Integer points, String audioUrl, String imageUrl, boolean aiDraft, List<OptionContent> options) {
+    }
+
+    static QuestionContent questionContent(QuizQuestion question, List<QuizOption> options) {
+        return new QuestionContent(
+                question.getQuestionType(), question.getQuestionText(), question.getCorrectAnswerText(),
+                question.getExplanation(), question.getHint(), question.getPoints(),
+                question.getAudioUrl(), question.getImageUrl(), question.isAiDraft(),
+                options.stream()
+                        .map(option -> new OptionContent(option.getOptionText(), option.isCorrectOption(),
+                                option.getFeedback()))
+                        .toList());
     }
 
     private static List<QuestionContent> questionContents(
             List<QuizQuestion> questions, Map<Long, List<QuizOption>> options) {
         List<QuestionContent> contents = new ArrayList<>(questions.size());
         for (QuizQuestion question : questions) {
-            contents.add(new QuestionContent(
-                    question.getQuestionType(), question.getQuestionText(), question.getCorrectAnswerText(),
-                    question.getExplanation(), question.getHint(), question.getPoints(),
-                    question.getAudioUrl(), question.getImageUrl(), question.isAiDraft(),
-                    options.getOrDefault(question.getId(), List.of()).stream()
-                            .map(option -> new OptionContent(option.getOptionText(), option.isCorrectOption(),
-                                    option.getFeedback()))
-                            .toList()));
+            contents.add(questionContent(question, options.getOrDefault(question.getId(), List.of())));
         }
         return contents;
     }

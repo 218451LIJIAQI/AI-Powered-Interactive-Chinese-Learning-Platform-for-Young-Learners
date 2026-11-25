@@ -1,9 +1,10 @@
+import type { IconName } from '@/components/common/IconGlyph.vue'
 import type { NavCounts, UserRole } from '@/types/api'
 
 export interface RoleNavItem {
   readonly labelKey: string
   readonly to: string
-  readonly icon: string
+  readonly icon: IconName
   /** Key in the nav-count response (`GET /users/me/nav-counts`) whose value is shown as a badge. */
   readonly countKey?: keyof NavCounts
 }

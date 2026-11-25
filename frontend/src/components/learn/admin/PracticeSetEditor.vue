@@ -9,6 +9,7 @@
   >
     <form
       :id="formId"
+      ref="formElement"
       class="form-grid admin-learning-form"
       novalidate
       @input="formError = null"
@@ -19,11 +20,16 @@
         <span class="tag is-outline">{{ t(`practiceType.${existing.type}`) }}</span>
         <span class="admin-meta">
           {{
-            t(
-              'adminLearning.createdByPlayed',
-              { author: existing.createdBy ?? t('adminLearning.platformTeam'), count: formatNumber(existing.playedBy) },
-              existing.playedBy,
-            )
+            existing.status === 'DRAFT'
+              ? t('adminLearning.createdBy', { author: existing.createdBy ?? t('adminLearning.platformTeam') })
+              : t(
+                  'adminLearning.createdByPlayed',
+                  {
+                    author: existing.createdBy ?? t('adminLearning.platformTeam'),
+                    count: formatNumber(existing.playedBy),
+                  },
+                  existing.playedBy,
+                )
           }}
         </span>
       </div>
@@ -60,7 +66,7 @@
           :aria-describedby="titleError ? `${formId}-title-error` : undefined"
           :placeholder="t('adminLearning.titlePlaceholder')"
           data-testid="editor-title"
-          data-autofocus
+          :data-autofocus="existing ? '' : undefined"
         />
         <p v-if="titleError" :id="`${formId}-title-error`" class="field-error" role="alert">{{ titleError }}</p>
       </div>
@@ -79,20 +85,13 @@
         v-model:hanzi="form.items[0]!.hanzi"
         v-model:pinyin="form.items[0]!.pinyin"
         v-model:meaning="form.items[0]!.meaning"
-        v-model:stroke-count="form.strokeCount"
         :form-id="formId"
         :disabled="saving"
-        :tracing-characters="tracingCharacters"
-        :character-strokes="characterStrokes"
-        :character-limit-error="characterLimitError"
-        :total-strokes-error="totalStrokesError"
-        :character-strokes-error="characterStrokesError"
-        @update-stroke="(index, value) => (characterStrokes[index] = value)"
-        @blur-strokes="strokesChecked = true"
+        :tracing="tracing"
       />
 
       <!-- Items of every other type -->
-      <fieldset v-else-if="itemKeys" class="field-set" :disabled="saving">
+      <fieldset v-else-if="itemKeys" ref="itemsFieldset" class="field-set" :disabled="saving">
         <legend>{{ t(itemKeys.count, { count: form.items.length }) }}</legend>
         <p v-if="type === 'DRAG_DROP' || type === 'TYPING'" class="field-hint">
           {{ t(type === 'DRAG_DROP' ? 'adminLearning.extraTiles' : 'adminLearning.lookAlike') }}
@@ -102,6 +101,7 @@
           v-for="(item, index) in form.items"
           :key="`item-${index}`"
           :class="usesWords ? 'admin-learning-words' : 'admin-learning-item'"
+          data-row-item
           data-testid="editor-item"
         >
           <template v-if="usesWords">
@@ -141,6 +141,7 @@
               <button
                 class="btn btn-ghost btn-icon btn-sm"
                 type="button"
+                data-row-remove
                 :disabled="form.items.length <= 1"
                 :aria-label="t('adminLearning.removeItem', { number: index + 1 })"
                 @click="removeItem(index)"
@@ -192,10 +193,10 @@
         </div>
 
         <button
+          ref="addItemButton"
           class="btn btn-secondary btn-sm"
           type="button"
           :disabled="form.items.length >= 30"
-          data-testid="editor-add"
           @click="addItem"
         >
           <IconGlyph name="plus" :size="14" />
@@ -220,9 +221,7 @@
         class="btn btn-primary"
         type="submit"
         :form="formId"
-        :disabled="
-          saving || Boolean(characterLimitError) || totalStrokesError !== null || characterStrokesError !== null
-        "
+        :disabled="saving || tracing.blocked"
         :aria-busy="saving"
         data-testid="editor-save"
       >
@@ -233,7 +232,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, useId, watch } from 'vue'
+import { computed, nextTick, reactive, ref, useId } from 'vue'
 
 import type { adminLearningApi } from '@/api/learn'
 import AppOverlay from '@/components/common/AppOverlay.vue'
@@ -246,13 +245,12 @@ import { adminLearningSharedMessages } from '@/plugins/adminLearningSharedMessag
 import { adminPracticeLibraryMessages } from '@/plugins/adminPracticeLibraryMessages'
 import type { AdminPracticeSetDetail, PracticeItemData, PracticeType } from '@/types/learn'
 import { resolveApiError } from '@/utils/apiError'
+import { focusAfterRowAdd, focusAfterRowRemove } from '@/utils/focusRowList'
 import { formatNumber } from '@/utils/format'
-import { normalizeAppLanguage } from '@/utils/locale'
 import { localizeServerMessage } from '@/utils/serverMessages'
-import { tracingGlyphs } from '@/utils/tracing'
 
 import ListeningQuestionCard from './ListeningQuestionCard.vue'
-import TracingSetFields from './TracingSetFields.vue'
+import TracingSetFields, { useTracingSetFields } from './TracingSetFields.vue'
 
 const props = defineProps<{
   existing: AdminPracticeSetDetail | null
@@ -261,7 +259,7 @@ const props = defineProps<{
 const emit = defineEmits<{ close: []; saved: [set: AdminPracticeSetDetail] }>()
 
 const { t, locale } = useLocalMessages({ adminLearning: [adminLearningSharedMessages, adminPracticeLibraryMessages] })
-const serverRule = (message: string) => localizeServerMessage(message, normalizeAppLanguage(locale.value) ?? 'en')
+const serverRule = (message: string) => localizeServerMessage(message, locale.value)
 const formId = `set-${useId()}`
 const isUnmounted = useIsUnmounted()
 
@@ -270,85 +268,37 @@ const form = reactive<{
   title: string
   hskLevel: number
   items: PracticeItemData[]
-  strokeCount: number | string | null
 }>({
   title: props.existing?.title ?? '',
   hskLevel: props.existing?.hskLevel ?? 1,
   items: props.existing?.items.length
     ? props.existing.items.map((item) => ({ ...item, options: item.options.map((option) => ({ ...option })) }))
     : [emptyItem(type.value)],
-  strokeCount: props.existing?.strokeCount ?? null,
 })
 const saving = ref(false)
 const formError = ref<string | null>(null)
+const formElement = ref<HTMLFormElement | null>(null)
+const itemsFieldset = ref<HTMLFieldSetElement | null>(null)
+const addItemButton = ref<HTMLButtonElement | null>(null)
 const titleField = ref<HTMLInputElement | null>(null)
+const tracing = useTracingSetFields({
+  active: computed(() => type.value === 'TRACING'),
+  hanzi: computed(() => form.items[0]?.hanzi ?? ''),
+  initialStrokeCount: props.existing?.strokeCount ?? null,
+  initialCharacterStrokes: props.existing?.characterStrokes ?? [],
+  serverRule,
+})
 const { error: titleError, validate: validateTitle } = useFieldCheck(
   computed(() => form.title),
   (title) => (title.trim() ? null : t('adminLearning.titleRequired')),
 )
 
-const tracingCharacters = computed(() => (type.value === 'TRACING' ? tracingGlyphs(form.items[0]?.hanzi ?? '') : []))
-const characterLimitError = computed(() =>
-  tracingCharacters.value.length > 10 ? serverRule('A tracing set has at most 10 characters.') : null,
-)
-const characterStrokes = ref<(number | string | null)[]>([...(props.existing?.characterStrokes ?? [])])
-const strokesChecked = ref(false)
-
-watch(
-  tracingCharacters,
-  (characters, previous) => {
-    const previousCharacters = previous ?? characters
-    characterStrokes.value =
-      characters.length > 1
-        ? characters.map((char, index) =>
-            previousCharacters[index] === char ? (characterStrokes.value[index] ?? null) : null,
-          )
-        : []
-    strokesChecked.value = false
-  },
-  { immediate: true },
-)
-
-function isStrokeNumber(value: number | string | null): value is number {
-  return typeof value === 'number' && Number.isFinite(value)
-}
-
-const strokeValues = computed(() => characterStrokes.value.filter(isStrokeNumber))
-
-const totalStrokesProblem = computed(() => {
-  if (type.value !== 'TRACING' || !isStrokeNumber(form.strokeCount)) return null
-  const single = tracingCharacters.value.length === 1
-  const maxTotal = single ? 60 : 600
-  if (!Number.isInteger(form.strokeCount) || form.strokeCount < 1 || form.strokeCount > maxTotal) {
-    return serverRule(single ? 'Strokes must be between 1 and 60.' : 'Total strokes must be between 1 and 600.')
-  }
-  return null
-})
-const characterStrokesProblem = computed(() => {
-  if (type.value !== 'TRACING' || tracingCharacters.value.length < 2) return null
-  const given = strokeValues.value
-  if (!given.length) return null
-  if (given.some((strokes) => !Number.isInteger(strokes) || strokes < 1 || strokes > 60)) {
-    return serverRule('Each character needs 1 to 60 strokes.')
-  }
-  const total = given.reduce((sum, strokes) => sum + strokes, 0)
-  return given.length === characterStrokes.value.length && total === form.strokeCount
-    ? null
-    : serverRule('Give the strokes of each character, adding up to the total.')
-})
-const totalStrokesError = computed(() => (strokesChecked.value ? totalStrokesProblem.value : null))
-const characterStrokesError = computed(() => (strokesChecked.value ? characterStrokesProblem.value : null))
-
 const usesWords = computed(() => type.value !== 'LISTENING')
 
-const STATUS_SUBTITLE_KEYS: Readonly<Record<AdminPracticeSetDetail['status'], string>> = {
-  PUBLISHED: 'adminLearning.liveEditSubtitle',
-  DRAFT: 'adminLearning.draftEditSubtitle',
-  ARCHIVED: 'adminLearning.archivedEditSubtitle',
-}
-const subtitle = computed(() =>
-  t(props.existing ? STATUS_SUBTITLE_KEYS[props.existing.status] : 'adminLearning.newActivitySubtitle'),
-)
+const subtitle = computed(() => {
+  if (!props.existing) return t('adminLearning.newActivitySubtitle')
+  return t(props.existing.status === 'PUBLISHED' ? 'adminLearning.liveEditSubtitle' : 'adminLearning.draftEditSubtitle')
+})
 
 const ITEM_KEYS: Readonly<Record<Exclude<PracticeType, 'TRACING'>, { count: string; add: string }>> = {
   FLASHCARDS: { count: 'adminLearning.cardsCount', add: 'adminLearning.addCard' },
@@ -382,8 +332,14 @@ function emptyItem(forType: PracticeType): PracticeItemData {
 }
 
 function addItem(): void {
+  const wasFocused = document.activeElement === addItemButton.value
   formError.value = null
   form.items.push(emptyItem(type.value))
+  focusAfterRowAdd(
+    () => itemsFieldset.value,
+    () => addItemButton.value,
+    wasFocused,
+  )
 }
 
 function updateItem(index: number, updated: PracticeItemData): void {
@@ -392,15 +348,20 @@ function updateItem(index: number, updated: PracticeItemData): void {
 }
 
 function removeItem(index: number): void {
+  const wasFocused = Boolean(itemsFieldset.value?.contains(document.activeElement))
   formError.value = null
   form.items.splice(index, 1)
+  focusAfterRowRemove(
+    () => itemsFieldset.value,
+    () => addItemButton.value,
+    index,
+    wasFocused,
+  )
 }
 
 function changeType(): void {
   form.items = [emptyItem(type.value)]
-  form.strokeCount = null
-  characterStrokes.value = []
-  strokesChecked.value = false
+  tracing.reset()
   formError.value = null
 }
 
@@ -413,18 +374,22 @@ async function save(): Promise<void> {
   }
   if (type.value === 'LISTENING' && form.items.some((item) => item.correctIndex === null)) {
     formError.value = serverRule('Tick exactly one right answer.')
+    return
   }
-  strokesChecked.value = true
-  if (formError.value || characterLimitError.value || totalStrokesProblem.value || characterStrokesProblem.value) return
-  const tracing = type.value === 'TRACING'
+  const tracingData = tracing.validate()
+  if (!tracingData) {
+    await nextTick()
+    formElement.value?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()
+    return
+  }
   saving.value = true
   try {
     const saved = await props.saveSet(type.value, props.existing?.id ?? null, {
       title: form.title.trim(),
       stage: props.existing ? props.existing.stage : 'GUIDED',
       hskLevel: form.hskLevel,
-      strokeCount: tracing && isStrokeNumber(form.strokeCount) ? form.strokeCount : null,
-      characterStrokes: tracing && tracingCharacters.value.length > 1 ? strokeValues.value : [],
+      strokeCount: tracingData.strokeCount,
+      characterStrokes: tracingData.characterStrokes,
       items: form.items,
     })
     if (!isUnmounted()) emit('saved', saved)

@@ -58,7 +58,7 @@ import { useLocalMessages } from '@/composables/useLocalMessages'
 import { useMandarinReadAloud } from '@/composables/useMandarinSpeech'
 import { aiHelperMessages } from '@/plugins/aiHelperMessages'
 import { aiVoiceMessages } from '@/plugins/aiVoiceMessages'
-import { isMandarinTone, type PracticeCheck, type PronunciationIssue } from '@/types/ai'
+import { isMandarinTone, type PracticeCheck, type PronunciationIssue, type ToneComparison } from '@/types/ai'
 
 import AiToneDiagram from './AiToneDiagram.vue'
 
@@ -70,12 +70,14 @@ const props = defineProps<{ check: PracticeCheck; meta?: string; photo?: string 
 
 const { t } = useLocalMessages({ aiHelper: [aiHelperMessages, aiVoiceMessages] })
 const speech = useMandarinReadAloud()
-const toneComparisons = computed(() => {
+const toneComparisons = computed<ToneComparison[]>(() => {
   const pronunciation = props.check.pronunciation
   const raw = pronunciation?.toneComparisons?.length
     ? pronunciation.toneComparisons
     : (pronunciation?.issues.filter((issue) => issue.kind === 'TONE_MISMATCH') ?? [])
-  return raw.filter((item) => isMandarinTone(item.expectedTone) && isMandarinTone(item.detectedTone))
+  return raw.filter(
+    (item): item is ToneComparison => isMandarinTone(item.expectedTone) && isMandarinTone(item.detectedTone),
+  )
 })
 const parts = computed(() => {
   const pronunciation = props.check.pronunciation

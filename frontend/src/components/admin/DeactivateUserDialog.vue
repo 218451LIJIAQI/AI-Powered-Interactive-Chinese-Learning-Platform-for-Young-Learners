@@ -1,18 +1,19 @@
 <template>
   <AppOverlay
     :title="t('adminUsers.deactivateTitle', { name: user.fullName })"
-    :subtitle="user.role ? t('adminUsers.dialogSubtitle', { email: user.email, role: t(ROLE_KEYS[user.role]) }) : ''"
+    :subtitle="user.role ? t('adminUsers.dialogSubtitle', { email: user.email, role: t(`roles.${user.role}`) }) : ''"
+    :described-by-id="impactId"
     role="alertdialog"
     :busy="busy"
     test-id="admin-users-status-dialog"
     @close="emit('cancel')"
   >
-    <div class="callout" data-testid="admin-users-impact">
+    <div :id="impactId" class="callout" data-testid="admin-users-impact">
       <IconGlyph name="alert" :size="16" />
-      <div class="admin-callout-copy">
+      <span>
         <strong>{{ t('adminUsers.impactSignedOut', { name: user.fullName }) }}</strong>
         <span>{{ t('adminUsers.impactKept') }}</span>
-      </div>
+      </span>
     </div>
     <div class="field">
       <label class="field-label" for="admin-users-reason">
@@ -32,7 +33,7 @@
         :aria-invalid="Boolean(reasonError)"
         :aria-describedby="reasonError ? 'admin-users-reason-error admin-users-reason-hint' : 'admin-users-reason-hint'"
         data-testid="admin-users-reason"
-        @blur="checkReasonOnBlur"
+        @blur="validate"
       />
       <p id="admin-users-reason-hint" class="field-hint">{{ t('adminUsers.reasonHint') }}</p>
       <p v-if="reasonError" id="admin-users-reason-error" class="field-error" role="alert">{{ reasonError }}</p>
@@ -70,7 +71,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, useId, watch } from 'vue'
 
 import AppOverlay from '@/components/common/AppOverlay.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
@@ -78,20 +79,23 @@ import { useFieldCheck } from '@/composables/useFieldCheck'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { adminUsersMessages } from '@/plugins/adminUsersMessages'
 import type { AdminUserDetail } from '@/types/ops'
-import { ROLE_KEYS } from '@/utils/opsLabels'
 
-defineProps<{ user: AdminUserDetail; busy: boolean; error: string | null }>()
-const emit = defineEmits<{ confirm: [reason: string]; cancel: [] }>()
+const props = defineProps<{ user: AdminUserDetail; busy: boolean; error: string | null }>()
+const emit = defineEmits<{ confirm: [reason: string]; cancel: []; clearError: [] }>()
 const { t } = useLocalMessages({ adminUsers: adminUsersMessages })
+const impactId = `${useId()}-impact`
 const reason = ref('')
 const reasonField = ref<HTMLTextAreaElement | null>(null)
-const {
-  error: reasonError,
-  validate,
-  validateOnBlur: checkReasonOnBlur,
-} = useFieldCheck(reason, (text) => (text.trim() ? null : t('adminUsers.reasonMissing')))
+const { error: reasonError, validate } = useFieldCheck(reason, (text) =>
+  text.trim() ? null : t('adminUsers.reasonMissing'),
+)
+
+watch(reason, () => {
+  if (props.error) emit('clearError')
+})
 
 function confirm(): void {
+  if (props.busy) return
   if (validate()) emit('confirm', reason.value.trim())
   else reasonField.value?.focus()
 }

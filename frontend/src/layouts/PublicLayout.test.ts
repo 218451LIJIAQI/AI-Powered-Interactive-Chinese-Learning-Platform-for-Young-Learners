@@ -3,7 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it } from 'vitest'
 import { createMemoryHistory, createRouter, type RouteRecordRaw } from 'vue-router'
 
-import { routes } from '@/router'
+import { routes } from '@/router/routes'
 
 import PublicLayout from './PublicLayout.vue'
 

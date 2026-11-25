@@ -110,9 +110,18 @@ class SensitiveDataRedactorTests {
         // Unclosed quote followed by many backslashes must finish in linear time without backtracking stall.
         String adversarial = "password=\"" + "\\".repeat(1000);
         long startNanos = System.nanoTime();
-        SensitiveDataRedactor.redactText(adversarial);
+        String redactedAdversarial = SensitiveDataRedactor.redactText(adversarial);
         long elapsedMs = (System.nanoTime() - startNanos) / 1_000_000L;
+        assertThat(redactedAdversarial).isEqualTo("password=" + TEXT_REDACTED);
         assertThat(elapsedMs).isLessThan(1_000L);
+
+        assertThat(SensitiveDataRedactor.redactText(null)).isNull();
+        assertThat(SensitiveDataRedactor.redactText("")).isEmpty();
+        assertThat(SensitiveDataRedactor.redactText(
+                "sessionId=sess-123 jsessionid=JS-999 passwordHash=$2a$10$abc tokenHash=deadbeef"))
+                .doesNotContain("sess-123", "JS-999", "$2a$10$abc", "deadbeef")
+                .contains("sessionId=" + TEXT_REDACTED, "jsessionid=" + TEXT_REDACTED,
+                        "passwordHash=" + TEXT_REDACTED, "tokenHash=" + TEXT_REDACTED);
     }
 
     @Test
@@ -174,5 +183,20 @@ class SensitiveDataRedactorTests {
         long elapsedMs = (System.nanoTime() - startNanos) / 1_000_000L;
         assertThat(elapsedMs).isLessThan(1_000L);
         assertThat(redacted).contains(TEXT_REDACTED);
+    }
+
+    @Test
+    void redactTextCoversBracketedAuthorizationHeadersAndInviteOrConfirmationLinks() {
+        String value = """
+                HttpHeaders Authorization=[Bearer eyJ-bracketed-secret], X-Test=[ok]
+                https://learn.example/admin-invite?invite=inv-secret-99&lang=en
+                inviteLink=https://learn.example/accept?invite=inv-link-secret
+                confirmationLink=https://learn.example/confirm-email?token=confirm-secret
+                """;
+        String redacted = SensitiveDataRedactor.redactText(value);
+        assertThat(redacted)
+                .doesNotContain("eyJ-bracketed-secret", "inv-secret-99", "inv-link-secret", "confirm-secret")
+                .contains("Authorization=" + TEXT_REDACTED, "invite=" + TEXT_REDACTED, "lang=en",
+                        "inviteLink=" + TEXT_REDACTED, "confirmationLink=" + TEXT_REDACTED);
     }
 }

@@ -5,10 +5,13 @@ import { deferred } from '@/test/helpers'
 import { hintSettings } from '@/test/learnFixtures'
 import type { HintSettings } from '@/types/learn'
 
-const session = vi.hoisted(() => ({ version: 1 }))
+const session = vi.hoisted(() => ({ version: 1, token: 'token' as string | null }))
 const hintApi = vi.hoisted(() => ({ settings: vi.fn() }))
 
-vi.mock('@/api/http', () => ({ getAuthSessionVersion: () => session.version }))
+vi.mock('@/api/http', () => ({
+  getAccessToken: () => session.token,
+  getAuthSessionVersion: () => session.version,
+}))
 vi.mock('@/api/learn', () => ({ hintApi }))
 
 import { useHintSettings } from './useHintSettings'
@@ -18,6 +21,7 @@ describe('useHintSettings', () => {
   beforeEach(() => {
     hintApi.settings.mockReset()
     session.version += 1
+    session.token = 'token'
   })
 
   it('loads the setting once per sign-in and shares it', async () => {
@@ -100,5 +104,56 @@ describe('useHintSettings', () => {
     expect(hints.settings.value?.mode).toBe('OFF')
     expect(hints.remember(hintSettings({ mode: 'ON_REQUEST' }), rotatedVersion - 1)).toBe(false)
     expect(hints.settings.value?.mode).toBe('OFF')
+  })
+
+  it('recovers automatically when a token rotates while the initial read is still in flight, and supports reload()', async () => {
+    const first = deferred<HintSettings>()
+    hintApi.settings.mockReturnValueOnce(first.promise).mockResolvedValueOnce(hintSettings({ mode: 'ON_REQUEST' }))
+    const hints = useHintSettings()
+
+    session.version += 1
+    first.resolve(hintSettings({ mode: 'AUTOMATIC' }))
+    await flushPromises()
+    expect(hintApi.settings).toHaveBeenCalledTimes(2)
+    expect(hints.settings.value?.mode).toBe('ON_REQUEST')
+
+    hintApi.settings.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(hintSettings({ mode: 'OFF' }))
+    session.version += 1
+    await hints.reload()
+    expect(hints.failed.value).toBe(true)
+    await hints.reload()
+    expect(hints.failed.value).toBe(false)
+    expect(hints.settings.value?.mode).toBe('OFF')
+  })
+
+  it('does not retry when signed out or invalidated while the initial read is in flight', async () => {
+    const initial = deferred<HintSettings>()
+    hintApi.settings.mockReturnValueOnce(initial.promise)
+    const hints = useHintSettings()
+
+    session.token = null
+    session.version += 1
+    initial.reject(new Error('401'))
+    await flushPromises()
+
+    expect(hintApi.settings).toHaveBeenCalledTimes(1)
+    expect(hints.settings.value).toBeNull()
+  })
+
+  it('bounds automatic rotation retries to a single attempt', async () => {
+    const first = deferred<HintSettings>()
+    const second = deferred<HintSettings>()
+    hintApi.settings.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise)
+    useHintSettings()
+
+    session.version += 1
+    first.resolve(hintSettings({ mode: 'AUTOMATIC' }))
+    await flushPromises()
+    expect(hintApi.settings).toHaveBeenCalledTimes(2)
+
+    session.version += 1
+    second.resolve(hintSettings({ mode: 'ON_REQUEST' }))
+    await flushPromises()
+    expect(hintApi.settings).toHaveBeenCalledTimes(2)
   })
 })

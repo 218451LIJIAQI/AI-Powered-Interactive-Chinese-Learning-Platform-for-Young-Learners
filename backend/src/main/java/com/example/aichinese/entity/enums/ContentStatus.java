@@ -1,9 +1,7 @@
 package com.example.aichinese.entity.enums;
 
-import java.util.Optional;
-
 /**
- * Publishing state of classes, units, lessons, quizzes and practice activities (FRCONT06). An admin publishes content
+ * Publishing state of classes, lessons, quizzes and practice activities (FRCONT06). An admin publishes content
  * directly; learners see only PUBLISHED content.
  *
  * <pre>
@@ -19,9 +17,5 @@ public enum ContentStatus {
 
     PUBLISHED,
 
-    ARCHIVED;
-
-    public static Optional<ContentStatus> tryFrom(String value) {
-        return EnumLookups.tryFrom(ContentStatus.class, value);
-    }
+    ARCHIVED
 }

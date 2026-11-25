@@ -76,7 +76,7 @@ describe('SetDoneCard (a finished set)', () => {
     const again = practiceResult({ type: 'TYPING', correctCount: 6, itemCount: 6, xp: xpResult({ xpEarned: 15 }) })
     expect(lines(mountCard(again, { answered: 6, mistakes: 1 }))).toEqual([
       '6 of 6 answered',
-      'Every answer right',
+      '6 of 6 words correct',
       'Your mistake is saved for a quick review.',
       '+15 XP',
     ])

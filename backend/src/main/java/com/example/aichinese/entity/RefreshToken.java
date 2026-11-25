@@ -19,7 +19,8 @@ import lombok.Setter;
 @Setter
 @Entity
 @Table(name = "refresh_tokens", indexes = {
-        @Index(name = "idx_refresh_tokens_family_id", columnList = "family_id")
+        @Index(name = "idx_refresh_tokens_family_active", columnList = "user_id,family_id,revoked_at,expires_at"),
+        @Index(name = "idx_refresh_tokens_user_revoked", columnList = "user_id,revoked_at")
 }, uniqueConstraints = {
         @UniqueConstraint(name = "uk_refresh_tokens_token_hash", columnNames = "token_hash")
 })
@@ -46,12 +47,6 @@ public class RefreshToken extends BaseEntity {
 
     @Column(name = "replaced_by_token_hash", length = 64)
     private String replacedByTokenHash;
-
-    @Column(name = "created_by_ip", length = 64)
-    private String createdByIp;
-
-    @Column(name = "user_agent", length = 255)
-    private String userAgent;
 
     /** "Keep me signed in": a persistent cookie; otherwise the cookie ends with the browser session. */
     @Column(name = "persistent", nullable = false)

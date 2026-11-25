@@ -19,7 +19,7 @@ public final class FlywayMigrationFiles {
 
     public static final Path MIGRATION_DIRECTORY = Path.of("src", "main", "resources", "db", "migration");
     public static final List<String> EXPECTED_VERSIONS =
-            List.of("1", "2", "3", "4", "5", "5.1", "5.2", "6", "7", "8", "9", "10", "11");
+            List.of("1", "2", "3", "4", "5", "5.1", "5.2", "6", "7", "8", "9", "10", "11", "12", "13", "14");
     private static final Pattern MIGRATION_VERSION = Pattern.compile("^V(\\d+(?:_\\d+)*)__.+\\.sql$");
 
     private FlywayMigrationFiles() {

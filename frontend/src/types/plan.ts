@@ -14,8 +14,6 @@ import type {
   TodaySummary,
 } from '@/types/learn'
 
-export type { LevelCheckAnswer }
-
 export type PlanReason = 'TRAVEL' | 'WORK' | 'STUDY' | 'EVERYDAY' | 'JUST_FOR_ME' | 'OTHER'
 export type PlanGoal =
   | 'INTRODUCE_MYSELF'
@@ -73,7 +71,7 @@ export interface GoalInput {
 
 export interface BuildPlanPayload {
   goal: GoalInput
-  levelCheck: { selfLevel: PlanSelfLevel; skipped: boolean; answers: LevelCheckAnswer[] }
+  levelCheck: { selfLevel: PlanSelfLevel; skipped: boolean; answers: LevelCheckAnswer[]; runToken?: string | null }
   language: AppLanguage
 }
 
@@ -109,10 +107,16 @@ export interface PlanStep {
   readonly nextLesson: { readonly id: number; readonly title: string; readonly kind: LessonKind } | null
 }
 
-/** One of this week's to-dos: what each kind holds in the server's flat record. */
+/** One of this week's to-dos: a discriminated union keyed by `kind`. */
 type WeekTask =
   | { readonly kind: 'LEARN_DONE'; readonly title: string; readonly doneOn: string }
-  | { readonly kind: 'LEARN_NEXT'; readonly title: string; readonly minutes: number; readonly lessonId: number }
+  | {
+      readonly kind: 'LEARN_NEXT'
+      readonly title: string
+      readonly minutes: number
+      readonly lessonId: number
+      readonly lessonKind: LessonKind
+    }
   | {
       readonly kind: 'PRACTICE'
       readonly title: string
@@ -153,8 +157,6 @@ export interface LearningPlan {
     readonly status: PlanStatus
     /** Days of this plan week with the daily goal reached. */
     readonly daysThisWeek: number
-    /** Days of this plan week before today without the daily goal reached. */
-    readonly daysBehind: number
   }
   readonly pace: PlanPaceBand
   readonly steps: readonly PlanStep[]
@@ -256,7 +258,7 @@ export interface HomeView {
   readonly firstName: string
   /** Today's XP against the daily goal; its last `week` day is the platform's today. */
   readonly today: TodaySummary
-  /** No XP earned yet: the first day. */
+  /** No XP earned and no Learn lessons completed yet. */
   readonly firstTime: boolean
   readonly email: EmailConfirmation
   readonly setupState: 'NOT_STARTED' | 'SKIPPED' | 'COMPLETED'

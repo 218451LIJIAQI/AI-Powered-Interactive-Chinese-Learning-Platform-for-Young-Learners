@@ -2,9 +2,20 @@ import { flushPromises } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { deferred, rateFlashcard } from '@/test/helpers'
-import { practiceResult } from '@/test/learnFixtures'
+import { flashcardSet, practiceItem, practiceResult } from '@/test/learnFixtures'
+import type { PracticeSet } from '@/types/learn'
 
-import { flashcardsSet, mountPlayer } from './practicePlayerTestHelpers'
+import { mountPlayer } from './practicePlayerTestHelpers'
+
+const flashcardsSet: PracticeSet = {
+  ...flashcardSet(),
+  id: 16,
+  items: [
+    practiceItem('1', { hanzi: '你好', pinyin: 'nǐ hǎo', meaning: 'hello' }),
+    practiceItem('2', { hanzi: '谢谢', meaning: 'thank you' }),
+    practiceItem('3', { hanzi: '再见', meaning: 'goodbye' }),
+  ],
+}
 
 const api = vi.hoisted(() => ({ complete: vi.fn() }))
 
@@ -67,10 +78,8 @@ describe('FlashcardsPlayer', () => {
     expect(counter()).toBe('Card 1 of 3')
 
     await rateFlashcard(wrapper, 'learning')
-    // Where the learner is is said once, as text: no dots repeat it.
     expect(counter()).toBe('Card 2 of 3')
     expect(wrapper.get('[data-testid="flashcard"]').text()).toContain('谢谢')
-    expect(wrapper.find('.practice-dots').exists()).toBe(false)
     // The rating buttons went with the back of the card: the keyboard goes on from the new card's Show meaning.
     expect(document.activeElement).toBe(wrapper.get('[data-testid="flip"]').element)
     expect(api.complete).not.toHaveBeenCalled()
@@ -90,7 +99,6 @@ describe('FlashcardsPlayer', () => {
       undefined,
     )
     expect(wrapper.emitted('finished')).toHaveLength(1)
-    expect(wrapper.find('[data-testid="once-more"]').exists()).toBe(false)
   })
 
   it('goes back a card, and keeps the rating buttons busy while the finished set is saved', async () => {

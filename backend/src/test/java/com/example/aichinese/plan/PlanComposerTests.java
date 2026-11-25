@@ -111,18 +111,17 @@ class PlanComposerTests {
 
     @Test
     void aDeadlineShorterThanThePathMakesAFirstMilestone() {
-        PlanComposer.Goal relaxed = goal(List.of(PlanGoal.ASK_DIRECTIONS), TODAY.plusMonths(6), PlanPace.HOURS_1_TO_2, List.of());
-        PlanComposer.Composed six = compose(relaxed, BRAND_NEW);
-        assertThat(six.ambitious()).isFalse();
-        assertThat(six.totalWeeks()).isGreaterThan(six.contentWeeks());
-
-        PlanComposer.Goal rushed = goal(List.of(PlanGoal.ASK_DIRECTIONS), TODAY.plusDays(7), PlanPace.UNDER_30_MIN, List.of());
-        PlanComposer.Composed week = compose(rushed, BRAND_NEW);
-        assertThat(week.ambitious()).isTrue();
-        assertThat(week.milestoneWeek()).isEqualTo(1);
-        // The plan has the weeks to its date; the Learn steps after the milestone come later.
-        assertThat(week.totalWeeks()).isEqualTo(1);
-        assertThat(week.contentWeeks()).isGreaterThan(1);
+        // Mon 18 May to Mon 1 Jun: 14 days, 2 weeks, while the path needs more at under 30 minutes a day.
+        for (int weeks : List.of(1, 2)) {
+            PlanComposer.Goal rushed = goal(List.of(PlanGoal.ASK_DIRECTIONS), TODAY.plusDays(weeks * 7L),
+                    PlanPace.UNDER_30_MIN, List.of());
+            PlanComposer.Composed plan = compose(rushed, BRAND_NEW);
+            assertThat(plan.ambitious()).isTrue();
+            assertThat(plan.milestoneWeek()).isEqualTo(weeks);
+            // The plan has the weeks to its date; the Learn steps after the milestone come later.
+            assertThat(plan.totalWeeks()).isEqualTo(weeks);
+            assertThat(plan.contentWeeks()).isGreaterThan(weeks);
+        }
     }
 
     @Test
@@ -144,25 +143,15 @@ class PlanComposerTests {
 
     @Test
     void aPlanHasTheCalendarWeeksToItsDateUpToTwoYearsAway() {
-        // Mon 18 May to Wed 18 Nov: 184 days, 27 weeks.
+        // Mon 18 May to Wed 18 Nov: 184 days, 27 weeks (relaxed: more weeks than content needs).
         PlanComposer.Composed november = compose(goal(List.of(PlanGoal.ORDER_FOOD), LocalDate.of(2026, 11, 18),
                 PlanPace.MINUTES_30_TO_60, List.of()), BRAND_NEW);
         assertThat(november.totalWeeks()).isEqualTo(27);
         assertThat(november.ambitious()).isFalse();
+        assertThat(november.totalWeeks()).isGreaterThan(november.contentWeeks());
         // The latest date the setup accepts: 730 days, 105 weeks.
         assertThat(compose(goal(List.of(), TODAY.plusDays(PlanComposer.MAX_GOAL_DAYS), PlanPace.HOURS_2_PLUS,
                 List.of()), BRAND_NEW).totalWeeks()).isEqualTo(105);
-    }
-
-    @Test
-    void aDateTwoWeeksAwayIsTooShortForThePathAndGetsAFirstMilestoneOnIt() {
-        // Mon 18 May to Mon 1 Jun: 14 days, 2 weeks, while the path needs more at under 30 minutes a day.
-        PlanComposer.Composed plan = compose(goal(List.of(PlanGoal.ASK_DIRECTIONS), LocalDate.of(2026, 6, 1),
-                PlanPace.UNDER_30_MIN, List.of()), BRAND_NEW);
-        assertThat(plan.totalWeeks()).isEqualTo(2);
-        assertThat(plan.ambitious()).isTrue();
-        assertThat(plan.milestoneWeek()).isEqualTo(2);
-        assertThat(plan.contentWeeks()).isGreaterThan(2);
     }
 
     @Test
@@ -294,16 +283,23 @@ class PlanComposerTests {
                 Map.of("summary", "S", "targetLevel", "NEW_TO_MANDARIN", "steps", List.of()), candidates);
         PlanComposer.AiDraft inRange = PlanAdvisor.parse(
                 Map.of("summary", "S", "targetLevel", "BEGINNER_1", "steps", List.of()), candidates);
-        PlanComposer.AiDraft aboveCeiling = PlanAdvisor.parse(
-                Map.of("summary", "S", "targetLevel", "INTERMEDIATE", "steps", List.of()), candidates);
+        assertThat(belowPlacement.targetLevel()).isEqualTo(MandarinLevel.NEW_TO_MANDARIN);
+        assertThat(inRange.targetLevel()).isEqualTo(MandarinLevel.BEGINNER_1);
 
-        // Below placement and above ceiling are ignored in favour of the plan's ceiling (BEGINNER_2).
+        // Below placement is ignored in favour of the plan's ceiling (BEGINNER_2); in-range is kept.
         assertThat(PlanComposer.compose(goal, beginnerOne, candidates, Optional.of(belowPlacement), TODAY).targetLevel())
                 .isEqualTo(MandarinLevel.BEGINNER_2);
         assertThat(PlanComposer.compose(goal, beginnerOne, candidates, Optional.of(inRange), TODAY).targetLevel())
                 .isEqualTo(MandarinLevel.BEGINNER_1);
-        assertThat(PlanComposer.compose(goal, beginnerOne, candidates, Optional.of(aboveCeiling), TODAY).targetLevel())
-                .isEqualTo(MandarinLevel.BEGINNER_2);
+
+        // A brand-new learner with only Level 1 units has a ceiling of BEGINNER_1; a parsed BEGINNER_2 suggestion
+        // above that ceiling must be ignored and fall back to BEGINNER_1.
+        PlanComposer.Candidates levelOneOnly = PlanComposer.candidates(goal, BRAND_NEW, CATALOGUE);
+        PlanComposer.AiDraft aboveCeiling = PlanAdvisor.parse(
+                Map.of("summary", "S", "targetLevel", "BEGINNER_2", "steps", List.of()), levelOneOnly);
+        assertThat(aboveCeiling.targetLevel()).isEqualTo(MandarinLevel.BEGINNER_2);
+        assertThat(PlanComposer.compose(goal, BRAND_NEW, levelOneOnly, Optional.of(aboveCeiling), TODAY).targetLevel())
+                .isEqualTo(MandarinLevel.BEGINNER_1);
     }
 
     @Test

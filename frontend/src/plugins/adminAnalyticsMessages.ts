@@ -23,7 +23,7 @@ export const adminAnalyticsMessages = {
     noQuizzes: 'No quizzes yet',
     needsSupport: 'Needs support',
     content: 'Content by status',
-    contentDetail: '{total} classes and lessons',
+    contentDetail: '1 class or lesson | {total} classes and lessons',
     openContent: 'Open content',
     statusPublished: 'Published',
     statusDraft: 'Draft',
@@ -139,4 +139,4 @@ export const adminAnalyticsMessages = {
     csvRegistrations: '新注册',
     csvPublished: '已发布内容',
   },
-}
+} as const

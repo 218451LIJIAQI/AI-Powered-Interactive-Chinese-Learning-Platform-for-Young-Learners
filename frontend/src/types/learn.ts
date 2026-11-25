@@ -5,7 +5,10 @@
  */
 import type { PracticeType } from '@/config/practiceActivities'
 
-import type { AiResponseReportReason, ContentStatus, LearningStage, PageResponse } from './api'
+import type { ContentStatus, PageResponse } from './api'
+
+/** Optional scaffolding stage of a practice set (FRCONT10). */
+type LearningStage = 'GUIDED' | 'SCAFFOLDED' | 'INDEPENDENT'
 
 export type StopState = 'LOCKED' | 'AVAILABLE' | 'DONE'
 type UnitState = 'LOCKED' | 'ACTIVE' | 'DONE'
@@ -60,6 +63,8 @@ export interface AnswerCheck {
   readonly pinyin: string | null
   readonly meaning: string | null
   readonly explanation: string | null
+  /** Practice confidence as recorded by the server (e.g. GUESS when an earlier hint was served). */
+  readonly effectiveConfidence?: AnswerConfidence | null
 }
 
 /**
@@ -290,6 +295,7 @@ type HintKind =
   | 'CLUE'
   | 'FIRST_SOUND'
   | 'FIRST_LETTER'
+  | 'LISTEN_SLOW'
   | 'TWO_LEFT'
   | 'FIRST_TILE'
   | 'LEAVE_OUT'
@@ -309,19 +315,6 @@ export interface HintStep {
   readonly count: number | null
   /** Every answer ruled out so far (greyed out). */
   readonly ruledOut: readonly string[]
-}
-
-/**
- * A learner's report of a SparkBot hint (Report on the hint card). It joins the admins' AI reports as feature `HINT`,
- * and the reply shows in Ask SparkBot › My reports.
- */
-export interface HintReport {
-  readonly reasonCategory: AiResponseReportReason
-  readonly description: string | null
-  /** What the hint was for: the activity, set or lesson and item, and the page. */
-  readonly promptSnapshot: string
-  /** The hint as the learner read it. */
-  readonly aiResponseSnapshot: string
 }
 
 /** The Progress page's answers of the last 7 days. */
@@ -552,9 +545,10 @@ export interface LevelCheckStep {
   readonly result: {
     /** The starting level the check placed the learner at. */
     readonly level: MandarinLevel
-    readonly knownSkills: readonly LevelCheckSkill[]
     readonly newSkills: readonly LevelCheckSkill[]
   } | null
   readonly answeredCount: number
   readonly maxQuestions: number
+  /** Server-signed token binding this check's issued questions and answers to the current learner. */
+  readonly runToken?: string | null
 }

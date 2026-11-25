@@ -252,23 +252,52 @@ class SchemaEnumContractTests {
                 .containsExactlyInAnyOrderElementsOf(allSchemaEnumColumns);
     }
 
-    /** The columns of the removed teacher features went with their tables (V3). */
+    /** Removed teacher-era tables/columns (V3) and dropped unused enum columns (V13) stay absent. */
     @Test
-    void theTeacherEraColumnsAreGone() {
+    void removedAndDroppedEnumColumnsAreGone() {
         assertThat(ENUM_COLUMNS).doesNotContainKeys(
                 "teacher_profiles", "teacher_verification_documents", "teacher_verification_reviews", "live_classes",
                 "class_questions", "teacher_feedback", "class_content_events");
         assertThat(ENUM_COLUMNS.get("course_packages")).doesNotContainKey("revision_status");
         assertThat(ENUM_COLUMNS.get("quizzes")).doesNotContainKey("learning_stage");
+        assertThat(ENUM_COLUMNS.get("learning_modules")).doesNotContainKey("content_status");
+        assertThat(ENUM_COLUMNS.get("ai_chat_sessions")).doesNotContainKey("feature_key");
     }
 
     @Test
     void domainCheckConstraintsContainEveryApplicationEnumValue() {
-        assertCheckValues("chk_ai_chat_messages_sender_role", AiChatSenderRole.values());
-        assertCheckValues("chk_ai_usage_logs_status", AiRequestStatus.values());
-        assertCheckValues("chk_ai_response_reports_status", AiResponseReportStatus.values());
-        assertCheckValues("chk_ai_response_reports_reason_category", AiResponseReportReason.values());
-        assertCheckValues("chk_quiz_questions_question_type", QuizQuestionType.values());
+        Set<String> verifiedChecks = new LinkedHashSet<>();
+        assertCheckValues("chk_ai_chat_messages_sender_role", verifiedChecks, AiChatSenderRole.values());
+        assertCheckValues("chk_ai_usage_logs_status", verifiedChecks, AiRequestStatus.values());
+        assertCheckValues("chk_ai_response_reports_status", verifiedChecks, AiResponseReportStatus.values());
+        assertCheckValues("chk_ai_response_reports_reason_category", verifiedChecks, AiResponseReportReason.values());
+        assertCheckValues("chk_ai_response_reports_review_consistency", verifiedChecks, AiResponseReportStatus.values());
+        assertCheckValues("chk_quiz_questions_question_type", verifiedChecks, QuizQuestionType.values());
+        assertCheckValues("chk_notifications_read_state", verifiedChecks, NotificationStatus.values());
+        assertCheckValues("chk_recorded_videos_source_reference", verifiedChecks, RecordedVideoSourceType.values());
+
+        Set<String> allStringLiteralChecks = CHECK_CONSTRAINTS.values().stream()
+                .flatMap(checks -> checks.entrySet().stream())
+                .filter(entry -> !extractEnumValues(entry.getValue()).isEmpty())
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        assertThat(verifiedChecks)
+                .as("Every remaining CHECK constraint referencing string literals must be covered by this contract test")
+                .containsExactlyInAnyOrderElementsOf(allStringLiteralChecks);
+    }
+
+    @Test
+    void crossColumnIntegrityCheckConstraintsStayPresent() {
+        assertThat(CHECK_CONSTRAINTS.get("admin_invites"))
+                .containsKey("chk_admin_invites_not_accepted_and_cancelled");
+        assertThat(CHECK_CONSTRAINTS.get("admin_invites").get("chk_admin_invites_not_accepted_and_cancelled"))
+                .containsIgnoringCase("accepted_at")
+                .containsIgnoringCase("cancelled_at");
+
+        assertThat(CHECK_CONSTRAINTS.get("ai_response_reports"))
+                .containsKey("chk_ai_response_reports_snapshot_source");
+        assertThat(CHECK_CONSTRAINTS.get("ai_response_reports").get("chk_ai_response_reports_snapshot_source"))
+                .containsIgnoringCase("ai_response_snapshot");
     }
 
     private static Set<String> extractEnumValues(String rawEnumBody) {
@@ -292,8 +321,10 @@ class SchemaEnumContractTests {
     }
 
     /** The constraint as the last migration that (re)defines it leaves it. */
-    private static void assertCheckValues(String constraintName, Enum<?>... expectedValues) {
+    private static void assertCheckValues(
+            String constraintName, Set<String> verifiedChecks, Enum<?>... expectedValues) {
         String key = constraintName.toLowerCase(Locale.ROOT);
+        verifiedChecks.add(key);
         List<String> definitions = CHECK_CONSTRAINTS.values().stream()
                 .map(tableChecks -> tableChecks.get(key))
                 .filter(Objects::nonNull)

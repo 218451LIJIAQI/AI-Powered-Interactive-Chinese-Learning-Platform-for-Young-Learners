@@ -22,7 +22,7 @@
         class="learn-level"
         :class="levelClass(stop)"
         :style="{ '--x': `${point.x}px`, '--y': `${point.y}px` }"
-        @keydown.esc.stop="close(stop.id)"
+        @keydown.esc="onEscape(stop.id, $event)"
         @focusout="onFocusOut(stop.id, $event)"
       >
         <span v-if="stop.current" class="learn-level-halo" aria-hidden="true" />
@@ -65,7 +65,6 @@
           tabindex="-1"
           :aria-label="stop.title"
           :aria-describedby="`${baseId}-detail-${stop.id}`"
-          :data-testid="`level-card-${stop.id}`"
         >
           <p class="learn-level-card-title">{{ stop.title }}</p>
           <p v-if="stop.state === 'LOCKED'" :id="`${baseId}-detail-${stop.id}`" class="learn-level-card-meta">
@@ -95,7 +94,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, type ComponentPublicInstance } from 'vue'
+import { computed, nextTick, ref, useId, watch, type ComponentPublicInstance } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import IconGlyph from '@/components/common/IconGlyph.vue'
@@ -200,8 +199,9 @@ function onFocusOut(id: number, event: FocusEvent): void {
   }
 }
 
-function close(id: number): void {
+function onEscape(id: number, event: KeyboardEvent): void {
   if (openId.value !== id) return
+  event.stopPropagation()
   openId.value = null
   buttons.get(id)?.focus()
 }
@@ -216,6 +216,12 @@ function onDocumentClick(event: MouseEvent): void {
   if (!open || !event.composedPath().includes(open)) openId.value = null
 }
 
-onMounted(() => document.addEventListener('click', onDocumentClick))
-onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick))
+watch(
+  () => openId.value !== null,
+  (open, _previous, onCleanup) => {
+    if (!open) return
+    document.addEventListener('click', onDocumentClick)
+    onCleanup(() => document.removeEventListener('click', onDocumentClick))
+  },
+)
 </script>

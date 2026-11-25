@@ -29,6 +29,11 @@ import { useTemplateRef } from 'vue'
  * filters; `SegmentedControl` is only for switching a view mode. Give it a `label` unless a `<fieldset>` legend already
  * names the group. Size `md` is 32 high (filters, answer options), `sm` 26 high (suggestions, small stage controls).
  */
+export interface FilterChipsHandle {
+  readonly $el?: HTMLElement | null
+  focusSelected: () => void
+}
+
 export interface FilterChipOption<V> {
   readonly value: V
   readonly label: string

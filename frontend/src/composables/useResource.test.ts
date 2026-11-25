@@ -119,6 +119,30 @@ describe('useResource', () => {
     result.replace('after-unmount')
     expect(result.data.value).toBe('newer-value')
   })
+
+  it('sets loading to true when retrying after a reload fails with existing cached data', async () => {
+    const retry = deferred<string>()
+    const loader = vi
+      .fn<() => Promise<string>>()
+      .mockResolvedValueOnce('initial')
+      .mockRejectedValueOnce({ response: { status: 500, data: {} } })
+      .mockReturnValueOnce(retry.promise)
+    const resource = mountResource(loader)
+    await flushPromises()
+    expect(resource.data.value).toBe('initial')
+
+    await resource.reload()
+    expect(resource.error.value).toBe(SERVER_TROUBLE)
+
+    const retryPromise = resource.reload()
+    expect(resource.loading.value).toBe(true)
+    expect(resource.error.value).toBeNull()
+
+    retry.resolve('recovered')
+    await retryPromise
+    expect(resource.loading.value).toBe(false)
+    expect(resource.data.value).toBe('recovered')
+  })
 })
 
 describe('useRecordById', () => {
@@ -242,12 +266,12 @@ describe('useServerPage', () => {
     const view = useServerPage({ data, reload }, page, { onPageChange })
     expect([view.items.value, view.totalItems.value, view.totalPages.value]).toEqual([[], 0, 1])
 
-    data.value = { items: ['a', 'b'], page: 0, size: 2, totalItems: 5, totalPages: 3 }
+    data.value = { items: ['a', 'b'], page: 0, totalItems: 5, totalPages: 3 }
     expect([view.items.value, view.totalItems.value, view.totalPages.value]).toEqual([['a', 'b'], 5, 3])
     view.goToPage(7)
     expect(page.value).toBe(2)
     expect(view.displayedPage.value).toBe(0)
-    data.value = { items: ['e'], page: 2, size: 2, totalItems: 5, totalPages: 3 }
+    data.value = { items: ['e'], page: 2, totalItems: 5, totalPages: 3 }
     expect(view.displayedPage.value).toBe(2)
     view.goToPage(-1)
     expect(page.value).toBe(0)
@@ -263,21 +287,21 @@ describe('useServerPage', () => {
     const router = await testRouter('/admin/content')
     withSetup(() => useServerPage({ data, reload }, page, { stepBackFromEmpty: true, onPageChange }), [router])
 
-    data.value = { items: [], page: 4, size: 10, totalItems: 25, totalPages: 3 }
+    data.value = { items: [], page: 4, totalItems: 25, totalPages: 3 }
     await nextTick()
     expect(page.value).toBe(2)
     expect(onPageChange).toHaveBeenCalledOnce()
     expect(reload).toHaveBeenCalledOnce()
 
     // A page with rows stays where it is.
-    data.value = { items: ['a'], page: 2, size: 10, totalItems: 21, totalPages: 3 }
+    data.value = { items: ['a'], page: 2, totalItems: 21, totalPages: 3 }
     await nextTick()
     expect(page.value).toBe(2)
     expect(reload).toHaveBeenCalledOnce()
 
     // The first page stays at 0 even when empty.
     page.value = 0
-    data.value = { items: [], page: 0, size: 10, totalItems: 0, totalPages: 0 }
+    data.value = { items: [], page: 0, totalItems: 0, totalPages: 0 }
     await nextTick()
     expect(page.value).toBe(0)
     expect(reload).toHaveBeenCalledOnce()
@@ -289,7 +313,7 @@ describe('useServerPage', () => {
     const page = ref(1)
     useServerPage({ data, reload }, page)
 
-    data.value = { items: [], page: 1, size: 10, totalItems: 10, totalPages: 1 }
+    data.value = { items: [], page: 1, totalItems: 10, totalPages: 1 }
     await nextTick()
     expect(page.value).toBe(1)
     expect(reload).not.toHaveBeenCalled()
@@ -299,7 +323,7 @@ describe('useServerPage', () => {
     const data = ref<PageResponse<number> | null>(null)
     const view = useServerPage({ data, reload: vi.fn() }, ref(0))
 
-    data.value = { items: [], page: 0, size: 10, totalItems: 0, totalPages: 0 }
+    data.value = { items: [], page: 0, totalItems: 0, totalPages: 0 }
     expect(view.totalItems.value).toBe(0)
     expect(view.totalPages.value).toBe(1)
   })

@@ -13,7 +13,7 @@
         <span :id="`${formId}-type`" class="field-label">{{ t('lessonEditor.activities.type') }}</span>
         <span class="lesson-activity-kind" data-testid="activity-type">
           <IconGlyph :name="ACTIVITY_ICONS[type]" :size="16" />{{
-            t('lessonEditor.activities.fixedType', { type: typeName, number, total: LESSON_ACTIVITY_TYPES.length })
+            t('lessonEditor.activities.fixedType', { type: typeName, number, total: CLASS_ACTIVITY_TYPES.length })
           }}
         </span>
       </div>
@@ -38,10 +38,11 @@
           <span :id="`${formId}-rows`" class="field-label">{{ t(rowSet.label) }}</span>
           <button
             v-if="rows.length < rowSet.max"
+            ref="addRowButton"
             type="button"
             class="btn btn-secondary btn-sm"
             :disabled="busy"
-            @click="rows.push(blankRow())"
+            @click="addRow($event)"
           >
             <IconGlyph name="plus" :size="16" />{{ t(rowSet.add) }}
           </button>
@@ -50,12 +51,12 @@
         <p v-if="type === 'FLASHCARDS' && !rows.length" class="callout" data-testid="no-cards">
           <IconGlyph name="info" :size="18" /><span>{{ t('lessonEditor.activities.noCards') }}</span>
         </p>
-        <div v-else class="lesson-rows-box">
+        <div v-else ref="rowsBox" class="lesson-rows-box">
           <div class="lesson-rows-grid is-head" aria-hidden="true">
             <span v-for="column in columns" :key="column.key">{{ column.label }}</span>
             <span />
           </div>
-          <div v-for="(row, index) in rows" :key="row.id" class="lesson-rows-grid">
+          <div v-for="(row, index) in rows" :key="row.id" class="lesson-rows-grid" data-row-item>
             <div v-for="column in columns" :key="column.key" class="lesson-phrase-field">
               <span class="lesson-phrase-label" aria-hidden="true">{{ column.label }}</span>
               <input
@@ -70,9 +71,10 @@
             <button
               type="button"
               class="btn btn-ghost btn-icon btn-sm"
+              data-row-remove
               :disabled="busy || rows.length <= rowSet.min"
               :aria-label="t(rowSet.remove, { number: index + 1 })"
-              @click="rows.splice(index, 1)"
+              @click="removeRow(index, $event)"
             >
               <IconGlyph name="trash" :size="16" />
             </button>
@@ -99,10 +101,10 @@ import AppOverlay from '@/components/common/AppOverlay.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { lessonEditorMessages } from '@/plugins/lessonEditorMessages'
+import { focusAfterRowAdd, focusAfterRowRemove } from '@/utils/focusRowList'
 import type { ActivityPayload, EditorActivity } from '@/types/adminClasses'
-import type { ClassActivityType, KeyPhrase } from '@/types/classes'
+import { CLASS_ACTIVITY_TYPES, type ClassActivityType, type KeyPhrase } from '@/types/classes'
 import { ACTIVITY_ICONS } from '@/utils/classes'
-import { LESSON_ACTIVITY_TYPES } from '@/utils/lessonEditor'
 
 /**
  * Add or edit one of a lesson's 3 fixed activities with its rows: flashcards' cards, tracing characters or matching
@@ -123,8 +125,8 @@ const { t } = useLocalMessages({ lessonEditor: lessonEditorMessages })
 const formId = useId()
 
 /**
- * The rows of each activity: their wording, columns (with the server's lengths), how few and many, and how many a new
- * activity starts with. Flashcards may have none: learners then review the lesson's key phrases.
+ * Per-activity row configuration: wording keys, min/max counts, and the server's per-column max lengths. Flashcards
+ * may have none: learners then review the lesson's key phrases.
  */
 const ROW_SETS = {
   FLASHCARDS: {
@@ -175,7 +177,7 @@ function savedRows(activity: EditorActivity): DraftRow[] {
 
 const typeName = computed(() => t(`practiceType.${props.type}`))
 /** The slot's place: activity 1, 2 or 3. */
-const number = computed(() => LESSON_ACTIVITY_TYPES.indexOf(props.type) + 1)
+const number = computed(() => CLASS_ACTIVITY_TYPES.indexOf(props.type) + 1)
 const title = ref(props.activity?.title ?? '')
 const rowSet = computed(() => ROW_SETS[props.type])
 const columns = computed(() => {
@@ -194,6 +196,29 @@ const columns = computed(() => {
 const rows = ref<DraftRow[]>(
   props.activity ? savedRows(props.activity) : Array.from({ length: Math.max(1, rowSet.value.min) }, blankRow),
 )
+const addRowButton = ref<HTMLButtonElement | null>(null)
+const rowsBox = ref<HTMLDivElement | null>(null)
+
+function addRow(event: MouseEvent): void {
+  const wasFocused = event.currentTarget === document.activeElement
+  rows.value.push(blankRow())
+  focusAfterRowAdd(
+    () => rowsBox.value,
+    () => addRowButton.value,
+    wasFocused,
+  )
+}
+
+function removeRow(index: number, event: MouseEvent): void {
+  const wasFocused = event.currentTarget === document.activeElement
+  rows.value.splice(index, 1)
+  focusAfterRowRemove(
+    () => rowsBox.value,
+    () => addRowButton.value,
+    index,
+    wasFocused,
+  )
+}
 
 function save(): void {
   if (props.busy || !title.value.trim()) return

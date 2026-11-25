@@ -1,6 +1,6 @@
 <template>
   <!-- Decoration only: the heading and the sentence under it say what the part is for. -->
-  <div class="landing-art" :class="`is-${kind}`" aria-hidden="true">
+  <div class="landing-art" aria-hidden="true">
     <!-- Learn: the path. Two lessons done, the one you are on, the next still locked. -->
     <svg v-if="kind === 'path'" class="landing-art-path" viewBox="0 0 240 96" focusable="false">
       <path class="landing-art-trail" d="M36 62C58 62 70 34 92 34S126 62 148 62S182 34 204 34" />
@@ -14,7 +14,7 @@
         <circle r="15" />
         <circle class="landing-art-dot" r="5" />
       </g>
-      <g class="landing-art-node is-locked" transform="translate(204 34)">
+      <g class="landing-art-node" transform="translate(204 34)">
         <circle r="15" />
         <path d="M-3.5-1v-2.5a3.5 3.5 0 0 1 7 0V-1" />
         <rect x="-5.5" y="-1" width="11" height="8.5" rx="2" />

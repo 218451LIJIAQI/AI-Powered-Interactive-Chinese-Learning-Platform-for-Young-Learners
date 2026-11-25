@@ -18,7 +18,6 @@
     <StatePanel
       v-else-if="existing.error.value"
       tone="error"
-      icon="alert"
       :title="t('adminLearning.questionLoadFailed')"
       :message="existing.error.value"
       @retry="existing.reload"
@@ -110,13 +109,17 @@
         </div>
       </div>
       <div v-if="form.skill === 'LISTENING'" class="field">
-        <label class="field-label" :for="`${formId}-audio`">{{ t('adminLearning.readAloud') }}</label>
+        <label class="field-label" :for="`${formId}-audio`">
+          {{ t('adminLearning.readAloud')
+          }}<span v-if="form.status === 'PUBLISHED'" class="required-mark" aria-hidden="true">*</span>
+        </label>
         <input
           :id="`${formId}-audio`"
           v-model="form.audioText"
           class="input cjk-text"
           maxlength="200"
           lang="zh-CN"
+          :required="form.status === 'PUBLISHED'"
           :disabled="saving"
           :aria-describedby="`${formId}-audio-hint`"
           v-bind="errorAttributes('audio')"
@@ -124,14 +127,14 @@
         <p :id="`${formId}-audio-hint`" class="field-hint">{{ t('adminLearning.readAloudHint') }}</p>
       </div>
 
-      <fieldset class="field-set" :disabled="saving">
+      <fieldset ref="optionsFieldset" class="field-set" :disabled="saving">
         <legend>{{ t('adminLearning.answersTickRight') }}</legend>
         <div class="admin-learning-answer type-caption" aria-hidden="true">
           <span>{{ t('adminLearning.answer') }}</span>
           <span />
           <span>{{ t('adminLearning.explanation') }}</span>
         </div>
-        <div v-for="(option, index) in form.options" :key="index" class="admin-learning-answer">
+        <div v-for="(option, index) in form.options" :key="index" class="admin-learning-answer" data-row-item>
           <input
             v-model="option.text"
             class="input"
@@ -164,6 +167,7 @@
           <button
             class="btn btn-ghost btn-icon btn-sm"
             type="button"
+            data-row-remove
             :disabled="form.options.length <= 2"
             :aria-label="t('adminLearning.removeAnswer', { number: index + 1 })"
             @click="removeOption(index)"
@@ -171,7 +175,13 @@
             <IconGlyph name="trash" :size="16" />
           </button>
         </div>
-        <button class="btn btn-secondary btn-sm" type="button" :disabled="form.options.length >= 6" @click="addOption">
+        <button
+          ref="addOptionButton"
+          class="btn btn-secondary btn-sm"
+          type="button"
+          :disabled="form.options.length >= 6"
+          @click="addOption"
+        >
           <IconGlyph name="plus" :size="14" />
           <span>{{ t('adminLearning.addAnswer') }}</span>
         </button>
@@ -203,6 +213,7 @@ import { adminLearningApi } from '@/api/learn'
 import AppOverlay from '@/components/common/AppOverlay.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
+import { useIsUnmounted } from '@/composables/useIsUnmounted'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { useResource } from '@/composables/useResource'
 import { adminLearningPathMessages } from '@/plugins/adminLearningPathMessages'
@@ -215,8 +226,8 @@ import type {
   PublishStatus,
 } from '@/types/learn'
 import { resolveApiError } from '@/utils/apiError'
+import { focusAfterRowAdd, focusAfterRowRemove } from '@/utils/focusRowList'
 import { DIFFICULTY_KEYS, LEVEL_HSK, SKILL_KEYS } from '@/utils/learnLabels'
-import { normalizeAppLanguage } from '@/utils/locale'
 import { localizeServerMessage } from '@/utils/serverMessages'
 
 /**
@@ -227,8 +238,9 @@ const props = defineProps<{ questionId: number | null }>()
 const emit = defineEmits<{ close: []; saved: [question: LevelCheckQuestionDetail] }>()
 
 const { t, locale } = useLocalMessages({ adminLearning: [adminLearningSharedMessages, adminLearningPathMessages] })
-const serverRule = (message: string) => localizeServerMessage(message, normalizeAppLanguage(locale.value) ?? 'en')
+const serverRule = (message: string) => localizeServerMessage(message, locale.value)
 const formId = `question-${useId()}`
+const isUnmounted = useIsUnmounted()
 
 interface FormOption {
   text: string
@@ -253,6 +265,8 @@ const form = reactive({
 const rightOption = ref<FormOption | null>(form.options[0])
 const saving = ref(false)
 const formElement = ref<HTMLFormElement | null>(null)
+const optionsFieldset = ref<HTMLFieldSetElement | null>(null)
+const addOptionButton = ref<HTMLButtonElement | null>(null)
 const formError = ref<{ field?: string; message: string } | null>(null)
 
 function errorAttributes(field: string) {
@@ -299,14 +313,27 @@ const statsLine = computed(() => {
 })
 
 function addOption(): void {
+  const wasFocused = document.activeElement === addOptionButton.value
   formError.value = null
   form.options.push({ text: '', explanation: '' })
+  focusAfterRowAdd(
+    () => optionsFieldset.value,
+    () => addOptionButton.value,
+    wasFocused,
+  )
 }
 
 function removeOption(index: number): void {
+  const wasFocused = Boolean(optionsFieldset.value?.contains(document.activeElement))
   formError.value = null
   if (form.options[index] === rightOption.value) rightOption.value = null
   form.options.splice(index, 1)
+  focusAfterRowRemove(
+    () => optionsFieldset.value,
+    () => addOptionButton.value,
+    index,
+    wasFocused,
+  )
 }
 
 /** The first thing to fix before the question can be sent, or null. */
@@ -356,11 +383,11 @@ async function save(): Promise<void> {
         explanation: option.explanation.trim() || null,
       })),
     })
-    emit('saved', saved)
+    if (!isUnmounted()) emit('saved', saved)
   } catch (reason) {
-    formError.value = { message: resolveApiError(reason, t('adminLearning.saveFailed')) }
+    if (!isUnmounted()) formError.value = { message: resolveApiError(reason, t('adminLearning.saveFailed')) }
   } finally {
-    saving.value = false
+    if (!isUnmounted()) saving.value = false
   }
 }
 </script>

@@ -144,7 +144,11 @@ describe('StudentClassesPage', () => {
   it('shows the toast a join left, and its Undo leaves the class and goes back to Find classes', async () => {
     api.myClasses.mockResolvedValue(overview([entry()]))
     api.leave.mockResolvedValue(undefined)
-    queueClassNotice({ message: 'Mandarin for Campus Life is in My classes.', joinedClassId: 7 })
+    queueClassNotice({
+      message: 'Mandarin for Campus Life is in My classes.',
+      targetRoute: 'student-classes',
+      joinedClassId: 7,
+    })
     const { wrapper, router } = await mountPage()
 
     const toast = wrapper.get('[data-testid="toast"]')
@@ -159,7 +163,11 @@ describe('StudentClassesPage', () => {
   it('says so and keeps the class when Undo fails', async () => {
     api.myClasses.mockResolvedValue(overview([entry()]))
     api.leave.mockRejectedValue(new Error('offline'))
-    queueClassNotice({ message: 'Mandarin for Campus Life is in My classes.', joinedClassId: 7 })
+    queueClassNotice({
+      message: 'Mandarin for Campus Life is in My classes.',
+      targetRoute: 'student-classes',
+      joinedClassId: 7,
+    })
     const { wrapper, router } = await mountPage()
 
     await wrapper.get('[data-testid="toast"] button').trigger('click')
@@ -173,7 +181,7 @@ describe('StudentClassesPage', () => {
     api.myClasses.mockResolvedValue(overview([entry()]))
     const leaving = deferred<void>()
     api.leave.mockReturnValueOnce(leaving.promise)
-    queueClassNotice({ message: 'Class joined.', joinedClassId: 7 })
+    queueClassNotice({ message: 'Class joined.', targetRoute: 'student-classes', joinedClassId: 7 })
     const { wrapper, router } = await mountPage()
     await wrapper.get('[data-testid="toast"] button').trigger('click')
     wrapper.unmount()
@@ -187,7 +195,7 @@ describe('StudentClassesPage', () => {
     api.myClasses.mockResolvedValue(overview([entry()]))
     const leaving = deferred<void>()
     api.leave.mockReturnValueOnce(leaving.promise)
-    queueClassNotice({ message: 'Class joined.', joinedClassId: 7 })
+    queueClassNotice({ message: 'Class joined.', targetRoute: 'student-classes', joinedClassId: 7 })
     const { wrapper } = await mountPage()
     await wrapper.get('[data-testid="toast"] button').trigger('click')
     setAccessToken('different-learner-after-undo')
@@ -199,7 +207,7 @@ describe('StudentClassesPage', () => {
   it.each(['cancelled', 'failed'])('refreshes My classes after Undo when navigation is %s', async (outcome) => {
     api.myClasses.mockResolvedValueOnce(overview([entry()])).mockResolvedValueOnce(overview([], 8))
     api.leave.mockResolvedValue(undefined)
-    queueClassNotice({ message: 'Class joined.', joinedClassId: 7 })
+    queueClassNotice({ message: 'Class joined.', targetRoute: 'student-classes', joinedClassId: 7 })
     const { wrapper, router } = await mountPage()
     if (outcome === 'cancelled') router.beforeEach(() => false)
     else vi.spyOn(router, 'push').mockRejectedValueOnce(new Error('Page unavailable'))
@@ -214,7 +222,7 @@ describe('StudentClassesPage', () => {
 
   it('shows the confirmation of a left class without Undo', async () => {
     api.myClasses.mockResolvedValue(overview([archived], 8))
-    queueClassNotice({ message: 'You left Mandarin for Campus Life.' })
+    queueClassNotice({ message: 'You left Mandarin for Campus Life.', targetRoute: 'student-classes' })
     const { wrapper } = await mountPage()
 
     const toast = wrapper.get('[data-testid="toast"]')
@@ -227,7 +235,7 @@ describe('StudentClassesPage', () => {
     async (when) => {
       api.myClasses.mockResolvedValue(overview([entry()]))
       setAccessToken('original-class-session')
-      queueClassNotice({ message: 'Class joined.', joinedClassId: 7 })
+      queueClassNotice({ message: 'Class joined.', targetRoute: 'student-classes', joinedClassId: 7 })
       if (when === 'before display') setAccessToken('new-class-session')
       const { wrapper } = await mountPage()
       if (when === 'before display') {

@@ -85,18 +85,15 @@ class AccountIntegrationTests extends ApiIntegrationTest {
 
         mockMvc.perform(api.authGet(ACCOUNT, studentToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.notifications.reviewQueues").doesNotExist())
-                .andExpect(jsonPath("$.data.notifications.liveSessionReminders").doesNotExist())
-                .andExpect(jsonPath("$.data.notifications.feedback").doesNotExist());
+                .andExpect(jsonPath("$.data.notifications.reviewQueues").doesNotExist());
         mockMvc.perform(api.jsonPut(PREFERENCES, studentToken, Map.of("reviewQueues", false)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.reviewQueues").doesNotExist());
 
         String adminToken = api.adminToken();
         mockMvc.perform(api.authGet(ACCOUNT, adminToken))
-                .andExpect(jsonPath("$.data.notifications.reviewQueues").value(true))
-                .andExpect(jsonPath("$.data.notifications.liveSessionReminders").doesNotExist())
-                .andExpect(jsonPath("$.data.deletion").doesNotExist());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.notifications.reviewQueues").value(true));
         try {
             mockMvc.perform(api.jsonPut(PREFERENCES, adminToken, Map.of("reviewQueues", false)))
                     .andExpect(status().isOk())
@@ -248,6 +245,20 @@ class AccountIntegrationTests extends ApiIntegrationTest {
                     "select updated_at = used_at from " + table + " where user_id = ? and used_at is not null",
                     Boolean.class, userId)).as(table).containsExactly(true);
         }
+
+        // Even if created_at sits ahead of wall-clock now (clock step-back / multi-node skew), retirement clamps used_at >= created_at.
+        mockMvc.perform(api.jsonPost("/api/v1/auth/forgot-password", null, Map.of("email", email))
+                        .with(fromRemoteAddress(clientIp)))
+                .andExpect(status().isOk());
+        LocalDateTime ahead = LocalDateTime.now().plusMinutes(5).withNano(0);
+        jdbc.update("update password_reset_tokens set created_at = ? where user_id = ? and used_at is null",
+                Timestamp.valueOf(ahead), userId);
+        mockMvc.perform(api.jsonPost("/api/v1/auth/forgot-password", null, Map.of("email", email))
+                        .with(fromRemoteAddress(clientIp)))
+                .andExpect(status().isOk());
+        assertThat(jdbc.queryForList(
+                "select used_at >= created_at and updated_at = used_at from password_reset_tokens where user_id = ? and used_at is not null",
+                Boolean.class, userId)).containsOnly(true);
     }
 
     @Test
@@ -286,6 +297,14 @@ class AccountIntegrationTests extends ApiIntegrationTest {
                         Map.of("reason", "Asked to come back.")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("A deleted account can't be reactivated."));
+        mockMvc.perform(api.jsonPost("/api/v1/admin/users/" + userId + "/deactivate", adminToken,
+                        Map.of("reason", "Should not deactivate deleted user.")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("A deleted account can't be deactivated."));
+        mockMvc.perform(api.authGet("/api/v1/admin/users/" + userId, adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.deleted").value(true))
+                .andExpect(jsonPath("$.data.active").value(false));
     }
 
     /**
@@ -306,6 +325,23 @@ class AccountIntegrationTests extends ApiIntegrationTest {
                 .andReturn());
         int requestNumber = request.path("number").asInt();
         Long requestId = supportRequestId(requestNumber);
+        Long planReportId = api.id(mockMvc.perform(api.jsonPost("/api/v1/ai/reports", token, Map.of(
+                        "featureKey", "LEARNING_PLAN",
+                        "reasonCategory", "DOES_NOT_MATCH_INPUT",
+                        "description", "My email is " + email + " and my name is " + name,
+                        "promptSnapshot", "Moving to KL (" + email + ")",
+                        "aiResponseSnapshot", "Goal for " + name + ": speak Mandarin in KL.")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.promptSnapshot").value("Moving to KL ([EMAIL])"))
+                .andReturn());
+        Long hintReportId = api.id(mockMvc.perform(api.jsonPost("/api/v1/ai/reports", token, Map.of(
+                        "featureKey", "HINT",
+                        "reasonCategory", "UNCLEAR_EXPLANATION",
+                        "description", "Note from " + name + " (" + email + ")",
+                        "promptSnapshot", "Learner prompt by " + name,
+                        "aiResponseSnapshot", "It starts with 一.")))
+                .andExpect(status().isOk())
+                .andReturn());
         String adminToken = api.adminToken();
         mockMvc.perform(api.jsonPost(ADMIN_SUPPORT + requestId + "/replies", adminToken, Map.of("body", "Done.")))
                 .andExpect(status().isOk());
@@ -338,6 +374,14 @@ class AccountIntegrationTests extends ApiIntegrationTest {
                 .containsExactlyInAnyOrder(
                         tuple("SUPPORT_REPLY_SENT", "#" + requestNumber),
                         tuple("SUPPORT_REQUEST_SOLVED", "#" + requestNumber));
+        mockMvc.perform(api.authGet("/api/v1/admin/ai/reports/" + planReportId, adminToken))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(api.authGet("/api/v1/admin/ai/reports/" + hintReportId, adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.studentName").value("Deleted account"))
+                .andExpect(jsonPath("$.data.description").doesNotExist())
+                .andExpect(jsonPath("$.data.promptSnapshot").doesNotExist())
+                .andExpect(jsonPath("$.data.aiResponseSnapshot").value("It starts with 一."));
     }
 
     /**
@@ -349,6 +393,10 @@ class AccountIntegrationTests extends ApiIntegrationTest {
     void deletionRemovesTheRequestsSentFromTheAccountsAddressOnTheHelpPage() throws Exception {
         String email = uniqueEmail("account-visitor");
         String token = api.registerStudent(email);
+        // Only a verified account has proven ownership of the email address used by unlinked visitor requests.
+        User learner = user(email);
+        learner.setEmailVerifiedAt(LocalDateTime.now());
+        userRepository.save(learner);
         String subject = "Locked out: " + email;
         Long sentSignedOut = visitorRequest(email, subject + "\nThe reset link never came.");
         // An address stored before addresses were kept in lower case still belongs to the account.
@@ -383,6 +431,26 @@ class AccountIntegrationTests extends ApiIntegrationTest {
                 .extracting(AuditLog::getTargetLabel)
                 .containsExactly("#" + number, "#" + number);
         assertThat(supportRequestRepository.findById(otherAddress)).isPresent();
+    }
+
+    @Test
+    void unverifiedAccountDeletionDoesNotRemoveThirdPartyVisitorSupportRequests() throws Exception {
+        String victimEmail = uniqueEmail("unverified-victim");
+        Long visitorTicketId = visitorRequest(victimEmail, "I need help with my account.");
+        String token = api.registerStudent(victimEmail);
+        // Learner registers without confirming email ownership, creates one signed-in request, then deletes account.
+        JsonNode ownRequest = api.data(mockMvc.perform(api.authMultipart("/api/v1/users/me/support", token)
+                        .param("topic", "ACCOUNT").param("subject", "Own request").param("message", "Hello"))
+                .andExpect(status().isOk())
+                .andReturn());
+        Long ownRequestId = supportRequestId(ownRequest.path("number").asInt());
+
+        mockMvc.perform(api.jsonPost(DELETE, token, Map.of("confirmEmail", victimEmail)))
+                .andExpect(status().isOk());
+
+        // Own signed-in request is deleted, while unlinked visitor request remains protected.
+        assertThat(supportRequestRepository.findById(ownRequestId)).isEmpty();
+        assertThat(supportRequestRepository.findById(visitorTicketId)).isPresent();
     }
 
     /**
@@ -475,8 +543,10 @@ class AccountIntegrationTests extends ApiIntegrationTest {
                         allOf(containsString("/api/v1/auth/refresh"), not(containsString("Max-Age"))))));
         mockMvc.perform(api.jsonPost("/api/v1/auth/login", null,
                         Map.of("email", email, "password", USER_PASSWORD, "keepSignedIn", true)))
+                .andExpect(status().isOk())
                 .andExpect(header().stringValues("Set-Cookie", hasItem(
-                        allOf(containsString("/api/v1/auth/refresh"), containsString("Max-Age=")))));
+                        allOf(containsString("/api/v1/auth/refresh"), containsString("Max-Age="),
+                                not(containsString("Max-Age=0"))))));
     }
 
     /** A password change replaces the caller's session; a browser-session sign-in must not come back lasting. */
@@ -508,7 +578,48 @@ class AccountIntegrationTests extends ApiIntegrationTest {
         mockMvc.perform(api.changePasswordRequest(keptSession, NEW_PASSWORD, nextPassword, nextPassword))
                 .andExpect(status().isOk())
                 .andExpect(header().stringValues("Set-Cookie", hasItem(
-                        allOf(containsString("/api/v1/auth/refresh"), containsString("Max-Age=")))));
+                        allOf(containsString("/api/v1/auth/refresh"), containsString("Max-Age="),
+                                not(containsString("Max-Age=0"))))));
+    }
+
+    @Test
+    void deletingAVerifiedLearnerErasesAiHistoryAndAnonymisesAdminInviteAuditLabels() throws Exception {
+        String email = uniqueEmail("account-erase-ai");
+        String token = api.registerStudent(email);
+        Long userId = user(email).getId();
+        jdbc.update("update users set email_verified_at = now() where id = ?", userId);
+        jdbc.update("""
+                insert into ai_chat_sessions (user_id, created_at, updated_at) values (?, now(), now())
+                """, userId);
+        Long sessionId = jdbc.queryForObject(
+                "select id from ai_chat_sessions where user_id = ? order by id desc limit 1", Long.class, userId);
+        jdbc.update("""
+                insert into ai_chat_messages (session_id, sender_role, message_text, created_at, updated_at)
+                values (?, 'USER', 'Private question', now(), now())
+                """, sessionId);
+        jdbc.update("""
+                insert into ai_practice_checks
+                    (student_user_id, check_type, target_text, score, headline, created_at, updated_at)
+                values (?, 'HANDWRITING', '你好', 88, 'Clear strokes', now(), now())
+                """, userId);
+        jdbc.update("""
+                insert into audit_logs
+                    (actor_email, action_type, target_type, target_id, target_label, description, created_at, updated_at)
+                values (?, 'ADMIN_INVITE_SENT', 'AdminInvite', 999, ?, 'Admin sent invite.', now(), now())
+                """, ADMIN_EMAIL, email);
+
+        mockMvc.perform(api.jsonPost(DELETE, token, Map.of("confirmEmail", email)))
+                .andExpect(status().isOk());
+
+        assertThat(jdbc.queryForObject("select count(*) from ai_chat_sessions where user_id = ?", Long.class, userId))
+                .isZero();
+        assertThat(jdbc.queryForObject("select count(*) from ai_chat_messages where session_id = ?", Long.class, sessionId))
+                .isZero();
+        assertThat(jdbc.queryForObject("select count(*) from ai_practice_checks where student_user_id = ?", Long.class, userId))
+                .isZero();
+        assertThat(jdbc.queryForObject(
+                "select count(*) from audit_logs where target_type = 'AdminInvite' and target_label = ?",
+                Long.class, email)).isZero();
     }
 
     /** Deletion gives an account the address deleted-{id}@deleted.invalid; an account holding it would block that. */
@@ -611,15 +722,5 @@ class AccountIntegrationTests extends ApiIntegrationTest {
 
         assertThat(jdbc.queryForObject("select count(*) from password_reset_tokens where user_id = ?", Long.class, userId))
                 .isZero();
-    }
-
-    /** The raw link only exists in the e-mail: give the user's open change link a known token. */
-    private String knownEmailChangeToken(Long userId) {
-        String rawToken = SecureTokens.newHexToken();
-        // The hash is immutable through JPA.
-        int updated = jdbc.update("update email_change_tokens set token_hash = ? where user_id = ? and used_at is null",
-                SecureTokens.sha256Hex(rawToken), userId);
-        assertThat(updated).isEqualTo(1);
-        return rawToken;
     }
 }

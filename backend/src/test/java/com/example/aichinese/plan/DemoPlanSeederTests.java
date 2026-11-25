@@ -6,8 +6,6 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 
 import com.example.aichinese.config.seed.DemoPersonas;
 import com.example.aichinese.config.seed.DemoPlanSeeder;
@@ -25,10 +23,10 @@ import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.classes.StudentClassService;
 import com.example.aichinese.service.plan.LearningPlanService;
 import com.example.aichinese.service.plan.StudentHomeService;
+import com.example.aichinese.support.DemoProfileTest;
 
 /** The demo plans read through the real services, as Home and My learning plan show them. */
-@SpringBootTest
-@ActiveProfiles({"demo", "demo-test"})
+@DemoProfileTest
 class DemoPlanSeederTests {
 
     @Autowired

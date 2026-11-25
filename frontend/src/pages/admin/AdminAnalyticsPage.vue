@@ -1,38 +1,35 @@
 <template>
   <div class="page-stack">
-    <PageHeaderBlock :title="t('nav.analytics')" hide-title>
-      <template #actions>
-        <SegmentedControl
-          :model-value="data?.days ?? requestedDays"
-          :disabled="changingPeriod || analytics.loading.value"
-          :label="t('adminInsights.periodLabel')"
-          :options="periodOptions"
-          @update:model-value="selectPeriod"
-        />
-        <button
-          class="btn btn-secondary"
-          type="button"
-          :disabled="!data"
-          data-testid="admin-insights-export"
-          @click="exportCsv"
-        >
-          <IconGlyph name="download" :size="16" />
-          <span>{{ t('common.exportCsv') }}</span>
-        </button>
-      </template>
-    </PageHeaderBlock>
+    <h1 class="sr-only">{{ t('nav.analytics') }}</h1>
+    <div class="page-toolbar">
+      <SegmentedControl
+        :model-value="data?.days ?? requestedDays"
+        :disabled="changingPeriod || analytics.loading.value"
+        :label="t('adminInsights.periodLabel')"
+        :options="periodOptions"
+        @update:model-value="selectPeriod"
+      />
+      <button
+        class="btn btn-secondary"
+        type="button"
+        :disabled="!data"
+        data-testid="admin-insights-export"
+        @click="exportCsv"
+      >
+        <IconGlyph name="download" :size="16" />
+        <span>{{ t('common.exportCsv') }}</span>
+      </button>
+    </div>
 
     <!-- A period that could not be loaded: the numbers of the one before stay, and the control says which. -->
-    <DataNotice :error="data ? analytics.error.value : null" :error-title="t('adminInsights.loadError')">
-      <template #actions>
-        <button class="btn btn-secondary btn-sm" type="button" :disabled="changingPeriod" @click="retryPeriod">
-          {{ t('common.retry') }}
-        </button>
-      </template>
-    </DataNotice>
+    <DataNotice
+      :error="data ? analytics.error.value : null"
+      :error-title="t('adminInsights.loadError')"
+      @retry="retryPeriod"
+    />
 
     <StatePanel
-      v-if="analytics.loading.value"
+      v-if="!data && analytics.loading.value"
       heading-tag="h2"
       tone="loading"
       spacious
@@ -43,15 +40,14 @@
       v-else-if="!data"
       heading-tag="h2"
       tone="error"
-      icon="alert"
       spacious
       :title="t('adminInsights.loadError')"
-      :message="analytics.error.value ?? ''"
+      :message="analytics.error.value"
       @retry="retryPeriod"
     />
     <template v-else>
       <section class="panel admin-detail" aria-labelledby="admin-insights-registrations-title">
-        <header class="admin-section-head">
+        <header class="section-header">
           <div class="admin-list-head">
             <h2 id="admin-insights-registrations-title" class="card-title">{{ t('adminInsights.registrations') }}</h2>
             <p class="admin-meta" data-testid="admin-insights-registrations-detail">
@@ -81,19 +77,7 @@
             <p class="admin-meta">{{ usersBreakdown }}</p>
           </div>
         </header>
-        <div class="admin-insights-plot">
-          <TrendChart :values="trend" :label="t('adminInsights.registrationsChart')" />
-          <ol class="admin-insights-axis" aria-hidden="true">
-            <li
-              v-for="(point, index) in trend"
-              :key="data.registrations[index].date"
-              :class="{ 'is-quiet': !showAxisLabel(index) }"
-              :style="{ left: `${axisPosition(index)}%` }"
-            >
-              {{ t('adminInsights.dayCount', { day: point.label, count: point.value }) }}
-            </li>
-          </ol>
-        </div>
+        <TrendChart :values="trend" :label="t('adminInsights.registrationsChart')" />
       </section>
 
       <div class="admin-insights-grid">
@@ -138,7 +122,7 @@
           class="panel admin-detail"
           :aria-labelledby="`${section.id}-title`"
         >
-          <header class="admin-section-head">
+          <header class="section-header">
             <div class="admin-list-head">
               <h2 :id="`${section.id}-title`" class="card-title">{{ section.title }}</h2>
               <p class="admin-meta">{{ section.summary }}</p>
@@ -154,7 +138,7 @@
                 <span>{{ row.label }}</span>
                 <span>{{ row.text }}</span>
               </span>
-              <span class="admin-share-bar" aria-hidden="true"><span :style="{ width: `${row.percent}%` }" /></span>
+              <span class="progress-bar is-sm" aria-hidden="true"><span :style="{ width: `${row.percent}%` }" /></span>
             </li>
           </ul>
         </section>
@@ -166,17 +150,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { computed, ref, watch } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { adminOverviewApi } from '@/api/ops'
+import TrendChart, { type TrendPoint } from '@/components/admin/TrendChart.vue'
 import AppToast from '@/components/common/AppToast.vue'
 import DataNotice from '@/components/common/DataNotice.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import SegmentedControl from '@/components/common/SegmentedControl.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
-import TrendChart, { type TrendPoint } from '@/components/common/TrendChart.vue'
-import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { useResource } from '@/composables/useResource'
 import { useToast } from '@/composables/useToast'
@@ -185,14 +168,7 @@ import type { AiResultStatus, ContentStatus } from '@/types/api'
 import type { AdminAnalyticsResponse } from '@/types/ops'
 import { csvBlob } from '@/utils/csv'
 import { saveBlobDownload } from '@/utils/download'
-import {
-  createDateFormatter,
-  formatNumber,
-  formatPercent,
-  formatShortDate,
-  parseDate,
-  ratioPercent,
-} from '@/utils/format'
+import { formatNumber, formatPercent, formatShortDate, ratioPercent } from '@/utils/format'
 import '@/styles/admin-shared.css'
 import '@/styles/ops-admin.css'
 
@@ -213,12 +189,27 @@ const AI_STATUSES: readonly (readonly [AiResultStatus, string])[] = [
 const AXIS_LABEL_STEP = 5
 
 const { t, locale } = useLocalMessages({ adminInsights: adminAnalyticsMessages })
+const route = useRoute()
+const router = useRouter()
 const { toast, showToast } = useToast()
 
-const requestedDays = ref<Period>(7)
+function periodFromQuery(raw: unknown): Period {
+  return raw === '30' ? 30 : 7
+}
+
+const requestedDays = ref<Period>(periodFromQuery(route.query.days))
 const changingPeriod = ref(false)
 const analytics = useResource(() => adminOverviewApi.analytics(requestedDays.value))
 const data = analytics.data
+
+watch(
+  () => route.query.days,
+  (raw) => {
+    if (route.name !== 'admin-analytics') return
+    const next = periodFromQuery(raw)
+    if (next !== requestedDays.value) void loadPeriod(next, { syncAddress: false })
+  },
+)
 
 const periodOptions = computed(() =>
   PERIODS.map((period) => ({
@@ -228,11 +219,14 @@ const periodOptions = computed(() =>
   })),
 )
 
-async function loadPeriod(period: Period): Promise<void> {
+async function loadPeriod(period: Period, { syncAddress = true } = {}): Promise<void> {
   requestedDays.value = period
   changingPeriod.value = true
   try {
     await analytics.reload()
+    if (syncAddress && analytics.error.value === null) {
+      void router.replace({ query: { ...route.query, days: period === 30 ? '30' : undefined } })
+    }
   } finally {
     changingPeriod.value = false
   }
@@ -259,24 +253,20 @@ const usersBreakdown = computed(() => {
 })
 
 const trend = computed<TrendPoint[]>(() => {
-  if (!data.value) return []
-  const format = createDateFormatter({ month: 'short', day: 'numeric' }, locale.value)
-  return data.value.registrations.map((day) => {
-    const date = parseDate(day.date)
-    return { label: date ? format(date) : '--', value: day.count }
+  const days = data.value?.registrations ?? []
+  const last = days.length - 1
+  const sparse = data.value?.days === 30
+  return days.map((day, index) => {
+    const label = formatShortDate(day.date, locale.value)
+    return {
+      key: day.date,
+      label,
+      value: day.count,
+      axisLabel: t('adminInsights.dayCount', { day: label, count: formatNumber(day.count, locale.value) }),
+      quiet: sparse && index !== last && index % AXIS_LABEL_STEP !== 0,
+    }
   })
 })
-
-/** Every day of a 7-day chart is labelled; the period is that of the days shown (a switch may still be loading). */
-function showAxisLabel(index: number): boolean {
-  const last = trend.value.length - 1
-  return data.value?.days !== 30 || index === last || index % AXIS_LABEL_STEP === 0
-}
-
-/** Each label sits under its point: the chart spreads the points from edge to edge. */
-function axisPosition(index: number): number {
-  return trend.value.length <= 1 ? 50 : (index / (trend.value.length - 1)) * 100
-}
 
 function sharesByStatus<S extends string>(statuses: readonly (readonly [S, string])[], counts: Record<S, number>) {
   const total = statuses.reduce((sum, [status]) => sum + counts[status], 0)
@@ -302,7 +292,7 @@ const shareSections = computed(() => {
     {
       id: 'admin-insights-content',
       title: t('adminInsights.content'),
-      summary: t('adminInsights.contentDetail', { total: formatNumber(content.total) }),
+      summary: t('adminInsights.contentDetail', { total: formatNumber(content.total) }, content.total),
       link: t('adminInsights.openContent'),
       route: 'admin-classes',
       rows: content.rows,

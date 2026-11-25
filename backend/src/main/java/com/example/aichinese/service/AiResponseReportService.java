@@ -22,11 +22,13 @@ import com.example.aichinese.dto.ai.StudentAiResponseReportResponse;
 import com.example.aichinese.entity.AiChatMessage;
 import com.example.aichinese.entity.AiPracticeCheck;
 import com.example.aichinese.entity.AiResponseReport;
+import com.example.aichinese.entity.Notification;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.AiChatSenderRole;
 import com.example.aichinese.entity.enums.AiFeatureKey;
 import com.example.aichinese.entity.enums.AiResponseReportReason;
 import com.example.aichinese.entity.enums.AiResponseReportStatus;
+import com.example.aichinese.entity.enums.EnumLookups;
 import com.example.aichinese.entity.enums.NotificationType;
 import com.example.aichinese.repository.AiChatMessageRepository;
 import com.example.aichinese.repository.AiResponseReportRepository;
@@ -34,6 +36,7 @@ import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.account.CurrentAccount;
 import com.example.aichinese.util.AiInputSanitizer;
 import com.example.aichinese.util.PaginationUtils;
+import com.example.aichinese.util.PersonalDataRedactor;
 
 import lombok.RequiredArgsConstructor;
 
@@ -66,9 +69,9 @@ public class AiResponseReportService {
             // A hint card: what the hint was for (activity, item, page) and the hint as the learner read it.
             AiFeatureKey.HINT);
     /** My reports is the rail of Ask SparkBot; {@code /student/ai} itself opens Talk with Xiaomei, which has no rail. */
-    public static final String STUDENT_REPORTS_PATH = "/student/ai/ask";
+    private static final String STUDENT_REPORTS_PATH = "/student/ai/ask";
     /** The admin AI reports page selects the report its {@code report} query names, as the dashboard links it. */
-    static final String ADMIN_REPORT_PATH = "/admin/ai?report=";
+    private static final String ADMIN_REPORT_PATH = "/admin/ai?report=";
 
     private final AiResponseReportRepository aiResponseReportRepository;
     private final AiChatMessageRepository aiChatMessageRepository;
@@ -82,17 +85,18 @@ public class AiResponseReportService {
             SecurityUserDetails currentUser,
             CreateAiResponseReportRequest request) {
         User student = currentAccount.lock(currentUser);
-        AiFeatureKey feature = AiFeatureKey.tryFrom(request.featureKey())
+        AiFeatureKey feature = EnumLookups.tryFrom(AiFeatureKey.class, request.featureKey())
                 .filter(REPORTABLE_FEATURES::contains)
                 .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Invalid AI feature key."));
-        AiResponseReportReason reason = AiResponseReportReason.tryFrom(request.reasonCategory())
+        AiResponseReportReason reason = EnumLookups.tryFrom(AiResponseReportReason.class, request.reasonCategory())
                 .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Invalid AI report reason category."));
 
         AiResponseReport report = new AiResponseReport();
         report.setStudentUser(student);
         report.setFeatureKey(feature);
         report.setReasonCategory(reason);
-        report.setDescription(AiInputSanitizer.sanitize(request.description(), MAX_REPORT_DESCRIPTION_LENGTH));
+        report.setDescription(AiInputSanitizer.sanitize(
+                PersonalDataRedactor.redact(request.description()), MAX_REPORT_DESCRIPTION_LENGTH));
         // An Ask SparkBot answer and a practice score are kept on the server, so their report always carries the
         // server's copy: a page-made snapshot could claim an answer SparkBot never gave.
         if (feature == AiFeatureKey.CHAT_TUTOR) {
@@ -106,7 +110,7 @@ public class AiResponseReportService {
             }
             attachPracticeCheck(report, practiceCheckService.requireOwnCheck(student.getId(), request.practiceCheckId()));
         } else {
-            report.setPromptSnapshot(snapshot(request.promptSnapshot()));
+            report.setPromptSnapshot(snapshot(PersonalDataRedactor.redact(request.promptSnapshot())));
             report.setAiResponseSnapshot(AiInputSanitizer.requireText(
                     request.aiResponseSnapshot(),
                     MAX_REPORT_SNAPSHOT_LENGTH,
@@ -154,7 +158,7 @@ public class AiResponseReportService {
         User reviewer = currentAccount.lock(currentUser);
         AiResponseReport report = aiResponseReportRepository.findLockedById(id)
                 .orElseThrow(AiResponseReportService::missingReport);
-        AiResponseReportStatus decision = AiResponseReportStatus.tryFrom(request.status())
+        AiResponseReportStatus decision = EnumLookups.tryFrom(AiResponseReportStatus.class, request.status())
                 .filter(status -> status != AiResponseReportStatus.PENDING_REVIEW)
                 .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Invalid AI report review status."));
         if (report.getStatus() != AiResponseReportStatus.PENDING_REVIEW) {
@@ -173,16 +177,7 @@ public class AiResponseReportService {
         boolean resolved = decision == AiResponseReportStatus.RESOLVED;
         auditLogService.record(reviewer, resolved ? REVIEW_RESOLVED_ACTION : REVIEW_DISMISSED_ACTION, TARGET_TYPE,
                 report.getId(), "Admin " + (resolved ? "resolved" : "dismissed") + " an AI report with a note to the student.");
-        notificationService.safeCreateNotification(
-                report.getStudentUser(),
-                NotificationType.AI_REPORT_REVIEW,
-                "An admin replied to your AI report",
-                resolved
-                        ? "Your report was resolved. Read the admin's note in AI Helper › Ask SparkBot › My reports."
-                        : "Your report was checked and dismissed. Read the admin's note in AI Helper › Ask SparkBot › My reports.",
-                TARGET_TYPE,
-                report.getId(),
-                STUDENT_REPORTS_PATH);
+        notificationService.safeCreateNotification(report.getStudentUser(), reviewedDraft(report, resolved));
         return toAdminResponse(report);
     }
 
@@ -201,11 +196,6 @@ public class AiResponseReportService {
         report.setAiResponseSnapshot(responseSnapshot != null ? responseSnapshot : "-");
     }
 
-    /** The admin AI reports page opened on this report. */
-    public static String adminReportPath(AiResponseReport report) {
-        return ADMIN_REPORT_PATH + report.getId();
-    }
-
     /** What was checked ("Recording · 谢谢 · Lesson title") and the score with its feedback, in plain text. */
     private void attachPracticeCheck(AiResponseReport report, AiPracticeCheck check) {
         AiPracticeCheckService.ReportSnapshot formatted = practiceCheckService.formatReportSnapshot(check);
@@ -213,15 +203,34 @@ public class AiResponseReportService {
         report.setAiResponseSnapshot(snapshot(formatted.response()));
     }
 
-    private void notifyAdmins(AiResponseReport report, User student) {
+    public static Notification needsReviewDraft(AiResponseReport report, String studentName) {
         String reason = report.getReasonCategory().name().replace('_', ' ').toLowerCase(Locale.ROOT);
-        notificationService.notifyActiveAdminsForUserTarget(
+        return NotificationService.draft(
                 NotificationType.ADMIN_TASK,
                 "AI report needs review",
-                student.getDisplayName() + " reported an AI answer (" + reason + ").",
+                studentName + " reported an AI answer (" + reason + ").",
                 TARGET_TYPE,
                 report.getId(),
-                adminReportPath(report),
+                ADMIN_REPORT_PATH + report.getId());
+    }
+
+    public static Notification reviewedDraft(AiResponseReport report, boolean resolved) {
+        return NotificationService.draft(
+                NotificationType.AI_REPORT_REVIEW,
+                "An admin replied to your AI report",
+                resolved
+                        ? "Your report was resolved. Read the admin's note in AI Helper › Ask SparkBot › My reports."
+                        : "Your report was checked and dismissed. Read the admin's note in AI Helper › Ask SparkBot › My reports.",
+                TARGET_TYPE,
+                report.getId(),
+                STUDENT_REPORTS_PATH);
+    }
+
+    private void notifyAdmins(AiResponseReport report, User student) {
+        String studentName = student.getDisplayName();
+        notificationService.notifyActiveAdminsForUserTarget(
+                () -> needsReviewDraft(report, studentName),
+                TARGET_TYPE + ":" + report.getId(),
                 student.getId());
     }
 

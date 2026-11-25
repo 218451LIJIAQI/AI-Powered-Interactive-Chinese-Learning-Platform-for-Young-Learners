@@ -14,7 +14,7 @@ html {
 }
 
 html:has(.focus-main) {
-  scroll-padding-top: calc(var(--focus-bar-top) + var(--control-height-md) + var(--space-4));
+  scroll-padding-top: calc(var(--focus-bar-top) + var(--control-height-md) + var(--space-3) + var(--space-4));
   scroll-padding-bottom: calc(var(--focus-footer-height) + var(--space-4));
 }
 
@@ -34,7 +34,7 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Headings are set by their classes; the bare elements only lose the browser margins. */
+/* Heading sizes are set by their classes; the bare elements reset margins and share default heading typography. */
 :where(h1, h2, h3, h4) {
   margin: 0;
   font-weight: var(--font-weight-heading);
@@ -90,7 +90,7 @@ input[type='checkbox'] {
   outline-offset: var(--focus-ring-offset);
 }
 
-[tabindex='-1']:focus {
+[tabindex='-1']:focus:not(:focus-visible) {
   outline: none;
 }
 
@@ -100,7 +100,9 @@ input[type='checkbox'] {
   *::after {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
     animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
     animation-iteration-count: 1 !important;
   }
 }
@@ -200,7 +202,6 @@ input[type='checkbox'] {
 }
 
 /* Page layout */
-.home-page,
 .page-stack {
   display: flex;
   flex-direction: column;
@@ -210,47 +211,6 @@ input[type='checkbox'] {
 
 .page-stack > * {
   min-width: 0;
-}
-
-/* App shell: public pages */
-/* The header spans the window above a centred content column. */
-.public-shell {
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-  /* A full-bleed band may paint past the window; it is clipped here without making a scroll container. */
-  overflow-x: clip;
-}
-
-.public-shell-content {
-  flex: 1 0 auto;
-  width: min(calc(100% - 2 * var(--page-gutter)), var(--public-max));
-  margin: 0 auto;
-  padding-block: var(--space-10) var(--space-16);
-}
-
-/* The sign-in and recovery pages fill the whole window with their own layout (AuthShell). */
-.public-shell--auth .public-shell-content {
-  width: 100%;
-  padding-block: 0;
-}
-
-/* Both headers stay visible as the page scrolls. */
-.public-nav,
-.dashboard-topbar {
-  position: sticky;
-  top: 0;
-  z-index: var(--z-sticky);
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--surface-glass);
-  backdrop-filter: saturate(180%) blur(14px);
-}
-
-.sidebar-link:hover,
-.topbar-icon-button:hover,
-.topbar-icon-button.is-active {
-  background: var(--color-ink-a06);
-  color: var(--text-primary);
 }
 
 /* App shell: dashboard (sidebar + header + main), focus mode, route tabs */
@@ -319,6 +279,11 @@ input[type='checkbox'] {
     color var(--duration-fast) var(--ease-standard);
 }
 
+.sidebar-link:hover {
+  background: var(--color-ink-a06);
+  color: var(--text-primary);
+}
+
 .sidebar-link > .icon-glyph:first-child {
   color: var(--color-ink-500);
   transition: color var(--duration-fast) var(--ease-standard);
@@ -358,15 +323,18 @@ input[type='checkbox'] {
 
 /* Waiting work in a section: the amber count. */
 .sidebar-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-width: 20px;
-  height: 20px;
-  padding: 0 var(--space-1-5);
+  min-height: 20px;
+  padding: 0.125rem var(--space-1-5);
   border-radius: var(--radius-pill);
   background: var(--color-accent-500);
   color: var(--text-on-accent);
   font-size: var(--font-size-2xs);
   font-weight: var(--font-weight-heading);
-  line-height: 20px;
+  line-height: 1.2;
   text-align: center;
 }
 
@@ -457,6 +425,9 @@ a.sidebar-status:hover {
 /* The header: the active section's name on the left; language, bell and account on the right. It lines up with the
    content column at every window width. */
 .dashboard-topbar {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -464,6 +435,9 @@ a.sidebar-status:hover {
   min-height: var(--topbar-height);
   padding-block: var(--space-2);
   padding-inline: max(var(--page-gutter), calc((100% - var(--page-max)) / 2 + var(--page-gutter)));
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-glass);
+  backdrop-filter: saturate(180%) blur(14px);
 }
 
 .topbar-location {
@@ -507,11 +481,21 @@ a.sidebar-status:hover {
     color var(--duration-fast) var(--ease-standard);
 }
 
+.topbar-icon-button:hover,
+.topbar-icon-button.is-active {
+  background: var(--color-ink-a06);
+  color: var(--text-primary);
+}
+
 .topbar-notification-badge {
   position: absolute;
   top: -2px;
   right: -4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-width: var(--count-size);
+  min-height: var(--count-size);
   padding: 0 var(--space-1);
   border: 2px solid var(--surface-card);
   border-radius: var(--radius-pill);
@@ -519,11 +503,11 @@ a.sidebar-status:hover {
   color: var(--color-white);
   font-size: var(--font-size-2xs);
   font-weight: var(--font-weight-heading);
-  line-height: 14px;
+  line-height: 1.2;
   text-align: center;
 }
 
-/* The account: a chip with the avatar and the name, separated from the tools by a rule. */
+/* The account: a chip with the avatar and the name, set slightly apart from the tools. */
 .topbar-user {
   display: inline-flex;
   align-items: center;
@@ -605,13 +589,13 @@ a.sidebar-status:hover {
 
 .focus-title {
   font-size: var(--type-question-size);
-  line-height: 32px;
+  line-height: 1.33;
 }
 
 .focus-headline {
   font-size: var(--type-h1-focus-size);
   letter-spacing: var(--letter-spacing-display);
-  line-height: 40px;
+  line-height: 1.25;
 }
 
 /* The footer of every focus flow: a rule, then [Back / Skip] left, an optional note, [Continue / Check] right. After an
@@ -689,24 +673,6 @@ a.sidebar-status:hover {
   justify-self: center;
   width: min(100%, 520px);
   min-width: 0;
-}
-
-/* In a short window an explanation or hint can grow taller than the space reserved for a fixed footer. */
-@media (max-height: 37.5rem) {
-  html:has(.focus-main) {
-    scroll-padding-bottom: var(--space-4);
-  }
-
-  .focus-main {
-    padding-bottom: 0;
-    container-type: inline-size;
-  }
-
-  .focus-footer {
-    position: static;
-    margin: var(--space-6) calc(50% - 50cqi - var(--page-gutter)) 0;
-    box-shadow: none;
-  }
 }
 
 /* Underline tabs for sibling views: 14 medium (the active one semibold), 16 icon, 24 apart, 44 high, 2px underline on
@@ -789,17 +755,19 @@ a.sidebar-status:hover {
    so it is grey; the active tab's count takes the tab's violet. .is-attention (amber) marks work waiting. */
 .route-tab-count,
 .count-badge {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex: 0 0 auto;
   min-width: var(--count-size);
-  height: var(--count-size);
-  padding: 0 var(--space-1-5);
+  min-height: var(--count-size);
+  padding: 0.125rem var(--space-1-5);
   border-radius: var(--radius-pill);
   background: var(--color-ink-100);
   color: var(--color-ink-700);
   font-size: var(--font-size-2xs);
   font-weight: var(--font-weight-heading);
-  line-height: var(--count-size);
+  line-height: 1.2;
   text-align: center;
 }
 
@@ -861,6 +829,8 @@ a.sidebar-status:hover {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  width: fit-content;
+  max-width: 100%;
   min-width: 0;
   color: var(--text-primary);
 }
@@ -883,7 +853,7 @@ a.sidebar-status:hover {
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-heading);
   letter-spacing: var(--letter-spacing-display);
-  line-height: 22px;
+  line-height: 1.22;
   white-space: nowrap;
 }
 
@@ -895,13 +865,14 @@ a.sidebar-status:hover {
   color: var(--text-secondary);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-medium);
-  line-height: 16px;
+  line-height: 1.33;
 }
 
-/* Language switcher and segmented control: a recessed tray; the chosen option is a white sheet laid on it. A segmented
-   control only switches a view mode (two or three); filters are chips (FilterChips). */
+/* Language switcher, segmented control, and auth tabs: a recessed tray; the chosen option is a white sheet laid on it.
+   A segmented control only switches a view mode (two or three); filters are chips (FilterChips). */
 .pill-switch,
-.segmented {
+.segmented,
+.tabs {
   display: inline-flex;
   align-items: center;
   gap: var(--space-0-5);
@@ -914,27 +885,58 @@ a.sidebar-status:hover {
   border-radius: var(--radius-pill);
 }
 
+.tabs {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  width: 100%;
+}
+
 .pill-switch button,
-.segmented-option {
+.segmented-option,
+.tab-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--space-1-5);
-  flex: 1 1 auto;
-  min-width: 44px;
-  min-height: var(--control-height-sm);
-  padding: 0 var(--space-3);
   border: 0;
-  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-secondary);
-  font-size: var(--font-size-sm);
   font-weight: var(--font-weight-strong);
-  white-space: nowrap;
   transition:
     background var(--duration-fast) var(--ease-standard),
     color var(--duration-fast) var(--ease-standard),
     box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.segmented-option,
+.tab-button {
+  min-height: var(--control-height-sm);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+}
+
+.pill-switch button {
+  flex: 1 1 auto;
+  min-width: 36px;
+  min-height: 28px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+}
+
+.segmented-option {
+  flex: 1 1 auto;
+  min-width: 44px;
+  padding: 0 var(--space-3);
+  white-space: nowrap;
+}
+
+.tab-button {
+  min-width: 0;
+  padding: 0 var(--space-4);
+  font-weight: var(--font-weight-medium);
 }
 
 .pill-switch button:hover:not(:disabled),
@@ -958,12 +960,8 @@ a.sidebar-status:hover {
     0 1px 3px var(--color-ink-a12);
 }
 
-.pill-switch button {
-  min-width: 36px;
-  min-height: 28px;
-  padding: 0 var(--space-2);
-  border-radius: var(--radius-pill);
-  font-size: var(--font-size-xs);
+.tab-button[aria-selected='true'] {
+  font-weight: var(--font-weight-strong);
 }
 
 /* Filter chips: one list's filters. M 32 high, 13 semibold, "Label · N"; S 26 high, 12, for suggestions and small stage
@@ -1017,9 +1015,7 @@ a.sidebar-status:hover {
 }
 
 .filter-chip.is-removable:hover:not(:disabled) {
-  border-color: var(--color-ink-900);
   background: var(--color-ink-700);
-  color: var(--color-white);
 }
 
 .filter-chip:disabled {
@@ -1034,7 +1030,7 @@ a.sidebar-status:hover {
 }
 
 /* Buttons
-   Three sizes (S 32, M 40, L 48), four variants (primary, secondary, ghost, sunken), plus danger and the one yellow hero
+   Three sizes (S 32, M 40, L 48), three variants (primary, secondary, ghost), plus danger and the one yellow hero
    action a page may have. One primary per area, rightmost in every action group; repeated card and row actions are
    secondary, never primary. Inline text links in copy are .btn-link. */
 .btn {
@@ -1043,6 +1039,7 @@ a.sidebar-status:hover {
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
+  max-width: 100%;
   min-width: 0;
   min-height: var(--control-height-md);
   padding: 0 var(--space-4);
@@ -1111,7 +1108,7 @@ a.sidebar-status:hover {
 }
 
 .btn-primary[aria-busy='true']:is(:disabled, [aria-disabled='true']) {
-  background: var(--color-primary-400);
+  background: var(--color-primary-600);
 }
 
 .btn-accent {
@@ -1133,6 +1130,11 @@ a.sidebar-status:hover {
   background: var(--color-ink-400);
 }
 
+.btn-accent[aria-busy='true']:is(:disabled, [aria-disabled='true']) {
+  color: var(--text-on-accent);
+  background: var(--color-accent-500);
+}
+
 /* Secondary: a white key with a hairline. It lifts on hover and stays neutral, so it never competes with the primary. */
 .btn-secondary {
   background: var(--surface-card);
@@ -1149,6 +1151,11 @@ a.sidebar-status:hover {
   background: var(--surface-subtle);
 }
 
+.btn-secondary[aria-busy='true']:is(:disabled, [aria-disabled='true']),
+.btn-ghost[aria-busy='true']:is(:disabled, [aria-disabled='true']) {
+  color: var(--text-secondary);
+}
+
 /* Low-frequency page actions (Archive, Delete draft): quiet, with less side padding. */
 .btn-ghost {
   padding-inline: var(--space-3);
@@ -1156,14 +1163,6 @@ a.sidebar-status:hover {
 
 .btn-ghost:not(:disabled, [aria-disabled='true']):hover {
   background: var(--color-ink-a06);
-}
-
-.btn-sunken {
-  background: var(--surface-sunken);
-}
-
-.btn-sunken:not(:disabled, [aria-disabled='true']):hover {
-  background: var(--color-ink-200);
 }
 
 .btn-danger {
@@ -1183,6 +1182,11 @@ a.sidebar-status:hover {
   background: var(--color-ink-400);
 }
 
+.btn-danger[aria-busy='true']:is(:disabled, [aria-disabled='true']) {
+  color: var(--color-white);
+  background: var(--color-danger-strong);
+}
+
 .btn-danger-soft {
   color: var(--color-danger-text);
   background: var(--surface-card);
@@ -1200,6 +1204,10 @@ a.sidebar-status:hover {
   background: var(--surface-subtle);
 }
 
+.btn-danger-soft[aria-busy='true']:is(:disabled, [aria-disabled='true']) {
+  color: var(--color-danger-text);
+}
+
 /* An inline text link inside copy ("Responsible AI"). Padding stays 0 so the text lines up with neighbouring copy.
    Actions in rows and on cards are .btn-secondary.btn-sm, not links. */
 .btn-link {
@@ -1212,6 +1220,11 @@ a.sidebar-status:hover {
   text-decoration-color: transparent;
   text-decoration-thickness: 1px;
   text-underline-offset: 4px;
+}
+
+.field-hint .btn-link {
+  min-height: var(--space-6);
+  font-size: inherit;
 }
 
 .btn-link:not(:disabled, [aria-disabled='true']):hover {
@@ -1285,12 +1298,6 @@ a.sidebar-status:hover {
 
 .form-grid.two {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-@media (max-width: 48rem) {
-  .form-grid.two {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 
 /* One field made of several controls (a segmented choice, a group of cards): the legend reads as a field label.
@@ -1405,7 +1412,9 @@ a.sidebar-status:hover {
 :is(.input, .select, .textarea):focus {
   outline: none;
   border-color: var(--color-primary-500);
-  box-shadow: var(--focus-halo);
+  box-shadow:
+    inset 0 0 0 1px var(--color-primary-500),
+    var(--focus-halo);
 }
 
 :is(.input, .select, .textarea)[aria-invalid='true'] {
@@ -1413,7 +1422,10 @@ a.sidebar-status:hover {
 }
 
 :is(.input, .select, .textarea)[aria-invalid='true']:focus {
-  box-shadow: 0 0 0 4px var(--color-danger-a12);
+  border-color: var(--color-danger-text);
+  box-shadow:
+    inset 0 0 0 1px var(--color-danger-text),
+    0 0 0 4px var(--color-danger-a12);
 }
 
 :is(.input, .select, .textarea):disabled {
@@ -1425,7 +1437,10 @@ a.sidebar-status:hover {
 }
 
 .select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
   appearance: none;
+  padding-block: var(--space-2);
   padding-right: var(--space-10);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23535c79' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
@@ -1492,6 +1507,21 @@ a.sidebar-status:hover {
 
 .input-with-icon > .input {
   padding-left: var(--space-10);
+}
+
+.auth-password {
+  position: relative;
+}
+
+.auth-password .input {
+  padding-right: var(--space-10);
+}
+
+.auth-password-toggle {
+  position: absolute;
+  top: 50%;
+  right: var(--space-1);
+  translate: 0 -50%;
 }
 
 .choice {
@@ -1572,7 +1602,7 @@ a.sidebar-status:hover {
   font-size: var(--type-card-title-size);
   font-weight: var(--font-weight-heading);
   letter-spacing: var(--letter-spacing-heading);
-  line-height: 22px;
+  line-height: 1.375;
 }
 
 .card-subtitle {
@@ -1592,7 +1622,7 @@ a.sidebar-status:hover {
 }
 
 /* Page header (nested pages): breadcrumb, 8, H1 28, meta. Page actions sit on the H1 row, right-aligned. Section roots
-   have no visible H1 (the header bar already names them): PageHeaderBlock hide-title. */
+   render a screen-reader-only h1 directly (the header bar already names them). */
 .page-header {
   display: flex;
   align-items: flex-start;
@@ -1639,7 +1669,7 @@ a.sidebar-status:hover {
   color: var(--text-primary);
   font-family: var(--font-display);
   font-size: var(--type-h1-size);
-  line-height: 36px;
+  line-height: 1.29;
   letter-spacing: var(--letter-spacing-display);
   overflow-wrap: anywhere;
 }
@@ -1686,7 +1716,7 @@ a.sidebar-status:hover {
   color: var(--text-primary);
   font-family: var(--font-display);
   font-size: var(--type-h2-size);
-  line-height: 24px;
+  line-height: 1.33;
 }
 
 /* A title with its count: "My classes (4)" is never written, the Count badge is. */
@@ -1718,6 +1748,14 @@ a.sidebar-status:hover {
   border-top: 1px solid var(--border-subtle);
 }
 
+.row-list.is-flush > li:first-child {
+  padding-top: 0;
+}
+
+.row-list.is-flush > li:last-child {
+  padding-bottom: 0;
+}
+
 .row-list-copy,
 .data-notice-copy {
   display: grid;
@@ -1728,7 +1766,7 @@ a.sidebar-status:hover {
 .row-list-title {
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-strong);
-  line-height: 20px;
+  line-height: var(--line-height-normal);
 }
 
 .row-list-meta {
@@ -1742,43 +1780,6 @@ a.sidebar-status:hover {
   flex: 0 0 auto;
   align-items: center;
   gap: var(--space-2);
-}
-
-/* List and detail: list column 360, gap 24, the detail fills the rest; the list hugs its content. */
-.list-detail {
-  display: grid;
-  grid-template-columns: var(--list-column) minmax(0, 1fr);
-  align-items: start;
-  gap: var(--grid-gap);
-  min-width: 0;
-}
-
-/* A selectable list item: bordered, radius 12; the selected one has a 2px ring that does not shift its text. */
-.select-card {
-  display: grid;
-  gap: var(--space-1);
-  width: 100%;
-  min-width: 0;
-  padding: var(--space-3);
-  border: 0;
-  border-radius: var(--radius-btn-lg);
-  background: var(--surface-card);
-  box-shadow: inset 0 0 0 1px var(--border-default);
-  color: var(--text-primary);
-  text-align: left;
-  transition:
-    background var(--duration-fast) var(--ease-standard),
-    box-shadow var(--duration-fast) var(--ease-standard);
-}
-
-.select-card:hover {
-  background: var(--surface-subtle);
-  box-shadow: inset 0 0 0 1px var(--border-strong);
-}
-
-.select-card[aria-current='true'] {
-  background: var(--color-primary-50);
-  box-shadow: inset 0 0 0 var(--border-width-thick) var(--color-primary-500);
 }
 
 /* An answer option: 60 high, radius 14, 1px line and a short drop, like a key you press; selected is a 2px ring on a
@@ -1822,8 +1823,8 @@ a.sidebar-status:hover {
     0 2px 0 var(--color-primary-200);
 }
 
-/* An option that can no longer be pressed lies flat. */
-.option-row:disabled:not([aria-pressed='true'], [aria-checked='true'], .is-correct, .is-wrong, .is-ruled-out) {
+/* :where keeps disabled below selected/marked/ruled-out states regardless of stylesheet load order. */
+.option-row:where(:disabled) {
   box-shadow: inset 0 0 0 1px var(--border-default);
 }
 
@@ -1862,47 +1863,9 @@ a.sidebar-status:hover {
   font-weight: var(--font-weight-strong);
 }
 
-/* Tabs: in-page views (the auth sign-in / create-account switch) on the same recessed tray as the segmented control,
-   in equal columns across the full width; 40 high, like the fields under it. Hover and the chosen tab are styled with
-   the segmented control. */
-.tabs {
-  display: grid;
-  grid-auto-columns: minmax(0, 1fr);
-  grid-auto-flow: column;
-  gap: var(--space-0-5);
-  width: 100%;
-  padding: var(--space-1);
-  border-radius: var(--radius-md);
-  background: var(--color-ink-100);
-}
-
-.tab-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-1-5);
-  min-width: 0;
-  min-height: var(--control-height-sm);
-  padding: 0 var(--space-4);
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: var(--type-label-size);
-  font-weight: var(--font-weight-medium);
-  transition:
-    background var(--duration-fast) var(--ease-standard),
-    color var(--duration-fast) var(--ease-standard),
-    box-shadow var(--duration-fast) var(--ease-standard);
-}
-
-.tab-button[aria-selected='true'] {
-  font-weight: var(--font-weight-strong);
-}
-
 /* Tags and status badges
    A tag names a category, not a state (theme, role, type): M 24 or S 20, no dot. A status badge is 24 high, fully rounded,
-   12 semibold, always with a leading dot; one status per row, in the right-hand column. */
+   12 semibold, with a leading dot (or a leading icon via .has-icon); one status per row, in the right-hand column. */
 .tag,
 .status-pill {
   display: inline-flex;
@@ -1980,22 +1943,28 @@ a.sidebar-status:hover {
   color: var(--text-on-primary);
 }
 
-/* Notices: DataNotice (.data-notice) and inline .alert banners
+/* Notices: DataNotice (.data-notice)
    A banner says what happened in one line: a tinted strip, radius 10, a leading icon and 13 semibold text. */
 .data-notice {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: var(--space-2) var(--space-3);
   min-width: 0;
   padding: var(--space-2-5) var(--space-3);
   border-radius: var(--radius-md);
+  background: var(--color-danger-soft);
   color: var(--text-primary);
+}
+
+.data-notice:has(> .data-notice-actions) {
+  grid-template-columns: auto minmax(0, 1fr) auto;
 }
 
 .data-notice-icon {
   display: grid;
   place-items: center;
+  color: var(--color-danger-text);
 }
 
 .data-notice-copy strong {
@@ -2016,47 +1985,9 @@ a.sidebar-status:hover {
   gap: var(--space-2);
 }
 
-.data-notice.is-error {
-  background: var(--color-danger-soft);
-}
-
-.data-notice.is-error .data-notice-icon {
-  color: var(--color-danger-text);
-}
-
-.alert {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  padding: var(--space-2-5) var(--space-3);
-  border-radius: var(--radius-md);
-  color: var(--text-primary);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-strong);
-}
-
-.alert > .icon-glyph {
-  margin-top: 1px;
-}
-
-.alert-warning {
-  background: var(--color-warning-soft);
-}
-
-.alert-warning > .icon-glyph {
-  color: var(--color-warning-text);
-}
-
-.alert-danger {
-  background: var(--color-danger-soft);
-}
-
-.alert-danger > .icon-glyph {
-  color: var(--color-danger-text);
-}
-
-/* Callout: a sunken box with a leading icon that says what an action will do or why something is so, inside a
-   dialog or a panel. .is-warning / .is-danger tint it; .is-compact is a one-line note. */
+/* Callout: a sunken box (optional leading icon and trailing action) that says what an action will do, warns, or
+   explains an error inside a dialog, form, or panel. .is-warning / .is-danger / .is-success tint it; .is-compact is a
+   one-line note. */
 .callout {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -2075,6 +2006,15 @@ a.sidebar-status:hover {
   grid-template-columns: auto minmax(0, 1fr);
 }
 
+.callout:has(> .btn) {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.callout:has(> .icon-glyph):has(> .btn) {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
 .callout > .icon-glyph {
   color: var(--text-secondary);
 }
@@ -2085,8 +2025,12 @@ a.sidebar-status:hover {
   gap: var(--space-1);
 }
 
-.callout p {
-  margin: 0;
+.callout.is-info {
+  background: var(--color-info-soft);
+}
+
+.callout.is-info > .icon-glyph {
+  color: var(--color-info-text);
 }
 
 .callout.is-warning {
@@ -2121,7 +2065,7 @@ a.sidebar-status:hover {
   font-size: var(--font-size-xs);
 }
 
-.callout.is-compact:is(.is-warning, .is-danger, .is-success) {
+.callout.is-compact:is(.is-info, .is-warning, .is-danger, .is-success) {
   color: var(--text-primary);
 }
 
@@ -2229,7 +2173,7 @@ a.sidebar-status:hover {
   color: var(--text-primary);
   font-family: var(--font-display);
   font-size: var(--type-card-title-size);
-  line-height: 22px;
+  line-height: 1.375;
 }
 
 .state-panel p {
@@ -2295,7 +2239,12 @@ a.sidebar-status:hover {
 .skeleton {
   display: block;
   border-radius: var(--radius-xs);
-  background: linear-gradient(90deg, var(--color-ink-100), var(--color-ink-50), var(--color-ink-100));
+  background: linear-gradient(
+    90deg,
+    var(--skeleton-edge, var(--color-ink-100)),
+    var(--color-ink-50),
+    var(--skeleton-edge, var(--color-ink-100))
+  );
   background-size: 200% 100%;
   animation: shimmer 1.4s ease-in-out infinite;
 }
@@ -2491,6 +2440,7 @@ a.sidebar-status:hover {
 
 /* Progress */
 .progress-bar {
+  display: block;
   overflow: hidden;
   width: 100%;
   height: 8px;
@@ -2516,12 +2466,6 @@ a.sidebar-status:hover {
 
 .progress-bar.success > span {
   background: var(--color-success);
-}
-
-.mini-chart {
-  width: 100%;
-  height: 220px;
-  color: var(--color-primary-500);
 }
 
 /* AppOverlay and ConfirmDialog use 520px dialogs and full-height 480px drawers, both 720px wide when large.
@@ -2581,7 +2525,7 @@ a.sidebar-status:hover {
 .overlay-title {
   font-family: var(--font-display);
   font-size: var(--font-size-lg);
-  line-height: 24px;
+  line-height: 1.33;
   overflow-wrap: anywhere;
 }
 
@@ -2659,6 +2603,13 @@ a.sidebar-status:hover {
   }
 }
 
+@keyframes overlay-drawer-left-in {
+  from {
+    transform: translateX(-24px);
+    opacity: 0;
+  }
+}
+
 /* A report dialog's line on what goes with the report (problem, hint and AI answer reports). */
 .report-attached {
   display: flex;
@@ -2667,14 +2618,14 @@ a.sidebar-status:hover {
   margin: 0;
   color: var(--text-secondary);
   font-size: var(--font-size-xs);
-  line-height: 18px;
+  line-height: 1.5;
 }
 
 .report-attached .icon-glyph {
   margin-top: var(--space-0-5);
 }
 
-/* Responsive dashboard shell */
+/* Responsive layout and components */
 
 @media (max-width: 63.9375rem) {
   .dashboard-shell {
@@ -2695,7 +2646,9 @@ a.sidebar-status:hover {
 
   .overlay-panel--drawer:has(.sidebar) {
     width: min(100%, 20rem);
-    animation-name: overlay-in;
+    border-left: 0;
+    border-right: 1px solid var(--border-subtle);
+    animation-name: overlay-drawer-left-in;
   }
 
   .overlay-body .sidebar {
@@ -2712,13 +2665,18 @@ a.sidebar-status:hover {
 }
 
 @media (max-width: 48rem) {
-  .list-detail {
-    grid-template-columns: minmax(0, 1fr);
+  .topbar-user {
+    min-width: 0;
+  }
+
+  .topbar-user-name {
+    max-width: 7.5rem;
   }
 
   .focus-footer-inner,
   .focus-footer-inner.has-middle {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: auto auto;
+    justify-content: space-between;
     gap: var(--space-3);
   }
 
@@ -2737,37 +2695,30 @@ a.sidebar-status:hover {
     width: 100%;
   }
 
+  .focus-footer .btn {
+    white-space: normal;
+  }
+
   .focus-footer .btn-lg {
     min-width: 0;
+    padding-inline: var(--space-4);
+  }
+
+  .form-grid.two {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .callout:has(> .icon-glyph):has(> .btn) {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .callout:has(> .icon-glyph):has(> .btn) > .btn {
+    grid-column: 1 / -1;
+    justify-self: start;
   }
 }
 
-@media (max-width: 40rem) {
-  .dashboard-topbar,
-  .topbar-actions {
-    gap: var(--space-2);
-  }
-
-  .topbar-user {
-    margin-left: 0;
-    padding: var(--space-0-5);
-  }
-
-  /* Visually hide the name on narrow viewports while keeping the account link's accessible name intact. */
-  .topbar-user-name {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border-width: 0;
-  }
-}
-
-@media (max-width: 29rem) {
+@media (max-width: 36rem) {
   html:has(.dashboard-topbar) {
     --topbar-sticky-offset: 0px;
   }
@@ -2784,12 +2735,80 @@ a.sidebar-status:hover {
   }
 }
 
+@media (max-width: 29rem) {
+  .kv-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .btn {
+    white-space: normal;
+  }
+
+  .focus-footer-inner,
+  .focus-footer-inner.has-middle {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .focus-footer-end {
+    grid-column: auto;
+  }
+}
+
+@media (max-height: 37.5rem) {
+  html:has(.dashboard-topbar) {
+    --topbar-sticky-offset: 0px;
+  }
+
+  .dashboard-topbar {
+    position: static;
+  }
+
+  /* In a short window an explanation or hint can grow taller than the space reserved for a fixed footer. */
+  html:has(.focus-main) {
+    scroll-padding-bottom: var(--space-4);
+  }
+
+  .focus-main {
+    padding-bottom: 0;
+    container-type: inline-size;
+  }
+
+  .focus-footer {
+    position: static;
+    margin: var(--space-6) calc(50% - 50cqi - var(--page-gutter)) 0;
+    box-shadow: none;
+  }
+
+  .overlay:not(.overlay--drawer) {
+    overflow-y: auto;
+    padding-block: var(--space-3);
+  }
+
+  .overlay:not(.overlay--drawer) .overlay-panel {
+    max-height: none;
+    margin-block: auto;
+  }
+
+  .overlay .overlay-header {
+    padding: var(--space-4) var(--card-padding) var(--space-3);
+  }
+
+  .overlay .overlay-footer {
+    padding: var(--space-3) var(--card-padding);
+  }
+}
+
 /* Windows High Contrast / Forced Colors: kept after all foundation component rules so equal-specificity rules cannot
    silently overwrite these borders, focus rings or Highlight fills. */
 @media (forced-colors: active) {
-  :is(.input, .select, .textarea):focus-visible {
+  :is(.input, .select, .textarea):focus {
     outline: var(--border-width-focus) solid Highlight;
     outline-offset: var(--focus-ring-offset);
+  }
+
+  .spinner {
+    border-color: CanvasText;
+    border-right-color: transparent;
   }
 
   .select {
@@ -2805,8 +2824,7 @@ a.sidebar-status:hover {
 
   .btn-primary,
   .btn-accent,
-  .btn-danger,
-  .btn-sunken {
+  .btn-danger {
     border-color: ButtonText;
   }
 
@@ -2844,7 +2862,6 @@ a.sidebar-status:hover {
   .count-badge,
   .callout,
   .data-notice,
-  .alert,
   .toast,
   .overlay-panel {
     border: 1px solid CanvasText;
@@ -2882,13 +2899,11 @@ a.sidebar-status:hover {
     forced-color-adjust: none;
   }
 
-  .select-card,
   .option-row,
   .progress-bar {
     border: 1px solid ButtonText;
   }
 
-  .select-card[aria-current='true'],
   .option-row:is([aria-pressed='true'], [aria-checked='true']) {
     border: var(--border-width-thick) solid Highlight;
   }
@@ -2900,9 +2915,15 @@ a.sidebar-status:hover {
     forced-color-adjust: none;
   }
 
+  .option-row.is-correct * {
+    color: inherit;
+  }
+
   .option-row.is-correct .option-keycap {
     border: 1px solid HighlightText;
+    background: transparent;
     color: HighlightText;
+    box-shadow: none;
   }
 
   .option-row.is-wrong {

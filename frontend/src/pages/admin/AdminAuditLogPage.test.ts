@@ -1,5 +1,5 @@
 import { flushPromises } from '@vue/test-utils'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { AuditEntry } from '@/types/ops'
 
@@ -62,10 +62,6 @@ describe('AdminAuditLogPage', () => {
       ),
     )
     overview.auditActions.mockResolvedValue(['ADMIN_CLASS_PUBLISH', 'ADMIN_USER_DEACTIVATE', 'ACCOUNT_CREATED'])
-  })
-
-  afterEach(() => {
-    vi.useRealTimers()
   })
 
   it('lists entries newest first with labels, the actor and the total', async () => {
@@ -291,7 +287,10 @@ describe('AdminAuditLogPage', () => {
 
   it('names the CSV after the local day when the server sends no file name', async () => {
     // Half past midnight in Kuala Lumpur is still the day before in UTC.
-    vi.stubEnv('TZ', 'Asia/Kuala_Lumpur')
+    const env = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env
+    const previousTz = env?.TZ
+    const resolvedTz = Intl.DateTimeFormat().resolvedOptions().timeZone
+    if (env) env.TZ = 'Asia/Kuala_Lumpur'
     try {
       vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-05-17T16:30:00Z') })
       overview.exportAuditLog.mockResolvedValue({ blob: new Blob(['id\r\n']), fileName: null })
@@ -302,7 +301,10 @@ describe('AdminAuditLogPage', () => {
 
       expect(download.saveBlobDownload).toHaveBeenLastCalledWith(expect.anything(), 'audit-log-2026-05-18.csv')
     } finally {
-      vi.unstubAllEnvs()
+      if (env) {
+        env.TZ = previousTz ?? resolvedTz
+        if (previousTz === undefined) delete env.TZ
+      }
     }
   })
 
@@ -321,6 +323,22 @@ describe('AdminAuditLogPage', () => {
     expect(wrapper.findAll('[data-testid="admin-audit-row"]')).toHaveLength(0)
     expect(wrapper.text()).not.toContain('No events match')
     expect(wrapper.get('[data-testid="admin-audit-export"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('rejects out-of-range dates and reloads cleanly when the date is cleared', async () => {
+    const { wrapper } = await mountAtRoute(AdminAuditLogPage, '/admin/audit-log?from=2026-05-01')
+    overview.auditLog.mockClear()
+
+    await wrapper.get('[data-testid="admin-audit-from"]').setValue('0999-01-01')
+    await flushPromises()
+    expect(wrapper.get('#admin-audit-range-error').text()).toBeTruthy()
+    expect(overview.auditLog).not.toHaveBeenCalled()
+
+    await wrapper.get('[data-testid="admin-audit-from"]').setValue('')
+    await flushPromises()
+    expect(wrapper.find('#admin-audit-range-error').exists()).toBe(false)
+    expect(overview.auditLog).toHaveBeenLastCalledWith({ page: 0, size: 10 })
+    expect(wrapper.findAll('[data-testid="admin-audit-row"]')).toHaveLength(2)
   })
 
   it('names the search that matched nothing; the button says what it clears and is not the primary action', async () => {

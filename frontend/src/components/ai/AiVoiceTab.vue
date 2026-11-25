@@ -6,12 +6,12 @@
       :result="result"
       :reported="reportedIds.has(result.check.id)"
       :ai-notice="aiNotice"
-      @report="report"
+      @report="(check) => (reportingCheckId = check.id)"
       @try-again="tryAgain"
     />
 
     <section v-else class="panel" :aria-labelledby="`${baseId}-form`">
-      <form class="ai-check-form" @submit.prevent="submit">
+      <form class="ai-check-form" novalidate @submit.prevent="submit">
         <h2 :id="`${baseId}-form`" class="card-title">{{ t('aiHelper.checkTitle') }}</h2>
 
         <div class="ai-check-row">
@@ -57,10 +57,10 @@
             autocomplete="off"
             :maxlength="MAX_PRACTICE_TARGET_LENGTH"
             :disabled="locked"
-            :placeholder="TARGET_FIELD[type].placeholder"
+            :placeholder="mode.placeholder"
             :aria-describedby="`${baseId}-target-hint`"
           />
-          <p :id="`${baseId}-target-hint`" class="field-hint">{{ t(TARGET_FIELD[type].hintKey) }}</p>
+          <p :id="`${baseId}-target-hint`" class="field-hint">{{ t(mode.hintKey) }}</p>
           <div v-if="phraseChips" class="ai-topics" role="group" :aria-label="phraseChips.label">
             <span class="ai-topics-label" aria-hidden="true">{{ phraseChips.label }}</span>
             <div lang="zh-CN">
@@ -146,9 +146,9 @@
         </div>
 
         <div class="field">
-          <label class="field-label" :for="`${baseId}-file`">
-            {{ type === 'RECORDING' ? t('aiHelper.chooseAudio') : t('aiHelper.choosePhoto') }}
-          </label>
+          <span :id="`${baseId}-file-label`" class="field-label">
+            {{ t(mode.chooseLabelKey) }}
+          </span>
           <div class="ai-file-row">
             <label class="ai-file" :class="{ 'is-invalid': chosenFileError }">
               <input
@@ -156,13 +156,14 @@
                 ref="fileInput"
                 class="sr-only"
                 type="file"
-                :accept="uploadAccept(type === 'RECORDING' ? 'audio' : 'image')"
+                :accept="uploadAccept(mode.uploadKind)"
                 :disabled="locked"
+                :aria-labelledby="`${baseId}-file-label`"
                 :aria-invalid="Boolean(chosenFileError) || undefined"
                 :aria-describedby="chosenFileError ? `${baseId}-file-error` : `${baseId}-file-hint`"
                 @change="chooseFile"
               />
-              <span class="btn btn-sunken btn-sm" aria-hidden="true">
+              <span class="btn btn-sm" aria-hidden="true">
                 <IconGlyph name="upload" :size="16" />
                 {{ t('aiHelper.chooseFile') }}
               </span>
@@ -189,24 +190,21 @@
         </div>
 
         <p v-if="status && !blocked && !typeAvailable" class="callout is-compact is-warning">
-          {{ type === 'RECORDING' ? t('aiHelper.recordingUnavailable') : t('aiHelper.handwritingUnavailable') }}
+          {{ t(mode.unavailableKey) }}
         </p>
         <p v-if="error" class="callout is-compact is-danger" role="alert">{{ error }}</p>
 
         <p v-if="type === 'RECORDING' && typeAvailable" class="field-hint">{{ t('aiHelper.recordingDataNotice') }}</p>
 
-        <div class="card-footer ai-check-submit">
+        <div class="card-footer">
           <p v-if="checking" class="field-hint ai-check-status" role="status">{{ checkingLine }}</p>
           <button class="btn btn-primary" type="submit" :disabled="!canCheck" :aria-busy="checking">
             <IconGlyph v-if="!checking" name="send" :size="16" />
-            {{
-              checking
-                ? t('aiHelper.checking')
-                : t(type === 'RECORDING' ? 'aiHelper.checkPronunciation' : 'aiHelper.checkWithSparkbot')
-            }}
+            {{ checking ? t('aiHelper.checking') : t(mode.submitKey) }}
           </button>
         </div>
       </form>
+      <AiNotice :text="aiNotice" />
     </section>
 
     <AiPracticeCheckHistory
@@ -214,8 +212,7 @@
       :viewing-check-id="result?.check.id ?? null"
       :reported-ids="reportedIds"
       :ai-notice="aiNotice"
-      :drawer-suppressed="Boolean(reportTarget)"
-      @report="report"
+      @report="(check) => (reportingCheckId = check.id)"
       @deleted="onCheckDeleted"
       @toast="(message, action) => emit('toast', message, action)"
     />
@@ -231,12 +228,11 @@
     @cancel="mic.cancel"
   />
   <AiReportDialog
-    v-if="reportTarget"
-    :payload="reportTarget.payload"
-    :title="t(reportTarget.titleKey)"
-    :subtitle="reportTarget.leadKey ? t(reportTarget.leadKey) : undefined"
-    :attached="t(reportTarget.attachedKey)"
-    @close="reportTarget = null"
+    v-if="reportingCheckId !== null"
+    :payload="{ featureKey: 'PRACTICE_CHECK', practiceCheckId: reportingCheckId }"
+    :title="t('aiHelper.reportScore')"
+    :attached="t('aiHelper.reportScoreAttached')"
+    @close="reportingCheckId = null"
     @sent="onReported"
   />
 </template>
@@ -258,18 +254,18 @@ import { useResource } from '@/composables/useResource'
 import { aiHelperMessages } from '@/plugins/aiHelperMessages'
 import { aiVoiceMessages } from '@/plugins/aiVoiceMessages'
 import { appLocale } from '@/plugins/i18n'
-import type { AiHelperStatus, PracticeCheck, PracticeCheckLesson, PracticeCheckType } from '@/types/ai'
+import type { AiHelperStatus, PracticeCheckLesson, PracticeCheckType } from '@/types/ai'
 import { resolveApiError } from '@/utils/apiError'
 import { formatClock, formatFileSize } from '@/utils/format'
-import { MAX_PRACTICE_TARGET_LENGTH } from '@/utils/practiceUpload'
 import { serverMessageOr } from '@/utils/serverMessages'
 import { uploadAccept, uploadFileIssue } from '@/utils/uploadFormat'
 
+import AiNotice from './AiNotice.vue'
 import AiPracticeCheckHistory from './AiPracticeCheckHistory.vue'
 import AiReportDialog from './AiReportDialog.vue'
 import AiVoiceResult, { type PracticeCheckView } from './AiVoiceResult.vue'
 import '@/styles/ai-voice.css'
-import type { AiBlockedReason, AiReportTarget } from './aiHelper'
+import type { AiBlockedReason } from './aiHelper'
 
 const props = defineProps<{
   blocked: AiBlockedReason
@@ -288,12 +284,50 @@ const isUnmounted = useIsUnmounted()
 const recorder = useAudioRecorder()
 const mic = useMicPermission(startRecording)
 
-const TARGET_FIELD: Readonly<Record<PracticeCheckType, { placeholder: string; hintKey: string }>> = {
-  RECORDING: { placeholder: '谢谢', hintKey: 'aiHelper.targetHintRecording' },
-  HANDWRITING: { placeholder: '好', hintKey: 'aiHelper.targetHintHandwriting' },
+const MAX_PRACTICE_TARGET_LENGTH = 100
+
+const CHECK_MODE: Readonly<
+  Record<
+    PracticeCheckType,
+    {
+      placeholder: string
+      hintKey: string
+      chooseLabelKey: string
+      uploadKind: 'audio' | 'image'
+      formatsKey: string
+      fileHintKey: string
+      wrongTypeKey: string
+      unavailableKey: string
+      submitKey: string
+    }
+  >
+> = {
+  RECORDING: {
+    placeholder: '谢谢',
+    hintKey: 'aiHelper.targetHintRecording',
+    chooseLabelKey: 'aiHelper.chooseAudio',
+    uploadKind: 'audio',
+    formatsKey: 'aiHelper.audioFormats',
+    fileHintKey: 'aiHelper.audioFileHint',
+    wrongTypeKey: 'aiHelper.audioWrongType',
+    unavailableKey: 'aiHelper.recordingUnavailable',
+    submitKey: 'aiHelper.checkPronunciation',
+  },
+  HANDWRITING: {
+    placeholder: '好',
+    hintKey: 'aiHelper.targetHintHandwriting',
+    chooseLabelKey: 'aiHelper.choosePhoto',
+    uploadKind: 'image',
+    formatsKey: 'aiHelper.photoFormats',
+    fileHintKey: 'aiHelper.photoFileHint',
+    wrongTypeKey: 'aiHelper.photoWrongType',
+    unavailableKey: 'aiHelper.handwritingUnavailable',
+    submitKey: 'aiHelper.checkWithSparkbot',
+  },
 }
 
 const type = ref<PracticeCheckType>('RECORDING')
+const mode = computed(() => CHECK_MODE[type.value])
 const checkTypeOptions = computed<SegmentedOption<PracticeCheckType>[]>(() => [
   { value: 'RECORDING', label: t('aiHelper.recording'), icon: 'mic' },
   { value: 'HANDWRITING', label: t('aiHelper.handwriting'), icon: 'pen' },
@@ -309,7 +343,7 @@ const previewPlaying = ref(false)
 const error = ref<string | null>(null)
 const checking = ref(false)
 const result = shallowRef<PracticeCheckView | null>(null)
-const reportTarget = ref<AiReportTarget | null>(null)
+const reportingCheckId = ref<number | null>(null)
 const reportedIds = reactive(new Set<number>())
 const resultView = ref<InstanceType<typeof AiVoiceResult> | null>(null)
 const historyRef = ref<InstanceType<typeof AiPracticeCheckHistory> | null>(null)
@@ -338,23 +372,26 @@ const upload = computed(() => chosenFile.value ?? (type.value === 'RECORDING' ? 
 const maxBytes = computed(() =>
   type.value === 'RECORDING' ? props.status?.audioUploadMaxBytes : props.status?.imageUploadMaxBytes,
 )
-const fileHint = computed(() => {
-  const audio = type.value === 'RECORDING'
-  if (maxBytes.value === undefined) return t(audio ? 'aiHelper.audioFormats' : 'aiHelper.photoFormats')
-  return t(audio ? 'aiHelper.audioFileHint' : 'aiHelper.photoFileHint', { max: formatFileSize(maxBytes.value) })
-})
+const fileHint = computed(() =>
+  maxBytes.value === undefined
+    ? t(mode.value.formatsKey)
+    : t(mode.value.fileHintKey, { max: formatFileSize(maxBytes.value, appLocale.value) }),
+)
 const fileLabel = computed(() =>
-  chosenFile.value ? `${chosenFile.value.name} · ${formatFileSize(chosenFile.value.size)}` : null,
+  chosenFile.value ? `${chosenFile.value.name} · ${formatFileSize(chosenFile.value.size, appLocale.value)}` : null,
 )
 
 function formatUploadIssue(file: File): string | null {
-  const issue = uploadFileIssue(file, type.value === 'RECORDING' ? 'audio' : 'image', maxBytes.value)
+  const issue = uploadFileIssue(file, mode.value.uploadKind, maxBytes.value)
   if (!issue) return null
   if (issue === 'fileTooLarge') {
-    return t('aiHelper.fileTooLarge', { size: formatFileSize(file.size), max: formatFileSize(maxBytes.value) })
+    return t('aiHelper.fileTooLarge', {
+      size: formatFileSize(file.size, appLocale.value),
+      max: formatFileSize(maxBytes.value, appLocale.value),
+    })
   }
   if (issue === 'fileEmpty') return t('aiHelper.fileEmpty')
-  return type.value === 'RECORDING' ? t('aiHelper.audioWrongType') : t('aiHelper.photoWrongType')
+  return t(mode.value.wrongTypeKey)
 }
 
 const chosenFileError = computed(() => (chosenFile.value ? formatUploadIssue(chosenFile.value) : null))
@@ -387,7 +424,7 @@ watch(
 
 const recordingLine = computed(() => {
   const say = target.value.trim()
-  return [say ? t('aiHelper.recordingSay', { target: say }) : '', t('aiHelper.recordingStays')]
+  return [say ? t('aiHelper.recordingSay', { target: say }) : '', t('aiHelper.recordingStaysHere')]
     .filter(Boolean)
     .join(' ')
 })
@@ -409,7 +446,6 @@ function setType(next: PracticeCheckType): void {
   type.value = next
   clearFile()
   recorder.reset()
-  error.value = null
 }
 
 function revokePhoto(): void {
@@ -433,7 +469,6 @@ function chooseFile(event: Event): void {
   clearFile()
   if (!file) return
   mic.cancel()
-  error.value = null
   chosenFile.value = file
   if (!chosenFileError.value) recorder.reset()
 }
@@ -441,7 +476,6 @@ function chooseFile(event: Event): void {
 async function startRecording(): Promise<void> {
   if (result.value || type.value !== 'RECORDING' || !typeAvailable.value || props.blocked || locked.value) return
   clearFile()
-  error.value = null
   await recorder.start()
 }
 
@@ -526,18 +560,9 @@ async function tryAgain(): Promise<void> {
   targetInput.value?.focus()
 }
 
-function report(check: PracticeCheck): void {
-  reportTarget.value = {
-    payload: { featureKey: 'PRACTICE_CHECK', practiceCheckId: check.id },
-    titleKey: 'aiHelper.reportScore',
-    attachedKey: 'aiHelper.reportScoreAttached',
-  }
-}
-
 function onReported(): void {
-  const id = reportTarget.value?.payload.practiceCheckId
-  if (id) reportedIds.add(id)
-  reportTarget.value = null
+  if (reportingCheckId.value !== null) reportedIds.add(reportingCheckId.value)
+  reportingCheckId.value = null
   emit('reported')
 }
 

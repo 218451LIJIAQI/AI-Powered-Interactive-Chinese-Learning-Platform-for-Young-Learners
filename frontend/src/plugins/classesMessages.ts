@@ -97,8 +97,8 @@ export const classesMessages = {
     continueNamed: '继续：{title}',
     bestAfterInline: '建议学完第 {unit} 单元后学习',
     keepGoing: '继续学习',
-    unitLabel: '单元 {number}：{title}',
+    unitLabel: '第 {number} 单元：{title}',
     leave: '离开',
     loading: '加载中…',
   },
-}
+} as const

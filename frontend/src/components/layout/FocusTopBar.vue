@@ -2,8 +2,9 @@
   <header class="focus-topbar">
     <button
       type="button"
-      class="btn btn-ghost btn-icon focus-topbar-close"
+      class="btn btn-ghost btn-icon"
       :aria-label="closeLabel"
+      :title="closeLabel"
       :disabled="closeDisabled"
       data-testid="focus-close"
       @click="emit('close')"

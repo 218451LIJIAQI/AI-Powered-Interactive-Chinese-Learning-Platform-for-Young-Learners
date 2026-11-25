@@ -1,7 +1,7 @@
-import { expect, test, type Page } from '@playwright/test'
+import type { Page } from '@playwright/test'
 
 import { E2E_ACCOUNTS } from './accounts'
-import { API_BASE_URL, apiAuthHeaders, sidebar, signIn } from './support'
+import { API_BASE_URL, bestEffortApi, expect, sidebar, signIn, test } from './support'
 
 // Admins are the MandarinSpark team: they answer support, review AI reports and make the classes learners join.
 // The demo profile seeds two class drafts and the eight published catalogue classes.
@@ -80,8 +80,8 @@ test('the dashboard lists what needs attention, and Analytics has the platform n
   await sidebar(page).getByRole('link', { name: 'Analytics' }).click()
   await expect(page).toHaveURL(/\/admin\/analytics$/)
   const registrations = page.getByRole('region', { name: 'Registrations' })
-  await expect(registrations).toContainText(/learners?/)
-  await expect(registrations).toContainText(/admins?/)
+  await expect(registrations).toContainText(/[1-9]\d*\s+learners?/)
+  await expect(registrations).toContainText(/[1-9]\d*\s+admins?/)
   await expect(registrations).not.toContainText(/teacher/i)
 })
 
@@ -93,6 +93,8 @@ test('Users finds a learner and her row opens her account', async ({ page }) => 
   await expect(page).toHaveURL(/\/admin\/users(\?user=\d+)?$/)
 
   await page.getByRole('searchbox', { name: 'Search' }).fill('Amira')
+  await expect(page).toHaveURL(/[?&]q=Amira(&|$)/)
+  await expect(page.getByTestId('admin-users-row')).toHaveCount(1)
   await page.getByRole('button', { name: 'Open Amira Hassan' }).click()
   const main = page.getByRole('main')
   await expect(main.getByRole('heading', { name: 'Amira Hassan', level: 2 })).toBeVisible()
@@ -114,6 +116,7 @@ test('Content › Classes lists classes and lessons with their status', async ({
   }
 
   await page.getByLabel('Status').selectOption({ label: 'Published' })
+  await expect(page).toHaveURL(/[?&]status=PUBLISHED(&|$)/)
   await expect(table.getByRole('row', { name: /Published/ }).first()).toBeVisible()
   await expect(table.getByRole('row', { name: /Draft/ })).toHaveCount(0)
 })
@@ -122,7 +125,6 @@ test('an admin creates, edits and deletes a draft class with an audit trail', as
   await signInAdmin(page, '/admin/content')
   const classTitle = `E2E Hawker Mandarin ${Date.now()}`
   let createdClassId: number | null = null
-  let deleted = false
 
   try {
     await test.step('create a draft that cannot be published yet', async () => {
@@ -146,6 +148,7 @@ test('an admin creates, edits and deletes a draft class with an audit trail', as
     await test.step('add a unit and open a new lesson in its editor', async () => {
       await page.goto('/admin/content')
       await page.getByRole('searchbox').fill(classTitle)
+      await expect(page).toHaveURL(/[?&]q=E2E/)
       await page.getByRole('link', { name: `Open ${classTitle}` }).click()
 
       await page.getByTestId('add-first-unit').click()
@@ -170,32 +173,33 @@ test('an admin creates, edits and deletes a draft class with an audit trail', as
     await test.step('delete the draft and find its creation and deletion records', async () => {
       await page.goto('/admin/content')
       await page.getByRole('searchbox').fill(classTitle)
+      await expect(page).toHaveURL(/[?&]q=E2E/)
       await page.getByRole('link', { name: `Open ${classTitle}` }).click()
 
       await page.getByTestId('delete-class').click()
       const confirm = page.getByRole('alertdialog', { name: `Delete “${classTitle}”?` })
       await confirm.getByRole('button', { name: 'Delete class' }).click()
       await expect(page).toHaveURL(/\/admin\/content(\?.*)?$/)
-      deleted = true
+      createdClassId = null
       await expect(page.getByTestId('toast')).toContainText(`“${classTitle}” deleted.`)
       await page.getByRole('searchbox').fill(classTitle)
+      await expect(page).toHaveURL(/[?&]q=E2E/)
       await expect(page.getByRole('heading', { name: `No classes or lessons match “${classTitle}”` })).toBeVisible()
       await expect(page.getByRole('row', { name: new RegExp(classTitle) })).toHaveCount(0)
 
       await sidebar(page).getByRole('link', { name: 'Audit log' }).click()
+      await expect(page).toHaveURL(/\/admin\/audit-log$/)
       await page.getByRole('searchbox', { name: 'Search', exact: true }).fill(classTitle)
+      await expect(page).toHaveURL(/[?&]q=E2E/)
       const entries = page.getByRole('row').filter({ hasText: classTitle })
       await expect(entries.filter({ hasText: 'Class created' })).toHaveCount(1)
       await expect(entries.filter({ hasText: 'Draft class deleted' })).toHaveCount(1)
     })
   } finally {
-    if (createdClassId !== null && !deleted) {
-      try {
-        const headers = await apiAuthHeaders(request, E2E_ACCOUNTS.admin)
-        await request.delete(`${API_BASE_URL}/admin/classes/${createdClassId}`, { headers })
-      } catch {
-        // Best-effort teardown: do not mask the primary test failure.
-      }
+    if (createdClassId !== null) {
+      await bestEffortApi(request, E2E_ACCOUNTS.admin, (headers) =>
+        request.delete(`${API_BASE_URL}/admin/classes/${createdClassId}`, { headers }),
+      )
     }
   }
 })
@@ -211,10 +215,10 @@ test('Support opens a request, marks it solved with Undo, and switches queue tab
   await expect(list.getByRole('button', { name: /#1041.*Can't sign in after resetting my password/ })).toBeVisible()
   await videoItem.click()
 
-  await expect(page).toHaveURL(/[?&]request=\d+/)
-  const requestId = Number(/[?&]request=(\d+)/.exec(page.url())![1])
   const detail = page.getByTestId('admin-support-detail')
   await expect(detail.getByRole('heading', { name: '#1042 · Lesson video won’t play', level: 2 })).toBeVisible()
+  await expect(page).toHaveURL(/[?&]request=\d+/)
+  const requestId = Number(/[?&]request=(\d+)/.exec(page.url())![1])
   await expect(detail).toContainText('Amira Hassan')
   await expect(detail).toContainText('The video “Meeting a classmate”')
   await expect(detail.getByRole('link', { name: 'View the account of Amira Hassan' })).toHaveAttribute(
@@ -223,11 +227,11 @@ test('Support opens a request, marks it solved with Undo, and switches queue tab
   )
   await expect(detail.getByTestId('admin-support-send')).toBeDisabled()
 
-  let solved = false
-  let reopened = false
+  await page.clock.install()
+  let needsReopen = false
   try {
     await detail.getByTestId('admin-support-solve').click()
-    solved = true
+    needsReopen = true
     const solvedToast = page.getByRole('status').filter({ hasText: '#1042 marked as solved.' })
     await expect(solvedToast).toBeVisible()
     const undo = solvedToast.getByRole('button', { name: 'Undo' })
@@ -237,17 +241,14 @@ test('Support opens a request, marks it solved with Undo, and switches queue tab
 
     await undo.click()
     await expect(detail).toContainText('Open')
-    reopened = true
+    needsReopen = false
     await expect(detail.getByTestId('admin-support-reply')).toBeVisible()
     await expect(videoItem).toBeVisible()
   } finally {
-    if (solved && !reopened) {
-      try {
-        const headers = await apiAuthHeaders(request, E2E_ACCOUNTS.admin)
-        await request.post(`${API_BASE_URL}/admin/support/${requestId}/reopen`, { headers })
-      } catch {
-        // Best-effort teardown: do not mask the primary test failure.
-      }
+    if (needsReopen) {
+      await bestEffortApi(request, E2E_ACCOUNTS.admin, (headers) =>
+        request.post(`${API_BASE_URL}/admin/support/${requestId}/reopen`, { headers }),
+      )
     }
   }
 
@@ -265,7 +266,7 @@ test('Support opens a request, marks it solved with Undo, and switches queue tab
 test('AI shows open and resolved reports, validates the review note, and opens Usage and Settings', async ({
   page,
 }) => {
-  await signInAdmin(page, '/admin/ai/reports')
+  await signInAdmin(page, '/admin/ai')
   const tabs = page.getByRole('navigation', { name: 'AI sections' })
   await expect(tabs.getByRole('link')).toHaveText([/^Reports\s*\d*$/, 'Usage', 'Settings'])
 

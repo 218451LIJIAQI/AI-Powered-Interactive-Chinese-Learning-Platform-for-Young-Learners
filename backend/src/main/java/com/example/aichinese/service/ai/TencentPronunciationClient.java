@@ -12,7 +12,9 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -50,12 +52,16 @@ public class TencentPronunciationClient {
     private static final int SENTENCE_MAX_CHARACTERS = 30;
     private static final int SINGLE_FRAME_MAX_SECONDS = 60;
     private static final int MAX_ISSUES = 3;
+    private static final int MAX_CONCURRENT_ASSESSMENTS = 8;
+    private static final long BULKHEAD_WAIT_SECONDS = 5L;
     private static final String SERVICE_PATH = "soe.cloud.tencent.com/soe/api/";
 
     private final AiProperties properties;
     private final PracticeAudioDecoder decoder;
     private final TencentSoeSocket socket;
     private final ObjectMapper mapper;
+    /** Caps concurrent long-running WebSocket streaming + PCM buffers to protect servlet threads and heap. */
+    private final Semaphore assessmentBulkhead = new Semaphore(MAX_CONCURRENT_ASSESSMENTS);
 
     public enum Failure {
         INVALID_TARGET("Enter the Mandarin target in Chinese characters.", "Invalid pronunciation target."),
@@ -107,38 +113,54 @@ public class TencentPronunciationClient {
         if (!properties.isEnableRealProvider() || !properties.getPronunciation().configured()) {
             return Assessment.failed(Failure.PROVIDER_FAILURE);
         }
-        byte[] pcm;
+        boolean acquired;
         try {
-            pcm = decoder.pcm(upload);
-        } catch (PracticeAudioDecoder.DecodeException exception) {
-            return Assessment.failed(exception.failure());
-        }
-        boolean recordingMode = pcm.length <= SINGLE_FRAME_MAX_SECONDS * PracticeAudioDecoder.BYTES_PER_SECOND;
-        boolean paragraph = !recordingMode || reference.codePointCount(0, reference.length()) > SENTENCE_MAX_CHARACTERS;
-        try {
-            URI uri = signedUri(reference, paragraph, recordingMode, Instant.now().getEpochSecond(),
-                    ThreadLocalRandom.current().nextInt(1, Integer.MAX_VALUE), UUID.randomUUID().toString());
-            var json = socket.assess(uri, pcm, recordingMode, properties.getTimeoutSeconds());
-            var reply = mapper.treeToValue(json, ProviderReply.class);
-            return readAssessment(reply, reference);
+            acquired = assessmentBulkhead.tryAcquire(BULKHEAD_WAIT_SECONDS, TimeUnit.SECONDS);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             return Assessment.failed(Failure.PROVIDER_FAILURE);
-        } catch (ExecutionException exception) {
-            if (exception.getCause() instanceof Error error) {
-                throw error;
+        }
+        if (!acquired) {
+            log.warn("Tencent pronunciation assessment rejected: concurrent assessment limit ({}) reached.",
+                    MAX_CONCURRENT_ASSESSMENTS);
+            return Assessment.failed(Failure.PROVIDER_FAILURE);
+        }
+        try {
+            byte[] pcm;
+            try {
+                pcm = decoder.pcm(upload);
+            } catch (PracticeAudioDecoder.DecodeException exception) {
+                return Assessment.failed(exception.failure());
             }
-            if (exception.getCause() instanceof TencentSoeSocket.ServiceFailure service) {
-                log.warn("Tencent pronunciation assessment returned code {}.", service.code());
-                return Assessment.failed(serviceFailure(service.code()));
-            }
-            if (exception.getCause() instanceof TencentSoeSocket.ProtocolFailure protocol) {
-                log.warn("Tencent pronunciation assessment protocol failure: {}.", protocol.reason());
+            boolean recordingMode = pcm.length <= SINGLE_FRAME_MAX_SECONDS * PracticeAudioDecoder.BYTES_PER_SECOND;
+            boolean paragraph = !recordingMode || reference.codePointCount(0, reference.length()) > SENTENCE_MAX_CHARACTERS;
+            try {
+                URI uri = signedUri(reference, paragraph, recordingMode, Instant.now().getEpochSecond(),
+                        ThreadLocalRandom.current().nextInt(1, Integer.MAX_VALUE), UUID.randomUUID().toString());
+                var json = socket.assess(uri, pcm, recordingMode, properties.getTimeoutSeconds());
+                var reply = mapper.treeToValue(json, ProviderReply.class);
+                return readAssessment(reply, reference);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
                 return Assessment.failed(Failure.PROVIDER_FAILURE);
+            } catch (ExecutionException exception) {
+                if (exception.getCause() instanceof Error error) {
+                    throw error;
+                }
+                if (exception.getCause() instanceof TencentSoeSocket.ServiceFailure service) {
+                    log.warn("Tencent pronunciation assessment returned code {}.", service.code());
+                    return Assessment.failed(serviceFailure(service.code()));
+                }
+                if (exception.getCause() instanceof TencentSoeSocket.ProtocolFailure protocol) {
+                    log.warn("Tencent pronunciation assessment protocol failure: {}.", protocol.reason());
+                    return Assessment.failed(Failure.PROVIDER_FAILURE);
+                }
+                return providerFailure(exception.getCause());
+            } catch (GeneralSecurityException | JsonProcessingException | TimeoutException exception) {
+                return providerFailure(exception);
             }
-            return providerFailure(exception.getCause());
-        } catch (GeneralSecurityException | JsonProcessingException | TimeoutException exception) {
-            return providerFailure(exception);
+        } finally {
+            assessmentBulkhead.release();
         }
     }
 
@@ -219,7 +241,7 @@ public class TencentPronunciationClient {
             if (comparison != null) {
                 Word next = index + 1 < words.length ? words[index + 1] : null;
                 if (comparison.expectedTone() != comparison.detectedTone()
-                        && possibleSandhi(text, word.tone(), next, reference)) {
+                        && possibleSandhi(text, comparison, next, reference)) {
                     continue;
                 }
                 toneComparisons.add(comparison);
@@ -236,23 +258,24 @@ public class TencentPronunciationClient {
     }
 
     private static ToneComparison toneComparison(Word word, String text) {
-        Long tag = word.matchTag();
+        int tag = word.matchTag() == null ? -1 : word.matchTag();
         Tone tone = word.tone();
-        if ((Long.valueOf(0).equals(tag) || Long.valueOf(3).equals(tag)) && tone != null
+        if ((tag == 0 || tag == 3) && tone != null
                 && Boolean.TRUE.equals(tone.valid()) && recognizedTone(tone.reference()) && recognizedTone(tone.detected())) {
-            return new ToneComparison(text, tone.reference().intValue(), tone.detected().intValue());
+            return new ToneComparison(text, tone.reference(), tone.detected());
         }
         return null;
     }
 
-    private static Issue issue(Long tag, String text, ToneComparison comparison) {
-        if (Long.valueOf(2).equals(tag)) {
+    private static Issue issue(Integer matchTag, String text, ToneComparison comparison) {
+        int tag = matchTag == null ? -1 : matchTag;
+        if (tag == 2) {
             return new Issue(text, IssueKind.OMITTED, null, null);
         }
         if (comparison != null && comparison.expectedTone() != comparison.detectedTone()) {
             return new Issue(text, IssueKind.TONE_MISMATCH, comparison.expectedTone(), comparison.detectedTone());
         }
-        return Long.valueOf(3).equals(tag) ? new Issue(text, IssueKind.MISPRONOUNCED, null, null) : null;
+        return tag == 3 ? new Issue(text, IssueKind.MISPRONOUNCED, null, null) : null;
     }
 
     private static String targetWord(Word word, String reference) {
@@ -264,37 +287,34 @@ public class TencentPronunciationClient {
     }
 
     /** A lexical reference tone can differ from the expected sound in a phrase such as 你好, 不是, or 一起. */
-    private static boolean possibleSandhi(String text, Tone tone, Word next, String reference) {
+    private static boolean possibleSandhi(String text, ToneComparison comparison, Word next, String reference) {
         String nextText = next == null ? null : targetWord(next, reference);
         if (nextText == null || !reference.contains(text + nextText)) {
             return false;
         }
-        Long nextRefTone = next.tone() == null ? null : next.tone().reference();
+        int expected = comparison.expectedTone();
+        int detected = comparison.detectedTone();
+        Integer nextRef = next.tone() == null ? null : next.tone().reference();
         if (text.equals("不")) {
-            return Long.valueOf(4).equals(tone.reference())
-                    && Long.valueOf(2).equals(tone.detected())
-                    && (nextRefTone == null || Long.valueOf(4).equals(nextRefTone));
+            return expected == 4 && detected == 2 && (nextRef == null || nextRef == 4);
         }
         if (text.equals("一")) {
-            if (!Long.valueOf(1).equals(tone.reference())) {
+            if (expected != 1) {
                 return false;
             }
-            if (nextRefTone == null) {
-                return Long.valueOf(2).equals(tone.detected()) || Long.valueOf(4).equals(tone.detected());
+            if (nextRef == null) {
+                return detected == 2 || detected == 4;
             }
-            return Long.valueOf(4).equals(nextRefTone)
-                    ? Long.valueOf(2).equals(tone.detected())
-                    : recognizedTone(nextRefTone) && Long.valueOf(4).equals(tone.detected());
+            return nextRef == 4 ? detected == 2 : recognizedTone(nextRef) && detected == 4;
         }
-        return Long.valueOf(3).equals(tone.reference()) && Long.valueOf(2).equals(tone.detected())
-                && Long.valueOf(3).equals(nextRefTone);
+        return expected == 3 && detected == 2 && nextRef != null && nextRef == 3;
     }
 
     private static boolean nonChineseWord(int codePoint) {
         return Character.isLetterOrDigit(codePoint) && Character.UnicodeScript.of(codePoint) != Character.UnicodeScript.HAN;
     }
 
-    private static boolean recognizedTone(Long tone) {
+    private static boolean recognizedTone(Integer tone) {
         return tone != null && tone >= 1 && tone <= 4;
     }
 
@@ -317,14 +337,14 @@ public class TencentPronunciationClient {
     private record Word(
             @JsonProperty("Word") String text,
             @JsonProperty("ReferenceWord") String reference,
-            @JsonProperty("MatchTag") @JsonAlias("Tag") Long matchTag,
+            @JsonProperty("MatchTag") @JsonAlias("Tag") Integer matchTag,
             @JsonProperty("Tone") Tone tone) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     private record Tone(
             @JsonProperty("Valid") Boolean valid,
-            @JsonProperty("RefTone") Long reference,
-            @JsonProperty("HypothesisTone") @JsonAlias("HypTone") Long detected) {
+            @JsonProperty("RefTone") Integer reference,
+            @JsonProperty("HypothesisTone") @JsonAlias("HypTone") Integer detected) {
     }
 }

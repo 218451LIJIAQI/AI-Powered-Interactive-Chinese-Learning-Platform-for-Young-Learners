@@ -8,7 +8,6 @@ import type { EditorQuestion, EditorQuiz, LessonEditor } from '@/types/adminClas
 import type { AiQuizGeneratorResponse } from '@/types/api'
 
 const api = vi.hoisted(() => ({
-  get: vi.fn(),
   addQuestion: vi.fn(),
   addQuiz: vi.fn(),
   updateQuiz: vi.fn(),

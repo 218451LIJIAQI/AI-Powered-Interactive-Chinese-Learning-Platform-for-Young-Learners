@@ -41,6 +41,24 @@ public final class TracingCharacters {
         exercise.setMeaning(joined(characters.stream().map(ClassRequests.TraceCharacter::meaning).toList()));
     }
 
+    /** The characters as {@link #read} returns them after {@link #write}, without allocating an entity. */
+    static List<LessonViews.TraceCharacter> normalize(List<ClassRequests.TraceCharacter> characters) {
+        return characters.stream()
+                .map(character -> new LessonViews.TraceCharacter(
+                        character.character(),
+                        cleanField(character.pinyin()),
+                        cleanField(character.meaning())))
+                .toList();
+    }
+
+    private static String cleanField(String value) {
+        if (value == null) {
+            return null;
+        }
+        String cleaned = TextUtils.stripFormSpaces(value.replace(SEPARATOR, "/"));
+        return cleaned.isEmpty() ? null : cleaned;
+    }
+
     /** One value per character; a separator typed inside a value would shift the values after it. */
     private static String joined(List<String> values) {
         return String.join(SEPARATOR, values.stream()

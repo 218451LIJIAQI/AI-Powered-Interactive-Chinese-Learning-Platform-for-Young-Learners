@@ -30,7 +30,6 @@ const STALE_TOKEN = 'stale-token'
 restoreAxiosAdapterAfterEach()
 
 afterEach(() => {
-  vi.useRealTimers()
   setAccessToken(null)
   Reflect.deleteProperty(navigator, 'locks')
 })
@@ -661,5 +660,84 @@ describe('requests that outlive their access-token session', () => {
       if (originalLocks) Object.defineProperty(navigator, 'locks', originalLocks)
       else Reflect.deleteProperty(navigator, 'locks')
     }
+  })
+
+  it('rejects a refreshed JWT whose subject belongs to a different account than the active tab token', async () => {
+    const fakeJwt = (sub: string) => {
+      const encode = (obj: object) =>
+        btoa(JSON.stringify(obj)).replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_')
+      return `${encode({ alg: 'HS256', typ: 'JWT' })}.${encode({ sub })}.sig`
+    }
+    const aliceToken = fakeJwt('alice@example.com')
+    const bobToken = fakeJwt('bob@example.com')
+    http.defaults.adapter = (async (config) => {
+      if (config.url === REFRESH_URL) return tokenResponse(config, bobToken)
+      throw new Error(`Unexpected request ${config.url}`)
+    }) satisfies AxiosAdapter
+
+    setAccessToken(aliceToken)
+    await expect(refreshAccessToken()).resolves.toBeNull()
+    expect(getAccessToken()).toBeNull()
+  })
+
+  it('does not attach credentials to public unauthenticated endpoints or cancel them on session change', async () => {
+    const release = deferred<void>()
+    let sentAuth: string | null = 'unset'
+    http.defaults.adapter = (async (config) => {
+      sentAuth = authorization(config)
+      await release.promise
+      return ok(config, { success: true, data: { confirmed: true } })
+    }) satisfies AxiosAdapter
+
+    setAccessToken(STALE_TOKEN)
+    const pending = http.post('/auth/confirm-email', { token: 'abc' })
+    setAccessToken(FRESH_TOKEN)
+    release.resolve()
+
+    await expect(pending).resolves.toMatchObject({ status: 200 })
+    expect(sentAuth).toBeNull()
+  })
+
+  it('aborts a fresh refresh if the session changes while awaiting an in-flight refresh, and coalesces concurrent fresh waiters', async () => {
+    const firstGate = deferred<void>()
+    const secondGate = deferred<void>()
+    let calls = 0
+    http.defaults.adapter = (async (config) => {
+      if (config.url !== REFRESH_URL) throw new Error(`Unexpected request ${config.url}`)
+      const callNumber = ++calls
+      await (callNumber === 1 ? firstGate : secondGate).promise
+      return tokenResponse(config, callNumber === 1 ? FRESH_TOKEN : ROTATED_TOKEN)
+    }) satisfies AxiosAdapter
+
+    setAccessToken(STALE_TOKEN)
+    const initial = refreshAccessToken()
+    const staleFresh = refreshAccessToken(undefined, { fresh: true })
+    setAccessToken(null)
+    firstGate.resolve()
+    await expect(initial).resolves.toBeNull()
+    await expect(staleFresh).resolves.toBeNull()
+    expect(calls).toBe(1)
+
+    calls = 0
+    const nextFirstGate = deferred<void>()
+    const nextSecondGate = deferred<void>()
+    http.defaults.adapter = (async (config) => {
+      if (config.url !== REFRESH_URL) throw new Error(`Unexpected request ${config.url}`)
+      const callNumber = ++calls
+      await (callNumber === 1 ? nextFirstGate : nextSecondGate).promise
+      return tokenResponse(config, callNumber === 1 ? FRESH_TOKEN : ROTATED_TOKEN)
+    }) satisfies AxiosAdapter
+
+    setAccessToken(STALE_TOKEN)
+    const inflight = refreshAccessToken()
+    const freshA = refreshAccessToken(undefined, { fresh: true })
+    const freshB = refreshAccessToken(undefined, { fresh: true })
+    nextFirstGate.resolve()
+    await expect(inflight).resolves.toBe(FRESH_TOKEN)
+    await flushPromises()
+    expect(calls).toBe(2)
+    nextSecondGate.resolve()
+    await expect(Promise.all([freshA, freshB])).resolves.toEqual([ROTATED_TOKEN, ROTATED_TOKEN])
+    expect(calls).toBe(2)
   })
 })

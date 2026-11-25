@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
-/** Every action the backend writes to the audit log lands in the category the audit log page filters by. */
+/** Current and historical audit log actions map to the category shown on the audit log page and CSV export. */
 class AuditCategoryTests {
 
     @ParameterizedTest

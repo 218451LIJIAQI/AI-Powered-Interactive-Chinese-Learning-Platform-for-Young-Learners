@@ -77,7 +77,7 @@ class AiGatewayTests {
         when(availability.getAvailability()).thenReturn(AiAvailabilityService.Availability.unavailable(
                 PROVIDER, MODEL, "AI provider is disabled in the current backend configuration."));
 
-        AiExecutionResult result = gateway.execute(AiGateway.AiCall.text(student, AiFeatureKey.CHAT_TUTOR, "en", "Hello"));
+        AiExecutionResult result = gateway.execute(AiGateway.AiCall.text(student, null, AiFeatureKey.CHAT_TUTOR, "en", "Hello"));
 
         assertThat(result.status()).isEqualTo(AiRequestStatus.UNAVAILABLE);
         assertThat(result.userMessage()).isEqualTo(AiAvailabilityService.FRIENDLY_UNAVAILABLE_MESSAGE);
@@ -90,7 +90,7 @@ class AiGatewayTests {
     void safetyCheckBlocksUnsafeWordsOrHistoryBeforeTheProviderAndTheQuota() {
         when(safetyGuard.blocksRequest("unsafe history")).thenReturn(true);
 
-        AiExecutionResult result = gateway.execute(AiGateway.AiCall.text(student, AiFeatureKey.XIAOMEI_CONVERSATION,
+        AiExecutionResult result = gateway.execute(AiGateway.AiCall.text(student, null, AiFeatureKey.XIAOMEI_CONVERSATION,
                         "en", "A fine message")
                 .withHistory(List.of(new AiProviderPrompt.AiMessage("user", "unsafe history"))));
 
@@ -106,7 +106,7 @@ class AiGatewayTests {
         doThrow(new ResponseStatusException(TOO_MANY_REQUESTS, "Daily AI request limit reached."))
                 .when(limiter).checkProviderCallAllowed(any(), any());
 
-        assertThatThrownBy(() -> gateway.execute(AiGateway.AiCall.text(student, AiFeatureKey.CHAT_TUTOR, "en", "Hi")))
+        assertThatThrownBy(() -> gateway.execute(AiGateway.AiCall.text(student, null, AiFeatureKey.CHAT_TUTOR, "en", "Hi")))
                 .isInstanceOf(ResponseStatusException.class);
         assertThat(loggedEntry().status()).isEqualTo(AiRequestStatus.FAILED);
         verify(client, never()).generateText(any());
@@ -117,7 +117,7 @@ class AiGatewayTests {
         ResponseStatusException ended = new ResponseStatusException(UNAUTHORIZED, "Session ended.");
         doThrow(ended).when(limiter).checkProviderCallAllowed(any(), any());
 
-        assertThatThrownBy(() -> gateway.execute(AiGateway.AiCall.text(student, AiFeatureKey.CHAT_TUTOR, "en", "Hi")))
+        assertThatThrownBy(() -> gateway.execute(AiGateway.AiCall.text(student, null, AiFeatureKey.CHAT_TUTOR, "en", "Hi")))
                 .isSameAs(ended);
         verifyNoInteractions(client, pronunciation, aiLogService);
     }
@@ -152,7 +152,7 @@ class AiGatewayTests {
         when(client.generateText(any()))
                 .thenThrow(new IllegalStateException("boom"))
                 .thenReturn(AiProviderResult.success("unsafe reply", 2));
-        AiGateway.AiCall call = AiGateway.AiCall.text(student, AiFeatureKey.CHAT_TUTOR, "en", "Hi");
+        AiGateway.AiCall call = AiGateway.AiCall.text(student, null, AiFeatureKey.CHAT_TUTOR, "en", "Hi");
 
         AiExecutionResult failed = gateway.execute(call);
         assertThat(failed.status()).isEqualTo(AiRequestStatus.FAILED);
@@ -171,7 +171,7 @@ class AiGatewayTests {
         when(availability.getAvailability()).thenReturn(
                 AiAvailabilityService.Availability.available("deepseek", "deepseek-chat", false, true));
 
-        AiExecutionResult result = gateway.execute(AiGateway.AiCall.text(student, AiFeatureKey.PRACTICE_CHECK, "en", "Check")
+        AiExecutionResult result = gateway.execute(AiGateway.AiCall.text(student, null, AiFeatureKey.PRACTICE_CHECK, "en", "Check")
                 .withImage(new AiProviderPrompt.AiImageInput(new byte[] { 1, 2, 3 }, "image/png")));
 
         assertThat(result.status()).isEqualTo(AiRequestStatus.UNAVAILABLE);
@@ -232,7 +232,7 @@ class AiGatewayTests {
         String nothingReadable = new String(new char[] { 0, 0x200B }) + "<|im_end|>";
         when(client.generateText(any())).thenReturn(AiProviderResult.success(nothingReadable, 2));
 
-        AiExecutionResult result = gateway.execute(AiGateway.AiCall.text(student, AiFeatureKey.CHAT_TUTOR, "en", "Hi"));
+        AiExecutionResult result = gateway.execute(AiGateway.AiCall.text(student, null, AiFeatureKey.CHAT_TUTOR, "en", "Hi"));
 
         assertThat(result.status()).isEqualTo(AiRequestStatus.FAILED);
         assertThat(result.userMessage()).isEqualTo(AiAvailabilityService.FRIENDLY_UNAVAILABLE_MESSAGE);
@@ -258,7 +258,7 @@ class AiGatewayTests {
         }).when(aiLogService).logUsage(any());
 
         try {
-            AiExecutionResult result = gateway.execute(AiGateway.AiCall.text(student, AiFeatureKey.CHAT_TUTOR, "en", "Hi"));
+            AiExecutionResult result = gateway.execute(AiGateway.AiCall.text(student, null, AiFeatureKey.CHAT_TUTOR, "en", "Hi"));
 
             assertThat(result.status()).isEqualTo(AiRequestStatus.FAILED);
             assertThat(interruptedWhileLogging).isFalse();
@@ -286,7 +286,7 @@ class AiGatewayTests {
         });
 
         try {
-            AiExecutionResult result = gateway.execute(AiGateway.AiCall.text(student, AiFeatureKey.CHAT_TUTOR, "en", "Hi"));
+            AiExecutionResult result = gateway.execute(AiGateway.AiCall.text(student, null, AiFeatureKey.CHAT_TUTOR, "en", "Hi"));
 
             assertThat(result.succeeded()).isTrue();
             assertThat(interruptedWhileScreening).isFalse();
@@ -384,7 +384,7 @@ class AiGatewayTests {
     void promptSentToTheProviderNeverCarriesTheStudentsNameOrEmail() {
         when(client.generateText(any())).thenReturn(AiProviderResult.success("你好 (nǐ hǎo)", 5));
 
-        gateway.execute(AiGateway.AiCall.text(student, AiFeatureKey.CHAT_TUTOR, "en", "How do I say hello?"));
+        gateway.execute(AiGateway.AiCall.text(student, null, AiFeatureKey.CHAT_TUTOR, "en", "How do I say hello?"));
 
         ArgumentCaptor<AiProviderPrompt> sent = ArgumentCaptor.forClass(AiProviderPrompt.class);
         verify(client).generateText(sent.capture());
@@ -395,7 +395,7 @@ class AiGatewayTests {
     }
 
     private AiGateway.AiCall xiaomeiJsonCall() {
-        return AiGateway.AiCall.json(student, AiFeatureKey.XIAOMEI_CONVERSATION, "en", "Reply as Xiaomei.",
+        return AiGateway.AiCall.json(student, null, AiFeatureKey.XIAOMEI_CONVERSATION, "en", "Reply as Xiaomei.",
                 (Map<String, Object> json) -> json.containsKey("reply"));
     }
 

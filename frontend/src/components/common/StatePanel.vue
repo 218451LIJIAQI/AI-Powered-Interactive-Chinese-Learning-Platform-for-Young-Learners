@@ -5,7 +5,6 @@
     :role="tone === 'error' ? 'alert' : 'status'"
     :aria-live="tone === 'error' ? 'assertive' : 'polite'"
     aria-atomic="true"
-    :aria-busy="tone === 'loading' ? 'true' : undefined"
   >
     <div class="state-icon" aria-hidden="true">
       <span v-if="tone === 'loading'" class="spinner" />
@@ -42,7 +41,7 @@ interface Props {
   title: string
   /** h2 for a state directly under the page title, h3 inside a titled section. */
   headingTag?: 'h2' | 'h3'
-  message: string
+  message?: string | null
   tone?: PanelTone
   /** Roomier padding for a state that replaces a whole page; the default is compact, for cards and side panels. */
   spacious?: boolean
@@ -55,6 +54,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   icon: undefined,
   headingTag: 'h3',
+  message: '',
   tone: 'empty',
   spacious: false,
   skeleton: true,

@@ -14,8 +14,7 @@ import lombok.Setter;
 @Setter
 @Entity
 @Table(name = "listening_exercises", indexes = {
-        @Index(name = "idx_listening_exercises_status_updated", columnList = "content_status,updated_at"),
-        @Index(name = "idx_listening_exercises_hsk_level", columnList = "hsk_level")
+        @Index(name = "idx_listening_exercises_status_updated", columnList = "content_status,updated_at")
 })
 public class ListeningExercise extends PracticeActivityContent {
 

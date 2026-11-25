@@ -32,13 +32,24 @@ public class ContentSafetyService {
     /*
      * Separators that cannot hide a word: Unicode spaces and line/paragraph separators (\p{Z}, which NFKC keeps for
      * U+1680, U+2028 and U+2029), ASCII whitespace including line breaks and tabs (\s), the next-line control U+0085,
-     * punctuation, symbols and underscores.
+     * Unicode punctuation (\p{P}, covering Chinese/CJK punctuation like 、 。 — · as well as ASCII punctuation),
+     * symbols (\p{S}) and underscores.
      */
-    private static final String SEPARATOR_CLASS = "[\\p{Z}\\s\\x{85}\\p{Punct}\\p{S}_]";
-    private static final String SEPARATORS = SEPARATOR_CLASS + "*";
+    private static final String SEPARATOR_CLASS = "[\\p{Z}\\s\\x{85}\\p{P}\\p{S}_]";
     private static final String REQUIRED_SEPARATOR = SEPARATOR_CLASS + "+";
-    /** Invisible Unicode format characters (zero-width spaces, BOM, bidi controls) cannot split blocked words. */
-    private static final Pattern FORMAT_CHARACTERS = Pattern.compile("\\p{Cf}+");
+    /** Non-space obfuscation separators (punctuation, symbols, underscores, line breaks, tabs) within a Latin word. */
+    private static final String LATIN_OBFUSCATOR_CLASS = "[\\p{P}\\p{S}_\\r\\n\\t\\x{85}\\u2028\\u2029]";
+    /** Chinese clause punctuation (after NFKC folds ，；： to ,;:) that separates benign words like "红色，情况". */
+    private static final String CHINESE_CLAUSE_PUNCT = "[,;:]";
+    /** Non-clause separators that always flag obfuscated Chinese terms even between surrounding Han characters. */
+    private static final String CHINESE_NON_CLAUSE_SEP = "[\\p{Z}\\s\\x{85}\\p{P}\\p{S}_&&[^,;:]]";
+    /**
+     * Invisible Unicode format characters (zero-width spaces, BOM, bidi controls), combining grapheme joiner (U+034F),
+     * variation selectors (U+FE00–U+FE0F), Hangul filler characters, and non-whitespace control characters cannot split
+     * blocked words.
+     */
+    private static final Pattern INVISIBLE_CHARACTERS = Pattern.compile(
+            "[\\p{Cf}\\u034F\\uFE00-\\uFE0F\\u115F\\u1160\\u3164\\uFFA0[\\p{Cc}&&[^\\r\\n\\t\\x{85}]]]+");
     private static final List<Pattern> SENSITIVE_PATTERNS = Stream.of(
                     "fuck", "shit", "bitch", "asshole", "porn", "porno", "nude", "naked", "rape", "rapist", "suicide",
                     "self harm", "kill yourself", "cocaine", "heroin", "meth", "lucah", "bogel", "dadah", "bunuh diri")
@@ -79,16 +90,6 @@ public class ContentSafetyService {
         return sanitized;
     }
 
-    /**
-     * Screens free text that is stored as entered (for example a lesson's flashcard phrases) with the
-     * same sensitive-word rule used for lessons and quizzes; blank values are ignored.
-     */
-    public void screenText(String... values) {
-        for (String value : values) {
-            requireSafeContent(value);
-        }
-    }
-
     /** 400 for text with a sensitive word while the "Sensitive-word filter" is on; null and blank text pass. */
     private void requireSafeContent(String value) {
         if (containsSensitiveContent(value) && platformSettingsService.sensitiveWordFilterEnabled()) {
@@ -113,31 +114,72 @@ public class ContentSafetyService {
 
     private static String normalize(String value) {
         String nfkc = Normalizer.normalize(value, Normalizer.Form.NFKC);
-        return FORMAT_CHARACTERS.matcher(nfkc).replaceAll("").toLowerCase(Locale.ROOT);
+        return INVISIBLE_CHARACTERS.matcher(nfkc).replaceAll("").toLowerCase(Locale.ROOT);
     }
 
     private static Pattern sensitivePattern(String term, boolean latinWordBoundaries) {
         String normalizedTerm = normalize(term);
-        // Word boundaries only against Latin letters, digits, and English contractions/possessives ending in "'s"
-        // (so "Let's hit the road" does not match "shit", while "我想看porn" still matches and "class" skips "ass").
-        StringBuilder pattern = new StringBuilder(
-                latinWordBoundaries ? "(?iu)(?<![\\p{IsLatin}\\p{N}])(?<![\\p{IsLatin}]['’])" : "(?iu)");
-        int[] codePoints = normalizedTerm.codePoints().toArray();
-        for (int index = 0; index < codePoints.length; index++) {
-            int codePoint = codePoints[index];
-            String character = new String(Character.toChars(codePoint));
-            if (Character.isLetterOrDigit(codePoint)) {
-                pattern.append(Pattern.quote(character));
-                if (index + 1 < codePoints.length && Character.isLetterOrDigit(codePoints[index + 1])) {
-                    pattern.append(SEPARATORS);
-                }
-            } else {
+        if (!latinWordBoundaries) {
+            return chineseSensitivePattern(normalizedTerm);
+        }
+        String[] words = normalizedTerm.split("\\s+");
+        StringBuilder pattern = new StringBuilder("(?iu)(?<![\\p{IsLatin}\\p{N}])");
+        for (int wordIndex = 0; wordIndex < words.length; wordIndex++) {
+            if (wordIndex > 0) {
                 pattern.append(REQUIRED_SEPARATOR);
             }
+            pattern.append(latinWordAlternation(words[wordIndex]));
         }
-        if (latinWordBoundaries) {
-            pattern.append("(?![\\p{IsLatin}\\p{N}])");
-        }
+        pattern.append("(?![\\p{IsLatin}\\p{N}])");
         return Pattern.compile(pattern.toString());
+    }
+
+    /**
+     * Matches a single Latin word either intact, obfuscated with non-space separators (e.g. "p.o.r.n", "f—u—c—k",
+     * "p\no\nr\nn"), or letter-by-letter separated with any separator including spaces (e.g. "s h i t").
+     * Avoids splitting two legitimate words across a single plain space (such as English "Let's hit" -> "shit" or
+     * toneless Pinyin "nu de" -> "nude") while still rejecting apostrophe-prefixed bypasses like "a'porn" or "a'p.o.r.n".
+     */
+    private static String latinWordAlternation(String word) {
+        int[] codePoints = word.codePoints().toArray();
+        if (codePoints.length <= 1) {
+            return Pattern.quote(word);
+        }
+        StringBuilder nonSpaceObfuscated = new StringBuilder();
+        StringBuilder fullySpaced = new StringBuilder();
+        for (int i = 0; i < codePoints.length; i++) {
+            String ch = Pattern.quote(new String(Character.toChars(codePoints[i])));
+            nonSpaceObfuscated.append(ch);
+            fullySpaced.append(ch);
+            if (i + 1 < codePoints.length) {
+                nonSpaceObfuscated.append(LATIN_OBFUSCATOR_CLASS).append('*');
+                fullySpaced.append(REQUIRED_SEPARATOR);
+            }
+        }
+        return "(?:" + nonSpaceObfuscated + "|" + fullySpaced + ")";
+    }
+
+    /**
+     * Matches a Chinese sensitive term either contiguous, split by non-clause obfuscation separators (including
+     * spaces, newlines, dots, dashes, middle-dot, enumeration comma 、, full stop 。, etc.), or split by clause
+     * punctuation (， ； ：) when NOT flanked on both sides by Han characters (preventing benign clause-boundary false
+     * positives like "红色，情况" or "角色，情绪" while still blocking standalone "色，情").
+     */
+    private static Pattern chineseSensitivePattern(String normalizedTerm) {
+        int[] codePoints = normalizedTerm.codePoints().toArray();
+        StringBuilder nonClause = new StringBuilder();
+        StringBuilder withClause = new StringBuilder();
+        for (int i = 0; i < codePoints.length; i++) {
+            String ch = Pattern.quote(new String(Character.toChars(codePoints[i])));
+            nonClause.append(ch);
+            withClause.append(ch);
+            if (i + 1 < codePoints.length) {
+                nonClause.append(CHINESE_NON_CLAUSE_SEP).append('*');
+                withClause.append("(?:").append(CHINESE_NON_CLAUSE_SEP).append("|").append(CHINESE_CLAUSE_PUNCT).append(")*");
+            }
+        }
+        // Clause-punctuation match is allowed unless flanked on both sides by Han characters (two benign multi-char words).
+        String clauseGuard = "(?:(?<!\\p{IsHan})" + withClause + "|" + withClause + "(?!\\p{IsHan}))";
+        return Pattern.compile("(?iu)(?:" + nonClause + "|" + clauseGuard + ")");
     }
 }

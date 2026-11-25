@@ -230,7 +230,7 @@ public final class PlanViews {
             }
         }
 
-        record LearnNext(String title, Integer minutes, Long lessonId) implements WeekTask {
+        record LearnNext(String title, Integer minutes, Long lessonId, LearnLessonKind lessonKind) implements WeekTask {
             @Override
             public TaskKind kind() {
                 return TaskKind.LEARN_NEXT;

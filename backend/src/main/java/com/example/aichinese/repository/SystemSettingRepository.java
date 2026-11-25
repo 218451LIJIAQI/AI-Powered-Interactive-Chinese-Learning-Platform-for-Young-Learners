@@ -21,14 +21,14 @@ public interface SystemSettingRepository extends JpaRepository<SystemSetting, Lo
     @Modifying(flushAutomatically = true)
     @Query(value = """
             insert into system_settings (setting_key, setting_value, created_at, updated_at)
-            values (:key, '', current_timestamp(6), current_timestamp(6))
+            values (:key, '', :now, :now)
             on duplicate key update setting_key = setting_key
             """, nativeQuery = true)
-    void lockOrCreateEmpty(@Param("key") String key);
+    void lockOrCreateEmpty(@Param("key") String key, @Param("now") LocalDateTime now);
 
     /** Both startup seeders acquire this row before reading their inputs. */
     default void lockForSeeding() {
-        lockOrCreateEmpty("startup_seed_lock");
+        lockOrCreateEmpty("startup_seed_lock", LocalDateTime.now());
     }
 
     Optional<SystemSetting> findBySettingKey(String settingKey);

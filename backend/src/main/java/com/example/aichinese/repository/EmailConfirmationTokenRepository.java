@@ -9,7 +9,7 @@ import com.example.aichinese.entity.EmailConfirmationToken;
 
 import jakarta.persistence.LockModeType;
 
-public interface EmailConfirmationTokenRepository extends EmailVerificationTokenRepository<EmailConfirmationToken> {
+public interface EmailConfirmationTokenRepository extends OneTimeUserTokenRepository<EmailConfirmationToken> {
 
     /** Locking read ensures the latest committed send history is seen even under a joined REPEATABLE READ snapshot. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)

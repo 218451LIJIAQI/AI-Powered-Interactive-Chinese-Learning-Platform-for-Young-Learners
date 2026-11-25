@@ -12,6 +12,9 @@ public record PronunciationFeedback(
         List<ToneComparison> toneComparisons) {
 
     public PronunciationFeedback {
+        requireScore(accuracy, "Accuracy");
+        requireScore(fluency, "Fluency");
+        requireScore(completeness, "Completeness");
         issues = issues == null ? List.of() : List.copyOf(issues);
         // Earlier saved recordings have only scores and issues.
         toneComparisons = toneComparisons == null ? List.of() : List.copyOf(toneComparisons);
@@ -53,6 +56,12 @@ public record PronunciationFeedback(
     private static void requireText(String text, String label) {
         if (text == null || text.isBlank()) {
             throw new IllegalArgumentException(label + " is required.");
+        }
+    }
+
+    private static void requireScore(Integer score, String label) {
+        if (score != null && (score < 0 || score > 100)) {
+            throw new IllegalArgumentException(label + " must be between 0 and 100.");
         }
     }
 

@@ -84,8 +84,9 @@ public class StudentClassService {
         Map<Long, ClassProgress> progressByClass = classesProgress(student, joined);
         return joined.stream().map(course -> {
             ClassProgress state = progressByClass.get(course.getId());
+            boolean archived = course.getContentStatus() == ContentStatus.ARCHIVED;
             return new ClassViews.MyClassCard(state.summary(course), state.completed(), state.percent(),
-                    state.rows(), state.nextStep(), course.getContentStatus() == ContentStatus.ARCHIVED,
+                    state.rows(), archived ? null : state.nextStep(), archived,
                     course.getArchivedAt());
         }).toList();
     }
@@ -161,7 +162,7 @@ public class StudentClassService {
                 classProgress.summary(coursePackage),
                 List.of(),
                 classProgress.completed(),
-                classProgress.nextStep(),
+                archived ? null : classProgress.nextStep(),
                 classProgress.units());
     }
 
@@ -263,12 +264,10 @@ public class StudentClassService {
                 .orElseGet(() -> {
                     VideoProgress created = new VideoProgress();
                     created.setStudent(student);
-                    created.setLesson(found.lesson());
                     created.setRecordedVideo(video);
                     return created;
                 });
         watched.setCompleted(true);
-        watched.setLastWatchedAt(LocalDateTime.now());
         videoProgressRepository.save(watched);
         progress.recordProgress(student, found.lesson());
     }

@@ -2,6 +2,7 @@ package com.example.aichinese.dto.plan;
 
 import static com.example.aichinese.dto.DtoNormalization.immutableListOrEmpty;
 import static com.example.aichinese.dto.DtoNormalization.redactLength;
+import static com.example.aichinese.dto.DtoNormalization.redactValue;
 import static com.example.aichinese.dto.DtoNormalization.stripToNull;
 
 import java.time.LocalDate;
@@ -77,10 +78,22 @@ public final class PlanRequests {
             boolean skipped,
 
             @Size(max = 8, message = "The level check has at most 8 questions.")
-            List<@NotNull(message = "Question is required.") @Valid Answer> answers) {
+            List<@NotNull(message = "Question is required.") @Valid Answer> answers,
+
+            @Size(max = 512, message = "Start the level check again.")
+            String runToken) {
 
         public LevelCheckInput {
             answers = immutableListOrEmpty(answers);
+            runToken = stripToNull(runToken);
+        }
+
+        @Override
+        public String toString() {
+            return "LevelCheckInput[selfLevel=" + selfLevel
+                    + ", skipped=" + skipped
+                    + ", answers=" + answers.size()
+                    + ", runToken=" + redactValue(runToken) + "]";
         }
     }
 
@@ -122,17 +135,28 @@ public final class PlanRequests {
             Long classId) {
     }
 
-    /** A retaken level check: every answer. */
+    /** A retaken level check: every answer and the server-signed run token of that check. */
     public record RetakeRequest(
             @Size(max = 8, message = "The level check has at most 8 questions.")
             List<@NotNull(message = "Question is required.") @Valid Answer> answers,
 
             @Size(max = 20, message = "Language preference must not exceed 20 characters.")
-            String language) {
+            String language,
+
+            @Size(max = 512, message = "Start the level check again.")
+            String runToken) {
 
         public RetakeRequest {
             answers = immutableListOrEmpty(answers);
             language = stripToNull(language);
+            runToken = stripToNull(runToken);
+        }
+
+        @Override
+        public String toString() {
+            return "RetakeRequest[answers=" + answers.size()
+                    + ", language=" + language
+                    + ", runToken=" + redactValue(runToken) + "]";
         }
     }
 }

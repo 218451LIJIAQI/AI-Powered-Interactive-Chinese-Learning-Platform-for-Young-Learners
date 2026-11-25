@@ -1,7 +1,7 @@
 <template>
   <FocusFooter class="learn-checkbar" :tone="tone" data-testid="check-bar">
     <template #start>
-      <div v-if="check" class="learn-checkbar-feedback" role="status" aria-live="polite">
+      <div v-if="check" :id="feedbackId" class="learn-checkbar-feedback" role="status" aria-live="polite">
         <span class="learn-checkbar-icon" aria-hidden="true">
           <IconGlyph :name="check.correct ? 'check' : 'close'" :size="26" />
         </span>
@@ -9,11 +9,11 @@
           <p class="learn-checkbar-title">{{ title }}</p>
           <p v-if="!check.correct && answerLine" class="learn-checkbar-answer">
             <span :lang="hasHan(check.correctAnswer) ? 'zh-CN' : undefined">{{ check.correctAnswer }}</span>
-            <span v-if="showPinyin"> · {{ check.pinyin }}</span>
+            <span v-if="showPinyin" lang="zh-Latn"> · {{ check.pinyin }}</span>
             <span v-if="check.meaning && check.meaning !== check.correctAnswer"> · {{ check.meaning }}</span>
           </p>
           <p v-if="check.explanation || note" class="learn-checkbar-explanation">
-            {{ [check.explanation, note].filter(Boolean).join(' ') }}
+            <CjkText :text="[check.explanation, note].filter(Boolean).join(' ')" />
           </p>
         </div>
       </div>
@@ -52,6 +52,7 @@
         type="button"
         :disabled="checking"
         :aria-busy="checking"
+        :aria-describedby="feedbackId"
         data-testid="continue"
         @click="emit('continue')"
       >
@@ -62,10 +63,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, useId, watch } from 'vue'
 
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import FocusFooter from '@/components/layout/FocusFooter.vue'
+import CjkText from '@/components/learning/CjkText.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { learnSharedMessages } from '@/plugins/learnSharedMessages'
 import type { AnswerCheck } from '@/types/learn'
@@ -108,6 +110,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useLocalMessages({ learn: learnSharedMessages })
+const feedbackId = `${useId()}-feedback`
 const continueButton = ref<HTMLButtonElement | null>(null)
 
 const tone = computed(() => {

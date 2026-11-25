@@ -15,6 +15,11 @@
   line-height: var(--line-height-normal);
 }
 
+.learn-say-note[role='alert'] {
+  color: var(--color-danger-text);
+  font-weight: var(--font-weight-medium);
+}
+
 /* The microphone question: where the recording stays. */
 .learn-mic-note {
   display: flex;

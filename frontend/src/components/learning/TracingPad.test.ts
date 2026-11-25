@@ -12,9 +12,8 @@ const BoundTracingHost = defineComponent({
     showModel: { type: Boolean, required: true },
     label: { type: String, required: true },
   },
-  setup(props, { expose }) {
+  setup(props) {
     const strokes = ref<Stroke[]>([])
-    expose({ strokes })
     return () =>
       h(TracingPad, {
         characters: props.characters,
@@ -233,36 +232,32 @@ describe('TracingPad input lifecycle', () => {
       attachTo: document.body,
       props: { characters: '一', showModel: false, label: 'Trace 一' },
     })
-    try {
-      const pad = wrapper.get('canvas')
-      // Force the window pointer fallback path to verify pointermove is not processed twice.
-      pad.element.setPointerCapture = vi.fn()
-      pad.element.hasPointerCapture = vi.fn(() => false)
-      pad.element.releasePointerCapture = vi.fn()
+    const pad = wrapper.get('canvas')
+    // Force the window pointer fallback path to verify pointermove is not processed twice.
+    pad.element.setPointerCapture = vi.fn()
+    pad.element.hasPointerCapture = vi.fn(() => false)
+    pad.element.releasePointerCapture = vi.fn()
 
-      pad.element.dispatchEvent(
-        new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 25, clientY: 35 }),
-      )
-      pad.element.dispatchEvent(
-        new PointerEvent('pointermove', { bubbles: true, pointerId: 1, clientX: 120, clientY: 135 }),
-      )
-      moveTo.mockClear()
-      lineTo.mockClear()
-      pad.element.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1 }))
-      await nextTick()
+    pad.element.dispatchEvent(
+      new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: 25, clientY: 35 }),
+    )
+    pad.element.dispatchEvent(
+      new PointerEvent('pointermove', { bubbles: true, pointerId: 1, clientX: 120, clientY: 135 }),
+    )
+    moveTo.mockClear()
+    lineTo.mockClear()
+    pad.element.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1 }))
+    await nextTick()
 
-      expect(wrapper.findComponent(TracingPad).props('strokes')).toEqual([
-        [
-          { x: 25, y: 35 },
-          { x: 120, y: 135 },
-        ],
-      ])
-      // The post-commit redraw after v-model updates must paint the committed stroke onto the canvas.
-      expect(moveTo).toHaveBeenCalledWith(25, 35)
-      expect(lineTo).toHaveBeenCalledWith(120, 135)
-    } finally {
-      wrapper.unmount()
-    }
+    expect(wrapper.findComponent(TracingPad).props('strokes')).toEqual([
+      [
+        { x: 25, y: 35 },
+        { x: 120, y: 135 },
+      ],
+    ])
+    // The post-commit redraw after v-model updates must paint the committed stroke onto the canvas.
+    expect(moveTo).toHaveBeenCalledWith(25, 35)
+    expect(lineTo).toHaveBeenCalledWith(120, 135)
   })
 
   it('cancels an active fallback pointer stroke on window blur so subsequent strokes still draw', async () => {
@@ -270,24 +265,48 @@ describe('TracingPad input lifecycle', () => {
       attachTo: document.body,
       props: { characters: '好', showModel: true, label: 'Trace 好', cellSize: 280, strokes: [] },
     })
-    try {
-      const pad = wrapper.get('canvas')
-      pad.element.setPointerCapture = vi.fn()
-      pad.element.hasPointerCapture = vi.fn(() => false)
-      pad.element.releasePointerCapture = vi.fn()
+    const pad = wrapper.get('canvas')
+    pad.element.setPointerCapture = vi.fn()
+    pad.element.hasPointerCapture = vi.fn(() => false)
+    pad.element.releasePointerCapture = vi.fn()
 
-      await pointer(pad.element, 'pointerdown', { pointerId: 1, clientX: 10, clientY: 20 })
-      await pointer(pad.element, 'pointermove', { pointerId: 1, clientX: 30, clientY: 40 })
-      window.dispatchEvent(new Event('blur'))
-      await nextTick()
-      expect(wrapper.emitted('update:strokes')).toBeUndefined()
+    await pointer(pad.element, 'pointerdown', { pointerId: 1, clientX: 10, clientY: 20 })
+    await pointer(pad.element, 'pointermove', { pointerId: 1, clientX: 30, clientY: 40 })
+    window.dispatchEvent(new Event('blur'))
+    await nextTick()
+    expect(wrapper.emitted('update:strokes')).toBeUndefined()
 
-      await pointer(pad.element, 'pointerdown', { pointerId: 2, clientX: 50, clientY: 60 })
-      await pointer(pad.element, 'pointermove', { pointerId: 2, clientX: 70, clientY: 80 })
-      await pointer(pad.element, 'pointerup', { pointerId: 2 })
-      expect(wrapper.emitted('update:strokes')).toHaveLength(1)
-    } finally {
-      wrapper.unmount()
-    }
+    await pointer(pad.element, 'pointerdown', { pointerId: 2, clientX: 50, clientY: 60 })
+    await pointer(pad.element, 'pointermove', { pointerId: 2, clientX: 70, clientY: 80 })
+    await pointer(pad.element, 'pointerup', { pointerId: 2 })
+    expect(wrapper.emitted('update:strokes')).toHaveLength(1)
+  })
+
+  it('supports Shift+Arrow coarse drawing, Escape to cancel an unfinished stroke, and PageDown cell jumps', async () => {
+    const wrapper = mount(TracingPad, {
+      props: { characters: '你好', showModel: true, label: 'Trace 你好', cellSize: 280, strokes: [] },
+    })
+    const pad = wrapper.get('canvas')
+    expect(pad.attributes('title')).toBeUndefined()
+
+    await pad.trigger('keydown', { key: ' ' })
+    await pad.trigger('keydown', { key: 'ArrowRight', shiftKey: true })
+    await pad.trigger('keydown', { key: 'Escape' })
+    expect(wrapper.emitted('update:strokes')).toBeUndefined()
+
+    await pad.trigger('keydown', { key: 'PageDown' })
+    await pad.trigger('keydown', { key: 'Enter' })
+    await pad.trigger('keydown', { key: 'ArrowRight', shiftKey: true })
+    await pad.trigger('keydown', { key: 'Enter' })
+    expect(wrapper.emitted('update:strokes')).toEqual([
+      [
+        [
+          [
+            { x: 420, y: 140 },
+            { x: 460, y: 140 },
+          ],
+        ],
+      ],
+    ])
   })
 })

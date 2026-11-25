@@ -21,11 +21,13 @@
     <p class="callout">{{ t('aiHelper.practiceScoreNote', { notice: aiNotice }) }}</p>
     <div class="form-actions">
       <button v-if="!reported" class="btn btn-secondary" type="button" @click="emit('report', result.check)">
+        <IconGlyph name="flag" :size="16" />
         {{ t('aiHelper.reportScore') }}
       </button>
       <span v-else class="ai-reported"><IconGlyph name="status" :size="14" />{{ t('aiSafety.reported') }}</span>
       <button class="btn btn-primary" type="button" @click="emit('tryAgain')">{{ t('aiHelper.tryAgain') }}</button>
     </div>
+    <AiNotice :text="aiNotice" />
   </section>
 </template>
 
@@ -34,11 +36,11 @@ import { ref, useId } from 'vue'
 
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
-import { aiHelperMessages } from '@/plugins/aiHelperMessages'
 import { aiVoiceMessages } from '@/plugins/aiVoiceMessages'
 import type { PracticeCheck } from '@/types/ai'
 
 import AiCheckScore from './AiCheckScore.vue'
+import AiNotice from './AiNotice.vue'
 import AiResultLabel from './AiResultLabel.vue'
 import { formatPracticeCheckMeta, practiceCheckKindKey, revealResult } from './aiHelper'
 
@@ -59,7 +61,7 @@ const emit = defineEmits<{
   tryAgain: []
 }>()
 
-const { t } = useLocalMessages({ aiHelper: [aiHelperMessages, aiVoiceMessages] })
+const { t } = useLocalMessages({ aiHelper: aiVoiceMessages })
 const baseId = useId()
 const rootEl = ref<HTMLElement | null>(null)
 

@@ -1,7 +1,7 @@
 import type { AdminClassPage, ClassDetailsForm, ClassDetailsPayload } from '@/types/adminClasses'
 import { QUIZ_QUESTION_TYPES, type QuizQuestionType } from '@/types/api'
 import type { ClassActivityType } from '@/types/classes'
-import { pageFromQuery, pageQuery } from '@/utils/pageQuery'
+import { pageFromQuery, pageQuery } from '@/utils/routeQuery'
 
 /** Only the catalogue's filters follow a class link and its breadcrumb back. */
 export function catalogueQuery(query: { theme?: unknown; page?: unknown }) {
@@ -55,13 +55,13 @@ export const ACTIVITY_ICONS: Record<ClassActivityType, string> = {
   MATCHING: 'puzzle',
 }
 
-export function isQuestionType(type: string): type is QuizQuestionType {
-  return QUIZ_QUESTION_TYPES.some((known) => known === type)
+export function normalizeQuestionType(type: string | null | undefined): QuizQuestionType {
+  return QUIZ_QUESTION_TYPES.find((known) => known === type) ?? 'MULTIPLE_CHOICE'
 }
 
 /** The name of a question type; one this app does not know reads as multiple choice. */
 export function questionTypeKey(type: string): string {
-  return `classes.questionType.${isQuestionType(type) ? type : 'MULTIPLE_CHOICE'}`
+  return `classes.questionType.${normalizeQuestionType(type)}`
 }
 
 /** Typed answers (no options to pick from). */
@@ -87,11 +87,16 @@ export function classInitials(title: string): string {
   return first.toLowerCase() !== first.toUpperCase() ? first.toUpperCase() : characters.slice(0, 2).join('')
 }
 
-/** True for a link the browser may open (http or https only). */
+/** True for a safe web link the browser may open (http or https with a host, no embedded credentials or control chars). */
 export function isWebLink(value: string): boolean {
+  if (!/^https?:\/\//i.test(value) || /\s/.test(value)) return false
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001f\u007f]/.test(value)) return false
   try {
     const url = new URL(value)
-    return url.protocol === 'https:' || url.protocol === 'http:'
+    return (
+      (url.protocol === 'https:' || url.protocol === 'http:') && Boolean(url.hostname) && !url.username && !url.password
+    )
   } catch {
     return false
   }

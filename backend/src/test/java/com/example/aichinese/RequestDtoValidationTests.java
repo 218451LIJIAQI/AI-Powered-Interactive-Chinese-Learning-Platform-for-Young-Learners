@@ -12,6 +12,8 @@ import java.util.stream.LongStream;
 import org.junit.jupiter.api.AutoClose;
 import org.junit.jupiter.api.Test;
 
+import com.example.aichinese.dto.admin.AdminDeactivationRequest;
+import com.example.aichinese.dto.admin.AdminReactivationRequest;
 import com.example.aichinese.dto.ai.AdminAiSettingsUpdateRequest;
 import com.example.aichinese.dto.ai.AiChatRequest;
 import com.example.aichinese.dto.ai.AiQuizGeneratorRequest;
@@ -33,10 +35,14 @@ import com.example.aichinese.dto.learn.HintPolicyDto;
 import com.example.aichinese.dto.learn.LevelCheckNextRequest;
 import com.example.aichinese.dto.learn.LevelCheckQuestionData;
 import com.example.aichinese.dto.learn.PracticeCompleteRequest;
+import com.example.aichinese.dto.learn.PracticeItemAnswer;
+import com.example.aichinese.dto.learn.QuestionAnswer;
+import com.example.aichinese.dto.support.CreateSupportRequest;
 import com.example.aichinese.entity.enums.ActivityDifficulty;
 import com.example.aichinese.entity.enums.LevelCheckLevel;
 import com.example.aichinese.entity.enums.LevelCheckSkill;
 import com.example.aichinese.entity.enums.PublishStatus;
+import com.example.aichinese.entity.enums.SupportTopic;
 import com.example.aichinese.entity.enums.XiaomeiScenario;
 
 import jakarta.validation.Validation;
@@ -64,11 +70,11 @@ class RequestDtoValidationTests {
     @Test
     void contentRequestIdsMustBePositive() {
         ClassRequests.ClassDetails details = new ClassRequests.ClassDetails("Class", "Description", -3L, null);
-        ClassRequests.LessonContent content = new ClassRequests.LessonContent("Lesson", -1L, 0, null, List.of());
+        ClassRequests.LessonContent content = new ClassRequests.LessonContent("Lesson", -1L, List.of());
         QuizDraftRequest draft = new QuizDraftRequest(-1L, "Greetings", null, 3, null);
 
         assertViolationPathsContain(details, "categoryId");
-        assertViolationPathsContain(content, "unitId", "minutes");
+        assertViolationPathsContain(content, "unitId");
         assertViolationPathsContain(draft, "lessonId");
         assertViolationPathsContain(new QuizDraftRequest(null, "Greetings", null, 3, null), "lessonId");
     }
@@ -296,10 +302,33 @@ class RequestDtoValidationTests {
         assertViolationPathsContain(new ClassRequests.MatchingAnswer(null), "pairs");
         assertViolationPathStartsWith(matchingAnswer, "pairs");
         assertViolationPathStartsWith(questionWithOptions(singletonList(null)), "options");
-        assertViolationPathStartsWith(new LevelCheckNextRequest(null, singletonList(null)), "answers");
+        assertViolationPathStartsWith(new LevelCheckNextRequest(null, singletonList(null), null), "answers");
         assertViolationPathStartsWith(new PracticeCompleteRequest(singletonList(null), null), "answers");
         assertViolationPathStartsWith(
                 new XiaomeiConversationRequest(XiaomeiScenario.CAFE, singletonList(null), "en"), "turns");
+    }
+
+    @Test
+    void freeTextAndAnswerDtosStripInvisibleControlsAndNormalizeLineBreaks() {
+        assertViolationPathsContain(new AdminAiSettingsUpdateRequest("\u200B\u202E", true, true), "aiNoticeText");
+        assertThat(new AdminAiSettingsUpdateRequest("Line 1\r\nLine 2\u200B", true, true).aiNoticeText())
+                .isEqualTo("Line 1\nLine 2");
+
+        assertViolationPathsContain(new AdminDeactivationRequest("\u0007\u202E"), "reason");
+        assertThat(new AdminReactivationRequest("\u200B\u0000").reason()).isNull();
+
+        CreateSupportRequest normalizedSupport = new CreateSupportRequest(
+                SupportTopic.ACCOUNT, "  Login\r\nissue\u200B  ", "First\r\nSecond\u200B");
+        assertThat(normalizedSupport.subject()).isEqualTo("Login issue");
+        assertThat(normalizedSupport.message()).isEqualTo("First\nSecond");
+        assertViolationPathsContain(
+                new CreateSupportRequest(SupportTopic.ACCOUNT, "\u0000\u200B", "\u202E"), "subject", "message");
+
+        assertThat(new PracticeItemAnswer(" item-1 ", ideographicWrapped("GOT_IT"), null, false).answer())
+                .isEqualTo("GOT_IT");
+        assertThat(new PracticeItemAnswer("item-1", IDEOGRAPHIC_SPACE, null, false).answer()).isNull();
+        assertThat(new QuestionAnswer(1L, ideographicWrapped("你好")).answer()).isEqualTo("你好");
+        assertThat(new QuestionAnswer(1L, IDEOGRAPHIC_SPACE).answer()).isNull();
     }
 
     private static QuizQuestionRequest questionWithOptions(List<QuizOptionRequest> options) {

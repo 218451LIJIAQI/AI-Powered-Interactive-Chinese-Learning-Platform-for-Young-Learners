@@ -1,6 +1,8 @@
 package com.example.aichinese;
 
 import static com.example.aichinese.support.LearningApiTestClient.ADMIN_EMAIL;
+import static com.example.aichinese.support.LearningApiTestClient.fromRemoteAddress;
+import static com.example.aichinese.support.LearningApiTestClient.nextClientIp;
 import static com.example.aichinese.support.LearningApiTestClient.uniqueEmail;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.startsWith;
@@ -216,7 +218,8 @@ class SupportIntegrationTests extends ApiIntegrationTest {
         int number = api.data(mockMvc.perform(api.jsonPost("/api/v1/public/support", null, Map.of(
                         "email", email,
                         "topic", "ACCOUNT",
-                        "message", "Can't sign in after resetting my password\nThe new one fails.")))
+                        "message", "Can't sign in after resetting my password\nThe new one fails."))
+                        .with(fromRemoteAddress(nextClientIp())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.email").value(email))
                 .andReturn()).path("number").asInt();
@@ -240,10 +243,16 @@ class SupportIntegrationTests extends ApiIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("This request is solved. Reopen it first if you need to reply."));
         mockMvc.perform(api.jsonPost("/api/v1/public/support", null,
-                        Map.of("email", "not-an-email", "topic", "OTHER", "message", "Hello")))
+                        Map.of("email", "not-an-email", "topic", "OTHER", "message", "Hello"))
+                        .with(fromRemoteAddress(nextClientIp())))
                 .andExpect(status().isBadRequest());
         mockMvc.perform(api.jsonPost("/api/v1/public/support", null,
-                        Map.of("email", email, "topic", "OTHER", "message", "\u00a0\u2007\ufeff")))
+                        Map.of("email", email, "topic", "OTHER", "message", "\u00a0\u2007\ufeff"))
+                        .with(fromRemoteAddress(nextClientIp())))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(api.jsonPost("/api/v1/public/support", null,
+                        Map.of("email", email, "topic", "OTHER", "message", "\u200B\u202E\u00AD"))
+                        .with(fromRemoteAddress(nextClientIp())))
                 .andExpect(status().isBadRequest());
     }
 
@@ -281,7 +290,8 @@ class SupportIntegrationTests extends ApiIntegrationTest {
         retiredTopic.param("topic", "VERIFICATION").param("subject", "Retired topic").param("message", "Legacy value.");
         mockMvc.perform(retiredTopic).andExpect(status().isBadRequest());
         mockMvc.perform(api.jsonPost("/api/v1/public/support", null,
-                        Map.of("email", uniqueEmail("support-retired"), "topic", "VERIFICATION", "message", "Legacy.")))
+                        Map.of("email", uniqueEmail("support-retired"), "topic", "VERIFICATION", "message", "Legacy."))
+                        .with(fromRemoteAddress(nextClientIp())))
                 .andExpect(status().isBadRequest());
     }
 

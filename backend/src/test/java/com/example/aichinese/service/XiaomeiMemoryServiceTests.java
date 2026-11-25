@@ -17,8 +17,8 @@ import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.XiaomeiMemoryNote;
 import com.example.aichinese.entity.enums.PlanReason;
 import com.example.aichinese.repository.LearningPlanRepository;
+import com.example.aichinese.repository.LearningPlanRepository.XiaomeiPlanGoal;
 import com.example.aichinese.repository.XiaomeiMemoryNoteRepository;
-import com.example.aichinese.repository.projection.XiaomeiPlanGoal;
 import com.example.aichinese.service.account.CurrentAccount;
 
 /**

@@ -12,7 +12,7 @@
 
     <h1 class="sr-only">{{ lesson.data.value?.title ?? t('learn.lesson') }}</h1>
 
-    <div class="focus-stage" :class="{ 'learn-done-stage': result !== null }">
+    <div ref="stageRef" class="focus-stage" :class="{ 'learn-done-stage': result !== null }">
       <StatePanel
         v-if="lesson.loading.value"
         heading-tag="h2"
@@ -22,23 +22,23 @@
         spacious
       />
       <StatePanel
-        v-else-if="lesson.error.value"
+        v-else-if="lesson.error.value || !questions.length"
         heading-tag="h2"
         tone="error"
-        icon="lock"
+        :icon="isLocked ? 'lock' : 'alert'"
         :title="t('learn.lessonUnavailable')"
-        :message="lesson.error.value"
+        :message="lesson.error.value ?? t('learn.lessonEmptyMessage')"
         spacious
       >
         <template #actions>
+          <button v-if="canRetry" class="btn btn-secondary" type="button" @click="lesson.reload">
+            {{ t('common.retry') }}
+          </button>
           <RouterLink class="btn btn-primary" :to="{ name: 'student-learn' }">{{ t('learn.backToPath') }}</RouterLink>
         </template>
       </StatePanel>
-
       <LessonDone v-else-if="result" :result="result" />
-
       <SayStep v-else-if="saying && sayPhrase" v-bind="sayPhrase" />
-
       <QuestionStage
         v-else-if="question"
         v-model="answer"
@@ -47,21 +47,8 @@
         :check="check"
         :ruled-out="hint.ruledOut.value"
       />
-      <StatePanel
-        v-else
-        heading-tag="h2"
-        tone="error"
-        icon="lock"
-        :title="t('learn.lessonUnavailable')"
-        :message="t('learn.lessonUnavailable')"
-        spacious
-      >
-        <template #actions>
-          <RouterLink class="btn btn-primary" :to="{ name: 'student-learn' }">{{ t('learn.backToPath') }}</RouterLink>
-        </template>
-      </StatePanel>
 
-      <p v-if="actionError" class="alert alert-danger" role="alert">{{ actionError }}</p>
+      <p v-if="actionError" class="callout is-danger" role="alert">{{ actionError }}</p>
     </div>
 
     <FocusFooter v-if="result">
@@ -84,7 +71,7 @@
         >
           {{ t('learn.continue') }}
         </button>
-        <button v-if="!result.passed" class="btn btn-primary btn-lg" type="button" @click="restart">
+        <button v-if="!result.passed" class="btn btn-primary btn-lg" type="button" @click="resetRun">
           {{ t('learn.tryAgain') }}
         </button>
       </template>
@@ -124,7 +111,6 @@
           :question="question"
           :hint="hint"
           :report-context="`LEARN #${lessonId} / ${question.id}`"
-          :own-toast="false"
           @reported="showToast(t('aiSafety.reportSent'))"
         />
       </template>
@@ -151,7 +137,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { learnApi } from '@/api/learn'
@@ -172,7 +158,7 @@ import { useRecordById } from '@/composables/useResource'
 import { useToast } from '@/composables/useToast'
 import { learnMessages } from '@/plugins/learnMessages'
 import { learnSharedMessages } from '@/plugins/learnSharedMessages'
-import type { AnswerCheck, LessonResult, QuestionView } from '@/types/learn'
+import type { AnswerCheck, QuestionView } from '@/types/learn'
 import { hasHan } from '@/utils/cjkText'
 import { stepProgress } from '@/utils/format'
 import { parseRecordId } from '@/utils/recordId'
@@ -194,11 +180,15 @@ const { toast, showToast } = useToast()
 const lessonId = computed(() => parseRecordId(route.params.lessonId))
 const lesson = useRecordById(lessonId, learnApi.lesson)
 
-const result = ref<LessonResult | null>(null)
 const leaving = ref(false)
+const stageRef = ref<HTMLElement | null>(null)
 
 const questions = computed(() => lesson.data.value?.questions ?? [])
 const isCheckpoint = computed(() => lesson.data.value?.kind === 'CHECKPOINT')
+const isLocked = computed(() => lesson.errorStatus.value === 409)
+const canRetry = computed(
+  () => Boolean(lesson.error.value) && lesson.errorStatus.value !== 409 && lesson.errorStatus.value !== 404,
+)
 
 /** The top bar's fixed column names the lesson by the part of its title before " · ". */
 const topLabel = computed(() => lesson.data.value?.title.split(' · ')[0] ?? t('learn.lesson'))
@@ -225,6 +215,7 @@ const {
   index,
   answer,
   check,
+  result,
   busy: checking,
   savingResult,
   actionError,
@@ -238,14 +229,12 @@ const {
   reset,
 } = useQuestionRun({
   questions,
-  grade: (sent) => learnApi.checkLesson(lessonId.value!, sent),
-  saveResult: async (sent) => {
-    const id = lessonId.value
-    if (id === null) return
-    const version = attemptVersion
-    const saved = await learnApi.completeLesson(id, sent)
-    if (lessonId.value === id && version === attemptVersion) result.value = saved
-  },
+  grade: (sent) =>
+    lessonId.value === null
+      ? Promise.reject(new Error('Missing lesson id'))
+      : learnApi.checkLesson(lessonId.value, sent),
+  saveResult: (sent) =>
+    lessonId.value === null ? Promise.resolve(null) : learnApi.completeLesson(lessonId.value, sent),
   t,
   onChecked: (current, verdict) => {
     if (!isCheckpoint.value) sayPhrase.value = phraseOf(current, verdict) ?? sayPhrase.value
@@ -254,43 +243,44 @@ const {
     if (sayPhrase.value) saying.value = true
     else await complete()
   },
-  keysBlocked: () => leaving.value || result.value !== null || saying.value,
+  keysBlocked: () => leaving.value || saying.value,
   hintsAllowed: () => !isCheckpoint.value,
-  loadHint: (id) => learnApi.hint(lessonId.value!, id, lesson.data.value),
+  loadHint: (id) =>
+    lessonId.value === null
+      ? Promise.reject(new Error('Missing lesson id'))
+      : learnApi.hint(lessonId.value, id, lesson.data.value),
 })
 
 const progress = computed(() => {
   if (result.value) return 100
+  if (!questions.value.length) return null
   const total = questions.value.length + (isCheckpoint.value ? 0 : 1)
   return stepProgress(index.value, total, check.value !== null)
 })
-
-/** Try again: only a checkpoint can fail, and a checkpoint has no step to say a phrase. */
-let attemptVersion = 0
-onBeforeUnmount(() => {
-  attemptVersion += 1
-})
-
-function restart(): void {
-  attemptVersion += 1
-  reset()
-  result.value = null
-}
 
 // The result screen
 
 /** The rank-up dialog is open: the lesson took the learner past a rank, and Keep going goes on to the map. */
 const rankingUp = ref(false)
 
-watch(lessonId, () => {
-  attemptVersion += 1
+watch(
+  result,
+  (next) => {
+    if (!next || (document.activeElement && document.activeElement !== document.body)) return
+    stageRef.value?.querySelector<HTMLElement>('h2[tabindex="-1"]')?.focus({ preventScroll: true })
+  },
+  { flush: 'post' },
+)
+
+function resetRun(): void {
   reset()
-  result.value = null
   saying.value = false
   sayPhrase.value = null
   leaving.value = false
   rankingUp.value = false
-})
+}
+
+watch(lessonId, resetRun)
 
 /** Continue: back to the map, which says what the lesson earned and unlocked; first the rank-up when there is one. */
 function finish(): void {

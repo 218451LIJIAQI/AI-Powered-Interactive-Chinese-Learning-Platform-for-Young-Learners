@@ -22,28 +22,22 @@
         </div>
         <div v-if="editor.editable" class="row-list-actions">
           <button
-            v-if="slot.activity"
-            type="button"
-            class="btn btn-secondary btn-sm"
-            :aria-label="t('lessonEditor.activities.editLabel', { title: slot.activity.title })"
-            @click="open(slot.type, slot.activity)"
-          >
-            <IconGlyph name="edit" :size="16" />{{ t('common.edit') }}
-          </button>
-          <button
-            v-else
             type="button"
             class="btn btn-secondary btn-sm"
             :aria-label="
-              t('lessonEditor.activities.addLabel', {
-                number: slot.number,
-                type: t(`practiceType.${slot.type}`),
-              })
+              slot.activity
+                ? t('lessonEditor.activities.editLabel', { title: slot.activity.title })
+                : t('lessonEditor.activities.addLabel', {
+                    number: slot.number,
+                    type: t(`practiceType.${slot.type}`),
+                  })
             "
-            :data-testid="`add-activity-${slot.number}`"
-            @click="open(slot.type, null)"
+            :data-testid="slot.activity ? undefined : `add-activity-${slot.number}`"
+            @click="open(slot.type, slot.activity)"
           >
-            <IconGlyph name="plus" :size="16" />{{ t('lessonEditor.activities.add') }}
+            <IconGlyph :name="slot.activity ? 'edit' : 'plus'" :size="16" />{{
+              slot.activity ? t('common.edit') : t('lessonEditor.activities.add')
+            }}
           </button>
         </div>
       </li>
@@ -62,7 +56,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 
 import { lessonEditorApi } from '@/api/adminClasses'
 import IconGlyph from '@/components/common/IconGlyph.vue'
@@ -70,12 +64,12 @@ import CjkText from '@/components/learning/CjkText.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { lessonEditorMessages } from '@/plugins/lessonEditorMessages'
 import type { ActivityPayload, EditorActivity, LessonEditor } from '@/types/adminClasses'
-import type { ClassActivityType } from '@/types/classes'
+import { CLASS_ACTIVITY_TYPES, type ClassActivityType } from '@/types/classes'
 import { resolveApiError } from '@/utils/apiError'
 import { ACTIVITY_ICONS } from '@/utils/classes'
-import { LESSON_ACTIVITY_TYPES } from '@/utils/lessonEditor'
 
 import LessonActivityDrawer from './LessonActivityDrawer.vue'
+import { useLessonPanelGuard } from './useLessonPanelGuard'
 
 /**
  * The Activities tab of the lesson editor: the 3 fixed activities every lesson has, in the order learners do them
@@ -93,33 +87,27 @@ const emit = defineEmits<{
 const { t } = useLocalMessages({ lessonEditor: lessonEditorMessages })
 
 const slots = computed(() =>
-  LESSON_ACTIVITY_TYPES.map((type, index) => ({
+  CLASS_ACTIVITY_TYPES.map((type, index) => ({
     type,
     number: index + 1,
     activity: props.editor.activities.find((activity) => activity.type === type) ?? null,
   })),
 )
 
-let panelVersion = 0
 const busy = ref(false)
-watch(busy, (saving) => emit('saving', saving), { flush: 'sync' })
 /** The open drawer: its slot's type, and the activity it edits (null to add it). */
 const drawer = ref<{ type: ClassActivityType; activity: EditorActivity | null } | null>(null)
 const drawerError = ref<string | null>(null)
 
-watch(
-  () => props.editor.lessonId,
-  () => {
-    panelVersion++
+const guard = useLessonPanelGuard({
+  lessonId: () => props.editor.lessonId,
+  saving: busy,
+  onSaving: (saving) => emit('saving', saving),
+  onReset: () => {
     drawer.value = null
     drawerError.value = null
     busy.value = false
   },
-  { flush: 'sync' },
-)
-onBeforeUnmount(() => {
-  panelVersion++
-  if (busy.value) emit('saving', false)
 })
 
 function open(type: ClassActivityType, activity: EditorActivity | null): void {
@@ -132,21 +120,26 @@ async function save(payload: ActivityPayload): Promise<void> {
   if (!props.editor.editable || !drawer.value || busy.value) return
   const { activity } = drawer.value
   const lessonId = props.editor.lessonId
-  const version = panelVersion
   busy.value = true
   drawerError.value = null
-  try {
-    const next = activity
-      ? await lessonEditorApi.updateActivity(lessonId, activity.type, activity.id, payload)
-      : await lessonEditorApi.addActivity(lessonId, payload)
-    if (version !== panelVersion) return
-    emit('updated', next)
-    emit('notice', t('lessonEditor.activities.saved'))
-    drawer.value = null
-  } catch (reason) {
-    if (version === panelVersion) drawerError.value = resolveApiError(reason, t('lessonEditor.activities.error'))
-  } finally {
-    if (version === panelVersion) busy.value = false
-  }
+  await guard.run(
+    async (isCurrent) => {
+      const next = activity
+        ? await lessonEditorApi.updateActivity(lessonId, activity.type, activity.id, payload)
+        : await lessonEditorApi.addActivity(lessonId, payload)
+      if (!isCurrent()) return
+      emit('updated', next)
+      emit('notice', t('lessonEditor.activities.saved'))
+      drawer.value = null
+    },
+    {
+      onError: (reason) => {
+        drawerError.value = resolveApiError(reason, t('lessonEditor.activities.error'))
+      },
+      onFinally: () => {
+        busy.value = false
+      },
+    },
+  )
 }
 </script>

@@ -13,6 +13,8 @@ describe('hskLevelName', () => {
     ['en', 4, 'HSK 4'],
     ['en', 6, 'HSK 6'],
     ['ms', 1, 'HSK 1 (Asas)'],
+    ['ms', 2, 'HSK 2 (Harian)'],
+    ['zh-CN', 2, 'HSK 2（日常）'],
     ['zh-CN', 3, 'HSK 3（会话）'],
   ] as const)('%s: level %i reads "%s"', (locale, level, name) => {
     i18n.global.locale.value = locale

@@ -1,4 +1,4 @@
-import { onBeforeUnmount, onMounted, ref, type Ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue'
 import { useRouter, type RouteLocationNormalized, type RouteLocationRaw } from 'vue-router'
 
 /**
@@ -14,6 +14,10 @@ export function useEditorLeaveGuard(
   const router = useRouter()
   const leaveTarget = ref<string | null>(null)
   let confirmed = false
+
+  watch(dirty, (isDirty) => {
+    if (!isDirty) leaveTarget.value = null
+  })
 
   const removeGuard = router.beforeEach((to, from) => {
     if (confirmed || savingCurrent.value || !dirty.value || !isEditorRoute(from) || isEditorRoute(to)) return

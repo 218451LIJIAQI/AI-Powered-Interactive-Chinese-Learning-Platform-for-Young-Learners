@@ -8,5 +8,5 @@ import com.example.aichinese.entity.LearnUnitPhrase;
 
 public interface LearnUnitPhraseRepository extends JpaRepository<LearnUnitPhrase, Long> {
 
-    List<LearnUnitPhrase> findByUnitIdOrderByPositionAsc(Long unitId);
+    List<LearnUnitPhrase> findByUnitIdOrderByPositionAscIdAsc(Long unitId);
 }

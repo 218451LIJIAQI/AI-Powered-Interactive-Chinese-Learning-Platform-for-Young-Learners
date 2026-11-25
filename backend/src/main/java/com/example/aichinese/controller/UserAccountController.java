@@ -1,6 +1,5 @@
 package com.example.aichinese.controller;
 
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -79,7 +78,7 @@ public class UserAccountController {
     @PutMapping("/notification-preferences")
     public ApiResponse<NotificationPreferences> updateNotificationPreferences(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
-            @RequestBody NotificationPreferences request) {
+            @Valid @RequestBody NotificationPreferences request) {
         return ApiResponse.success(
                 "Notification preferences saved.",
                 accountService.updatePreferences(currentUser, request));
@@ -128,8 +127,7 @@ public class UserAccountController {
         AuthSessionResponse session = authService.changePassword(
                 currentUser,
                 request,
-                clientIpResolver.resolve(httpRequest),
-                httpRequest.getHeader(HttpHeaders.USER_AGENT));
+                clientIpResolver.resolve(httpRequest));
         return refreshCookies.sessionResponse(
                 httpRequest,
                 "Password changed successfully. Other sessions have been signed out.",

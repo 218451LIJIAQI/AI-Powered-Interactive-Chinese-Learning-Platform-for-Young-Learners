@@ -1,9 +1,11 @@
 package com.example.aichinese.dto.support;
 
 import static com.example.aichinese.dto.DtoNormalization.redactLength;
-import static com.example.aichinese.dto.DtoNormalization.strip;
+import static com.example.aichinese.dto.DtoNormalization.stripMultiline;
 
 import com.example.aichinese.entity.enums.SupportTopic;
+import com.example.aichinese.util.AiInputSanitizer;
+import com.example.aichinese.util.TextUtils;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -26,8 +28,8 @@ public record CreateSupportRequest(
         String message) {
 
     public CreateSupportRequest {
-        subject = strip(subject);
-        message = strip(message);
+        subject = TextUtils.collapseWhitespaceToNull(AiInputSanitizer.sanitizeUnbounded(subject));
+        message = AiInputSanitizer.sanitizeUnbounded(stripMultiline(message));
     }
 
     @Override

@@ -1,6 +1,8 @@
 package com.example.aichinese.dto.learn;
 
+import static com.example.aichinese.dto.DtoNormalization.redactLength;
 import static com.example.aichinese.dto.DtoNormalization.strip;
+import static com.example.aichinese.dto.DtoNormalization.stripToNull;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -27,5 +29,14 @@ public record PracticeItemAnswer(
 
     public PracticeItemAnswer {
         itemKey = strip(itemKey);
+        answer = stripToNull(answer);
+    }
+
+    @Override
+    public String toString() {
+        return "PracticeItemAnswer[itemKey=" + itemKey
+                + ", answer=" + redactLength(answer)
+                + ", confidence=" + confidence
+                + ", audioFailed=" + audioFailed + "]";
     }
 }

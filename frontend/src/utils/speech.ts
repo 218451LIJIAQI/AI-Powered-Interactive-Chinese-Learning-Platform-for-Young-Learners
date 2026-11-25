@@ -4,7 +4,7 @@
 const NORMAL_RATE = 0.9
 const SLOW_RATE = 0.55
 
-export type SpeechStateReason = 'started' | 'ended' | 'error' | 'cancelled'
+type SpeechStateReason = 'started' | 'ended' | 'error' | 'cancelled'
 export type SpeechStateListener = (speaking: boolean, reason: SpeechStateReason) => void
 
 interface ActiveSpeech {

@@ -1,16 +1,13 @@
 /**
- * The learning plan module's endpoints: Home, the setup, the plan page, a new goal, a retaken level check and the
- * e-mail confirmation of a new account.
+ * The learning plan module's endpoints: Home, the setup, the plan page, a new goal and a retaken level check.
  */
 import type { AppLanguage } from '@/types/api'
-import type { LinkTokenResponse } from '@/types/ops'
+import type { LevelCheckAnswer } from '@/types/learn'
 import type {
   BuildPlanPayload,
-  EmailConfirmation,
   GoalInput,
   HomeView,
   LearningPlan,
-  LevelCheckAnswer,
   PlanOptions,
   PlanOverview,
   RetakeResult,
@@ -54,22 +51,12 @@ export const planApi = {
   pickClass(classId: number | null) {
     return apiPut<LearningPlan>('/students/plan/class-pick', { classId })
   },
-  retake(answers: readonly LevelCheckAnswer[], language: AppLanguage) {
-    return apiPost<RetakeResult>('/students/plan/level-check', { answers, language }, BUILD_CONFIG)
+  retake(answers: readonly LevelCheckAnswer[], language: AppLanguage, runToken?: string | null) {
+    const body = runToken ? { answers, language, runToken } : { answers, language }
+    return apiPost<RetakeResult>('/students/plan/level-check', body, BUILD_CONFIG)
   },
   /** "Set up later", also after the plan was built: a draft that was not started is discarded. */
   skip() {
     return apiPost<void>('/students/plan/skip')
-  },
-}
-
-export const emailConfirmationApi = {
-  /** "Send the link again" (once a minute). */
-  resend() {
-    return apiPost<EmailConfirmation>('/users/me/email-confirmation')
-  },
-  /** The link from the sign-up e-mail. */
-  confirm(token: string) {
-    return apiPost<LinkTokenResponse>('/auth/confirm-signup-email', { token })
   },
 }

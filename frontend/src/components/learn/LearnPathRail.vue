@@ -29,6 +29,9 @@
         :pending-hint="goalHint"
       />
     </section>
+    <section v-else-if="todayError" class="learn-rail-section" data-testid="today-error">
+      <DataNotice :error="todayError" :on-retry="onRetryToday" />
+    </section>
 
     <section v-if="today && today.mistakesWaiting > 0" class="learn-rail-section" data-testid="practise-card">
       <h2 class="learn-rail-heading">{{ t('learn.practiseWhatYouLearned') }}</h2>
@@ -46,6 +49,7 @@
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 
+import DataNotice from '@/components/common/DataNotice.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { learnMessages } from '@/plugins/learnMessages'
 import type { LearnPath, PathCheckpoint, TodaySummary } from '@/types/learn'
@@ -59,6 +63,8 @@ import DailyGoalMeter from './DailyGoalMeter.vue'
 interface Props {
   path: LearnPath
   today: TodaySummary | null
+  todayError?: string | null
+  onRetryToday?: () => void
 }
 
 const props = defineProps<Props>()

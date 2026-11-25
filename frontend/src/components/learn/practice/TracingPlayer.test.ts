@@ -3,10 +3,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { setAccessToken } from '@/api/http'
 import { buttonNamed, deferred } from '@/test/helpers'
-import { hintSettings, practiceItem, practiceResult } from '@/test/learnFixtures'
+import { flashcardSet, hintSettings, practiceItem, practiceResult } from '@/test/learnFixtures'
 import type { PracticeResult, PracticeSet } from '@/types/learn'
 
-import { mountPlayer, tracingSet } from './practicePlayerTestHelpers'
+import { mountPlayer } from './practicePlayerTestHelpers'
+
+const tracingSet: PracticeSet = {
+  ...flashcardSet(),
+  id: 13,
+  type: 'TRACING',
+  stage: 'GUIDED',
+  items: [practiceItem('0', { hanzi: '学', pinyin: 'xué', meaning: 'to learn' })],
+  strokeCount: 2,
+}
 
 const api = vi.hoisted(() => ({ complete: vi.fn(), hint: vi.fn() }))
 const hintApi = vi.hoisted(() => ({ settings: vi.fn() }))
@@ -68,7 +77,7 @@ describe('TracingPlayer', () => {
     await flushPromises()
 
     expect(api.complete).toHaveBeenCalledWith('TRACING', 13, [], 2)
-    expect(wrapper.emitted('finished')![0]![1]).toBe('xué · to learn')
+    expect(wrapper.emitted('finished')![0]![0]).toMatchObject({ recap: 'xué · to learn' })
   })
 
   it('counts a word’s strokes per character when the set gives each character’s strokes', async () => {

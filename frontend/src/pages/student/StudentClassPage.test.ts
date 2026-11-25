@@ -282,4 +282,18 @@ describe('StudentClassPage', () => {
     expect(wrapper.find('[data-testid="leave-class"]').exists()).toBe(false)
     expect(wrapper.findAll('a.student-class-lesson')).toHaveLength(2)
   })
+
+  it('does not claim all lessons are finished when a joined class has zero lessons', async () => {
+    api.classPage.mockResolvedValue({
+      ...joined(),
+      summary: { ...card, lessonCount: 0 },
+      completedLessons: 0,
+      nextStep: null,
+      units: [],
+    })
+    const { wrapper } = await mountPage()
+
+    expect(wrapper.find('[data-testid="class-next"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('You finished every lesson of this class.')
+  })
 })

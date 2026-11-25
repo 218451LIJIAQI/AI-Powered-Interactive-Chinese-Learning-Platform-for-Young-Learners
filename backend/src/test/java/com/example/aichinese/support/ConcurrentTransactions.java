@@ -1,8 +1,6 @@
 package com.example.aichinese.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mockingDetails;
 
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
@@ -15,16 +13,29 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
-import org.mockito.stubbing.Stubber;
+import org.aopalliance.intercept.MethodInterceptor;
+import org.springframework.aop.framework.Advised;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** Commit a second request between the first transaction's managed-entity read and write. */
+/**
+ * Concurrency test harness: prove row-lock serialization against InnoDB ({@link #withRowLock}), interleave a
+ * competing commit after an earlier read ({@link #withEarlierRead}), or pause at a Spring AOP boundary
+ * ({@link #withPausedOperation}, {@link #withAfterMethod}).
+ */
 public final class ConcurrentTransactions {
 
     private ConcurrentTransactions() {
+    }
+
+    public static TransactionTemplate readCommitted(PlatformTransactionManager transactionManager) {
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+        transaction.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
+        return transaction;
     }
 
     /** Start the competing request at the first operation's chosen boundary and prove it blocked before continuing. */
@@ -105,18 +116,48 @@ public final class ConcurrentTransactions {
         }), concurrentSave);
     }
 
-    /** Run the repository spy's real lookup, then pause once on the transaction thread that installed this stub. */
-    public static Stubber pauseAfterLookup(Runnable pause) {
-        Thread paused = Thread.currentThread();
+    /**
+     * Runs {@code hook} once after {@code methodName} returns on the calling thread while {@code action} executes
+     * against a Spring AOP proxy, removing the advice in {@code finally}.
+     */
+    public static void withAfterMethod(Object advisedBean, String methodName, Runnable hook, Runnable action) {
+        withAfterMethod(advisedBean, methodName, args -> true, true, hook, action);
+    }
+
+    /**
+     * Runs {@code hook} immediately after matching calls to {@code methodName} return on the calling thread while
+     * {@code action} executes against a Spring AOP proxy, removing the advice in {@code finally}.
+     */
+    public static void withAfterMethod(
+            Object advisedBean,
+            String methodName,
+            Predicate<Object[]> argsMatch,
+            boolean once,
+            Runnable hook,
+            Runnable action) {
+        Thread installingThread = Thread.currentThread();
         AtomicBoolean fired = new AtomicBoolean();
-        return doAnswer(invocation -> {
-            Object found = mockingDetails(invocation.getMock()).getMockCreationSettings().getDefaultAnswer()
-                    .answer(invocation);
-            if (Thread.currentThread() == paused && fired.compareAndSet(false, true)) {
-                pause.run();
+        MethodInterceptor interceptor = invocation -> {
+            Object result = invocation.proceed();
+            if (Thread.currentThread() == installingThread
+                    && invocation.getMethod().getName().equals(methodName)
+                    && argsMatch.test(invocation.getArguments())
+                    && (!once || fired.compareAndSet(false, true))) {
+                hook.run();
             }
-            return found;
-        });
+            return result;
+        };
+        Advised advised = (Advised) advisedBean;
+        synchronized (advised) {
+            advised.addAdvice(0, interceptor);
+        }
+        try {
+            action.run();
+        } finally {
+            synchronized (advised) {
+                advised.removeAdvice(interceptor);
+            }
+        }
     }
 
     /** The first operation chooses its pause boundary, with or without a surrounding transaction. */
@@ -130,9 +171,6 @@ public final class ConcurrentTransactions {
                 try {
                     operation.accept(() -> {
                         reachedPause.complete(true);
-                        if (aborted.get()) {
-                            throw new AssertionError("Concurrent test aborted before resuming paused transaction.");
-                        }
                         await(continueSave);
                         if (aborted.get()) {
                             throw new AssertionError("Concurrent test aborted before post-pause writes.");
@@ -143,19 +181,18 @@ public final class ConcurrentTransactions {
                     reachedPause.complete(false);
                 }
             });
-            boolean paused;
-            try {
-                paused = reachedPause.get(20, TimeUnit.SECONDS);
-                if (paused) {
-                    concurrentSave.run();
+            boolean paused = reachedPause.get(20, TimeUnit.SECONDS);
+            if (!paused) {
+                try {
+                    delayed.get(10, TimeUnit.SECONDS);
+                } catch (ExecutionException failure) {
+                    throw new AssertionError("The first operation failed before reaching its pause", failure.getCause());
                 }
-            } catch (Throwable failure) {
-                aborted.set(true);
-                throw failure;
+                throw new AssertionError("The first operation returned before reaching its pause");
             }
+            concurrentSave.run();
             continueSave.countDown();
             awaitUnwrapped(delayed, 10, TimeUnit.SECONDS);
-            assertThat(paused).as("the first operation reached its pause").isTrue();
         } finally {
             aborted.set(true);
             continueSave.countDown();

@@ -1,6 +1,11 @@
 package com.example.aichinese.config.seed;
 
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,10 +17,12 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.example.aichinese.config.ProductionProfiles;
+import com.example.aichinese.dto.auth.MaxUtf8Bytes;
 
 import com.example.aichinese.entity.Badge;
 import com.example.aichinese.entity.LearningCategory;
 import com.example.aichinese.entity.Role;
+import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.RoleName;
 import com.example.aichinese.repository.BadgeRepository;
 import com.example.aichinese.repository.LearningCategoryRepository;
@@ -26,6 +33,7 @@ import com.example.aichinese.service.AuthService;
 import com.example.aichinese.service.PlatformSettingsService;
 import com.example.aichinese.service.PlatformSettingsService.SettingDefinition;
 import com.example.aichinese.service.RewardBadge;
+import com.example.aichinese.service.account.AccountGuards;
 import com.example.aichinese.service.learn.HintPolicyService;
 import com.example.aichinese.util.LanguageCodes;
 
@@ -51,6 +59,17 @@ public class DataSeeder implements CommandLineRunner {
             "Personal interest");
 
     private static final int MIN_ADMIN_PASSWORD_LENGTH = 8;
+    private static final int MAX_ADMIN_EMAIL_LENGTH = 150;
+    private static final Pattern ADMIN_EMAIL_PATTERN =
+            Pattern.compile("^[^\\s@\\p{Cntrl}]+@[^\\s@\\p{Cntrl}.]+(?:\\.[^\\s@\\p{Cntrl}.]+)+$");
+    private static final Set<String> DISALLOWED_PROD_PASSWORDS = Set.of(
+            "choose-a-strong-1",
+            "demostudent123!",
+            "e2e-admin-pass-2026",
+            "e2e-student-pass-2026",
+            "password123!",
+            "admin123!",
+            "admin@123");
 
     private final RoleRepository roleRepository;
     private final LearningCategoryRepository learningCategoryRepository;
@@ -124,25 +143,43 @@ public class DataSeeder implements CommandLineRunner {
     }
 
     private void seedDefaultAdmin() {
-        if (defaultAdminEmail.isBlank() || defaultAdminPassword.isBlank()) {
+        boolean emailBlank = defaultAdminEmail == null || defaultAdminEmail.isBlank();
+        boolean passwordBlank = defaultAdminPassword == null || defaultAdminPassword.isBlank();
+        if (emailBlank && passwordBlank) {
             log.warn("Default admin credentials are not configured. Skipping default admin creation safely.");
             return;
         }
+        if (emailBlank || passwordBlank) {
+            throw new IllegalStateException(
+                    "Both DEFAULT_ADMIN_EMAIL and DEFAULT_ADMIN_PASSWORD must be configured together.");
+        }
+        String normalizedEmail = AuthService.normalizeEmail(defaultAdminEmail);
+        if (normalizedEmail.length() > MAX_ADMIN_EMAIL_LENGTH
+                || !ADMIN_EMAIL_PATTERN.matcher(normalizedEmail).matches()
+                || normalizedEmail.endsWith(AccountGuards.DELETED_ACCOUNT_DOMAIN)) {
+            throw new IllegalStateException(
+                    "DEFAULT_ADMIN_EMAIL must be a valid non-reserved email address of at most 150 characters.");
+        }
+        if (defaultAdminPassword.getBytes(StandardCharsets.UTF_8).length > MaxUtf8Bytes.BCRYPT_MAX_PASSWORD_BYTES) {
+            throw new IllegalStateException(
+                    "DEFAULT_ADMIN_PASSWORD must be at most 72 bytes in UTF-8 encoding.");
+        }
+        String strippedPassword = defaultAdminPassword.strip();
         if (ProductionProfiles.isActive(environment)
                 && (ProductionProfiles.isPlaceholder(defaultAdminPassword)
-                        || defaultAdminPassword.length() < MIN_ADMIN_PASSWORD_LENGTH)) {
+                        || DISALLOWED_PROD_PASSWORDS.contains(strippedPassword.toLowerCase(Locale.ROOT))
+                        || strippedPassword.length() < MIN_ADMIN_PASSWORD_LENGTH)) {
             throw new IllegalStateException(
-                    "DEFAULT_ADMIN_PASSWORD must be at least 8 characters and not a placeholder value when the prod profile is active.");
+                    "DEFAULT_ADMIN_PASSWORD must be at least 8 characters and not a placeholder or demo value when the prod profile is active.");
         }
-
-        String normalizedEmail = AuthService.normalizeEmail(defaultAdminEmail);
 
         if (userRepository.existsByEmailIgnoreCase(normalizedEmail)) {
             return;
         }
 
-        authService.createAccount(
+        User admin = authService.createAccount(
                 "Platform Administrator", normalizedEmail, defaultAdminPassword, LanguageCodes.ENGLISH, RoleName.ADMIN);
+        admin.setEmailVerifiedAt(LocalDateTime.now());
         log.info("Default admin account created.");
     }
 }

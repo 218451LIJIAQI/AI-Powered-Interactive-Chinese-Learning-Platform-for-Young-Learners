@@ -1,6 +1,6 @@
 <template>
   <div class="lesson-with-rail">
-    <section class="panel authoring-card" aria-labelledby="lesson-quiz-title">
+    <section ref="quizPanel" class="panel authoring-card" aria-labelledby="lesson-quiz-title">
       <template v-if="questions.length">
         <div class="section-header">
           <h2 id="lesson-quiz-title" class="card-title">{{ t('lessonEditor.quiz.questions') }}</h2>
@@ -140,6 +140,7 @@
             }}</span>
             <input
               :id="`${baseId}-hints`"
+              ref="hintsSwitch"
               class="switch"
               type="checkbox"
               role="switch"
@@ -169,10 +170,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue'
+import { computed, nextTick, ref, useId } from 'vue'
 
 import { lessonEditorApi } from '@/api/adminClasses'
-import AdminQuizDraftPanel from '@/components/admin/AdminQuizDraftPanel.vue'
+import AdminQuizDraftPanel from '@/components/classes/AdminQuizDraftPanel.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
 import CjkText from '@/components/learning/CjkText.vue'
@@ -181,12 +182,12 @@ import { classesMessages } from '@/plugins/classesMessages'
 import { lessonEditorMessages } from '@/plugins/lessonEditorMessages'
 import type { AiQuizGeneratorResponse } from '@/types/api'
 import type { EditorQuestion, LessonEditor, QuestionPayload } from '@/types/adminClasses'
-import { quizDraftToQuestionDrafts } from '@/utils/aiDraft'
 import { apiErrorStatus, resolveApiError } from '@/utils/apiError'
 import { questionTypeKey } from '@/utils/classes'
-import { DEFAULT_QUESTION_POINTS, QUIZ_SIZE, lessonQuiz } from '@/utils/lessonEditor'
+import { QUIZ_SIZE, lessonQuiz, quizDraftToQuestionPayloads } from '@/utils/lessonEditor'
 
 import LessonQuestionDrawer from './LessonQuestionDrawer.vue'
+import { useLessonPanelGuard } from './useLessonPanelGuard'
 
 /**
  * The Quiz tab: the lesson's quiz of exactly 5 questions, with AI-assisted drafts and the "Allow SparkBot hints"
@@ -221,31 +222,54 @@ const busy = ref(false)
 const generating = ref(false)
 /** A write or an AI draft is out: no other change starts meanwhile. */
 const working = computed(() => busy.value || generating.value)
-watch(working, (saving) => emit('saving', saving), { flush: 'sync' })
 /** Undefined closes the drawer; null opens it for a new question. */
 const editingQuestion = ref<EditorQuestion | null>()
 const drawerError = ref<string | null>(null)
-/**
- * Bumped whenever this panel switches to another lesson or unmounts so in-flight mutations and batches belonging to
- * the previous lesson drop silently instead of mutating or emitting onto the new lesson.
- */
-let panelVersion = 0
-watch(
-  () => props.editor.lessonId,
-  () => {
-    panelVersion += 1
+const quizPanel = ref<HTMLElement | null>(null)
+const hintsSwitch = ref<HTMLInputElement | null>(null)
+const questionList = ref<HTMLOListElement | null>(null)
+
+const guard = useLessonPanelGuard({
+  lessonId: () => props.editor.lessonId,
+  saving: working,
+  onSaving: (saving) => emit('saving', saving),
+  onReset: () => {
     editingQuestion.value = undefined
     drawerError.value = null
     savingHints.value = null
     busy.value = false
     generating.value = false
   },
-  { flush: 'sync' },
-)
-onBeforeUnmount(() => {
-  panelVersion += 1
-  if (working.value) emit('saving', false)
 })
+
+async function runBusyAction(
+  work: (isCurrent: () => boolean) => Promise<void>,
+  options: {
+    errorMessage: string
+    onError?: (message: string) => void
+    onFinally?: () => void
+    afterSuccess?: () => void
+    afterSettled?: () => void
+  },
+): Promise<void> {
+  const version = guard.capture()
+  busy.value = true
+  const succeeded = await guard.run(work, {
+    onError: (reason) => {
+      const message = resolveApiError(reason, options.errorMessage)
+      if (options.onError) options.onError(message)
+      else emit('error', message)
+    },
+    onFinally: () => {
+      options.onFinally?.()
+      busy.value = false
+    },
+  })
+  const after = succeeded ? (options.afterSuccess ?? options.afterSettled) : options.afterSettled
+  if (!after || !guard.isCurrent(version)) return
+  await nextTick()
+  if (guard.isCurrent(version)) after()
+}
 
 /** "meitian.mp3" for a link to an audio file; the server only stores full web addresses. */
 function fileName(url: string): string {
@@ -261,24 +285,24 @@ function fileName(url: string): string {
  * this editor is then out of date, so it is read again and the quiz shows, and the next action uses it. The refusal
  * still reaches the caller, which says so.
  */
-async function addQuiz(current: LessonEditor, hints: boolean, version: number): Promise<LessonEditor> {
+async function addQuiz(current: LessonEditor, hints: boolean, isCurrent: () => boolean): Promise<LessonEditor> {
   try {
     return await lessonEditorApi.addQuiz(current.lessonId, { title: current.title, hintsAllowed: hints })
   } catch (reason) {
-    if (apiErrorStatus(reason) === 409 && version === panelVersion) {
+    if (apiErrorStatus(reason) === 409 && isCurrent()) {
       const fresh = await lessonEditorApi.get(current.lessonId).catch(() => null)
-      if (fresh && version === panelVersion) emit('updated', fresh)
+      if (fresh && isCurrent()) emit('updated', fresh)
     }
     throw reason
   }
 }
 
 /** The id of the lesson's quiz; a new lesson gets it, hints off, with its first question. */
-async function ensureQuiz(current: LessonEditor, version: number): Promise<number | null> {
+async function ensureQuiz(current: LessonEditor, isCurrent: () => boolean): Promise<number | null> {
   const existing = lessonQuiz(current)
   if (existing) return existing.id
-  const next = await addQuiz(current, false, version)
-  if (version !== panelVersion) return null
+  const next = await addQuiz(current, false, isCurrent)
+  if (!isCurrent()) return null
   emit('updated', next)
   return next.quizzes[0]!.id
 }
@@ -294,27 +318,28 @@ async function setHints(input: HTMLInputElement): Promise<void> {
     input.checked = hintsChecked.value
     return
   }
+  const hadFocus = document.activeElement === input
   const current = props.editor
   const existing = lessonQuiz(current)
-  const version = panelVersion
-  busy.value = true
   savingHints.value = allowed
-  try {
-    const next = existing
-      ? await lessonEditorApi.updateQuiz(current.lessonId, existing.id, { hintsAllowed: allowed })
-      : await addQuiz(current, allowed, version)
-    if (version !== panelVersion) return
-    emit('updated', next)
-    emit('notice', t('lessonEditor.quiz.hintsSaved'))
-  } catch (reason) {
-    if (version === panelVersion) emit('error', resolveApiError(reason, t('lessonEditor.quiz.error')))
-  } finally {
-    if (version === panelVersion) {
+  await runBusyAction(
+    async (isCurrent) => {
+      const next = existing
+        ? await lessonEditorApi.updateQuiz(current.lessonId, existing.id, { hintsAllowed: allowed })
+        : await addQuiz(current, allowed, isCurrent)
+      if (!isCurrent()) return
+      emit('updated', next)
+      emit('notice', t('lessonEditor.quiz.hintsSaved'))
+    },
+    {
+      errorMessage: t('lessonEditor.quiz.error'),
       // From here the switch shows the quiz's setting: the saved one, or the one it still has when the save failed.
-      savingHints.value = null
-      busy.value = false
-    }
-  }
+      onFinally: () => {
+        savingHints.value = null
+      },
+      afterSettled: hadFocus ? () => hintsSwitch.value?.focus() : undefined,
+    },
+  )
 }
 
 function openQuestion(question: EditorQuestion | null): void {
@@ -327,51 +352,68 @@ async function saveQuestion(payload: QuestionPayload): Promise<void> {
   const question = editingQuestion.value
   if (question === undefined || busy.value || !canEdit.value) return
   const current = props.editor
-  const version = panelVersion
-  busy.value = true
+  const targetNumber = question ? question.number : questions.value.length + 1
   drawerError.value = null
-  try {
-    let next: LessonEditor
-    if (question) {
-      // Saved by the admin: the server checks an AI draft too.
-      next = await lessonEditorApi.updateQuestion(current.lessonId, question.id, payload)
-    } else {
-      const quizId = await ensureQuiz(current, version)
-      if (quizId === null || version !== panelVersion) return
-      next = await lessonEditorApi.addQuestion(current.lessonId, quizId, payload)
-    }
-    if (version !== panelVersion) return
-    emit('updated', next)
-    // X1.18: one confirmation for a new question and an edited one.
-    emit('notice', t('lessonEditor.question.saved'))
-    editingQuestion.value = undefined
-  } catch (reason) {
-    if (version === panelVersion) drawerError.value = resolveApiError(reason, t('lessonEditor.question.error'))
-  } finally {
-    if (version === panelVersion) busy.value = false
-  }
+  await runBusyAction(
+    async (isCurrent) => {
+      let next: LessonEditor
+      if (question) {
+        // Saved by the admin: the server checks an AI draft too.
+        next = await lessonEditorApi.updateQuestion(current.lessonId, question.id, payload)
+      } else {
+        const quizId = await ensureQuiz(current, isCurrent)
+        if (quizId === null || !isCurrent()) return
+        next = await lessonEditorApi.addQuestion(current.lessonId, quizId, payload)
+      }
+      if (!isCurrent()) return
+      emit('updated', next)
+      // X1.18: one confirmation for a new question and an edited one.
+      emit('notice', t('lessonEditor.question.saved'))
+      editingQuestion.value = undefined
+    },
+    {
+      errorMessage: t('lessonEditor.question.error'),
+      onError: (message) => {
+        drawerError.value = message
+      },
+      // Re-focuses the saved question's Edit button even if the 1st edit cloned ids or adding the 5th disabled Add.
+      afterSuccess: () => {
+        const focusNumber = Math.min(targetNumber, questions.value.length)
+        if (focusNumber > 0) {
+          questionList.value?.querySelector<HTMLButtonElement>(`[data-question-edit="${focusNumber}"]`)?.focus()
+        }
+      },
+    },
+  )
 }
 
 /** Deleting runs at once; the editor's toast offers Undo, which puts the question back in its place. */
 async function deleteQuestion(question: EditorQuestion): Promise<void> {
   const quizId = quiz.value?.id
   if (working.value || !canEdit.value || quizId === undefined) return
-  const version = panelVersion
-  busy.value = true
-  try {
-    const next = await lessonEditorApi.deleteQuestion(props.editor.lessonId, question.id)
-    if (version !== panelVersion) return
-    emit('updated', next)
-    emit('deleted', question, quizId)
-  } catch (reason) {
-    if (version === panelVersion) emit('error', resolveApiError(reason, t('lessonEditor.quiz.error')))
-  } finally {
-    if (version === panelVersion) busy.value = false
-  }
+  const deletedNumber = question.number
+  await runBusyAction(
+    async (isCurrent) => {
+      const next = await lessonEditorApi.deleteQuestion(props.editor.lessonId, question.id)
+      if (!isCurrent()) return
+      emit('updated', next)
+      emit('deleted', question, quizId)
+    },
+    {
+      errorMessage: t('lessonEditor.quiz.error'),
+      // After Delete (success or failure), restore focus to the surviving question's Edit button (or Add question when empty).
+      afterSettled: () => {
+        const remainingCount = questions.value.length
+        if (remainingCount > 0) {
+          const focusNumber = Math.min(deletedNumber, remainingCount)
+          questionList.value?.querySelector<HTMLButtonElement>(`[data-question-edit="${focusNumber}"]`)?.focus()
+        } else {
+          quizPanel.value?.querySelector<HTMLButtonElement>('[data-testid="add-first-question"]')?.focus()
+        }
+      },
+    },
+  )
 }
-
-/** After Keep, focus goes to the same row's Edit button (Keep leaves the row). */
-const questionList = ref<HTMLOListElement | null>(null)
 
 /**
  * Keep: the admin checked an AI draft and keeps it as it is, so it is no longer an AI draft and stops holding back
@@ -379,22 +421,20 @@ const questionList = ref<HTMLOListElement | null>(null)
  */
 async function keepQuestion(question: EditorQuestion, number: number): Promise<void> {
   if (working.value || !canEdit.value) return
-  const version = panelVersion
-  busy.value = true
-  try {
-    const next = await lessonEditorApi.keepQuestion(props.editor.lessonId, question.id)
-    if (version !== panelVersion) return
-    emit('updated', next)
-  } catch (reason) {
-    if (version === panelVersion) emit('error', resolveApiError(reason, t('lessonEditor.quiz.error')))
-    return
-  } finally {
-    if (version === panelVersion) busy.value = false
-  }
-  // Once the buttons are enabled again: a disabled button takes no focus.
-  await nextTick()
-  if (version !== panelVersion) return
-  questionList.value?.querySelector<HTMLButtonElement>(`[data-question-edit="${number}"]`)?.focus()
+  await runBusyAction(
+    async (isCurrent) => {
+      const next = await lessonEditorApi.keepQuestion(props.editor.lessonId, question.id)
+      if (!isCurrent()) return
+      emit('updated', next)
+    },
+    {
+      errorMessage: t('lessonEditor.quiz.error'),
+      // Once the buttons are enabled again (success or failure), restore focus to this row's Edit button.
+      afterSettled: () => {
+        questionList.value?.querySelector<HTMLButtonElement>(`[data-question-edit="${number}"]`)?.focus()
+      },
+    },
+  )
 }
 
 /**
@@ -405,31 +445,20 @@ async function keepQuestion(question: EditorQuestion, number: number): Promise<v
 async function addDraftQuestions(draft: AiQuizGeneratorResponse): Promise<void> {
   if (busy.value || !canEdit.value) return
   const current = props.editor
-  const toAdd = quizDraftToQuestionDrafts(draft).slice(0, remaining.value)
+  const toAdd = quizDraftToQuestionPayloads(draft).slice(0, remaining.value)
   if (!toAdd.length) return
-  const version = panelVersion
-  busy.value = true
-  try {
-    const quizId = await ensureQuiz(current, version)
-    if (quizId === null || version !== panelVersion) return
-    for (const question of toAdd) {
-      const next = await lessonEditorApi.addQuestion(current.lessonId, quizId, {
-        questionType: question.questionType,
-        questionText: question.questionText,
-        points: DEFAULT_QUESTION_POINTS,
-        correctAnswerText: question.correctAnswerText || null,
-        explanation: question.explanation || null,
-        options: question.options,
-        aiDraft: true,
-      })
-      if (version !== panelVersion) return
-      emit('updated', next)
-    }
-    emit('notice', t('lessonEditor.quiz.aiAdded'))
-  } catch (reason) {
-    if (version === panelVersion) emit('error', resolveApiError(reason, t('lessonEditor.question.error')))
-  } finally {
-    if (version === panelVersion) busy.value = false
-  }
+  await runBusyAction(
+    async (isCurrent) => {
+      const quizId = await ensureQuiz(current, isCurrent)
+      if (quizId === null || !isCurrent()) return
+      for (const payload of toAdd) {
+        const next = await lessonEditorApi.addQuestion(current.lessonId, quizId, payload)
+        if (!isCurrent()) return
+        emit('updated', next)
+      }
+      emit('notice', t('lessonEditor.quiz.aiAdded'))
+    },
+    { errorMessage: t('lessonEditor.question.error') },
+  )
 }
 </script>

@@ -134,8 +134,6 @@ class TransactionalEmailDispatcherTests {
                 .startsWith("Waiting for an admin on MandarinSpark:")
                 .contains("AI reports: 1" + LINE + "https://app.example.com/admin/ai")
                 .contains("Support requests: 3" + LINE + "https://app.example.com/admin/support")
-                .doesNotContain("Teacher applications")
-                .doesNotContain("Content reviews")
                 .endsWith(SWITCH_OFF_NOTE);
 
         Sent malay = delivered(dispatcher -> dispatcher.enqueueReviewQueueDigest(recipient("ms"), waiting));

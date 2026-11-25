@@ -16,13 +16,12 @@
     <StatePanel
       v-else-if="detail.error.value"
       tone="error"
-      icon="alert"
       :title="t('adminLearning.unitError')"
       :message="detail.error.value"
       @retry="detail.reload"
     />
-    <section v-else-if="unit" class="admin-section" aria-labelledby="unit-detail-lessons">
-      <h3 id="unit-detail-lessons" class="admin-section-title">{{ t('adminLearning.lessons') }}</h3>
+    <section v-else-if="unit" class="admin-section" :aria-labelledby="`${baseId}-lessons`">
+      <h3 :id="`${baseId}-lessons`" class="admin-section-title">{{ t('adminLearning.lessons') }}</h3>
       <ol class="row-list">
         <li v-for="stop in stops" :key="stop.id">
           <span class="admin-path-stop">
@@ -49,6 +48,7 @@
         class="btn btn-secondary"
         type="button"
         :disabled="busy"
+        :aria-busy="busy || undefined"
         data-testid="unit-unpublish"
         @click="confirming = true"
       >
@@ -59,7 +59,7 @@
         class="btn btn-primary"
         type="button"
         :disabled="busy"
-        :aria-busy="busy"
+        :aria-busy="busy || undefined"
         data-testid="unit-publish"
         @click="changeStatus(true)"
       >
@@ -81,7 +81,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, useId } from 'vue'
 
 import { adminLearningApi } from '@/api/learn'
 import AppOverlay from '@/components/common/AppOverlay.vue'
@@ -89,6 +89,7 @@ import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
 import CjkText from '@/components/learning/CjkText.vue'
+import { useIsUnmounted } from '@/composables/useIsUnmounted'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { useResource } from '@/composables/useResource'
 import { adminLearningPathMessages } from '@/plugins/adminLearningPathMessages'
@@ -110,6 +111,8 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useLocalMessages({ adminLearning: [adminLearningSharedMessages, adminLearningPathMessages] })
+const baseId = useId()
+const isUnmounted = useIsUnmounted()
 
 const detail = useResource(() => adminLearningApi.unit(props.unitId))
 const busy = ref(false)
@@ -170,14 +173,18 @@ async function changeStatus(publish: boolean): Promise<void> {
   busy.value = true
   actionError.value = null
   try {
-    detail.replace(await adminLearningApi.setUnitPublished(props.unitId, publish))
+    const updated = await adminLearningApi.setUnitPublished(props.unitId, publish)
+    if (isUnmounted()) return
+    detail.replace(updated)
     const title = unitTitle.value
     emit('changed', t(publish ? 'adminLearning.unitPublished' : 'adminLearning.unitUnpublished', { title }))
   } catch (reason) {
-    actionError.value = resolveApiError(reason, t('adminLearning.saveFailed'))
+    if (!isUnmounted()) actionError.value = resolveApiError(reason, t('adminLearning.saveFailed'))
   } finally {
-    busy.value = false
-    confirming.value = false
+    if (!isUnmounted()) {
+      busy.value = false
+      confirming.value = false
+    }
   }
 }
 </script>

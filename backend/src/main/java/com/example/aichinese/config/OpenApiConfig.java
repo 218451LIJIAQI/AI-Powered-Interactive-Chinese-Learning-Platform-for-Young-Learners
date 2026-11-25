@@ -6,6 +6,7 @@ import org.springdoc.core.customizers.OpenApiCustomizer;
 import org.springdoc.core.utils.SpringDocAnnotationsUtils;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 
 import com.example.aichinese.dto.ai.AiChatResponse;
 
@@ -22,6 +23,21 @@ public class OpenApiConfig {
     private static final String BEARER_AUTH = "bearerAuth";
     private static final String REFRESH_COOKIE = "refreshCookie";
     private static final String LOGIN_ENDPOINT = "POST /api/v1/auth/login";
+
+    /** Ensures OpenAPI specs and Swagger UI stay disabled whenever the production profile is active. */
+    public OpenApiConfig(Environment environment) {
+        if (!ProductionProfiles.isActive(environment)) {
+            return;
+        }
+        if (!Boolean.FALSE.equals(environment.getProperty("springdoc.api-docs.enabled", Boolean.class))) {
+            throw new IllegalStateException(
+                    "springdoc.api-docs.enabled must be false when the prod profile is active.");
+        }
+        if (!Boolean.FALSE.equals(environment.getProperty("springdoc.swagger-ui.enabled", Boolean.class))) {
+            throw new IllegalStateException(
+                    "springdoc.swagger-ui.enabled must be false when the prod profile is active.");
+        }
+    }
 
     @Bean
     public OpenAPI aiChineseLearningOpenApi(SecurityProperties security) {

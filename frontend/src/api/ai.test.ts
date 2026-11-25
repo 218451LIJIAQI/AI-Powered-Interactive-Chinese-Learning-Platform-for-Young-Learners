@@ -1,7 +1,5 @@
-import type { AxiosAdapter } from 'axios'
 import { describe, expect, it } from 'vitest'
 
-import { http } from './http'
 import { adminAiApi, aiHelperApi } from './ai'
 import { axiosResponse, installAxiosCapture, restoreAxiosAdapterAfterEach } from '@/test/axiosCapture'
 
@@ -98,11 +96,7 @@ describe('AI Helper wrappers', () => {
   })
 
   it('applies endpoint-specific timeouts to AI generation and practice check uploads', async () => {
-    const timeouts: Array<{ url?: string; timeout?: number }> = []
-    http.defaults.adapter = (async (config) => {
-      timeouts.push({ url: config.url, timeout: config.timeout })
-      return axiosResponse(config, 200, { success: true, data: {} })
-    }) satisfies AxiosAdapter
+    const calls = installAxiosCapture()
 
     await aiHelperApi.xiaomeiReply({ scenario: 'CAFE', turns, message: '你好', languagePreference: 'en' })
     await aiHelperApi.checkPractice({
@@ -118,7 +112,7 @@ describe('AI Helper wrappers', () => {
       languagePreference: 'en',
     })
 
-    expect(timeouts).toEqual([
+    expect(calls.map(({ url, timeout }) => ({ url, timeout }))).toEqual([
       { url: '/ai/conversation/reply', timeout: 45_000 },
       { url: '/ai/practice-checks', timeout: 370_000 },
       { url: '/ai/practice-checks', timeout: 90_000 },
@@ -145,7 +139,8 @@ describe('admin AI wrappers', () => {
     await adminAiApi.hintPolicy()
     await adminAiApi.saveHintPolicy(levels)
 
-    expect(calls).toEqual([
+    expect(calls).toHaveLength(9)
+    expect(calls).toMatchObject([
       { method: 'GET', url: '/admin/ai/reports', params: { page: 1, size: 8 }, data: undefined },
       { method: 'GET', url: '/admin/ai/reports/3', params: undefined, data: undefined },
       {
@@ -174,18 +169,17 @@ describe('admin AI wrappers', () => {
   })
 
   it('downloads the filtered usage log as a CSV file', async () => {
-    const seen: Array<{ url?: string; params: unknown; responseType: unknown }> = []
-    http.defaults.adapter = (async (config) => {
-      seen.push({ url: config.url, params: config.params, responseType: config.responseType })
-      return {
-        ...axiosResponse(config, 200, new Blob(['Time,User'], { type: 'text/csv' })),
-        headers: { 'content-disposition': 'attachment; filename="ai-usage-log-2026-10-28.csv"' },
-      }
-    }) satisfies AxiosAdapter
+    const calls = installAxiosCapture((config) => ({
+      ...axiosResponse(config, 200, new Blob(['Time,User'], { type: 'text/csv' })),
+      headers: { 'content-disposition': 'attachment; filename="ai-usage-log-2026-10-28.csv"' },
+    }))
 
     const file = await adminAiApi.exportUsageLogs({ featureType: '', status: 'FAILED', userRole: '' })
 
     expect(file.fileName).toBe('ai-usage-log-2026-10-28.csv')
-    expect(seen).toEqual([{ url: '/admin/ai/usage-logs/export', params: { status: 'FAILED' }, responseType: 'blob' }])
+    expect(calls).toHaveLength(1)
+    expect(calls).toMatchObject([
+      { url: '/admin/ai/usage-logs/export', params: { status: 'FAILED' }, responseType: 'blob' },
+    ])
   })
 })

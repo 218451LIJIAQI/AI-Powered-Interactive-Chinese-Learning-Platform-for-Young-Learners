@@ -1,5 +1,5 @@
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import IconGlyph from './IconGlyph.vue'
 
@@ -14,9 +14,11 @@ describe('IconGlyph', () => {
   })
 
   it.each(['not-an-icon', 'constructor'])('falls back to the book icon for %s, still hidden', (name) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const wrapper = mount(IconGlyph, { props: { name } })
 
     expect(wrapper.get('svg').attributes('aria-hidden')).toBe('true')
     expect(wrapper.get('svg').classes()).toContain('lucide-book-open')
+    expect(warn).toHaveBeenCalledTimes(1)
   })
 })

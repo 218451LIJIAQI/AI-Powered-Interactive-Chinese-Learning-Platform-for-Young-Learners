@@ -70,8 +70,9 @@ export const accountMessages = {
     passwordChanged: 'Password changed.',
     passwordError: 'Your password was not changed.',
     currentPasswordWrong: 'That’s not your current password. Check it and try again.',
-    passwordLength: 'Use at least 8 characters and at most 72 UTF-8 bytes.',
-    confirmMismatch: 'Confirm password does not match.',
+    passwordLength:
+      'Use at least 8 characters and a shorter password (up to 72 characters in English, fewer for non-Latin scripts).',
+    confirmMismatch: 'Passwords do not match.',
     sameAsCurrent: 'New password must be different from the current password.',
     deviceTitle: 'This device',
     deviceLine: '{browser} on {os}',
@@ -164,8 +165,9 @@ export const accountMessages = {
     passwordChanged: 'Kata laluan ditukar.',
     passwordError: 'Kata laluan anda tidak ditukar.',
     currentPasswordWrong: 'Itu bukan kata laluan semasa anda. Semak dan cuba lagi.',
-    passwordLength: 'Gunakan sekurang-kurangnya 8 aksara dan paling banyak 72 bait UTF-8.',
-    confirmMismatch: 'Pengesahan kata laluan tidak sepadan.',
+    passwordLength:
+      'Gunakan sekurang-kurangnya 8 aksara dan kata laluan yang lebih pendek (sehingga 72 aksara biasa, lebih sedikit untuk aksara bukan Latin).',
+    confirmMismatch: 'Kata laluan tidak sepadan.',
     sameAsCurrent: 'Kata laluan baharu mestilah berbeza daripada kata laluan semasa.',
     deviceTitle: 'Peranti ini',
     deviceLine: '{browser} pada {os}',
@@ -258,7 +260,7 @@ export const accountMessages = {
     passwordChanged: '密码已更改。',
     passwordError: '密码未更改。',
     currentPasswordWrong: '这不是你的当前密码，请检查后再试。',
-    passwordLength: '请至少输入 8 个字符，UTF-8 编码长度最多为 72 字节。',
+    passwordLength: '请至少输入 8 个字符，且密码不能过长（英文最多 72 个字符，中文等非拉丁字符会更少）。',
     confirmMismatch: '两次输入的密码不一致。',
     sameAsCurrent: '新密码不能与当前密码相同。',
     deviceTitle: '这台设备',
@@ -282,4 +284,4 @@ export const accountMessages = {
     loadingHint: '正在获取账号设置。',
     loadErrorTitle: '无法加载账号设置',
   },
-}
+} as const

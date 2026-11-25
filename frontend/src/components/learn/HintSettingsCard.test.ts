@@ -13,7 +13,7 @@ vi.mock('@/api/learn', () => ({ hintApi }))
 import HintSettingsCard from './HintSettingsCard.vue'
 
 async function mountCard() {
-  const wrapper = mount(HintSettingsCard, { global: { stubs: { IconGlyph: true } } })
+  const wrapper = mount(HintSettingsCard)
   await flushPromises()
   return wrapper
 }
@@ -86,12 +86,18 @@ describe('HintSettingsCard', () => {
     expect(wrapper.get('[data-testid="hint-rule"]').text()).toContain('Up to 2 hints per set.')
   })
 
-  it('says at once when the setting cannot be loaded', async () => {
-    hintApi.settings.mockRejectedValue(new Error('offline'))
+  it('says at once when the setting cannot be loaded and retries on click', async () => {
+    hintApi.settings
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce(hintSettings({ mode: 'ON_REQUEST' }))
     const wrapper = await mountCard()
 
     expect(wrapper.get('[role="alert"]').text()).toBe('Your hint setting could not be loaded.')
     expect(wrapper.find('.account-hints-loading').exists()).toBe(false)
+
+    await wrapper.get('[data-testid="hints-retry"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="hint-mode-on-request"]').attributes('aria-pressed')).toBe('true')
   })
 
   it('keeps the saved mode and says so when saving fails', async () => {

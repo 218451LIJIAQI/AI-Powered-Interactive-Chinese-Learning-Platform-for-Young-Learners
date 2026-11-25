@@ -28,7 +28,7 @@ public class ClientIpResolver {
     }
 
     /**
-     * The client address the per-IP rate limits and the refresh-token records use. From a trusted proxy (loopback or
+     * The client address the per-IP rate limits use. From a trusted proxy (loopback or
      * a configured one) X-Forwarded-For is read from the right: the first hop that is no trusted proxy is the client,
      * or the left-most hop when all are. Otherwise, or when a hop is no address, it is the connection's peer. The
      * address comes back in one canonical form, so every spelling of it shares a limit.

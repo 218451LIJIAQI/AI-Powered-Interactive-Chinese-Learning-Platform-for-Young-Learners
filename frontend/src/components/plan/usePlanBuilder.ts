@@ -1,10 +1,11 @@
-import { onUnmounted, ref } from 'vue'
+import { onUnmounted, ref, shallowRef } from 'vue'
 
 import { getAuthSessionVersion } from '@/api/http'
-import type { GoalDraft } from '@/components/plan/goalDraft'
 import { useIsUnmounted } from '@/composables/useIsUnmounted'
 import type { LearningPlan } from '@/types/plan'
 import { apiErrorStatus, resolveApiError } from '@/utils/apiError'
+
+import type { GoalDraft } from './goalDraft'
 
 /** The building screen stays at least this long, so its steps can be read. */
 const MIN_BUILDING_MS = 2400
@@ -31,6 +32,7 @@ export function usePlanBuilder(options: PlanBuilderOptions) {
   const isUnmounted = useIsUnmounted()
   const buildError = ref<string | null>(null)
   const buildErrorStatus = ref<number | null>(null)
+  const buildErrorReason = shallowRef<unknown>(null)
 
   let lastRequest: (() => Promise<BuiltPlan>) | null = null
   let pendingBuild: Promise<BuiltPlan | null> | null = null
@@ -54,6 +56,7 @@ export function usePlanBuilder(options: PlanBuilderOptions) {
     lastRequest = request
     buildError.value = null
     buildErrorStatus.value = null
+    buildErrorReason.value = null
     options.onStart()
 
     const started = Date.now()
@@ -82,6 +85,7 @@ export function usePlanBuilder(options: PlanBuilderOptions) {
       if (stillBuilding()) {
         buildError.value = resolveApiError(reason, options.fallbackError())
         buildErrorStatus.value = apiErrorStatus(reason)
+        buildErrorReason.value = reason
       }
     } finally {
       pendingBuild = null
@@ -98,5 +102,5 @@ export function usePlanBuilder(options: PlanBuilderOptions) {
     return pendingBuild.catch(() => null)
   }
 
-  return { buildError, buildErrorStatus, run, retry, abortAndAwait }
+  return { buildError, buildErrorStatus, buildErrorReason, run, retry, abortAndAwait }
 }

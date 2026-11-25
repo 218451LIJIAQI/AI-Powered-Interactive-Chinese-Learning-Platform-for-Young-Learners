@@ -9,10 +9,7 @@ import { pauseDuringNavigation, usePageActive, usePageRedirect } from './usePage
 
 const Dummy = { template: '<div />' }
 
-async function mountOnPageA(
-  extraRoutes: Parameters<typeof createRouter>[0]['routes'] = [],
-  beforeMount?: (router: Router) => void,
-) {
+async function createTestRouter(extraRoutes: Parameters<typeof createRouter>[0]['routes'] = []) {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -23,6 +20,14 @@ async function mountOnPageA(
   })
   await router.push('/a')
   await router.isReady()
+  return router
+}
+
+async function mountOnPageA(
+  extraRoutes: Parameters<typeof createRouter>[0]['routes'] = [],
+  beforeMount?: (router: Router) => void,
+) {
+  const router = await createTestRouter(extraRoutes)
   beforeMount?.(router)
 
   const { result: pageActive, wrapper } = withSetup(() => usePageActive(), [router])
@@ -131,23 +136,13 @@ describe('usePageActive', () => {
   })
 
   it('pauseDuringNavigation pauses immediately when mounted inactive and resumes when active again', async () => {
-    const router = createRouter({
-      history: createMemoryHistory(),
-      routes: [
-        { path: '/a', name: 'page-a', component: Dummy },
-        { path: '/b', name: 'page-b', component: Dummy },
-      ],
-    })
-    await router.push('/a')
-    await router.isReady()
-
     const source = ref(0)
     const active = ref(false)
     const fired = vi.fn()
     const { wrapper } = withSetup(() => {
       const watcher = watch(source, fired)
       pauseDuringNavigation(watcher, active)
-    }, [router])
+    })
 
     source.value = 1
     await nextTick()
@@ -162,16 +157,7 @@ describe('usePageActive', () => {
 
   it('usePageRedirect defers redirect while navigating away and fires only if the page stays active', async () => {
     let releaseGuard!: (allow: boolean) => void
-    const router = createRouter({
-      history: createMemoryHistory(),
-      routes: [
-        { path: '/a', name: 'page-a', component: Dummy },
-        { path: '/b', name: 'page-b', component: Dummy },
-        { path: '/target', name: 'target', component: Dummy },
-      ],
-    })
-    await router.push('/a')
-    await router.isReady()
+    const router = await createTestRouter([{ path: '/target', name: 'target', component: Dummy }])
 
     const target = ref<RouteLocationRaw | null>(null)
     const { wrapper } = withSetup(() => usePageRedirect(() => target.value), [router])

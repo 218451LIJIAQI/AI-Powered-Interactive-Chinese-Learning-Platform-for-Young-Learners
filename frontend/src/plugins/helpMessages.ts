@@ -36,7 +36,10 @@ export const helpMessages = {
     aiWrongAnswer: 'Yes. Use Report on an answer or a score; an admin reviews it and tells you the outcome.',
     aiDataQuestion: 'What is sent to the AI?',
     aiDataAnswer:
-      'SparkBot receives your question or the handwriting photo you submit, with relevant context such as your level and the lesson topic. For pronunciation, Tencent Cloud receives your recording and target text. Xiaomei’s text replies use your plan goal and the short notes she remembers. You can remove these notes in any chat summary. If you start a live call with Xiaomei, Tavus receives the call audio and recent messages from the current conversation. Leave personal details out of your text, recordings and photos.',
+      'SparkBot receives your question or the handwriting photo you submit, with relevant context such as your level and the lesson topic. For pronunciation, Tencent Cloud receives your recording and target text. Xiaomei’s text replies use your plan goal and the short notes she remembers. You can remove these notes in any chat summary.',
+    aiDataLiveVideo:
+      'If you start a live call with Xiaomei, Tavus receives the call audio and recent messages from the current conversation.',
+    aiDataCaution: 'Leave personal details out of your text, recordings and photos.',
     aiDataLink: 'See the Responsible AI guidance.',
     contactTitle: 'Contact us',
     email: 'Your email',
@@ -96,7 +99,10 @@ export const helpMessages = {
     aiWrongAnswer: 'Ya. Gunakan Laporkan pada jawapan atau skor; pentadbir menyemaknya dan memaklumkan keputusannya.',
     aiDataQuestion: 'Apakah yang dihantar kepada AI?',
     aiDataAnswer:
-      'SparkBot menerima soalan atau foto tulisan tangan yang anda hantar bersama maklumat berkaitan seperti tahap anda dan topik pelajaran. Untuk penilaian sebutan, Tencent Cloud menerima rakaman dan teks sasaran anda. Balasan teks Xiaomei menggunakan matlamat pelan anda dan nota ringkas yang diingatinya. Anda boleh memadamkan nota ini dalam mana-mana ringkasan sembang. Jika anda memulakan panggilan langsung dengan Xiaomei, Tavus menerima audio panggilan dan mesej terkini daripada perbualan semasa. Elakkan memasukkan maklumat peribadi dalam teks, rakaman dan foto anda.',
+      'SparkBot menerima soalan atau foto tulisan tangan yang anda hantar bersama maklumat berkaitan seperti tahap anda dan topik pelajaran. Untuk penilaian sebutan, Tencent Cloud menerima rakaman dan teks sasaran anda. Balasan teks Xiaomei menggunakan matlamat pelan anda dan nota ringkas yang diingatinya. Anda boleh memadamkan nota ini dalam mana-mana ringkasan sembang.',
+    aiDataLiveVideo:
+      'Jika anda memulakan panggilan langsung dengan Xiaomei, Tavus menerima audio panggilan dan mesej terkini daripada perbualan semasa.',
+    aiDataCaution: 'Elakkan memasukkan maklumat peribadi dalam teks, rakaman dan foto anda.',
     aiDataLink: 'Lihat panduan AI Bertanggungjawab.',
     contactTitle: 'Hubungi kami',
     email: 'E-mel anda',
@@ -150,7 +156,9 @@ export const helpMessages = {
     aiWrongAnswer: '会。请在回答或评分上使用“举报”，管理员会审核并告诉你处理结果。',
     aiDataQuestion: '哪些内容会发送给 AI？',
     aiDataAnswer:
-      'SparkBot 会收到你提交的问题或手写照片，以及你的水平、课时主题等相关信息。发音评测时，腾讯云会收到你的录音和目标文字。小美的文字回复会用到你的计划目标和她记住的简短笔记。你可以在任意一次聊天总结中删除这些笔记。如果你和小美开始实时通话，Tavus 会收到通话语音和当前对话的近期消息。提交文字、录音或照片时，请避免包含个人信息。',
+      'SparkBot 会收到你提交的问题或手写照片，以及你的水平、课时主题等相关信息。发音评测时，腾讯云会收到你的录音和目标文字。小美的文字回复会用到你的计划目标和她记住的简短笔记。你可以在任意一次聊天总结中删除这些笔记。',
+    aiDataLiveVideo: '如果你和小美开始实时通话，Tavus 会收到通话语音和当前对话的近期消息。',
+    aiDataCaution: '提交文字、录音或照片时，请避免包含个人信息。',
     aiDataLink: '查看“负责任 AI 指南”。',
     contactTitle: '联系我们',
     email: '你的邮箱',
@@ -171,4 +179,4 @@ export const helpMessages = {
     sentToast: '留言已发送。我们会在 2 个工作日内通过邮件回复。',
     sendAnother: '再发送一条留言',
   },
-}
+} as const

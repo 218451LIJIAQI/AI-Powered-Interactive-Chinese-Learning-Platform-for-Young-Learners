@@ -7,7 +7,7 @@
         />
       </template>
       <template v-if="data" #actions>
-        <RouterLink class="btn btn-ghost" :to="{ name: 'student-level-check' }" data-testid="retake">
+        <RouterLink class="btn btn-ghost" :to="{ name: 'student-level-check' }">
           {{ t('plan.page.retake') }}
         </RouterLink>
         <button class="btn btn-secondary" type="button" data-testid="update-goal" @click="openUpdate">
@@ -27,7 +27,6 @@
       v-else-if="resource.error.value && !data"
       heading-tag="h2"
       tone="error"
-      icon="alert"
       :title="t('plan.page.loadError')"
       :message="resource.error.value"
       @retry="resource.reload"
@@ -49,40 +48,40 @@
     <template v-else>
       <section class="panel plan-stats" :aria-label="t('plan.page.statsLabel')" data-testid="plan-stats">
         <div class="plan-stat">
-          <h2 class="page-eyebrow">{{ t('plan.page.mandarinLevel') }}</h2>
+          <p class="page-eyebrow">{{ t('plan.page.mandarinLevel') }}</p>
           <p class="plan-stat-value">{{ levelSpan(t, data.level.placed, data.level.target) }}</p>
           <p v-if="data.level.placed === data.level.target" class="type-caption">
             {{ t('plan.page.targetReached') }}
           </p>
         </div>
         <div class="plan-stat">
-          <h2 class="page-eyebrow">{{ t('plan.page.planProgress') }}</h2>
+          <p class="page-eyebrow">{{ t('plan.page.planProgress') }}</p>
           <p class="plan-stat-value">{{ data.progress.percent }}%</p>
           <ProgressBar class="is-sm" :progress="data.progress.percent" :label="t('plan.page.planProgress')" />
         </div>
         <div class="plan-stat">
-          <h2 class="page-eyebrow">{{ t('plan.page.thisWeek') }}</h2>
+          <p class="page-eyebrow">{{ t('plan.page.thisWeek') }}</p>
           <p class="plan-stat-value">
             {{ t('plan.page.daysOf', { done: data.progress.daysThisWeek, total: DAYS_A_WEEK }) }}
           </p>
-          <p class="type-caption" :class="{ 'plan-stat-behind': data.progress.status === 'BEHIND' }">
-            {{ t(`plan.status.${data.progress.status}`) }}
+          <p class="type-caption" :class="{ 'plan-stat-behind': !ended && data.progress.status === 'BEHIND' }">
+            {{ ended ? t('plan.cards.planEnded') : t(`plan.status.${data.progress.status}`) }}
           </p>
         </div>
         <div class="plan-stat">
-          <h2 class="page-eyebrow">{{ t('plan.page.pace') }}</h2>
+          <p class="page-eyebrow">{{ t('plan.page.pace') }}</p>
           <p class="plan-stat-value">{{ paceDaily(t, data.pace) }}</p>
         </div>
       </section>
 
       <div class="plan-layout">
-        <section class="plan-road-card" aria-labelledby="plan-path-heading">
+        <section class="panel plan-road-card" aria-labelledby="plan-path-heading">
           <h2 id="plan-path-heading" class="card-title">{{ t('plan.page.yourPath') }}</h2>
           <PlanPath :plan="data" live :picked="picked" @pick="togglePick" />
           <p v-if="pickError" class="field-error" role="alert" data-testid="pick-error">{{ pickError }}</p>
         </section>
 
-        <aside class="plan-rail">
+        <aside class="panel plan-rail">
           <section class="plan-rail-block" aria-labelledby="plan-week-heading">
             <h2 id="plan-week-heading" class="card-title">{{ t('plan.page.thisWeek') }}</h2>
             <ul class="plan-tasks" :aria-label="t('plan.page.tasksLabel')" data-testid="plan-tasks">
@@ -101,7 +100,7 @@
               </li>
             </ul>
           </section>
-          <PlanOutcomes :plan="data" />
+          <PlanOutcomes :plan="data" heading-tag="h2" />
           <!-- Who wrote what: an AI-made plan can make mistakes and its texts can be reported. -->
           <div class="plan-ai-note" data-testid="plan-ai-note">
             <IconGlyph :name="data.aiAssisted ? 'magic' : 'info'" :size="14" />
@@ -126,19 +125,19 @@
       <p
         v-if="actionError"
         ref="errorNotice"
-        class="alert alert-danger"
+        class="callout is-danger"
         role="alert"
         tabindex="-1"
         data-testid="rebuild-error"
       >
         {{ actionError }}
       </p>
-      <template v-if="options.data.value">
+      <template v-if="drawerOptions">
         <fieldset class="field-set" :disabled="rebuilding">
           <legend class="sr-only">{{ t('plan.page.update') }}</legend>
           <GoalForm
             v-model="draft"
-            :options="options.data.value"
+            :options="drawerOptions"
             :sections="['reason', 'goals', 'deadline', 'pace', 'focus']"
             compact
             :calendar-no-date="false"
@@ -152,6 +151,9 @@
         >
           <IconGlyph name="calendar" :size="16" /><span>{{ t('plan.page.deadlinePassed') }}</span>
         </p>
+        <p v-if="otherGoalMissing" class="field-hint" role="status" data-testid="other-goal-hint">
+          {{ t('plan.page.otherGoalHint') }}
+        </p>
         <p class="callout is-compact">
           <IconGlyph name="info" :size="16" /><span>{{ t('plan.page.keptNote') }}</span>
         </p>
@@ -159,12 +161,11 @@
       <StatePanel
         v-else-if="options.error.value"
         tone="error"
-        icon="alert"
-        :title="t('plan.page.updateError')"
+        :title="t('plan.page.optionsError')"
         :message="options.error.value"
         @retry="options.reload"
       />
-      <StatePanel v-else tone="loading" :title="t('plan.page.loading')" :message="t('plan.check.loadingHint')" />
+      <StatePanel v-else tone="loading" :title="t('plan.page.optionsLoading')" :message="t('plan.check.loadingHint')" />
       <template #footer>
         <p v-if="rebuilding" class="type-caption is-far-left" role="status">{{ t('plan.page.readingGoal') }}</p>
         <button class="btn btn-secondary" type="button" :disabled="rebuilding" @click="closeUpdate">
@@ -212,7 +213,6 @@ import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import ProgressBar from '@/components/common/ProgressBar.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
-import { practiceSetRoute } from '@/components/learn/practice/practiceTypes'
 import GoalForm from '@/components/plan/GoalForm.vue'
 import {
   deadlinePassed,
@@ -228,8 +228,10 @@ import { LEVEL_KEYS } from '@/components/plan/planLabels'
 import PlanOutcomes from '@/components/plan/PlanOutcomes.vue'
 import PlanPath from '@/components/plan/PlanPath.vue'
 import PlanReportLink from '@/components/plan/PlanReportLink.vue'
+import { usePlanOptions } from '@/components/plan/usePlanOptions'
 import { usePlanPick } from '@/components/plan/usePlanPick'
-import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
+import PageHeaderBlock from '@/components/layout/PageHeaderBlock.vue'
+import { practiceSetRoute } from '@/config/practiceActivities'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { pauseDuringNavigation } from '@/composables/usePageNavigation'
 import { useIsUnmounted } from '@/composables/useIsUnmounted'
@@ -238,7 +240,7 @@ import { useToast } from '@/composables/useToast'
 import { planPathMessages } from '@/plugins/planPathMessages'
 import { planSetupMessages } from '@/plugins/planSetupMessages'
 import { planSummaryMessages } from '@/plugins/planSummaryMessages'
-import { resolveApiError } from '@/utils/apiError'
+import { apiErrorStatus, resolveApiError } from '@/utils/apiError'
 import { formatDate, formatWeekdayLongDate } from '@/utils/format'
 
 /**
@@ -255,10 +257,17 @@ const router = useRouter()
 const { t, locale } = useLocalMessages({ plan: [planSummaryMessages, planSetupMessages, planPathMessages] })
 const { toast, showToast } = useToast()
 const resource = useResource(planApi.plan)
-const options = useResource(planApi.options, route.query.edit === 'goal')
+const options = usePlanOptions(route.query.edit === 'goal')
 
 const data = resource.data
-const effectiveToday = computed(() => options.data.value?.today ?? data.value?.today ?? '')
+const effectiveToday = computed(() => {
+  const planToday = data.value?.today ?? ''
+  const optionsToday = options.data.value?.today ?? ''
+  return optionsToday > planToday ? optionsToday : planToday
+})
+const drawerOptions = computed(() =>
+  options.data.value ? { ...options.data.value, today: effectiveToday.value } : null,
+)
 const updating = ref(false)
 const rebuilding = ref(false)
 /** "Discard your changes?" over the drawer. */
@@ -275,15 +284,22 @@ const baselineDraft = computed(() =>
   data.value ? draftFromPlan({ ...data.value, today: effectiveToday.value }) : null,
 )
 const goalChanged = computed(() => (baselineDraft.value ? !sameGoal(draft.value, baselineDraft.value) : false))
-const canRebuild = computed(() => {
-  const goal = draft.value
-  return Boolean(
+const otherGoalMissing = computed(
+  () => draft.value.reason === 'OTHER' && !draft.value.reasonText.trim() && !draft.value.goalText.trim(),
+)
+const canRebuild = computed(() =>
+  Boolean(
     options.data.value &&
+    !options.busy.value &&
     goalChanged.value &&
-    deadlineReady(goal) &&
-    (goal.reason !== 'OTHER' || goal.reasonText.trim() || goal.goalText.trim()),
-  )
-})
+    deadlineReady(draft.value) &&
+    !otherGoalMissing.value,
+  ),
+)
+
+const ended = computed(() =>
+  Boolean(data.value && planExpired(data.value.progress.status, data.value.goal.deadline, effectiveToday.value)),
+)
 
 const goalLine = computed(() => {
   const plan = data.value
@@ -292,7 +308,7 @@ const goalLine = computed(() => {
   const { deadline } = plan.goal
   if (!deadline) return t('plan.page.meta', { goal, week: plan.weeks.current, total: plan.weeks.total })
   const date = formatWeekdayLongDate(deadline, locale.value)
-  return planExpired(plan.progress.status, deadline, plan.today)
+  return ended.value
     ? t('plan.page.metaEnded', { goal, date })
     : t('plan.page.metaBy', { goal, date, week: plan.weeks.current, total: plan.weeks.total })
 })
@@ -309,14 +325,16 @@ const tasks = computed<{ key: string; done: boolean; title: string; meta: string
           meta: t('plan.page.learnDone', { day: formatDate(task.doneOn, { weekday: 'long' }, locale.value) }),
           to: null,
         }
-      case 'LEARN_NEXT':
+      case 'LEARN_NEXT': {
+        const isCheckpoint = task.lessonKind === 'CHECKPOINT'
         return {
           key,
           done: false,
           title: task.title,
-          meta: t('plan.page.learnNext', { minutes: task.minutes }),
+          meta: t(isCheckpoint ? 'plan.page.learnCheckpoint' : 'plan.page.learnNext', { minutes: task.minutes }),
           to: { name: 'student-learn-lesson', params: { lessonId: task.lessonId } },
         }
+      }
       case 'PRACTICE':
         return {
           key,
@@ -342,14 +360,17 @@ function openUpdate(): void {
   draft.value = draftFromPlan({ ...data.value, today: effectiveToday.value })
   actionError.value = null
   updating.value = true
-  if (!options.data.value && !options.loading.value) void options.reload()
+  if (!options.data.value) {
+    if (!options.loading.value) void options.reload()
+  } else if (data.value.today > options.data.value.today) {
+    void options.refresh()
+  }
 }
 
-// If setup options arrive with a newer platform day that has passed the plan's saved deadline, clear the untouched date.
+// If setup options arrive with a newer platform day that has passed the draft's deadline, clear the expired date.
 watch(options.data, (loaded) => {
-  if (!updating.value || !loaded || !data.value) return
-  const savedDeadline = data.value.goal.deadline
-  if (savedDeadline && draft.value.deadline === savedDeadline && deadlinePassed(savedDeadline, loaded.today)) {
+  if (!updating.value || !loaded) return
+  if (deadlinePassed(draft.value.deadline, effectiveToday.value)) {
     draft.value = { ...draft.value, deadline: undefined }
   }
 })
@@ -380,11 +401,12 @@ async function rebuild(): Promise<void> {
     if (!stillCurrent()) return
     const updated = await planApi.updateGoal(goal, language)
     if (!stillCurrent()) return
-    data.value = updated
+    resource.replace(updated)
     updating.value = false
     showToast(t('plan.page.updated'))
   } catch (reason) {
     if (!stillCurrent()) return
+    if (apiErrorStatus(reason) === 400) void options.refresh()
     actionError.value = resolveApiError(reason, t('plan.page.rebuildError'))
     await nextTick()
     errorNotice.value?.focus()
@@ -401,7 +423,7 @@ const openFromQuery = watch(
     if (route.name !== 'student-plan' || !plan) return
     const { edit, updated, ...query } = route.query
     if (edit === undefined && updated === undefined) return
-    if (edit === 'goal') openUpdate()
+    if (edit === 'goal' && !updating.value) openUpdate()
     if (updated === 'level') showToast(t('plan.page.levelUpdated', { level: t(LEVEL_KEYS[plan.level.placed]) }))
     void router.replace({ query, hash: route.hash })
   },

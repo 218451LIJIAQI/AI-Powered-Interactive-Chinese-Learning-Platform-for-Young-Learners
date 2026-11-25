@@ -64,4 +64,24 @@ describe('useSelectedRecord', () => {
     await selection.select(null)
     expect(router.currentRoute.value.query).toEqual({ q: 'new', tab: '2' })
   })
+
+  it('auto-selects the first id when no record is named in the address yet', async () => {
+    const load = vi.fn(async (id: number) => `user ${id}`)
+    const router = await testRouter('/admin/users')
+    const { result: selection } = withSetup(
+      () =>
+        useSelectedRecord(
+          'user',
+          load,
+          () => ({}),
+          () => 42,
+        ),
+      [router],
+    )
+    await flushPromises()
+
+    expect(router.currentRoute.value.query).toEqual({ user: '42' })
+    expect(selection.selectedId.value).toBe(42)
+    expect(selection.detail.data.value).toBe('user 42')
+  })
 })

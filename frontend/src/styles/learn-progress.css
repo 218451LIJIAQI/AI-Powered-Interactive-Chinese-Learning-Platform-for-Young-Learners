@@ -170,7 +170,7 @@
 .progress-calendar {
   display: grid;
   flex: 1 1 auto;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto 1fr auto;
   gap: var(--space-4);
 }
 
@@ -284,9 +284,8 @@
   background: var(--surface-card);
 }
 
-/* Badges: 8-badge responsive grid */
+/* Badges: 8-badge grid */
 .progress-badges {
-  container-type: inline-size;
   display: grid;
   align-content: start;
   gap: var(--space-4);
@@ -294,7 +293,7 @@
 
 .progress-badge-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 6.25rem), 1fr));
   gap: var(--space-2);
   margin: 0;
   padding: 0;
@@ -398,12 +397,6 @@
   }
 }
 
-@container (max-width: 20rem) {
-  .progress-badge-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
 @media (max-width: 75rem) {
   .progress-row {
     grid-template-columns: minmax(0, 1fr);
@@ -411,7 +404,7 @@
 }
 
 @media (forced-colors: active) {
-  .progress-day:not(.is-future, .is-before, .is-learned, .is-learned-today, .is-today) {
+  .progress-day.is-missed {
     border-color: CanvasText;
   }
 

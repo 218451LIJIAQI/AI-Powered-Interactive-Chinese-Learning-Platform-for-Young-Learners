@@ -1,12 +1,14 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { CanceledError } from 'axios'
+import axios from 'axios'
 
 import {
+  bearer,
   getAccessToken,
   getAuthSessionVersion,
   invalidateAuthSession,
   refreshAccessToken,
+  requireCurrentSession,
   setAccessToken,
 } from '@/api/http'
 import { accountOpsApi } from '@/api/ops'
@@ -24,7 +26,6 @@ export const useAuthStore = defineStore('auth', () => {
   const currentUser = ref<CurrentUserResponse | null>(null)
   // A token alone is insufficient until /auth/me confirms the account.
   const isAuthenticated = computed(() => currentUser.value !== null)
-  const bootstrapped = ref(false)
   const loading = ref(false)
   /**
    * The address of the account whose session ended in this tab without a sign-out (it expired, or another tab signed
@@ -33,6 +34,7 @@ export const useAuthStore = defineStore('auth', () => {
   const endedSessionEmail = ref<string | null>(null)
 
   // Scoped to the Pinia store instance so separate apps or test runs never share in-flight promises.
+  let bootstrapped = false
   let restoreInFlight: Promise<void> | null = null
   let queuedLanguage: LanguageChoice | null = null
   let languageSave: Promise<void> | null = null
@@ -47,20 +49,21 @@ export const useAuthStore = defineStore('auth', () => {
     if (currentUser.value) endedSessionEmail.value = currentUser.value.email
     currentUser.value = null
     loading.value = false
-    bootstrapped.value = true
+    bootstrapped = true
     restoreInFlight = null
     queuedLanguage = null
     setAccessToken(null)
   }
 
   /**
-   * Ends the session here and in the browser's other tabs, which share the refresh cookie: after a sign-out, or when
-   * the server has ended the account's sessions itself (the account deleted, its password reset, its e-mail changed).
-   * Without the announcement the other tabs would go on showing the account until their next refresh fails.
+   * Ends the session here and in the browser's other tabs, which share the refresh cookie, when the server has already
+   * ended the account's sessions itself (the account deleted, its password reset, its e-mail changed). Explicit
+   * sign-out goes through `logout()` so an in-flight sign-out cannot clear a concurrent sign-in in another tab. Without
+   * this announcement the other tabs would go on showing the account until their next refresh fails.
    */
   function clearSessionInAllTabs(): void {
     clearSession()
-    // Signed out on purpose (or the account changed): the next sign-in starts empty, as on a shared computer.
+    // The account changed or was removed: the next sign-in starts empty, as on a shared computer.
     endedSessionEmail.value = null
     announceSessionOwner(null)
   }
@@ -71,24 +74,25 @@ export const useAuthStore = defineStore('auth', () => {
     // On startup an unreachable server leaves the tab signed out. The maintenance page can retry.
     const token = await refreshAccessToken().catch(() => null)
     if (version !== getAuthSessionVersion()) return
-    if (token) {
-      try {
-        const user = await authApi.me()
-        if (version === getAuthSessionVersion()) {
-          const owner = sessionOwner()
-          if (owner === null || (typeof owner === 'number' && owner !== user.id)) {
-            clearSession()
-            if (owner === null) endedSessionEmail.value = null
-          } else {
-            currentUser.value = user
-            sessionGeneration += 1
-          }
-        }
-      } catch {
-        if (version === getAuthSessionVersion()) clearSession()
-      }
+    if (!token) {
+      bootstrapped = true
+      return
     }
-    bootstrapped.value = true
+    const user = await authApi.me().catch(() => null)
+    if (version !== getAuthSessionVersion()) return
+    if (!user) {
+      clearSession()
+      return
+    }
+    const owner = sessionOwner()
+    if (owner === null || (typeof owner === 'number' && owner !== user.id)) {
+      clearSession()
+      if (owner === null) endedSessionEmail.value = null
+      return
+    }
+    currentUser.value = user
+    sessionGeneration += 1
+    bootstrapped = true
   }
 
   async function restoreSession(): Promise<void> {
@@ -103,7 +107,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function bootstrap(): Promise<void> {
-    if (bootstrapped.value) return
+    if (bootstrapped) return
     return restoreSession()
   }
 
@@ -111,15 +115,17 @@ export const useAuthStore = defineStore('auth', () => {
     clearSession()
     let version = getAuthSessionVersion()
     loading.value = true
+    let tokenIssued = false
 
     try {
       const response = await authApi.login({ email, password, keepSignedIn })
-      if (version !== getAuthSessionVersion()) throw new CanceledError('The sign-in session has ended.')
+      requireCurrentSession(version)
       setAccessToken(response.token)
+      tokenIssued = true
       version = getAuthSessionVersion()
 
       const user = await authApi.me()
-      if (version !== getAuthSessionVersion()) throw new CanceledError('The sign-in session has ended.')
+      requireCurrentSession(version)
       currentUser.value = user
       endedSessionEmail.value = null
       announceSessionOwner(user.id)
@@ -127,7 +133,13 @@ export const useAuthStore = defineStore('auth', () => {
       // FRAUTH07: an explicit sign-in switches the interface to the account's preferred language.
       applyPreferredLanguage(user.preferredLanguage)
     } catch (reason) {
-      if (version !== getAuthSessionVersion()) throw new CanceledError('The sign-in session has ended.')
+      requireCurrentSession(version)
+      // POST /auth/login already set the HttpOnly refresh cookie; if /auth/me failed, revoke that new session
+      // immediately so an uncompleted sign-in never leaves a live refresh cookie orphaned in the browser.
+      if (tokenIssued) {
+        await authApi.logout().catch(() => undefined)
+        requireCurrentSession(version)
+      }
       clearSession()
       throw reason
     } finally {
@@ -190,7 +202,22 @@ export const useAuthStore = defineStore('auth', () => {
    * this browser's (a confirmed e-mail change link can belong to another account than the one signed in).
    */
   async function hasLiveSession(): Promise<boolean> {
-    return (await refreshAccessToken()) !== null
+    return (await refreshAccessToken(undefined, { fresh: true })) !== null
+  }
+
+  async function requestServerLogout(generation: number): Promise<void> {
+    const sentToken = getAccessToken()
+    try {
+      await authApi.logout()
+    } catch (error) {
+      // After 15 minutes of inactivity, the short-lived access token expires while the 7-day HttpOnly refresh cookie
+      // is still active. Refresh once so /auth/logout can actually revoke the server session and clear the cookie.
+      const isUnauthorized = axios.isAxiosError(error) && error.response?.status === 401
+      if (!isUnauthorized || generation !== sessionGeneration) return
+      const refreshed = await refreshAccessToken(sentToken ? bearer(sentToken) : null).catch(() => null)
+      if (!refreshed || generation !== sessionGeneration) return
+      await authApi.logout().catch(() => undefined)
+    }
   }
 
   async function logout(): Promise<boolean> {
@@ -198,37 +225,28 @@ export const useAuthStore = defineStore('auth', () => {
     const generation = sessionGeneration
     const signingOutUserId = currentUser.value?.id ?? null
 
-    function announceSignOutIfStillOwner(): void {
-      const owner = sessionOwner()
-      if (owner === undefined || owner === signingOutUserId) {
-        announceSessionOwner(null)
+    if (isAuthenticated.value || getAccessToken() !== null) {
+      await requestServerLogout(generation)
+      // An in-place password change rotated the token without switching sessions: revoke the rotated session too.
+      if (
+        generation === sessionGeneration &&
+        version !== getAuthSessionVersion() &&
+        (isAuthenticated.value || getAccessToken() !== null)
+      ) {
+        await requestServerLogout(generation)
       }
     }
 
-    function finishAfterSessionChange(): boolean {
-      if (isAuthenticated.value || loading.value) return false
-      // If a concurrent background 401 expired the session while logout was in flight (and no new login started),
-      // still honour the user's explicit sign-out by clearing the remembered email and notifying other tabs unless
-      // another tab already claimed the browser for a different account.
-      endedSessionEmail.value = null
-      announceSignOutIfStillOwner()
-      return true
+    if (generation === sessionGeneration) {
+      clearSession()
+    } else if (isAuthenticated.value || loading.value) {
+      return false
     }
-
-    if (isAuthenticated.value || getAccessToken() !== null) {
-      await authApi.logout().catch(() => undefined)
-    }
-    if (generation !== sessionGeneration) return finishAfterSessionChange()
-
-    // An in-place password change rotated the token without switching sessions: revoke the rotated session too.
-    if (version !== getAuthSessionVersion() && (isAuthenticated.value || getAccessToken() !== null)) {
-      await authApi.logout().catch(() => undefined)
-      if (generation !== sessionGeneration) return finishAfterSessionChange()
-    }
-
-    clearSession()
+    // Whether the session ended here or expired concurrently (without a new sign-in starting), honour the explicit
+    // sign-out by clearing the remembered email and notifying other tabs unless another tab claimed another account.
     endedSessionEmail.value = null
-    announceSignOutIfStillOwner()
+    const owner = sessionOwner()
+    if (owner === undefined || owner === signingOutUserId) announceSessionOwner(null)
     return true
   }
 
@@ -253,7 +271,6 @@ export const useAuthStore = defineStore('auth', () => {
   return {
     isAuthenticated,
     currentUser,
-    bootstrapped,
     loading,
     endedSessionEmail,
     roles,

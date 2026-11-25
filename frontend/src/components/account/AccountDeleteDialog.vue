@@ -1,21 +1,21 @@
 <template>
   <AppOverlay
-    :open="open"
     role="alertdialog"
     :title="t('account.deleteAccount')"
     :subtitle="t('account.deleteDialogSubtitle')"
+    :described-by-id="warningId"
     :busy="deleting"
     test-id="account-delete-dialog"
     @close="emit('close')"
   >
-    <p class="callout is-danger">
+    <p :id="warningId" class="callout is-danger">
       <IconGlyph name="alert" :size="18" />
       <span>{{ t('account.deleteCopy') }}</span>
     </p>
     <form id="account-delete-form" novalidate @submit.prevent="deleteAccount">
       <div class="field">
         <label for="account-delete-confirm">
-          {{ t('account.typeToConfirm', { email: currentEmail ?? '' })
+          {{ t('account.typeToConfirm', { email: currentEmail })
           }}<span class="required-mark" aria-hidden="true">*</span>
         </label>
         <input
@@ -27,11 +27,11 @@
           type="email"
           autocomplete="off"
           spellcheck="false"
-          aria-required="true"
+          required
         />
       </div>
     </form>
-    <div v-if="error" class="alert alert-danger" role="alert">
+    <div v-if="error" class="callout is-danger" role="alert">
       <IconGlyph name="alert" :size="18" />
       <span>{{ error }}</span>
     </div>
@@ -55,7 +55,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, useId, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { getAuthSessionVersion } from '@/api/http'
@@ -69,8 +69,7 @@ import { useAuthStore } from '@/stores/auth'
 import { resolveApiError } from '@/utils/apiError'
 
 const props = defineProps<{
-  open: boolean
-  currentEmail: string | null
+  currentEmail: string
 }>()
 const emit = defineEmits<{ close: [] }>()
 
@@ -78,20 +77,16 @@ const { t } = useLocalMessages({ account: accountMessages })
 const auth = useAuthStore()
 const router = useRouter()
 const isUnmounted = useIsUnmounted()
+const warningId = `${useId()}-warning`
 
 const confirmText = ref('')
 const error = ref<string | null>(null)
 const deleting = ref(false)
-const confirmed = computed(() => confirmText.value.trim().toLowerCase() === props.currentEmail?.toLowerCase())
+const confirmed = computed(() => confirmText.value.trim().toLowerCase() === props.currentEmail.toLowerCase())
 
-watch(
-  () => props.open,
-  (opened) => {
-    if (!opened) return
-    confirmText.value = ''
-    error.value = null
-  },
-)
+watch(confirmText, () => {
+  error.value = null
+})
 
 async function deleteAccount(): Promise<void> {
   if (!confirmed.value || deleting.value) return

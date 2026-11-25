@@ -1,21 +1,23 @@
-import { expect, test, type Locator, type Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 
-import { expectFocusMode, expectLeaveStep, registerStudent, sidebar } from './support'
+import { expect, expectFocusMode, expectLeaveStep, registerStudent, sidebar, test } from './support'
 
 // New learners sign up through the Create account form (a new e-mail on every run) and land in the first-run setup.
 // The AI provider is off, so a plan is built from the learner's own answers.
 
 /** The e-mail banner of a new account on Home. */
 async function expectConfirmEmailBanner(page: Page, email: string): Promise<void> {
-  const banner = page.getByRole('status').filter({ hasText: 'Confirm your email' })
+  const banner = page.getByTestId('home-email')
+  await expect(banner).toContainText('Confirm your email')
   await expect(banner).toContainText(`we sent a link to ${email}.`)
   await expect(banner.getByRole('button', { name: 'Send the link again' })).toBeEnabled()
 }
 
-/** The one bar of the setup, which never goes back (the level check carries it on from 80%). */
-function setupProgress(page: Page, percent: number | RegExp): Locator {
-  const name = typeof percent === 'number' ? `Setup progress: ${percent}%` : percent
-  return page.getByRole('progressbar', { name })
+/** Asserts the setup progress bar is visible with the expected percentage (the level check carries it on from 80%). */
+async function expectSetupProgress(page: Page, percent: number | RegExp): Promise<void> {
+  const bar = page.getByRole('progressbar', { name: 'Setup progress' })
+  await expect(bar).toBeVisible()
+  await expect(bar).toHaveAttribute('aria-valuenow', typeof percent === 'number' ? String(percent) : percent)
 }
 
 /** The footer's Continue of the setup's steps. */
@@ -27,7 +29,7 @@ function continueButton(page: Page): Locator {
 async function answerWhyAndGoal(page: Page, reason: RegExp, goals: readonly string[]): Promise<void> {
   const next = continueButton(page)
   await expect(page.getByRole('heading', { name: 'Why are you learning Mandarin?', level: 2 })).toBeVisible()
-  await expect(setupProgress(page, 20)).toBeVisible()
+  await expectSetupProgress(page, 20)
   await expect(next).toBeDisabled()
   const picked = page.getByRole('group', { name: 'Main reason' }).getByRole('button', { name: reason })
   await picked.click()
@@ -35,7 +37,7 @@ async function answerWhyAndGoal(page: Page, reason: RegExp, goals: readonly stri
   await next.click()
 
   await expect(page.getByRole('heading', { name: 'What do you want to be able to do?', level: 2 })).toBeVisible()
-  await expect(setupProgress(page, 40)).toBeVisible()
+  await expectSetupProgress(page, 40)
   const wants = page.getByRole('group', { name: 'What you want to do' })
   for (const goal of goals) {
     await wants.getByRole('button', { name: goal, exact: true }).click()
@@ -68,7 +70,7 @@ test('a new learner signs up, builds her plan towards a goal date and starts her
 
   // 3 When, and how much time: a day picked on the calendar, and the time she can give each day.
   await expect(page.getByRole('heading', { name: 'When, and how much time?', level: 2 })).toBeVisible()
-  await expect(setupProgress(page, 60)).toBeVisible()
+  await expectSetupProgress(page, 60)
   const time = page.getByRole('group', { name: 'Time I can give each day' })
   // The sourced bands (Shen & Wu 2026), 1–2 hours until she picks another.
   await expect(time.getByRole('button')).toHaveText(['Under 30 min', '30–60 min', '1–2 hours', '2+ hours'])
@@ -106,7 +108,7 @@ test('a new learner signs up, builds her plan towards a goal date and starts her
 
   // 4 Her Mandarin, then the level check: she does not know the answers yet.
   await expect(page.getByRole('heading', { name: 'How much Mandarin do you know?', level: 2 })).toBeVisible()
-  await expect(setupProgress(page, 80)).toBeVisible()
+  await expectSetupProgress(page, 80)
   const level = page.getByRole('group', { name: 'How much Mandarin do you know?' }).getByRole('button', {
     name: /^Pre-HSK New/,
   })
@@ -117,7 +119,7 @@ test('a new learner signs up, builds her plan towards a goal date and starts her
   await page.getByRole('button', { name: 'Not new after all? Take the level check instead' }).click()
   await expect(page.getByText(/^Question 1 of \d+ · /)).toBeVisible()
   // The bar goes on from the 80% of the steps before instead of starting again.
-  await expect(setupProgress(page, /^Setup progress: (8[1-9]|9\d)%$/)).toBeVisible()
+  await expectSetupProgress(page, /^(8[1-9]|9\d)$/)
   const dontKnow = page.getByRole('button', { name: 'I don’t know yet' })
   const placed = page.getByRole('heading', { name: 'Your starting level: Pre-HSK (New)', level: 2 })
   for (let asked = 0; ; asked += 1) {
@@ -129,7 +131,7 @@ test('a new learner signs up, builds her plan towards a goal date and starts her
     await expect(page.getByRole('status').filter({ hasText: 'No problem!' })).toBeVisible()
     await next.click()
   }
-  await expect(setupProgress(page, 100)).toBeVisible()
+  await expectSetupProgress(page, 100)
   await next.click()
 
   // 5 Focus

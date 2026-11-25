@@ -57,14 +57,14 @@ public class OpenAiCompatibleAiProviderClient extends HttpAiProviderClient {
         }
         Object finishReason = choiceMap.get("finish_reason");
         if ("content_filter".equals(finishReason)) {
-            return AiProviderResult.failure("Provider response was filtered.", tokens);
+            return AiProviderResult.failure(FILTERED_ERROR, tokens);
         }
         if ("length".equals(finishReason) && prompt.expectJson()) {
-            return AiProviderResult.failure("Provider response was incomplete.", tokens);
+            return AiProviderResult.failure(INCOMPLETE_ERROR, tokens);
         }
         if (!(choiceMap.get("message") instanceof Map<?, ?> messageMap)) {
             return AiProviderResult.failure("Provider response message format was invalid.", tokens);
         }
-        return textResult(messageMap.get("content") instanceof String text ? text : null, responseBody);
+        return textResult(messageMap.get("content") instanceof String text ? text : null, tokens);
     }
 }

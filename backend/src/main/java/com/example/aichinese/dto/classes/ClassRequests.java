@@ -2,6 +2,7 @@ package com.example.aichinese.dto.classes;
 
 import static com.example.aichinese.dto.DtoNormalization.immutableListOrEmpty;
 import static com.example.aichinese.dto.DtoNormalization.immutableListOrNull;
+import static com.example.aichinese.dto.DtoNormalization.redactLength;
 import static com.example.aichinese.dto.DtoNormalization.strip;
 import static com.example.aichinese.dto.DtoNormalization.stripToNull;
 
@@ -98,20 +99,12 @@ public final class ClassRequests {
             @Positive(message = "Unit id must be positive.")
             Long unitId,
 
-            @Min(value = 1, message = "Minutes must be between 1 and 240.")
-            @Max(value = 240, message = "Minutes must be between 1 and 240.")
-            Integer minutes,
-
-            @Size(max = 1000, message = "Summary must be 1000 characters or fewer.")
-            String summary,
-
             @Size(max = 30, message = "A lesson can have at most 30 key phrases.")
             @Valid
             List<@NotNull(message = "Key phrase must not be null.") KeyPhrase> keyPhrases) {
 
         public LessonContent {
             title = strip(title);
-            summary = stripToNull(summary);
             keyPhrases = immutableListOrEmpty(keyPhrases);
         }
     }
@@ -240,6 +233,11 @@ public final class ClassRequests {
 
         public ChosenPair {
             meaning = strip(meaning);
+        }
+
+        @Override
+        public String toString() {
+            return "ChosenPair[wordId=" + wordId + ", meaning=" + redactLength(meaning) + "]";
         }
     }
 

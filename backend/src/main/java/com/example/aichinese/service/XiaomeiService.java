@@ -63,9 +63,8 @@ public class XiaomeiService {
                 + " Return keys: reply (object with chinese, pinyin and translation in "
                 + AiPromptBuilder.translationLanguage(language) + "), naturalVersion, tip.";
         AiExecutionResult result = gateway.execute(
-                AiGateway.AiCall.json(user, AiFeatureKey.XIAOMEI_CONVERSATION, language, prompt,
+                AiGateway.AiCall.json(user, currentUser.getSessionId(), AiFeatureKey.XIAOMEI_CONVERSATION, language, prompt,
                                 json -> line(AiJson.object(json, "reply")) != null)
-                        .withSession(currentUser.getSessionId())
                         .withHistory(history(request.turns())));
         // A "more natural" version that repeats the student's own line corrects nothing: then there is no tip either.
         String suggested = AiJson.text(result.json(), "naturalVersion");
@@ -107,9 +106,8 @@ public class XiaomeiService {
                 + " an e-mail address, a phone number, an address or another contact detail, and nothing Xiaomei already"
                 + " remembers; an empty array when there is nothing worth remembering).";
         AiExecutionResult result = gateway.execute(
-                AiGateway.AiCall.json(user, AiFeatureKey.XIAOMEI_CONVERSATION, language, prompt,
+                AiGateway.AiCall.json(user, currentUser.getSessionId(), AiFeatureKey.XIAOMEI_CONVERSATION, language, prompt,
                                 json -> AiJson.hasText(json, "feedback"))
-                        .withSession(currentUser.getSessionId())
                         .withHistory(turns));
         Map<String, Object> json = result.json();
         return new XiaomeiResponses.Summary(

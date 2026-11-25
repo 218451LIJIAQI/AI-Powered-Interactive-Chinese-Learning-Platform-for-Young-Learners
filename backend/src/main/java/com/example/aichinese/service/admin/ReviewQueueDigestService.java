@@ -7,21 +7,22 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import com.example.aichinese.config.EmailProperties;
 import com.example.aichinese.entity.User;
-import com.example.aichinese.entity.enums.RoleName;
 import com.example.aichinese.repository.UserRepository;
 import com.example.aichinese.service.ScheduledJobRunner;
 import com.example.aichinese.service.TransactionalEmailDispatcher;
 import com.example.aichinese.service.TransactionalEmailDispatcher.ReviewQueue;
 import com.example.aichinese.service.TransactionalEmailDispatcher.WaitingQueue;
-import com.example.aichinese.service.account.AccountGuards;
 import com.example.aichinese.service.learn.LearnClock;
 import com.example.aichinese.service.navigation.NavCountService;
 import com.example.aichinese.service.navigation.NavCountService.AdminQueueCounts;
+import com.example.aichinese.util.ExceptionLogUtils;
 
 import lombok.RequiredArgsConstructor;
 
@@ -36,6 +37,8 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class ReviewQueueDigestService {
+
+    private static final Logger log = LoggerFactory.getLogger(ReviewQueueDigestService.class);
 
     /** The system_settings row with the platform day (ISO date) of the last run; empty before the first one. */
     public static final String LAST_RUN_DAY_KEY = "review_queue_digest_last_day";
@@ -52,7 +55,12 @@ public class ReviewQueueDigestService {
     /** Every minute while background jobs run (app.scheduling.enabled). */
     @Scheduled(fixedDelay = 1, initialDelay = 1, timeUnit = TimeUnit.MINUTES)
     public void sendIfDue() {
-        sendIfDue(Clock.systemDefaultZone());
+        try {
+            sendIfDue(Clock.systemDefaultZone());
+        } catch (Exception exception) {
+            log.warn("Scheduled review queue digest failed: {}", ExceptionLogUtils.safeSummary(exception));
+            ExceptionLogUtils.debugOrigin(log, exception);
+        }
     }
 
     /** Runs the day's look at the queues if it is due; returns how many e-mails were queued. */
@@ -66,9 +74,7 @@ public class ReviewQueueDigestService {
             if (waiting.isEmpty()) {
                 return 0;
             }
-            List<User> admins = userRepository.findAllByRoleName(RoleName.ADMIN).stream()
-                    .filter(admin -> AccountGuards.isAvailable(admin) && admin.isNotifyReviewQueues())
-                    .toList();
+            List<User> admins = userRepository.findActiveDigestAdmins();
             admins.forEach(admin -> emailDispatcher.enqueueReviewQueueDigest(admin, waiting));
             return admins.size();
         });

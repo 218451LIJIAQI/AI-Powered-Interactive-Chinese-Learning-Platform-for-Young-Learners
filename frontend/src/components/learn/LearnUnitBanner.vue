@@ -20,6 +20,7 @@
       v-else-if="showGuidebook"
       class="btn btn-secondary btn-sm"
       type="button"
+      :aria-label="t('learn.guidebookTitle', { number: unit.number })"
       :data-testid="`guidebook-${unit.number}`"
       @click="emit('guidebook', unit)"
     >

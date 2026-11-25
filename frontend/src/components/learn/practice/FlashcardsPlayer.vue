@@ -1,6 +1,8 @@
 <template>
   <div class="practice-player" data-testid="flashcards-player">
-    <PracticeProgress :label="t('practice.cardOf', { current: index + 1, total: set.items.length })" />
+    <p class="practice-counter" aria-live="polite" data-testid="practice-counter">
+      {{ t('practice.cardOf', { current: index + 1, total: set.items.length }) }}
+    </p>
 
     <!-- A click anywhere on the card turns it; Show meaning in the footer does the same for the keyboard. -->
     <div
@@ -55,7 +57,7 @@
         <button
           class="btn btn-secondary"
           type="button"
-          :disabled="run.busy.value"
+          :disabled="run.busy.value || completed"
           :aria-disabled="index === 0"
           data-testid="previous-card"
           @click="back"
@@ -76,7 +78,7 @@
           <button
             class="btn btn-secondary"
             type="button"
-            :disabled="run.busy.value"
+            :disabled="run.busy.value || completed"
             :aria-busy="run.busy.value && rated === 'STILL_LEARNING'"
             data-testid="rate-learning"
             @click="rate('STILL_LEARNING')"
@@ -86,7 +88,7 @@
           <button
             class="btn btn-secondary"
             type="button"
-            :disabled="run.busy.value"
+            :disabled="run.busy.value || completed"
             :aria-busy="run.busy.value && rated === 'GOT_IT'"
             data-testid="rate-known"
             @click="rate('GOT_IT')"
@@ -94,7 +96,15 @@
             {{ t('practice.gotIt') }}
           </button>
         </div>
-        <button v-else ref="flipButton" class="btn btn-primary" type="button" data-testid="flip" @click="flip">
+        <button
+          v-else
+          ref="flipButton"
+          class="btn btn-primary"
+          type="button"
+          :disabled="run.busy.value || completed"
+          data-testid="flip"
+          @click="flip"
+        >
           {{ t('practice.showMeaning') }}
         </button>
       </div>
@@ -109,9 +119,9 @@ import IconGlyph from '@/components/common/IconGlyph.vue'
 import ListenButtons from '@/components/learn/ListenButtons.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { practiceMessages } from '@/plugins/practiceMessages'
-import type { FlashcardRating, PracticeResult, PracticeSet } from '@/types/learn'
+import type { FlashcardRating, PracticeSet } from '@/types/learn'
 
-import PracticeProgress from './PracticeProgress.vue'
+import type { PracticeCompletion } from './practiceTypes'
 import { usePracticeRun } from './usePracticeRun'
 
 /**
@@ -122,13 +132,14 @@ import { usePracticeRun } from './usePracticeRun'
  * questions.
  */
 const props = defineProps<{ set: PracticeSet }>()
-const emit = defineEmits<{ finished: [result: PracticeResult] }>()
+const emit = defineEmits<{ finished: [completion: PracticeCompletion] }>()
 
 const { t } = useLocalMessages({ practice: practiceMessages })
 const run = usePracticeRun(() => props.set, t)
 
 const index = ref(0)
 const flipped = ref(false)
+const completed = ref(false)
 const ratings = new Map<string, FlashcardRating>()
 /** The rating being sent with the finished set (its button shows it is busy). */
 const rated = ref<FlashcardRating | null>(null)
@@ -142,21 +153,22 @@ const card = computed(() => props.set.items[index.value] ?? null)
  * meaning on the front.
  */
 async function flip(): Promise<void> {
-  if (run.busy.value) return
+  if (run.busy.value || completed.value) return
   flipped.value = !flipped.value
   await nextTick()
   if (flipped.value) ratingGroup.value?.querySelector('button')?.focus()
   else flipButton.value?.focus()
 }
 
-/** The buttons inside the card do their own thing. */
+/** The buttons inside the card do their own thing, and selecting text to copy does not flip the card. */
 function flipFromCard(event: MouseEvent): void {
   if (event.target instanceof Element && event.target.closest('button, a')) return
+  if (window.getSelection?.()?.toString()) return
   void flip()
 }
 
 async function rate(rating: FlashcardRating): Promise<void> {
-  if (!card.value || !flipped.value || run.busy.value) return
+  if (!card.value || !flipped.value || run.busy.value || completed.value) return
   ratings.set(card.value.key, rating)
   if (index.value >= props.set.items.length - 1) {
     rated.value = rating
@@ -170,7 +182,8 @@ async function rate(rating: FlashcardRating): Promise<void> {
 }
 
 function back(): void {
-  if (index.value === 0 || run.busy.value) return
+  if (index.value === 0 || run.busy.value || completed.value) return
+  run.error.value = null
   index.value -= 1
   flipped.value = false
 }
@@ -179,6 +192,9 @@ async function finish(): Promise<void> {
   const answers = Array.from(ratings, ([itemKey, answer]) => ({ itemKey, answer }))
   const result = await run.complete(answers)
   rated.value = null
-  if (result) emit('finished', result)
+  if (result) {
+    completed.value = true
+    emit('finished', { result })
+  }
 }
 </script>

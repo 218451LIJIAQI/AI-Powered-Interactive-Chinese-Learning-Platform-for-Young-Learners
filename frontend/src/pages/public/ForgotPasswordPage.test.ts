@@ -157,4 +157,11 @@ describe('ForgotPasswordPage (FRAUTH04)', () => {
     expect(wrapper.get<HTMLInputElement>('#forgot-email').element.value).toBe('mei@example.com')
     expect(wrapper.find(SENT).exists()).toBe(false)
   })
+
+  it('prevents mousedown on Submit from blurring the email field before submit runs', () => {
+    const wrapper = mountPage()
+    const event = new MouseEvent('mousedown', { cancelable: true })
+    wrapper.get(SUBMIT).element.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(true)
+  })
 })

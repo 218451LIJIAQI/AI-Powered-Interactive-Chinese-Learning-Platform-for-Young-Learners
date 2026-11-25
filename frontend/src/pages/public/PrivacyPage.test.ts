@@ -1,11 +1,14 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { i18n } from '@/plugins/i18n'
 
 const mocks = vi.hoisted(() => ({ platformSettings: vi.fn() }))
 
-vi.mock('vue-router', async () => ({ RouterLink: (await import('@/test/helpers')).routerLinkStub }))
+vi.mock('vue-router', async () => ({
+  RouterLink: (await import('@/test/helpers')).routerLinkStub,
+  useRoute: () => ({ hash: '' }),
+}))
 vi.mock('@/api/services', () => ({ publicApi: { platformSettings: mocks.platformSettings } }))
 
 import PrivacyPage from './PrivacyPage.vue'
@@ -13,7 +16,7 @@ import PrivacyPage from './PrivacyPage.vue'
 const OPENAI_ONLY = /OpenAI Responses|store=false|to OpenAI/
 
 async function mountPage(): Promise<ReturnType<typeof mount>> {
-  const wrapper = mount(PrivacyPage, { global: { stubs: { IconGlyph: true } } })
+  const wrapper = mount(PrivacyPage)
   await flushPromises()
   return wrapper
 }
@@ -21,11 +24,8 @@ async function mountPage(): Promise<ReturnType<typeof mount>> {
 const text = (wrapper: ReturnType<typeof mount>) => wrapper.get('#ai-provider').text()
 
 beforeEach(() => {
-  vi.stubEnv('VITE_TAVUS_DEPLOYMENT_ID', '')
   mocks.platformSettings.mockResolvedValue({ aiDisclaimerText: 'x', aiModelName: 'm', aiProvider: 'openai' })
 })
-
-afterEach(() => vi.unstubAllEnvs())
 
 describe('PrivacyPage', () => {
   it('has the nine sections of the notice and says when it last changed', async () => {

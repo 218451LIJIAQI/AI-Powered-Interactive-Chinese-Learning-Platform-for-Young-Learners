@@ -1,4 +1,4 @@
-/** Account, notification, health, shell and reward clients; transport primitives live in `api/request.ts`. */
+/** Auth, public, notification, health and shell API clients; transport primitives live in `api/request.ts`. */
 import type {
   AppLanguage,
   AuthResponse,
@@ -10,9 +10,8 @@ import type {
   NotificationUnreadCountResponse,
   PageResponse,
   PublicPlatformSettingsResponse,
-  RewardSummaryResponse,
 } from '@/types/api'
-import type { LinkTokenResponse } from '@/types/ops'
+import type { LinkTokenResponse, SupportRequestCreated, VisitorSupportMessage } from '@/types/ops'
 
 import { apiGet, apiPatch, apiPost } from './request'
 
@@ -33,13 +32,6 @@ export const authApi = {
   me() {
     return apiGet<CurrentUserResponse>('/auth/me')
   },
-  /**
-   * This browser's session (Account › This device): `signedInAt`, the local date-time it signed in, or null when the
-   * request's token names no session.
-   */
-  session() {
-    return apiGet<{ signedInAt: string | null }>('/users/me/session')
-  },
   /** Signs out this browser only; the account's other devices stay signed in. */
   logout() {
     return apiPost<void>('/auth/logout')
@@ -50,11 +42,37 @@ export const authApi = {
   resetPassword(payload: { token: string; password: string; confirmPassword: string }) {
     return apiPost<void>('/auth/reset-password', payload)
   },
+  checkResetLink(token: string) {
+    return apiPost<LinkTokenResponse>('/auth/reset-password/check', { token })
+  },
+  confirmEmail(token: string) {
+    return apiPost<LinkTokenResponse>('/auth/confirm-email', { token })
+  },
+  /** The link from the sign-up e-mail. */
+  confirmSignupEmail(token: string) {
+    return apiPost<LinkTokenResponse>('/auth/confirm-signup-email', { token })
+  },
+  checkAdminInvite(token: string) {
+    return apiPost<LinkTokenResponse>('/auth/admin-invite/check', { token })
+  },
+  /** Creates the admin account; `preferredLanguage` (the page's language) becomes its language, as at sign-up. */
+  acceptAdminInvite(payload: {
+    token: string
+    fullName: string
+    password: string
+    confirmPassword: string
+    preferredLanguage: AppLanguage
+  }) {
+    return apiPost<LinkTokenResponse>('/auth/admin-invite/accept', payload)
+  },
 }
 
 export const publicApi = {
   platformSettings() {
     return apiGet<PublicPlatformSettingsResponse>('/public/platform-settings')
+  },
+  sendHelpMessage(payload: VisitorSupportMessage) {
+    return apiPost<SupportRequestCreated>('/public/support', payload)
   },
 }
 
@@ -82,12 +100,6 @@ export const notificationsApi = {
 export const systemApi = {
   health() {
     return apiGet<HealthStatusResponse>('/health')
-  },
-}
-
-export const studentApi = {
-  rewards() {
-    return apiGet<RewardSummaryResponse>('/students/rewards')
   },
 }
 

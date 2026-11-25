@@ -10,6 +10,7 @@
       @close="requestLeave"
     />
     <h1 class="sr-only">{{ t('learn.reviewTitle') }}</h1>
+    <p class="sr-only" role="status">{{ doneAnnouncement }}</p>
 
     <div class="focus-stage">
       <StatePanel
@@ -24,7 +25,6 @@
         v-else-if="review.error.value"
         heading-tag="h2"
         tone="error"
-        icon="alert"
         :title="t('learn.reviewError')"
         :message="review.error.value"
         spacious
@@ -46,8 +46,10 @@
         </template>
       </StatePanel>
 
-      <section v-else-if="result" class="practice-review-done" data-testid="review-complete" aria-live="polite">
-        <h2 class="focus-headline">{{ allFixed ? t('learn.allFixed') : t('learn.reviewComplete') }}</h2>
+      <section v-else-if="result" class="practice-review-done" data-testid="review-complete">
+        <h2 ref="doneHeading" class="focus-headline" tabindex="-1">
+          {{ allFixed ? t('learn.allFixed') : t('learn.reviewComplete') }}
+        </h2>
         <dl class="learn-done-stats">
           <div class="is-xp">
             <dt>{{ t('learn.xpEarned') }}</dt>
@@ -77,7 +79,19 @@
         :context="contextLine"
         :ruled-out="hint.ruledOut.value"
       />
-      <p v-if="actionError" class="alert alert-danger" role="alert">{{ actionError }}</p>
+      <div v-if="actionError" class="callout is-danger" role="alert">
+        <IconGlyph name="alert" :size="18" />
+        <span>{{ actionError }}</span>
+        <button
+          v-if="mistakeMissing"
+          class="btn btn-secondary btn-sm"
+          type="button"
+          data-testid="review-reload"
+          @click="reloadBatch"
+        >
+          {{ t('learn.reloadMistakes') }}
+        </button>
+      </div>
     </div>
 
     <FocusFooter v-if="result">
@@ -116,7 +130,6 @@
           :question="question"
           :hint="hint"
           :report-context="`MISTAKE #${question.id}`"
-          :own-toast="false"
           @reported="showToast(t('aiSafety.reportSent'))"
         />
       </template>
@@ -142,7 +155,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 
 import { mistakesApi } from '@/api/learn'
@@ -158,16 +171,15 @@ import { useRankUpLater } from '@/components/learn/practice/useRankUpLater'
 import QuestionStage from '@/components/learn/QuestionStage.vue'
 import RankUpDialog from '@/components/learn/RankUpDialog.vue'
 import { useQuestionRun } from '@/components/learn/useQuestionRun'
+import { useIsUnmounted } from '@/composables/useIsUnmounted'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { useResource } from '@/composables/useResource'
 import { useToast } from '@/composables/useToast'
 import { learnMessages } from '@/plugins/learnMessages'
 import { learnSharedMessages } from '@/plugins/learnSharedMessages'
-import { practiceMessages } from '@/plugins/practiceMessages'
-import type { MistakeReviewResult } from '@/types/learn'
+import { restoreFocusIfDropped } from '@/utils/focus'
 import { stepProgress } from '@/utils/format'
 import '@/styles/learn-shared.css'
-import '@/styles/learn-practice.css'
 
 /**
  * The mistakes review in focus mode: one waiting mistake at a time with where it came from (the lesson or set and the
@@ -176,44 +188,49 @@ import '@/styles/learn-practice.css'
  * cleared and those left for later; a review that passes a rank opens the rank-up dialog.
  */
 const router = useRouter()
-const { t } = useLocalMessages({ learn: [learnSharedMessages, learnMessages], practice: practiceMessages })
+const { t } = useLocalMessages({ learn: [learnSharedMessages, learnMessages] })
 const { toast, showToast } = useToast()
 
 const review = useResource(mistakesApi.review)
-const result = ref<MistakeReviewResult | null>(null)
 const leaving = ref(false)
+const doneHeading = ref<HTMLElement | null>(null)
+const isUnmounted = useIsUnmounted()
 
 const questions = computed(() => review.data.value?.questions ?? [])
 const {
   index,
   answer,
   check,
+  result,
   busy: checking,
   savingResult,
   actionError,
+  actionErrorStatus,
   answers,
   question,
   isLast,
   hint,
   submit,
   next,
+  reset,
 } = useQuestionRun({
   questions,
-  grade: (sent) => mistakesApi.check(sent),
-  saveResult: async (sent) => {
-    result.value = await mistakesApi.complete(sent)
-  },
+  grade: mistakesApi.check,
+  saveResult: mistakesApi.complete,
   t,
-  keysBlocked: () => leaving.value || result.value !== null,
+  keysBlocked: () => leaving.value,
   loadHint: (id) => mistakesApi.hint(id, review.data.value),
 })
-const progress = computed(() =>
-  result.value ? 100 : stepProgress(index.value, questions.value.length, check.value !== null),
-)
+const mistakeMissing = computed(() => actionErrorStatus.value === 404)
+const progress = computed(() => {
+  if (result.value) return 100
+  if (review.loading.value || review.error.value || !questions.value.length) return null
+  return stepProgress(index.value, questions.value.length, check.value !== null)
+})
 
 const topLabel = computed(() =>
   questions.value.length && !result.value
-    ? t('practice.reviewCounter', { current: index.value + 1, total: questions.value.length })
+    ? t('learn.reviewCounter', { current: index.value + 1, total: questions.value.length })
     : t('learn.reviewTitle'),
 )
 
@@ -241,12 +258,35 @@ const doneLine = computed(() => {
     : t('learn.reviewDoneLineNoStreak', values)
 })
 
+const doneAnnouncement = computed(() => {
+  if (!result.value) return ''
+  return `${allFixed.value ? t('learn.allFixed') : t('learn.reviewComplete')} ${doneLine.value}`.trim()
+})
+
+watch(
+  result,
+  (nextResult) => {
+    if (nextResult) {
+      void restoreFocusIfDropped(
+        () => doneHeading.value,
+        () => !isUnmounted(),
+      )
+    }
+  },
+  { flush: 'post' },
+)
+
 // A review that passed a rank says so a moment after its result appears.
 const { rankingUp, dismiss: dismissRankUp } = useRankUpLater(() => result.value?.xp ?? null)
 
+function reloadBatch(): void {
+  reset()
+  void review.reload()
+}
+
 function requestLeave(): void {
   if (savingResult.value) return
-  if (result.value || !answers.value.length) leave()
+  if (result.value || (!answers.value.length && answer.value === null)) leave()
   else leaving.value = true
 }
 
@@ -255,3 +295,31 @@ function leave(): void {
   void router.push({ name: 'student-practice', params: { type: 'mistakes' } })
 }
 </script>
+
+<style scoped>
+/* The review question keeps its place between steps and leaves room for feedback in a short desktop window. */
+.practice-review {
+  --focus-label-width: 14rem;
+  --focus-stage-top: clamp(var(--space-6), calc(45vh - 16rem), 152px);
+}
+
+.practice-review-done {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-4);
+  text-align: center;
+}
+
+.practice-review-streak {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--space-8);
+  margin: 0;
+  padding: var(--space-1) var(--space-4) var(--space-1) var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+  font-size: var(--type-label-size);
+  font-weight: var(--font-weight-strong);
+}
+</style>

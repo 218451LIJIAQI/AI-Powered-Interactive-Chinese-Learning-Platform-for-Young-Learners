@@ -22,13 +22,15 @@
         </template>
       </ClassPageHeader>
 
-      <DataNotice :error="actionError" />
+      <DataNotice :error="actionError ?? resource.error.value" :on-retry="actionError ? undefined : resource.reload" />
 
       <!-- Not joined yet: what the class holds, free to join, the lessons locked until then. -->
       <template v-if="!page.joined">
         <div class="panel student-class-join">
           <div class="student-class-join-copy">
-            <p v-if="page.summary.description" class="student-class-join-about">{{ page.summary.description }}</p>
+            <p v-if="page.summary.description" class="student-class-join-about">
+              <CjkText :text="page.summary.description" />
+            </p>
             <p class="type-caption" data-testid="class-preview-facts">{{ previewFacts }}</p>
           </div>
           <button
@@ -51,7 +53,7 @@
             :aria-labelledby="`class-unit-${unit.id}`"
           >
             <h2 :id="`class-unit-${unit.id}`" class="card-title">
-              {{ t('classes.unitLabel', { number: unitIndex + 1, title: unit.title }) }}
+              <CjkText :text="t('classes.unitLabel', { number: unitIndex + 1, title: unit.title })" />
             </h2>
             <ol class="row-list">
               <li v-for="lesson in unit.lessons" :key="lesson.id" class="student-class-locked">
@@ -69,10 +71,15 @@
           <span>{{ archivedBanner }}</span>
         </p>
 
-        <section v-else class="panel student-class-next" aria-labelledby="class-next-title" data-testid="class-next">
+        <section
+          v-else-if="page.nextStep || page.summary.lessonCount > 0"
+          class="panel student-class-next"
+          aria-labelledby="class-next-title"
+          data-testid="class-next"
+        >
           <div class="row-list-copy">
             <h2 id="class-next-title" class="page-eyebrow">{{ t('studentClasses.classPage.nextStep') }}</h2>
-            <p class="card-title">{{ nextStepText }}</p>
+            <p class="card-title"><CjkText :text="nextStepText" /></p>
           </div>
           <div v-if="page.nextStep" class="btn-group">
             <RouterLink
@@ -80,11 +87,13 @@
               :to="classLessonRoute(page.summary.id, page.nextStep.lessonId)"
               data-testid="continue-class"
             >
-              {{
-                nextNotStarted
-                  ? t('studentClasses.classPage.start', { title: page.nextStep.lessonTitle })
-                  : t('classes.continueNamed', { title: page.nextStep.lessonTitle })
-              }}
+              <CjkText
+                :text="
+                  nextNotStarted
+                    ? t('studentClasses.classPage.start', { title: page.nextStep.lessonTitle })
+                    : t('classes.continueNamed', { title: page.nextStep.lessonTitle })
+                "
+              />
               <IconGlyph name="chevronRight" :size="16" />
             </RouterLink>
           </div>
@@ -98,7 +107,7 @@
         >
           <div class="row-list-copy">
             <h2 :id="`class-unit-${unit.id}`" class="card-title">
-              {{ t('classes.unitLabel', { number: unitIndex + 1, title: unit.title }) }}
+              <CjkText :text="t('classes.unitLabel', { number: unitIndex + 1, title: unit.title })" />
             </h2>
             <span class="row-list-meta">
               {{ t('studentClasses.classPage.unitFacts', { done: unit.completedCount, total: unit.lessonCount }) }}
@@ -146,10 +155,10 @@
         tone="loading"
         spacious
         :title="t('classes.loading')"
-        :message="t('nav.classes')"
+        :message="t('studentClasses.classPage.loading')"
       />
       <ClassLoadError
-        v-else
+        v-else-if="resource.error.value"
         :title="t('classes.classLoadError')"
         :message="resource.error.value"
         :back-to="{ name: 'student-classes' }"
@@ -204,7 +213,7 @@ const busy = ref(false)
 let pageVersion = 0
 onBeforeUnmount(() => pageVersion++)
 
-const classId = computed(() => parseRecordId(route.params.classId))
+const classId = computed(() => (route.name === 'student-class' ? parseRecordId(route.params.classId) : null))
 const resource = useRecordById(classId, studentClassesApi.classPage)
 const page = resource.data
 
@@ -274,6 +283,19 @@ function closeLeave(): void {
   leaveError.value = null
 }
 
+async function returnToMyClasses(isCurrent: () => boolean): Promise<void> {
+  try {
+    await router.push({ name: 'student-classes' })
+  } catch (reason) {
+    if (isCurrent()) actionError.value = resolveApiError(reason)
+  }
+  if (isCurrent() && router.currentRoute.value.name === 'student-class') {
+    clearClassNotice()
+    await resource.reload()
+    if (isCurrent() && !resource.error.value) actionError.value = null
+  }
+}
+
 /** A join can be undone from My classes. Leaving is confirmed in the dialog. */
 async function changeMembership(action: 'join' | 'leave'): Promise<void> {
   if (busy.value || !page.value) return
@@ -285,45 +307,30 @@ async function changeMembership(action: 'join' | 'leave'): Promise<void> {
   busy.value = true
   error.value = null
   try {
-    await studentClassesApi[action](id)
-  } catch (reason) {
-    if (isCurrent()) {
-      const key =
-        action === 'join' ? 'studentClasses.classPage.preview.joinError' : 'studentClasses.classPage.leaveError'
-      error.value = resolveApiError(reason, t(key))
-    }
-    if (version === pageVersion) busy.value = false
-    return
-  }
-  if (!isCurrent()) {
-    if (version === pageVersion) busy.value = false
-    return
-  }
-  if (action === 'leave') leaveOpen.value = false
-  if (!pageActive.value) {
-    busy.value = false
-    return
-  }
-  if (action === 'join') {
-    queueClassNotice({
-      message: t('studentClasses.classPage.preview.joined', { title }),
-      targetRoute: 'student-classes',
-      joinedClassId: id,
-      joinedClassTitle: title,
-    })
-  } else {
-    queueClassNotice({ message: t('studentClasses.classPage.left', { title }), targetRoute: 'student-classes' })
-  }
-  try {
     try {
-      await router.push({ name: 'student-classes' })
+      await studentClassesApi[action](id)
     } catch (reason) {
-      if (isCurrent()) actionError.value = resolveApiError(reason)
+      if (isCurrent()) {
+        const key =
+          action === 'join' ? 'studentClasses.classPage.preview.joinError' : 'studentClasses.classPage.leaveError'
+        error.value = resolveApiError(reason, t(key))
+      }
+      return
     }
-    if (isCurrent() && router.currentRoute.value.name === 'student-class') {
-      clearClassNotice()
-      await resource.reload()
-    }
+    if (!isCurrent()) return
+    if (action === 'leave') leaveOpen.value = false
+    if (!pageActive.value) return
+    queueClassNotice(
+      action === 'join'
+        ? {
+            message: t('studentClasses.classPage.preview.joined', { title }),
+            targetRoute: 'student-classes',
+            joinedClassId: id,
+            joinedClassTitle: title,
+          }
+        : { message: t('studentClasses.classPage.left', { title }), targetRoute: 'student-classes' },
+    )
+    await returnToMyClasses(isCurrent)
   } finally {
     if (version === pageVersion) busy.value = false
   }

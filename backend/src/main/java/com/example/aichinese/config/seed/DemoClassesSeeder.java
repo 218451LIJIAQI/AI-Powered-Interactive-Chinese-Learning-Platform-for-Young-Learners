@@ -195,10 +195,10 @@ public class DemoClassesSeeder implements CommandLineRunner {
         amiraMeeting.attempt(0, 11, 45, true, true, true, true, false);
         amiraMeeting.saveProgress();
 
-        // Chen Hao finished three lessons and started University Life.
+        // Chen Hao finished three lessons and started University Life (quiz before QUIZ_STAR badge at 19:00).
         LessonHistory chenMeeting = new LessonHistory(chen, meeting);
         chenMeeting.completeAllActivities(12);
-        chenMeeting.attempt(12, 21, 0, true, true, true, true, false);
+        chenMeeting.attempt(12, 18, 0, true, true, true, true, false);
         chenMeeting.saveProgress();
 
         LessonHistory chenRooms = new LessonHistory(chen, rooms);
@@ -275,7 +275,6 @@ public class DemoClassesSeeder implements CommandLineRunner {
     private LearningModule createUnit(CoursePackage coursePackage, String title, int position) {
         LearningModule unit = new LearningModule();
         unit.setTitle(title);
-        unit.setContentStatus(ContentStatus.PUBLISHED);
         entityManager.persist(unit);
         PackageItem item = new PackageItem();
         item.setCoursePackage(coursePackage);
@@ -466,10 +465,8 @@ public class DemoClassesSeeder implements CommandLineRunner {
             watchedAt = clock.daysAgo(daysAgo, 17, 50);
             VideoProgress progress = new VideoProgress();
             progress.setStudent(student);
-            progress.setLesson(seeded.lesson());
             progress.setRecordedVideo(seeded.video());
             progress.setCompleted(completed);
-            progress.setLastWatchedAt(watchedAt);
             progress.setCreatedAt(watchedAt);
             progress.setUpdatedAt(watchedAt);
             entityManager.persist(progress);

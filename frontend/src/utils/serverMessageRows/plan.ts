@@ -1,5 +1,8 @@
 import type { MessageRow } from './types'
 
+/** Canonical backend refusal when updating or confirming without an existing learning plan. */
+export const BUILD_PLAN_FIRST_MESSAGE = 'Build your learning plan first.'
+
 /** Canonical backend refusal when confirming a draft whose goal date has already passed. */
 export const GOAL_DATE_PASSED_MESSAGE = "This plan's goal date has passed. Build it again."
 
@@ -20,7 +23,7 @@ export const PLAN_MESSAGES: readonly MessageRow[] = [
     'Pilih tarikh pada masa hadapan, dalam tempoh 2 tahun.',
     '请选择未来 2 年内的日期。',
   ],
-  ['Build your learning plan first.', 'Bina pelan pembelajaran anda dahulu.', '请先生成你的学习计划。'],
+  [BUILD_PLAN_FIRST_MESSAGE, 'Bina pelan pembelajaran anda dahulu.', '请先生成你的学习计划。'],
   ['Pick a class from your plan.', 'Pilih kelas daripada pelan anda.', '请从你的计划中选择一个课堂。'],
   [
     'This plan was built more than a day ago. Build it again.',

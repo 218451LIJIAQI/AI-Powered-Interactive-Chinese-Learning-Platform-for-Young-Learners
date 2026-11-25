@@ -8,6 +8,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,6 +34,7 @@ import com.example.aichinese.service.account.CurrentAccount;
 import com.example.aichinese.util.LanguageCodes;
 
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.persistence.LockModeType;
 
 import lombok.RequiredArgsConstructor;
@@ -46,16 +48,18 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class AdminInviteService {
 
+    public static final String TARGET_TYPE = "AdminInvite";
+
     private static final Duration INVITE_TTL = Duration.ofDays(7);
     private static final String INVALID_INVITE = "This invite link is invalid or has expired. Ask an admin to send a new one.";
     private static final String INVITE_NOT_FOUND = "This invite was not found.";
     private static final String INVITE_ACCEPTED = "This invite was already accepted.";
     private static final String INVITE_EXPIRED = "This invite has expired. Send a new invite.";
-    private static final String INVITE_TARGET = "AdminInvite";
 
     private final AdminInviteRepository inviteRepository;
     private final UserRepository userRepository;
     private final AuthService authService;
+    private final PasswordEncoder passwordEncoder;
     private final TransactionalEmailDispatcher emailDispatcher;
     private final EmailProperties emailProperties;
     private final AuditLogService auditLogService;
@@ -93,7 +97,7 @@ public class AdminInviteService {
         inviteRepository.saveAndFlush(invite);
 
         emailDispatcher.enqueueAdminInvite(email, admin, emailProperties.passwordPageLink("invite", rawToken));
-        auditLogService.record(admin, "ADMIN_INVITE_SENT", new AuditTarget(INVITE_TARGET, invite.getId(), email), null,
+        auditLogService.record(admin, "ADMIN_INVITE_SENT", new AuditTarget(TARGET_TYPE, invite.getId(), email), null,
                 "Admin sent an admin invite.");
         return toResponse(invite);
     }
@@ -113,7 +117,7 @@ public class AdminInviteService {
         }
         inviteRepository.markCancelled(invite.getId(), LocalDateTime.now());
         auditLogService.record(admin, "ADMIN_INVITE_CANCELLED",
-                new AuditTarget(INVITE_TARGET, invite.getId(), invite.getEmail()), null,
+                new AuditTarget(TARGET_TYPE, invite.getId(), invite.getEmail()), null,
                 "Admin cancelled the admin invite.");
     }
 
@@ -134,14 +138,18 @@ public class AdminInviteService {
         AdminInviteResponse response = toResponse(invite);
         if (inviteRepository.clearCancelled(invite.getId()) > 0) {
             auditLogService.record(admin, "ADMIN_INVITE_RESTORED",
-                    new AuditTarget(INVITE_TARGET, response.id(), response.email()), null,
+                    new AuditTarget(TARGET_TYPE, response.id(), response.email()), null,
                     "Admin undid the cancelling of the admin invite; its link works again.");
         }
         return response;
     }
 
     private void lockUnaccepted(AdminInvite invite) {
-        entityManager.refresh(invite, LockModeType.PESSIMISTIC_WRITE);
+        try {
+            entityManager.refresh(invite, LockModeType.PESSIMISTIC_WRITE);
+        } catch (EntityNotFoundException deleted) {
+            throw new ResponseStatusException(NOT_FOUND, INVITE_NOT_FOUND, deleted);
+        }
         if (invite.getAcceptedAt() != null) {
             throw new ResponseStatusException(CONFLICT, INVITE_ACCEPTED);
         }
@@ -162,18 +170,21 @@ public class AdminInviteService {
     public LinkTokenResponse accept(AcceptAdminInviteRequest request) {
         AuthService.validatePasswords(request.password(), request.confirmPassword());
         AdminInvite invite = requireUsable(request.token());
+        AccountGuards.requireUnregisteredEmail(userRepository, invite.getEmail());
+        // Pre-encode before acquiring the invite update lock so BCrypt(12) never holds row write locks.
+        String encodedPassword = passwordEncoder.encode(request.password());
         LocalDateTime now = LocalDateTime.now();
         // Used up by a conditional update, like the other e-mailed links: one cancelled, sent again or accepted since
         // it was read creates no account.
         if (inviteRepository.markAccepted(invite.getTokenHash(), now) != 1) {
             throw new ResponseStatusException(BAD_REQUEST, INVALID_INVITE);
         }
-        User saved = authService.createAccount(request.fullName(), invite.getEmail(), request.password(),
+        User saved = authService.createAccountWithEncodedPassword(request.fullName(), invite.getEmail(), encodedPassword,
                 LanguageCodes.normalizeOrDefault(request.preferredLanguage()), RoleName.ADMIN);
         saved.setEmailVerifiedAt(now);
 
         auditLogService.record(saved, "ADMIN_INVITE_ACCEPTED",
-                new AuditTarget(AuditLogQueryService.TARGET_USER, saved.getId(), saved.getDisplayName()),
+                new AuditTarget(AuditLogService.TARGET_USER, saved.getId(), saved.getDisplayName()),
                 null, "The invited admin set a password; the admin account is active.");
         return new LinkTokenResponse(saved.getEmail());
     }

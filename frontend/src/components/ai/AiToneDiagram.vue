@@ -1,5 +1,5 @@
 <template>
-  <figure v-if="validComparisons.length" class="ai-tone-diagram" :aria-labelledby="titleId">
+  <figure class="ai-tone-diagram" :aria-labelledby="titleId">
     <div class="ai-tone-diagram-header">
       <h3 :id="titleId" class="field-label">{{ t('aiHelper.toneDiagramTitle') }}</h3>
       <ul class="ai-tone-legend" role="list">
@@ -8,14 +8,9 @@
       </ul>
     </div>
 
-    <ol
-      class="ai-tone-strip"
-      role="list"
-      :tabindex="validComparisons.length > 1 ? 0 : undefined"
-      :aria-labelledby="titleId"
-    >
+    <ol class="ai-tone-strip" role="list" :tabindex="comparisons.length > 1 ? 0 : undefined" :aria-labelledby="titleId">
       <li
-        v-for="({ text, expectedTone, detectedTone }, index) in validComparisons"
+        v-for="({ text, expectedTone, detectedTone }, index) in comparisons"
         :key="index"
         class="ai-tone-card"
         :class="{ 'is-different': expectedTone !== detectedTone }"
@@ -43,19 +38,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed, useId } from 'vue'
+import { useId } from 'vue'
 
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { aiVoiceMessages } from '@/plugins/aiVoiceMessages'
-import { isMandarinTone, type MandarinTone, type ToneComparison } from '@/types/ai'
+import type { MandarinTone, ToneComparison } from '@/types/ai'
 
-const props = defineProps<{ comparisons: ToneComparison[] }>()
+defineProps<{ comparisons: readonly ToneComparison[] }>()
 
 const { t } = useLocalMessages({ aiHelper: aiVoiceMessages })
 const titleId = useId()
-const validComparisons = computed(() =>
-  props.comparisons.filter((item) => isMandarinTone(item.expectedTone) && isMandarinTone(item.detectedTone)),
-)
 
 // Reference shapes for the four tone categories. Tencent Cloud provides the categories rather than pitch samples.
 const CONTOURS: Record<MandarinTone, string> = {

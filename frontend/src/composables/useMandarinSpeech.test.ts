@@ -9,7 +9,6 @@ let synthesis: ReturnType<typeof stubSpeech>
 
 describe('useMandarinSpeech', () => {
   beforeEach(() => {
-    FakeRecognition.last = null
     vi.stubGlobal('webkitSpeechRecognition', FakeRecognition)
     synthesis = stubSpeech([{ lang: 'zh-CN', name: 'Mandarin' }])
   })
@@ -17,15 +16,17 @@ describe('useMandarinSpeech', () => {
   it('reads a line aloud in Mandarin, slower on request', () => {
     const { result: speech } = withSetup(useMandarinReadAloud)
 
+    speech.speak('你好！')
+    const normal = synthesis.utterance(0)
     speech.speak('你好！', true)
+    const slow = synthesis.utterance(1)
 
-    const utterance = synthesis.utterance(0)
-    expect(utterance.text).toBe('你好！')
-    expect(utterance.lang).toBe('zh-CN')
-    expect(utterance.rate).toBeLessThan(0.95)
-    expect(utterance.voice).toEqual({ lang: 'zh-CN', name: 'Mandarin' })
+    expect(slow.text).toBe('你好！')
+    expect(slow.lang).toBe('zh-CN')
+    expect(slow.rate).toBeLessThan(normal.rate)
+    expect(slow.voice).toEqual({ lang: 'zh-CN', name: 'Mandarin' })
     expect(speech.speaking.value).toBe(true)
-    utterance.onend?.()
+    slow.onend?.()
     expect(speech.speaking.value).toBe(false)
   })
 
@@ -145,12 +146,14 @@ describe('useMandarinSpeech', () => {
   it('reports a blocked microphone and forgets what was heard on cancel', () => {
     const { result: speech } = withSetup(useMandarinSpeech)
 
-    speech.listen()
+    expect(speech.listen()).toBe(true)
     const recognition = FakeRecognition.last!
     recognition.onerror?.({ error: 'not-allowed' })
     expect(speech.recognitionError.value).toBe('denied')
+    expect(speech.listening.value).toBe(false)
 
-    speech.listen()
+    expect(speech.listen()).toBe(true)
+    expect(FakeRecognition.last).not.toBe(recognition)
     FakeRecognition.last!.onresult?.({ resultIndex: 0, results: [{ isFinal: true, 0: { transcript: '你好' } }] })
     speech.cancelListening()
     expect(speech.heard.value).toBe('')

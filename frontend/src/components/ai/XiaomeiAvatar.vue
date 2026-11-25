@@ -54,7 +54,7 @@
  * speaks, is ringed in purple while she listens and rests with her eyes closed while the AI is away. Decorative only:
  * the page announces her state in text. Size it with CSS.
  */
-export type XiaomeiState = 'idle' | 'speaking' | 'listening' | 'thinking' | 'away'
+export type XiaomeiState = 'idle' | 'speaking' | 'listening' | 'away'
 
 defineProps<{ state: XiaomeiState }>()
 </script>

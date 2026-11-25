@@ -31,11 +31,11 @@ import { bestAfterUnit, optionalClassesInOrder } from './usePlanPick'
  */
 const props = defineProps<{ plan: LearningPlan; picked: number | null }>()
 
-const { t } = useLocalMessages({ plan: [planSetupMessages, planPathMessages] })
+const { t, locale } = useLocalMessages({ plan: [planSetupMessages, planPathMessages] })
 
 const heading = computed(() => {
-  const { total } = props.plan.weeks
-  if (props.plan.milestone) return t('plan.side.firstWeeks', { count: total }, total)
+  const { content, total } = props.plan.weeks
+  if (props.plan.milestone && content > total) return t('plan.side.firstWeeks', { count: total }, total)
   if (!props.plan.goal.deadline) return t('plan.side.weeksAtPace', { pace: paceInSentence(t, props.plan.pace.key) })
   return t('plan.side.yourWeeks', { count: total }, total)
 })
@@ -106,16 +106,17 @@ const rows = computed(() => {
       })
     }
   }
+  if (total > content && !laterUnits.length) {
+    list.push({ key: 'review', when: when(content + 1, total), what: t('plan.side.reviewWeeks'), unit: null })
+  }
   if (laterUnits.length || laterClasses.length) {
-    const units = laterUnits.length ? unitsWord(t, laterUnits) : ''
+    const units = laterUnits.length ? unitsWord(t, laterUnits, locale.value) : ''
     list.push({
       key: 'later',
       when: t('plan.side.later'),
       what: [units, ...laterClasses].filter(Boolean).join(' + '),
       unit: null,
     })
-  } else if (total > content) {
-    list.push({ key: 'review', when: when(content + 1, total), what: t('plan.side.reviewWeeks'), unit: null })
   }
   return list
 })

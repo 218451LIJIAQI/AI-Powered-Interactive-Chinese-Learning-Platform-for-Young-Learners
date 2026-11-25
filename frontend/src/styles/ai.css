@@ -9,27 +9,6 @@
   white-space: nowrap;
 }
 
-.ai-helper-notice {
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  font-weight: var(--font-weight-regular);
-}
-
-.ai-helper-notice > .icon-glyph {
-  margin-top: 0;
-}
-
-.ai-helper-notice p {
-  flex: 1 1 auto;
-  min-width: 0;
-  margin: 0;
-}
-
-.ai-helper-notice .btn {
-  flex: 0 0 auto;
-}
-
 /* Shared two-column rail layout (Ask, Voice, Talk summary) */
 .ai-ask,
 .ai-voice,
@@ -53,6 +32,10 @@
 .ai-check-report {
   justify-self: start;
   margin-left: calc(-1 * var(--space-2));
+}
+
+:is(.ai-panel, .ai-recording, .ai-expressions) .btn-ghost:not(:disabled, [aria-disabled='true']):hover {
+  background: var(--color-ink-200);
 }
 
 /* Shared quick-start and lesson-phrase chip strip across Ask, Generator, and Voice tabs. */
@@ -128,15 +111,5 @@
   .ai-voice,
   .ai-summary-columns {
     grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-@media (max-width: 40rem) {
-  .ai-helper-notice {
-    flex-wrap: wrap;
-  }
-
-  .ai-helper-notice p {
-    flex: 1 1 14rem;
   }
 }

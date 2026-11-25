@@ -1,44 +1,43 @@
 <template>
-  <div class="plan-setup" :class="{ 'is-building': step === 'building' && !buildError }">
+  <div ref="setupRef" class="plan-setup">
     <FocusTopBar
       :label="topLabel"
       :close-label="t('plan.setup.closeLabel')"
-      :close-disabled="starting || hasPlanAlready"
+      :close-disabled="actionBusy || hasPlanAlready"
       :progress="topProgress"
       :progress-label="t('plan.setup.progressLabel')"
       @close="requestClose"
     />
     <h1 class="sr-only">{{ t('plan.setup.title') }}</h1>
-    <p v-if="exitError" ref="exitErrorRef" class="alert alert-danger plan-setup-error" role="alert" tabindex="-1">
-      {{ exitError }}
-    </p>
     <!--
-      "Start my path" failed. A plan built more than a day ago (409) is built again from the same answers; a plan whose
-      goal date has passed (409) needs a new date first, so its goal opens with the date to pick again.
+      Exit or "Start my path" failure. A plan built more than a day ago (409) is built again from the same answers; a
+      plan whose goal date has passed (409) needs a new date first, so its goal opens with the date to pick again.
     -->
     <div
-      v-if="startError"
-      ref="startErrorRef"
-      class="alert alert-danger plan-setup-error plan-start-error"
+      v-if="setupError"
+      ref="setupErrorRef"
+      class="callout is-danger plan-setup-error"
       role="alert"
       tabindex="-1"
+      :data-testid="setupError.testId"
     >
-      <span>{{ startError.message }}</span>
+      <span>{{ setupError.message }}</span>
       <button
-        v-if="startError.action === 'rebuild'"
+        v-if="setupError.action === 'rebuild'"
         class="btn btn-secondary btn-sm"
         type="button"
-        :disabled="Boolean(finishing) || refreshingOptions"
+        :disabled="actionBusy || options.refreshing.value"
+        :aria-busy="rebuildingFromError || undefined"
         data-testid="setup-build-again"
         @click="buildAgain"
       >
         {{ t('plan.setup.buildAgain') }}
       </button>
       <button
-        v-else-if="startError.action === 'pickDate'"
+        v-else-if="setupError.action === 'pickDate'"
         class="btn btn-secondary btn-sm"
         type="button"
-        :disabled="Boolean(finishing)"
+        :disabled="actionBusy"
         data-testid="setup-pick-new-date"
         @click="pickNewDate"
       >
@@ -58,9 +57,8 @@
       v-else-if="!setupOptions"
       heading-tag="h2"
       tone="error"
-      icon="alert"
       :title="t('plan.page.loadError')"
-      :message="loadError ?? ''"
+      :message="loadError"
       spacious
       @retry="reloadPage"
     />
@@ -68,7 +66,7 @@
     <template v-else>
       <!-- Welcome -->
       <section v-if="step === 'welcome'" class="plan-center" aria-labelledby="plan-welcome-title">
-        <h2 id="plan-welcome-title" class="focus-headline">{{ t('plan.setup.welcomeTitle') }}</h2>
+        <h2 id="plan-welcome-title" class="focus-headline" tabindex="-1">{{ t('plan.setup.welcomeTitle') }}</h2>
         <ol class="plan-welcome-steps">
           <li v-for="(item, index) in WELCOME_STEPS" :key="item.title">
             <span class="plan-welcome-number" aria-hidden="true">{{ index + 1 }}</span>
@@ -89,7 +87,7 @@
         :aria-labelledby="`plan-${step}-title`"
       >
         <div class="plan-question-head">
-          <h2 :id="`plan-${step}-title`" class="focus-headline">{{ t(formStep.title) }}</h2>
+          <h2 :id="`plan-${step}-title`" class="focus-headline" tabindex="-1">{{ t(formStep.title) }}</h2>
           <p v-if="formStep.lead">{{ t(formStep.lead) }}</p>
         </div>
         <GoalForm
@@ -106,7 +104,7 @@
       <!-- How much Mandarin -->
       <section v-else-if="step === 'level'" class="focus-stage plan-question" aria-labelledby="plan-level-title">
         <div class="plan-question-head">
-          <h2 id="plan-level-title" class="focus-headline">{{ t('plan.setup.levelTitle') }}</h2>
+          <h2 id="plan-level-title" class="focus-headline" tabindex="-1">{{ t('plan.setup.levelTitle') }}</h2>
         </div>
         <PlanChoiceGrid
           :choices="selfLevelChoices"
@@ -145,10 +143,16 @@
         @progress="checkProgress"
         @finished="checkFinished"
       />
-      <LevelCheckDone
+      <section
         v-else-if="step === 'checkDone' && check"
-        :title="t('plan.check.startingLevel', { level: t(LEVEL_KEYS[check.result.level]) })"
-      />
+        class="plan-center"
+        aria-live="polite"
+        data-testid="level-check-done"
+      >
+        <h2 class="focus-headline" tabindex="-1">
+          {{ t('plan.check.startingLevel', { level: t(LEVEL_KEYS[check.result.level]) }) }}
+        </h2>
+      </section>
 
       <!-- Building -->
       <template v-else-if="step === 'building'">
@@ -156,7 +160,6 @@
           v-if="buildError"
           heading-tag="h2"
           tone="error"
-          icon="alert"
           :title="t('plan.setup.buildError')"
           :message="buildError"
           spacious
@@ -166,15 +169,26 @@
               {{ t('plan.common.back') }}
             </button>
             <button
-              v-if="!plan && buildErrorStatus === 400"
-              class="btn btn-secondary"
+              v-if="needsCheckRestart"
+              class="btn btn-primary"
               type="button"
-              data-testid="setup-edit-pace"
-              @click="returnToPace"
+              data-testid="setup-restart-check"
+              @click="startCheck"
             >
-              {{ t('plan.setup.editGoal') }}
+              {{ t('plan.retake.startAgain') }}
             </button>
-            <button class="btn btn-primary" type="button" @click="retryBuild">{{ t('common.retry') }}</button>
+            <template v-else>
+              <button
+                v-if="buildErrorStatus === 400"
+                class="btn btn-secondary"
+                type="button"
+                data-testid="setup-edit-pace"
+                @click="editGoalFromBuildError"
+              >
+                {{ t('plan.setup.editGoal') }}
+              </button>
+              <button class="btn btn-primary" type="button" @click="retryBuild">{{ t('common.retry') }}</button>
+            </template>
           </template>
         </StatePanel>
         <PlanBuilding v-else :skipped-check="!check" />
@@ -182,7 +196,7 @@
 
       <!-- Result -->
       <section v-else-if="step === 'result' && plan" class="focus-stage plan-wide" aria-labelledby="plan-result-title">
-        <h2 id="plan-result-title" class="focus-headline">{{ t('plan.setup.resultTitle') }}</h2>
+        <h2 id="plan-result-title" class="focus-headline" tabindex="-1">{{ t('plan.setup.resultTitle') }}</h2>
         <PlanResult :plan="plan" :skipped-check="!check" @reported="reported" @daily-goal="showToast" />
       </section>
 
@@ -192,32 +206,33 @@
         :plan="plan"
         :picked="picked"
         :pick-error="pickError"
-        :starting="starting"
+        :starting="actionBusy"
         @pick="togglePick"
         @reported="reported"
       />
 
       <section v-else-if="finished" class="plan-center" aria-labelledby="plan-finished-title">
-        <h2 id="plan-finished-title" class="focus-headline">
+        <h2 id="plan-finished-title" class="focus-headline" tabindex="-1">
           {{ t(step === 'saved' ? 'plan.setup.pathSaved' : 'plan.setup.setupSkipped') }}
         </h2>
       </section>
 
-      <AppOverlay
-        :open="editing"
-        :title="t('plan.setup.editTitle')"
-        test-id="edit-goal-dialog"
-        @close="editing = false"
-      >
-        <GoalForm v-model="editDraft" :options="setupOptions" :sections="['goals', 'deadline']" compact />
+      <AppOverlay :open="editing" :title="t('plan.setup.editTitle')" test-id="edit-goal-dialog" @close="cancelEdit">
+        <GoalForm
+          v-model="editDraft"
+          :options="setupOptions"
+          :sections="['goals', 'deadline']"
+          compact
+          :calendar-no-date="false"
+        />
         <template #footer>
-          <button class="btn btn-secondary" type="button" @click="editing = false">
+          <button class="btn btn-secondary" type="button" @click="cancelEdit">
             {{ t('common.cancel') }}
           </button>
           <button
             class="btn btn-primary"
             type="button"
-            :disabled="refreshingOptions || !deadlineReady(editDraft)"
+            :disabled="options.refreshing.value || !deadlineReady(editDraft) || sameGoal(editDraft, draft)"
             data-testid="save-rebuild"
             @click="rebuild"
           >
@@ -234,7 +249,7 @@
           class="btn btn-secondary btn-lg"
           type="button"
           data-testid="setup-secondary"
-          :disabled="starting"
+          :disabled="actionBusy"
           @click="footer.secondary.run"
         >
           <IconGlyph v-if="footer.secondary.icon" :name="footer.secondary.icon" :size="18" />
@@ -250,6 +265,7 @@
           type="button"
           data-testid="setup-primary"
           :disabled="footer.primary.disabled"
+          :aria-busy="(starting && step === 'path') || undefined"
           @click="footer.primary.run"
         >
           {{ footer.primary.label }}
@@ -290,8 +306,14 @@ import StatePanel from '@/components/common/StatePanel.vue'
 import FocusFooter from '@/components/layout/FocusFooter.vue'
 import FocusTopBar from '@/components/layout/FocusTopBar.vue'
 import GoalForm, { type Section } from '@/components/plan/GoalForm.vue'
-import { deadlinePassed, deadlineReady, emptyDraft, goalInput, type GoalDraft } from '@/components/plan/goalDraft'
-import LevelCheckDone from '@/components/plan/LevelCheckDone.vue'
+import {
+  deadlinePassed,
+  deadlineReady,
+  emptyDraft,
+  goalInput,
+  sameGoal,
+  type GoalDraft,
+} from '@/components/plan/goalDraft'
 import LevelCheckRunner from '@/components/plan/LevelCheckRunner.vue'
 import PlanBuilding from '@/components/plan/PlanBuilding.vue'
 import PlanChoiceGrid, { type PlanChoice } from '@/components/plan/PlanChoiceGrid.vue'
@@ -299,6 +321,7 @@ import { FOCUS_FOR_SKILL, LEVEL_KEYS, SELF_LEVELS, type SelfLevelChoice } from '
 import PlanResult from '@/components/plan/PlanResult.vue'
 import PlanSetupPath from '@/components/plan/PlanSetupPath.vue'
 import { usePlanBuilder, type BuiltPlan } from '@/components/plan/usePlanBuilder'
+import { usePlanOptions } from '@/components/plan/usePlanOptions'
 import { usePlanPick } from '@/components/plan/usePlanPick'
 import { invalidateHintSettings } from '@/composables/useHintSettings'
 import { useIsUnmounted } from '@/composables/useIsUnmounted'
@@ -309,8 +332,8 @@ import { useToast } from '@/composables/useToast'
 import { planPathMessages } from '@/plugins/planPathMessages'
 import { planSetupMessages } from '@/plugins/planSetupMessages'
 import { planSummaryMessages } from '@/plugins/planSummaryMessages'
-import type { LevelCheckStep } from '@/types/learn'
-import type { LearningPlan, LevelCheckAnswer, PlanOptions, PlanSelfLevel } from '@/types/plan'
+import type { LevelCheckAnswer, LevelCheckStep } from '@/types/learn'
+import type { LearningPlan, PlanOptions, PlanSelfLevel } from '@/types/plan'
 import { apiErrorStatus, hasServerMessage, resolveApiError } from '@/utils/apiError'
 import { SERVER_MESSAGE } from '@/utils/serverMessages'
 
@@ -376,9 +399,7 @@ const STEP_PROGRESS: Partial<Record<Step, number>> = {
 const router = useRouter()
 const { t, locale } = useLocalMessages({ plan: [planSummaryMessages, planSetupMessages, planPathMessages] })
 const { toast, showToast } = useToast()
-const options = useResource(planApi.options)
-const refreshingOptions = ref(false)
-let optionsRefreshSeq = 0
+const options = usePlanOptions()
 /**
  * Whether the learner already has a plan. The setup builds a first plan; a learner who has one (back from the plan, a
  * refresh after it was built, a bookmark) changes it on My learning plan ("Update my goal", "Retake level check"), so a
@@ -394,28 +415,52 @@ const levelChoice = ref<SelfLevelChoice | null>(null)
 /** The question of the level check on screen, as its `progress` event tells it; null until the first one is in. */
 const checkQuestion = ref<{ answered: number; max: number } | null>(null)
 /** The finished level check; null when it was skipped. */
-const check = ref<{ answers: LevelCheckAnswer[]; result: NonNullable<LevelCheckStep['result']> } | null>(null)
+const check = ref<{
+  answers: LevelCheckAnswer[]
+  result: NonNullable<LevelCheckStep['result']>
+  runToken: string | null
+} | null>(null)
 const plan = ref<LearningPlan | null>(null)
 const leaving = ref(false)
 const finishing = ref<'confirm' | 'skip' | null>(null)
-const exitError = ref<string | null>(null)
-const exitErrorRef = ref<HTMLElement | null>(null)
 const starting = computed(() => finishing.value === 'confirm')
-const startError = ref<{ message: string; action: 'rebuild' | 'pickDate' | null } | null>(null)
-const startErrorRef = ref<HTMLElement | null>(null)
+const rebuildingFromError = ref(false)
+const actionBusy = computed(() => finishing.value !== null || rebuildingFromError.value)
+const setupError = ref<{ message: string; action?: 'rebuild' | 'pickDate' | null; testId?: string } | null>(null)
+const setupErrorRef = ref<HTMLElement | null>(null)
+const setupRef = ref<HTMLElement | null>(null)
 const editing = ref(false)
+const hasPendingEdit = ref(false)
 const isUnmounted = useIsUnmounted()
 
 watch(
   step,
   () => {
-    exitError.value = null
-    startError.value = null
+    setupError.value = null
   },
   { flush: 'sync' },
 )
 
+watch(
+  step,
+  (nextStep) => {
+    if (isUnmounted() || leaving.value || editing.value || setupError.value) return
+    window.scrollTo?.({ top: 0 })
+    if (nextStep !== 'check') {
+      setupRef.value?.querySelector<HTMLElement>('h2[tabindex="-1"]')?.focus({ preventScroll: true })
+    }
+  },
+  { flush: 'post' },
+)
+
 const { picked, togglePick, pickError, whenSaved } = usePlanPick(plan, () => t('plan.path.pickError'))
+
+function applyBuiltPlan({ plan: built, draft: committedDraft }: BuiltPlan): void {
+  if (committedDraft) draft.value = committedDraft
+  hasPendingEdit.value = false
+  plan.value = built
+  step.value = 'result'
+}
 
 const builder = usePlanBuilder({
   isBuilding: () => step.value === 'building' && finishing.value === null,
@@ -424,14 +469,13 @@ const builder = usePlanBuilder({
   onStart: () => {
     step.value = 'building'
   },
-  onBuilt: ({ plan: built, draft: committedDraft }) => {
-    if (committedDraft) draft.value = committedDraft
-    plan.value = built
-    step.value = 'result'
-  },
+  onBuilt: applyBuiltPlan,
   fallbackError: () => t('plan.setup.buildError'),
 })
-const { buildError, buildErrorStatus } = builder
+const { buildError, buildErrorStatus, buildErrorReason, retry: retryBuild } = builder
+const needsCheckRestart = computed(
+  () => buildErrorStatus.value === 400 && hasServerMessage(buildErrorReason.value, SERVER_MESSAGE.RESTART_LEVEL_CHECK),
+)
 
 /** A plan built before this visit: the overview is read once, when the setup opens. */
 const hasPlanAlready = computed(() => Boolean(existing.data.value?.plan))
@@ -513,7 +557,10 @@ const footer = computed<{ primary: FooterAction; secondary?: FooterAction; note?
     case 'pace':
       return {
         secondary: back('goal'),
-        primary: continueTo(check.value ? 'checkDone' : 'level', !deadlineReady(draft.value)),
+        primary: continueTo(
+          check.value ? 'checkDone' : 'level',
+          options.refreshing.value || !deadlineReady(draft.value),
+        ),
       }
     case 'level':
       return {
@@ -545,7 +592,7 @@ const footer = computed<{ primary: FooterAction; secondary?: FooterAction; note?
         primary: {
           label: starting.value ? t('plan.setup.starting') : t('plan.setup.startPath'),
           run: () => finishSetup('confirm'),
-          disabled: starting.value,
+          disabled: actionBusy.value,
         },
       }
     default:
@@ -555,7 +602,7 @@ const footer = computed<{ primary: FooterAction; secondary?: FooterAction; note?
 
 /** Close leaves directly while loading, on load error, or once setup is done; otherwise asks before discarding. */
 function requestClose(): void {
-  if (starting.value || hasPlanAlready.value) return
+  if (actionBusy.value || hasPlanAlready.value) return
   if (finished.value || !setupOptions.value) void openHome()
   else leaving.value = true
 }
@@ -566,8 +613,8 @@ async function finishSetup(action: 'confirm' | 'skip'): Promise<void> {
   finishing.value = action
   const version = getAuthSessionVersion()
   const stillHere = () => !isUnmounted() && version === getAuthSessionVersion()
-  if (action === 'skip') exitError.value = null
-  else startError.value = null
+  const hadPickError = pickError.value !== null
+  setupError.value = null
   let builtDuringSkip: BuiltPlan | null = null
   try {
     // Discard after a draft already being built has reached the server, even if that build failed.
@@ -576,6 +623,7 @@ async function finishSetup(action: 'confirm' | 'skip'): Promise<void> {
     }
     await whenSaved()
     if (!stillHere()) return
+    if (action === 'confirm' && !hadPickError && pickError.value !== null) return
     await planApi[action]()
     if (action === 'confirm' && version === getAuthSessionVersion()) invalidateHintSettings()
     if (stillHere()) {
@@ -589,25 +637,19 @@ async function finishSetup(action: 'confirm' | 'skip'): Promise<void> {
       leaving.value = false
       // Never leave the learner stranded on the infinite building spinner if skip fails after aborting the build.
       if (step.value === 'building') {
-        if (builtDuringSkip) {
-          if (builtDuringSkip.draft) draft.value = builtDuringSkip.draft
-          plan.value = builtDuringSkip.plan
-          step.value = 'result'
-        } else {
-          step.value = plan.value ? 'result' : 'focus'
-        }
+        if (builtDuringSkip) applyBuiltPlan(builtDuringSkip)
+        else backFromBuildError()
       }
-      exitError.value = resolveApiError(reason, t('plan.setup.skipError'))
-      await nextTick()
-      if (stillHere()) exitErrorRef.value?.focus()
+      setupError.value = { message: resolveApiError(reason, t('plan.setup.skipError')) }
     } else {
-      startError.value = {
+      setupError.value = {
         message: resolveApiError(reason, t('plan.setup.startError')),
         action: startErrorAction(reason),
+        testId: 'plan-start-error',
       }
-      await nextTick()
-      if (stillHere()) startErrorRef.value?.focus()
     }
+    await nextTick()
+    if (stillHere()) setupErrorRef.value?.focus()
   } finally {
     if (stillHere()) finishing.value = null
   }
@@ -615,36 +657,29 @@ async function finishSetup(action: 'confirm' | 'skip'): Promise<void> {
 
 async function openHome(): Promise<void> {
   if (!pageActive.value) return
-  exitError.value = null
+  setupError.value = null
   try {
     await router.push({ name: 'student-home' })
   } catch (reason) {
-    if (!isUnmounted()) exitError.value = resolveApiError(reason)
+    if (!isUnmounted()) {
+      setupError.value = { message: resolveApiError(reason) }
+      await nextTick()
+      if (!isUnmounted()) setupErrorRef.value?.focus()
+    }
   }
 }
 
 /** Refreshes `setupOptions.today` on day rollover so passed target dates are cleared and disabled. */
 async function refreshOptions(): Promise<PlanOptions | null> {
-  const seq = ++optionsRefreshSeq
-  const session = getAuthSessionVersion()
-  refreshingOptions.value = true
-  try {
-    const fresh = await planApi.options()
-    if (isUnmounted() || seq !== optionsRefreshSeq || session !== getAuthSessionVersion()) return null
-    options.replace(fresh)
-    if (editing.value && editDraft.value.deadline && deadlinePassed(editDraft.value.deadline, fresh.today)) {
-      editDraft.value = { ...editDraft.value, deadline: undefined }
-    }
-    if (step.value === 'pace' && draft.value.deadline && deadlinePassed(draft.value.deadline, fresh.today)) {
-      draft.value = { ...draft.value, deadline: undefined }
-    }
-    return fresh
-  } catch {
-    // Keep the already loaded setup options if a background day-rollover refresh fails.
-    return null
-  } finally {
-    if (!isUnmounted() && seq === optionsRefreshSeq) refreshingOptions.value = false
+  const fresh = await options.refresh()
+  if (!fresh) return null
+  if ((editing.value || hasPendingEdit.value) && deadlinePassed(editDraft.value.deadline, fresh.today)) {
+    editDraft.value = { ...editDraft.value, deadline: undefined }
   }
+  if (!plan.value && deadlinePassed(draft.value.deadline, fresh.today)) {
+    draft.value = { ...draft.value, deadline: undefined }
+  }
+  return fresh
 }
 
 function returnToPace(): void {
@@ -656,6 +691,15 @@ function backFromBuildError(): void {
   step.value = plan.value ? 'result' : 'focus'
 }
 
+function editGoalFromBuildError(): void {
+  if (plan.value) {
+    step.value = 'result'
+    openEdit()
+  } else {
+    returnToPace()
+  }
+}
+
 /** The way on from a refused "Start my path": build again, or (the goal date has passed) pick a new date first. */
 function startErrorAction(reason: unknown): 'rebuild' | 'pickDate' | null {
   if (apiErrorStatus(reason) !== 409) return null
@@ -663,34 +707,54 @@ function startErrorAction(reason: unknown): 'rebuild' | 'pickDate' | null {
 }
 
 async function buildAgain(): Promise<void> {
-  if (finishing.value || finished.value || step.value !== 'path') return
+  if (rebuildingFromError.value || finishing.value || finished.value || step.value !== 'path') return
+  rebuildingFromError.value = true
   const session = getAuthSessionVersion()
-  startError.value = null
-  const fresh = await refreshOptions()
-  if (
-    isUnmounted() ||
-    session !== getAuthSessionVersion() ||
-    finishing.value ||
-    finished.value ||
-    step.value !== 'path'
-  ) {
-    return
+  setupError.value = null
+  try {
+    const fresh = await refreshOptions()
+    if (
+      isUnmounted() ||
+      session !== getAuthSessionVersion() ||
+      leaving.value ||
+      finishing.value ||
+      finished.value ||
+      step.value !== 'path'
+    ) {
+      return
+    }
+    const today = fresh?.today ?? setupOptions.value?.today
+    if (deadlinePassed(draft.value.deadline, today)) {
+      openGoalEditor(undefined, false)
+      return
+    }
+    if (check.value) {
+      runGoalRebuild(draft.value)
+    } else {
+      build()
+    }
+  } finally {
+    if (!isUnmounted()) rebuildingFromError.value = false
   }
-  const today = fresh?.today ?? setupOptions.value?.today
-  if (draft.value.deadline && today && deadlinePassed(draft.value.deadline, today)) {
-    pickNewDate()
-    return
-  }
-  build()
+}
+
+function openGoalEditor(deadline: GoalDraft['deadline'], refresh = true): void {
+  hasPendingEdit.value = false
+  editDraft.value = { ...draft.value, deadline }
+  editing.value = true
+  if (refresh) void refreshOptions()
+}
+
+function cancelEdit(): void {
+  hasPendingEdit.value = false
+  editing.value = false
 }
 
 /** Building again with the same date would be refused, so the goal opens with no date chosen. */
 function pickNewDate(): void {
-  if (finishing.value || finished.value) return
-  startError.value = null
-  editDraft.value = { ...draft.value, deadline: undefined }
-  editing.value = true
-  void refreshOptions()
+  if (actionBusy.value || finished.value) return
+  setupError.value = null
+  openGoalEditor(undefined)
 }
 
 function startCheck(): void {
@@ -710,42 +774,68 @@ function checkProgress(answered: number, max: number): void {
   checkQuestion.value = { answered, max }
 }
 
-function checkFinished(answers: LevelCheckAnswer[], result: NonNullable<LevelCheckStep['result']>): void {
-  check.value = { answers, result }
+function checkFinished(
+  answers: LevelCheckAnswer[],
+  result: NonNullable<LevelCheckStep['result']>,
+  runToken: string | null = null,
+): void {
+  check.value = { answers, result, runToken }
   step.value = 'checkDone'
 }
 
+function currentLevelCheck() {
+  const runToken = check.value?.runToken
+  return {
+    selfLevel: selfLevel.value,
+    skipped: !check.value,
+    answers: check.value?.answers ?? [],
+    ...(runToken ? { runToken } : {}),
+  }
+}
+
 function build(): void {
+  hasPendingEdit.value = false
   const goal = goalInput(draft.value)
-  const levelCheck = { selfLevel: selfLevel.value, skipped: !check.value, answers: check.value?.answers ?? [] }
+  const levelCheck = currentLevelCheck()
   void builder.run(async () => ({ plan: await planApi.build({ goal, levelCheck, language: locale.value }) }))
 }
 
-function retryBuild(): void {
-  builder.retry()
+function openEdit(): void {
+  if (actionBusy.value || finished.value) return
+  if (hasPendingEdit.value) {
+    if (deadlinePassed(editDraft.value.deadline, setupOptions.value?.today)) {
+      editDraft.value = { ...editDraft.value, deadline: undefined }
+    }
+    editing.value = true
+    void refreshOptions()
+    return
+  }
+  openGoalEditor(deadlinePassed(draft.value.deadline, setupOptions.value?.today) ? undefined : draft.value.deadline)
 }
 
-function openEdit(): void {
-  const currentToday = setupOptions.value?.today
-  const deadline =
-    draft.value.deadline && currentToday && deadlinePassed(draft.value.deadline, currentToday)
-      ? undefined
-      : draft.value.deadline
-  editDraft.value = { ...draft.value, deadline }
-  editing.value = true
-  void refreshOptions()
+function runGoalRebuild(targetDraft: GoalDraft, commitDraft?: GoalDraft): void {
+  const goal = goalInput(targetDraft)
+  const levelCheck = currentLevelCheck()
+  const language = locale.value
+  void builder.run(async () => {
+    try {
+      return { plan: await planApi.updateGoal(goal, language), draft: commitDraft }
+    } catch (reason) {
+      if (apiErrorStatus(reason) === 409 && hasServerMessage(reason, SERVER_MESSAGE.BUILD_PLAN_FIRST)) {
+        return { plan: await planApi.build({ goal, levelCheck, language }), draft: commitDraft }
+      }
+      throw reason
+    }
+  })
 }
 
 /** "Save and rebuild": the level check result stays; the plan is rebuilt for the new goal. */
 function rebuild(): void {
-  if (refreshingOptions.value || !deadlineReady(editDraft.value)) return
+  if (options.refreshing.value || !deadlineReady(editDraft.value) || sameGoal(editDraft.value, draft.value)) return
   const nextDraft = { ...editDraft.value }
+  hasPendingEdit.value = true
   editing.value = false
-  const goal = goalInput(nextDraft)
-  void builder.run(async () => ({
-    plan: await planApi.updateGoal(goal, locale.value),
-    draft: nextDraft,
-  }))
+  runGoalRebuild(nextDraft, nextDraft)
 }
 
 function reported(): void {

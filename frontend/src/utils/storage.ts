@@ -1,6 +1,3 @@
-import type { AppLanguage } from '@/types/api'
-import { normalizeAppLanguage } from '@/utils/locale'
-
 export const storageKeys = {
   /** Session storage, read once: the address typed on the sign-in page, handed to Forgot password. */
   recoveryEmail: 'mandarin-spark.recovery-email',
@@ -34,23 +31,6 @@ export function safeGetItem(key: string, storage = browserStorage('localStorage'
   }
 }
 
-/** An account id means signed in, null means explicitly signed out, and undefined means no readable announcement. */
-export function sessionOwner(announcement = safeGetItem(storageKeys.sessionOwner)): number | null | undefined {
-  if (!announcement) return undefined
-  try {
-    const userId: unknown = JSON.parse(announcement)?.userId
-    return typeof userId === 'number' || userId === null ? userId : undefined
-  } catch {
-    return undefined
-  }
-}
-
-/** Tells the browser's other tabs that this tab signed an account in (its id) or signed out (null). */
-export function announceSessionOwner(userId: number | null): void {
-  // The time makes every announcement a change, so the other tabs hear a second sign-in of the same account too.
-  safeSetItem(storageKeys.sessionOwner, JSON.stringify({ userId, at: Date.now() }))
-}
-
 export function safeSetItem(key: string, value: string, storage = browserStorage('localStorage')): void {
   try {
     storage?.setItem(key, value)
@@ -67,7 +47,21 @@ export function safeRemoveItem(key: string, storage = browserStorage('localStora
   }
 }
 
-/** The stored interface language; English when there is none. */
-export function readPersistedLocale(): AppLanguage {
-  return normalizeAppLanguage(safeGetItem(storageKeys.language)) ?? 'en'
+/** An account id means signed in, null means explicitly signed out, and undefined means no readable announcement. */
+export function sessionOwner(announcement = safeGetItem(storageKeys.sessionOwner)): number | null | undefined {
+  if (!announcement) return undefined
+  try {
+    const userId: unknown = JSON.parse(announcement)?.userId
+    return (typeof userId === 'number' && Number.isSafeInteger(userId) && userId > 0) || userId === null
+      ? userId
+      : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** Tells the browser's other tabs that this tab signed an account in (its id) or signed out (null). */
+export function announceSessionOwner(userId: number | null): void {
+  // The time makes every announcement a change, so the other tabs hear a second sign-in of the same account too.
+  safeSetItem(storageKeys.sessionOwner, JSON.stringify({ userId, at: Date.now() }))
 }

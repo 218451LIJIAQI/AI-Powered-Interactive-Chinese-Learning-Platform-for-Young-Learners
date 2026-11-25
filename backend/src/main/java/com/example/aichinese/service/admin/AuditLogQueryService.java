@@ -1,5 +1,6 @@
 package com.example.aichinese.service.admin;
 
+import static com.example.aichinese.service.AuditLogService.TARGET_USER;
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
@@ -50,7 +51,6 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class AuditLogQueryService {
 
-    public static final String TARGET_USER = "User";
     /** Upper bound of one CSV export (about a year of a busy platform's admin activity). */
     private static final int MAX_EXPORT_ROWS = 5000;
     private static final int RECENT_ENTRY_LIMIT = 5;
@@ -69,8 +69,16 @@ public class AuditLogQueryService {
             String keyword, String actionType, String actorEmail, LocalDate from, LocalDate to, Long userId) {
 
         public AuditFilter {
+            validateDateBounds(from);
+            validateDateBounds(to);
             if (from != null && to != null && from.isAfter(to)) {
                 throw new ResponseStatusException(BAD_REQUEST, "The from date must be on or before the to date.");
+            }
+        }
+
+        private static void validateDateBounds(LocalDate date) {
+            if (date != null && (date.getYear() < 1001 || date.getYear() > 9998)) {
+                throw new ResponseStatusException(BAD_REQUEST, "Date filter is out of the supported range.");
             }
         }
     }
@@ -164,17 +172,27 @@ public class AuditLogQueryService {
                 .getResultList();
     }
 
-    private Map<Long, String> resolveDisplayNames(Set<Long> userIds) {
+    private record TargetAccount(String displayName, boolean deleted) {
+    }
+
+    private Map<Long, TargetAccount> resolveTargetAccounts(Set<Long> userIds) {
         if (userIds.isEmpty()) {
             return Map.of();
         }
-        Map<Long, String> names = new HashMap<>(userIds.size());
+        Map<Long, TargetAccount> accounts = new HashMap<>(userIds.size());
         for (Object[] row : entityManager.createQuery(
-                "select u.id, u.displayName from User u where u.id in :ids", Object[].class)
+                "select u.id, u.displayName, u.deletedAt from User u where u.id in :ids", Object[].class)
                 .setParameter("ids", userIds)
                 .getResultList()) {
-            names.put((Long) row[0], (String) row[1]);
+            accounts.put((Long) row[0], new TargetAccount((String) row[1], row[2] != null));
         }
+        return accounts;
+    }
+
+    private Map<Long, String> resolveDisplayNames(Set<Long> userIds) {
+        Map<Long, TargetAccount> accounts = resolveTargetAccounts(userIds);
+        Map<Long, String> names = new HashMap<>(accounts.size());
+        accounts.forEach((id, account) -> names.put(id, account.displayName()));
         return names;
     }
 
@@ -239,14 +257,15 @@ public class AuditLogQueryService {
                 .filter(entry -> TARGET_USER.equals(entry.getTargetType()) && entry.getTargetId() != null)
                 .map(AuditLog::getTargetId)
                 .collect(Collectors.toSet());
-        Map<Long, String> displayNames = resolveDisplayNames(userIds);
+        Map<Long, TargetAccount> accounts = resolveTargetAccounts(userIds);
 
         return entries.stream().map(entry -> {
             Long targetId = TARGET_USER.equals(entry.getTargetType()) ? entry.getTargetId() : null;
-            boolean targetExists = targetId != null && displayNames.containsKey(targetId);
+            TargetAccount account = targetId == null ? null : accounts.get(targetId);
+            boolean targetExists = account != null;
             String label = entry.getTargetLabel() != null
                     ? entry.getTargetLabel()
-                    : targetExists ? displayNames.get(targetId) : null;
+                    : targetExists ? account.displayName() : null;
             User actor = entry.getActorUser();
             return new AuditEntryResponse(
                     entry.getId(),
@@ -255,7 +274,7 @@ public class AuditLogQueryService {
                     actor == null ? null : actor.getDisplayName(),
                     entry.getActorEmail(),
                     label,
-                    targetExists ? targetId : null,
+                    targetExists && !account.deleted() ? targetId : null,
                     entry.getReason(),
                     entry.getDescription(),
                     entry.getCreatedAt());

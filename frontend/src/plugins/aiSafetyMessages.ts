@@ -1,4 +1,4 @@
-import type { AiResponseReportReason } from '@/types/api'
+import type { AiResponseReportReason, AiResponseReportStatus } from '@/types/api'
 
 /** Shared wording for the AI disclaimer and the learner report form. */
 export const aiSafetyMessages = {
@@ -10,13 +10,13 @@ export const aiSafetyMessages = {
     reportOpen: 'Open',
     reportResolved: 'Resolved',
     reportDismissed: 'Dismissed',
-    reportLead: 'An admin replies in Ask SparkBot › My reports.',
+    reportLead: 'An admin replies in AI Helper › Ask SparkBot › My reports.',
     reportReason: 'Reason',
     reportNote: 'Note (optional)',
     reportNotePlaceholder: 'What looked wrong?',
     sendReport: 'Send report',
     reportError: 'The report could not be sent. Please try again.',
-    reportSent: 'Report sent. An admin replies in Ask SparkBot › My reports.',
+    reportSent: 'Report sent. An admin replies in AI Helper › Ask SparkBot › My reports.',
     reasonIncorrect: 'Incorrect content',
     reasonUnclear: 'Unclear explanation',
     reasonInappropriate: 'Unsafe or inappropriate',
@@ -32,13 +32,13 @@ export const aiSafetyMessages = {
     reportOpen: 'Terbuka',
     reportResolved: 'Diselesaikan',
     reportDismissed: 'Ditolak',
-    reportLead: 'Pentadbir membalas dalam Tanya SparkBot › Laporan saya.',
+    reportLead: 'Pentadbir membalas dalam Pembantu AI › Tanya SparkBot › Laporan saya.',
     reportReason: 'Sebab',
     reportNote: 'Nota (pilihan)',
     reportNotePlaceholder: 'Apa yang kelihatan salah?',
     sendReport: 'Hantar laporan',
     reportError: 'Laporan tidak dapat dihantar. Sila cuba lagi.',
-    reportSent: 'Laporan dihantar. Pentadbir membalas dalam Tanya SparkBot › Laporan saya.',
+    reportSent: 'Laporan dihantar. Pentadbir membalas dalam Pembantu AI › Tanya SparkBot › Laporan saya.',
     reasonIncorrect: 'Kandungan tidak tepat',
     reasonUnclear: 'Penerangan tidak jelas',
     reasonInappropriate: 'Tidak selamat atau tidak sesuai',
@@ -51,16 +51,16 @@ export const aiSafetyMessages = {
     responsibleAi: '负责任 AI 指南 ›',
     report: '举报',
     reported: '已举报',
-    reportOpen: '处理中',
+    reportOpen: '待处理',
     reportResolved: '已解决',
     reportDismissed: '已驳回',
-    reportLead: '管理员会在“问 SparkBot › 我的举报”中回复。',
+    reportLead: '管理员会在“AI 助手 › 问 SparkBot › 我的举报”中回复。',
     reportReason: '原因',
     reportNote: '备注（选填）',
     reportNotePlaceholder: '哪里有问题？',
     sendReport: '发送举报',
     reportError: '无法发送举报，请再试一次。',
-    reportSent: '举报已发送。管理员会在“问 SparkBot › 我的举报”中回复。',
+    reportSent: '举报已发送。管理员会在“AI 助手 › 问 SparkBot › 我的举报”中回复。',
     reasonIncorrect: '内容不正确',
     reasonUnclear: '解释不清楚',
     reasonInappropriate: '不安全或不恰当',
@@ -77,6 +77,16 @@ export const aiSafetyMessages = {
 const RETIRED_DEFAULT_NOTICE = 'AI responses may contain errors and do not replace your teacher.'
 
 /**
+ * Normalizes a stored notice for admin editing: blank values or the retired default wording map to the current
+ * English platform default so admins editing upgraded databases do not re-save retired copy.
+ */
+export function normalizeEditableAiNotice(serverText: string | null | undefined): string {
+  const text = serverText?.trim()
+  if (!text || text === RETIRED_DEFAULT_NOTICE) return aiSafetyMessages.en.disclaimer
+  return text
+}
+
+/**
  * The AI notice as a reader sees it (the rule of the Responsible AI page): an admin's own wording as written; the
  * platform default, which the server stores and sends in English (PlatformSettingsService.DEFAULT_AI_DISCLAIMER_TEXT,
  * the same words as `aiSafety.disclaimer` in `en`, or the retired default), or no text at all, as
@@ -84,15 +94,12 @@ const RETIRED_DEFAULT_NOTICE = 'AI responses may contain errors and do not repla
  * `aiSafety`.
  */
 export function shownAiNotice(serverText: string | null | undefined, translate: (key: string) => string): string {
-  const text = serverText?.trim()
-  if (!text || text === aiSafetyMessages.en.disclaimer || text === RETIRED_DEFAULT_NOTICE) {
-    return translate('aiSafety.disclaimer')
-  }
-  return text
+  const text = normalizeEditableAiNotice(serverText)
+  return text === aiSafetyMessages.en.disclaimer ? translate('aiSafety.disclaimer') : text
 }
 
 /** Full i18n key (bundle registered as `aiSafety`) for every report reason the backend accepts. */
-export const AI_REPORT_REASON_KEYS = {
+const AI_REPORT_REASON_KEYS = {
   INCORRECT_CONTENT: 'aiSafety.reasonIncorrect',
   UNCLEAR_EXPLANATION: 'aiSafety.reasonUnclear',
   INAPPROPRIATE_CONTENT: 'aiSafety.reasonInappropriate',
@@ -100,3 +107,16 @@ export const AI_REPORT_REASON_KEYS = {
   DOES_NOT_MATCH_INPUT: 'aiSafety.reasonMismatch',
   OTHER: 'aiSafety.reasonOther',
 } as const satisfies Record<AiResponseReportReason, `aiSafety.${keyof (typeof aiSafetyMessages)['en']}`>
+
+export function reportReasonKey(
+  reason: AiResponseReportReason,
+): (typeof AI_REPORT_REASON_KEYS)[AiResponseReportReason] {
+  return AI_REPORT_REASON_KEYS[reason] ?? AI_REPORT_REASON_KEYS.OTHER
+}
+
+/** Full i18n key (bundle registered as `aiSafety`) for every report review status. */
+export const AI_REPORT_STATUS_KEYS = {
+  PENDING_REVIEW: 'aiSafety.reportOpen',
+  RESOLVED: 'aiSafety.reportResolved',
+  DISMISSED: 'aiSafety.reportDismissed',
+} as const satisfies Record<AiResponseReportStatus, `aiSafety.${keyof (typeof aiSafetyMessages)['en']}`>

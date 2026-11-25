@@ -1,6 +1,6 @@
 <template>
-  <Teleport to="body">
-    <div v-if="shown" class="overlay" :class="`overlay--${variant}`" @mousedown.self="requestClose">
+  <Teleport v-if="shown" to="body">
+    <div class="overlay" :class="`overlay--${variant}`" @mousedown.self="requestClose">
       <section
         ref="panel"
         tabindex="-1"
@@ -23,7 +23,9 @@
             type="button"
             class="btn btn-ghost btn-icon btn-sm"
             :aria-label="t('common.close')"
+            :title="t('common.close')"
             :disabled="busy"
+            @mousedown.prevent
             @click="requestClose"
           >
             <IconGlyph name="close" :size="18" />
@@ -73,7 +75,7 @@ interface Props {
   /** True while an action runs: the overlay cannot be closed meanwhile. */
   busy?: boolean
   role?: 'dialog' | 'alertdialog'
-  /** Id of the element that describes the overlay; defaults to the subtitle. */
+  /** Id of an additional element that describes the overlay; combined with the subtitle when both are set. */
   describedById?: string
   testId?: string
 }
@@ -98,7 +100,9 @@ const bodyScrolls = ref(false)
 const baseId = useId()
 const titleId = `${baseId}-title`
 const subtitleId = `${baseId}-subtitle`
-const describedBy = computed(() => props.describedById ?? (props.subtitle ? subtitleId : undefined))
+const describedBy = computed(
+  () => [props.subtitle ? subtitleId : '', props.describedById ?? ''].filter(Boolean).join(' ') || undefined,
+)
 
 // A long read-only drawer needs a keyboard scroll target. Short dialogs keep their natural tab order.
 watch(
@@ -136,6 +140,19 @@ function requestClose(): void {
 function keepPanelKeys(event: KeyboardEvent): void {
   if (event.key !== 'Escape' && event.key !== 'Tab') event.stopPropagation()
 }
+
+// Disabling the active submit/confirm button when an overlay turns busy drops focus to document.body; reclaim it inside the panel.
+watch(
+  () => props.busy,
+  (isBusy) => {
+    if (!isBusy || !shown.value || !panel.value) return
+    const active = document.activeElement
+    if (!active || !panel.value.contains(active) || (active instanceof HTMLElement && active.matches(':disabled'))) {
+      panel.value.focus({ preventScroll: true })
+    }
+  },
+  { flush: 'post' },
+)
 
 useOverlayFocus({
   active: shown,

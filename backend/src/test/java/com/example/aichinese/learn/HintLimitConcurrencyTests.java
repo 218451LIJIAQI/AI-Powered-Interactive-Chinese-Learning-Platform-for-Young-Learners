@@ -3,7 +3,6 @@ package com.example.aichinese.learn;
 import static com.example.aichinese.support.ConcurrentTransactions.withRowLock;
 import static com.example.aichinese.support.LearningApiTestClient.uniqueEmail;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
@@ -23,7 +22,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.server.ResponseStatusException;
 
 import com.example.aichinese.config.SecurityProperties;
 import com.example.aichinese.dto.learn.HintDto;
@@ -34,6 +32,7 @@ import com.example.aichinese.entity.LearnQuestion;
 import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.entity.base.PracticeActivityContent;
 import com.example.aichinese.entity.enums.PracticeType;
+import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.learn.LearnPathService;
 import com.example.aichinese.service.learn.PracticeCatalog;
 import com.example.aichinese.service.learn.PracticeService;
@@ -61,6 +60,7 @@ class HintLimitConcurrencyTests extends ApiIntegrationTest {
     @AutoClose
     private HintRules rules;
     private StudentProfile student;
+    private SecurityUserDetails principal;
 
     @BeforeEach
     void oneHintASet() throws Exception {
@@ -69,18 +69,19 @@ class HintLimitConcurrencyTests extends ApiIntegrationTest {
         String email = uniqueEmail("hint-race");
         api.registerStudentAccount(email);
         student = studentProfile(email);
+        principal = principalFor(email);
     }
 
     @Test
     void twoLessonHintsAtOnceStayWithinTheHintsPerSet() throws Exception {
         LearnLesson lesson = learnLesson("The four tones · 声调");
         List<LearnQuestion> questions = learnQuestionRepository.findByLessonIdOrderByPositionAscIdAsc(lesson.getId());
-        LessonPlayResponse run = learnPathService.lesson(student, lesson.getId());
+        LessonPlayResponse run = learnPathService.lesson(principal, lesson.getId());
         Function<LearnQuestion, HintDto.QuestionRequest> request = question ->
                 new HintDto.QuestionRequest(question.getId(), run.runStartedAt(), run.runSignature());
 
-        race(() -> learnPathService.hint(student, lesson.getId(), request.apply(questions.get(0))),
-                () -> learnPathService.hint(student, lesson.getId(), request.apply(questions.get(1))));
+        race(() -> learnPathService.hint(principal, lesson.getId(), request.apply(questions.get(0))),
+                () -> learnPathService.hint(principal, lesson.getId(), request.apply(questions.get(1))));
 
         assertThat(hintedItems("LESSON#" + lesson.getId() + "#%")).isEqualTo(1);
     }
@@ -98,11 +99,10 @@ class HintLimitConcurrencyTests extends ApiIntegrationTest {
                 Timestamp.valueOf(opened), Timestamp.valueOf(opened));
 
         var second = new HintDto.QuestionRequest(questions.get(1).getId(), opened, preUpgradeSignature(scope, opened));
-        assertThatThrownBy(() -> learnPathService.hint(student, lesson.getId(), second))
-                .isInstanceOfSatisfying(ResponseStatusException.class,
-                        error -> assertThat(error.getReason()).isEqualTo("There are no hints left in this set."));
-        LessonPlayResponse next = learnPathService.lesson(student, lesson.getId());
-        assertThat(learnPathService.hint(student, lesson.getId(), new HintDto.QuestionRequest(
+        assertHttpError(() -> learnPathService.hint(principal, lesson.getId(), second),
+                400, "There are no hints left in this set.");
+        LessonPlayResponse next = learnPathService.lesson(principal, lesson.getId());
+        assertThat(learnPathService.hint(principal, lesson.getId(), new HintDto.QuestionRequest(
                 questions.get(1).getId(), next.runStartedAt(), next.runSignature()))).isNotNull();
     }
 
@@ -120,12 +120,12 @@ class HintLimitConcurrencyTests extends ApiIntegrationTest {
     void twoPracticeHintsAtOnceStayWithinTheHintsPerSet() throws Exception {
         PracticeActivityContent set = practiceSet(PracticeType.LISTENING, "Asking the Way");
         List<PracticeCatalog.Item> items = practiceCatalog.content(PracticeType.LISTENING, set).items();
-        PracticeSetResponse run = practiceService.set(student, PracticeType.LISTENING, set.getId());
+        PracticeSetResponse run = practiceService.set(principal, PracticeType.LISTENING, set.getId());
         Function<PracticeCatalog.Item, HintDto.Request> request = item ->
                 new HintDto.Request(item.key(), run.runStartedAt(), run.runSignature());
 
-        race(() -> practiceService.hint(student, PracticeType.LISTENING, set.getId(), request.apply(items.get(0))),
-                () -> practiceService.hint(student, PracticeType.LISTENING, set.getId(), request.apply(items.get(1))));
+        race(() -> practiceService.hint(principal, PracticeType.LISTENING, set.getId(), request.apply(items.get(0))),
+                () -> practiceService.hint(principal, PracticeType.LISTENING, set.getId(), request.apply(items.get(1))));
 
         assertThat(hintedItems("PRACTICE#LISTENING#" + set.getId() + "#%")).isEqualTo(1);
     }
@@ -135,13 +135,11 @@ class HintLimitConcurrencyTests extends ApiIntegrationTest {
      * row locked the later one waits until the earlier commits, then counts its hint and is refused; without the lock
      * it would count none and be given too.
      */
-    private void race(Supplier<HintDto.Step> earlier, Supplier<HintDto.Step> later) throws Exception {
+    private void race(Supplier<HintDto.Step> earlier, Supplier<HintDto.Step> later) {
         var transaction = new TransactionTemplate(transactionManager);
-        withRowLock(jdbc, "student_profiles", transaction, () -> assertThat(earlier.get()).isNotNull(),
-                () -> assertThatThrownBy(later::get).isInstanceOfSatisfying(ResponseStatusException.class, refused -> {
-                    assertThat(refused.getStatusCode().value()).isEqualTo(400);
-                    assertThat(refused.getReason()).isEqualTo("There are no hints left in this set.");
-                }));
+        assertHttpError(
+                () -> withRowLock(jdbc, "student_profiles", transaction, () -> assertThat(earlier.get()).isNotNull(), later::get),
+                400, "There are no hints left in this set.");
     }
 
     /** The different items of the student's run that got a hint. */

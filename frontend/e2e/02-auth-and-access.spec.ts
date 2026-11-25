@@ -1,9 +1,8 @@
-import { expect, test } from '@playwright/test'
-
 import { E2E_ACCOUNTS } from './accounts'
 import {
   API_BASE_URL,
   apiAuthHeaders,
+  expect,
   expectHiddenPageTitle,
   expectSidebarItems,
   registerStudent,
@@ -11,6 +10,7 @@ import {
   signOut,
   submitSignIn,
   switchLanguage,
+  test,
 } from './support'
 
 // Home page and sidebar of each role (frontend/src/config/navigation.ts). There are two roles: learners and admins.
@@ -35,9 +35,9 @@ for (const { role, account, home, sidebar } of ROLES) {
 
     await expect(page).toHaveURL(new RegExp(`${home}$`))
     await expect(page.getByRole('heading', { level: 1 })).toBeAttached()
-    const accountLink = page.getByRole('banner').getByRole('link', { name: account.name, exact: true })
+    const accountLink = page.getByRole('banner').getByRole('link', { name: `Account: ${account.name}`, exact: true })
     await expect(accountLink).toBeVisible()
-    await expect(accountLink).toHaveAccessibleDescription(`Account: ${account.name}`)
+    await expect(accountLink).toContainText(account.name)
     await expectSidebarItems(page, sidebar)
 
     await signOut(page, account)
@@ -55,17 +55,26 @@ test('saving a name in an open tab keeps the language chosen in another tab', as
   await otherTab.goto('/student/account')
   await expect(otherTab.locator('#account-name')).toHaveValue('Siti Hassan')
   const profilePath = '/api/v1/users/me/profile'
-  const languageSaved = otherTab.waitForResponse((response) => response.url().endsWith(profilePath))
+  const languageSaved = otherTab.waitForResponse(
+    (response) => response.url().endsWith(profilePath) && response.request().method() === 'PUT',
+  )
   await switchLanguage(otherTab, 'BM')
   expect((await languageSaved).ok()).toBe(true)
 
   await name.fill('Siti Aminah')
-  const nameSaved = page.waitForResponse((response) => response.url().endsWith(profilePath))
+  const nameSaved = page.waitForResponse(
+    (response) => response.url().endsWith(profilePath) && response.request().method() === 'PUT',
+  )
   await page.getByTestId('account-save').click()
   const response = await nameSaved
   expect(response.ok()).toBe(true)
   expect((await response.json()).data).toMatchObject({ fullName: 'Siti Aminah', preferredLanguage: 'ms' })
-  await expect(page.getByRole('banner').getByRole('link', { name: 'Siti Aminah', exact: true })).toBeVisible()
+  const updatedAccountLink = page.getByRole('banner').getByRole('link', { name: 'Account: Siti Aminah', exact: true })
+  await expect(updatedAccountLink).toBeVisible()
+  await expect(updatedAccountLink).toContainText('Siti Aminah')
+  await page.reload()
+  await expect(page.locator('#account-name')).toHaveValue('Siti Aminah')
+  await expect(page.locator('html')).toHaveAttribute('lang', 'ms')
 })
 
 test('a wrong password shows an error on the sign-in page', async ({ page }) => {

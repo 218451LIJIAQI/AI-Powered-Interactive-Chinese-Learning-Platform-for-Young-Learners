@@ -1,11 +1,13 @@
 import { readonly, ref } from 'vue'
 
-import { getAuthSessionVersion } from '@/api/http'
+import { getAccessToken, getAuthSessionVersion } from '@/api/http'
 import { hintApi } from '@/api/learn'
 import type { HintSettings } from '@/types/learn'
 
 const settings = ref<HintSettings | null>(null)
 const failed = ref(false)
+const readonlySettings = readonly(settings)
+const readonlyFailed = readonly(failed)
 let pending: Promise<void> | null = null
 let loadedForSession: number | null = null
 
@@ -16,6 +18,53 @@ export function invalidateHintSettings(): void {
   pending = null
 }
 
+function syncSession(session: number): void {
+  if (session === loadedForSession) return
+  invalidateHintSettings()
+  loadedForSession = session
+}
+
+function fetchSettings(targetSession: number, allowRetry = true): Promise<void> {
+  if (pending) return pending
+  loadedForSession = targetSession
+  failed.value = false
+  // Without settings no hint is offered; the next player to mount asks again.
+  const request = hintApi
+    .settings()
+    .catch(() => null)
+    .then((loaded) => {
+      if (pending !== request) return
+      pending = null
+      const current = getAuthSessionVersion()
+      if (current === targetSession) {
+        if (loaded !== null) settings.value = loaded
+        else failed.value = true
+      } else if (allowRetry && settings.value === null && getAccessToken() !== null) {
+        // Same-account token rotation bumped the session version while this initial read was in flight.
+        void fetchSettings(current, false)
+      }
+    })
+  pending = request
+  return request
+}
+
+function reload(): Promise<void> {
+  const current = getAuthSessionVersion()
+  syncSession(current)
+  return fetchSettings(current)
+}
+
+function rememberSettings(changed: HintSettings, expectedSession: number): boolean {
+  const currentSession = getAuthSessionVersion()
+  if (currentSession !== expectedSession) return false
+  // A saved setting supersedes an earlier GET even if its response is still in flight.
+  pending = null
+  failed.value = false
+  loadedForSession = currentSession
+  settings.value = changed
+  return true
+}
+
 /**
  * The student's hint setting with the rule of their level, loaded once per sign-in and shared by every Practice
  * player; the Account page writes a changed setting back with `remember`. Another sign-in (a different student on
@@ -24,43 +73,13 @@ export function invalidateHintSettings(): void {
  */
 export function useHintSettings() {
   const session = getAuthSessionVersion()
-  if (session !== loadedForSession) {
-    settings.value = null
-    pending = null
-    loadedForSession = session
+  syncSession(session)
+  if (!settings.value) void fetchSettings(session)
+
+  return {
+    settings: readonlySettings,
+    failed: readonlyFailed,
+    remember: (changed: HintSettings, expectedSession = session) => rememberSettings(changed, expectedSession),
+    reload,
   }
-
-  function fetchSettings(): Promise<void> {
-    if (pending) return pending
-    failed.value = false
-    const request: Promise<void> = hintApi
-      .settings()
-      .then((loaded) => {
-        if (pending === request && getAuthSessionVersion() === session) settings.value = loaded
-      })
-      .catch(() => {
-        // Without settings no hint is offered; the next player to mount asks again.
-        if (pending === request && getAuthSessionVersion() === session) failed.value = true
-      })
-      .finally(() => {
-        if (pending === request) pending = null
-      })
-    pending = request
-    return request
-  }
-
-  if (!settings.value && !pending) void fetchSettings()
-
-  function remember(changed: HintSettings, expectedSession = session): boolean {
-    const currentSession = getAuthSessionVersion()
-    if (currentSession !== expectedSession) return false
-    // A saved setting supersedes an earlier GET even if its response is still in flight.
-    pending = null
-    failed.value = false
-    loadedForSession = currentSession
-    settings.value = changed
-    return true
-  }
-
-  return { settings: readonly(settings), failed: readonly(failed), remember }
 }

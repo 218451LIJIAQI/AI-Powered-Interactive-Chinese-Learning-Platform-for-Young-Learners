@@ -9,7 +9,8 @@ import { http } from './http'
 
 const CONTENT_DISPOSITION_ASCII_FILENAME_PATTERN = /filename=(?:"([^"]+)"|([^;\s]+))/i
 const CONTENT_DISPOSITION_UTF8_FILENAME_PATTERN = /filename\*=UTF-8''([^;\s]+)/i
-const JSON_CONTENT_TYPE_PATTERN = /application\/(?:[^;\s]+\+)?json/i
+export const JSON_CONTENT_TYPE_PATTERN = /application\/(?:[^;\s]+\+)?json/i
+const HTML_CONTENT_TYPE_PATTERN = /text\/html/i
 
 export type DownloadResult = {
   blob: Blob
@@ -60,18 +61,28 @@ function parseContentDispositionFileName(contentDisposition: unknown): string | 
   return asciiMatch?.[1] ?? asciiMatch?.[2] ?? null
 }
 
+function blobContentType(data: unknown, headers?: Record<string, unknown>): string {
+  return (
+    (data instanceof Blob && data.type) ||
+    (typeof headers?.['content-type'] === 'string' ? headers['content-type'] : '')
+  )
+}
+
+async function parseJsonBlob(data: unknown): Promise<unknown> {
+  if (!(data instanceof Blob)) return undefined
+  try {
+    return JSON.parse(await data.text()) as unknown
+  } catch {
+    return undefined
+  }
+}
+
 /** A failed blob download receives the server's JSON error as a Blob; parse it so its message can be shown. */
 async function readBlobErrorBody(error: unknown): Promise<never> {
   const response = (error as { response?: { data?: unknown; headers?: Record<string, unknown> } } | null)?.response
-  const contentType =
-    (response?.data instanceof Blob && response.data.type) ||
-    (typeof response?.headers?.['content-type'] === 'string' ? response.headers['content-type'] : '')
-  if (response?.data instanceof Blob && JSON_CONTENT_TYPE_PATTERN.test(contentType)) {
-    try {
-      response.data = JSON.parse(await response.data.text()) as unknown
-    } catch {
-      // Not readable JSON: the message for the HTTP status is shown instead.
-    }
+  if (response && JSON_CONTENT_TYPE_PATTERN.test(blobContentType(response.data, response.headers))) {
+    const parsed = await parseJsonBlob(response.data)
+    if (parsed !== undefined) response.data = parsed
   }
   throw error
 }
@@ -79,5 +90,16 @@ async function readBlobErrorBody(error: unknown): Promise<never> {
 /** A protected file fetched with the bearer token as a Blob, with its file name. */
 export async function apiDownload(url: string, config?: AxiosRequestConfig): Promise<DownloadResult> {
   const response = await http.get<Blob>(url, { ...config, responseType: 'blob' }).catch(readBlobErrorBody)
-  return { blob: response.data, fileName: parseContentDispositionFileName(response.headers['content-disposition']) }
+  const contentType = blobContentType(response.data, response.headers)
+  if (HTML_CONTENT_TYPE_PATTERN.test(contentType)) {
+    throw new ApiEnvelopeError(apiClientMessage('unexpectedFormat'))
+  }
+  if (JSON_CONTENT_TYPE_PATTERN.test(contentType)) {
+    const payload = (await parseJsonBlob(response.data)) as { success?: boolean; message?: unknown } | undefined
+    if (payload?.success === false) {
+      throw new ApiEnvelopeError(cleanServerMessage(payload.message) ?? apiClientMessage('fallback'))
+    }
+    throw new ApiEnvelopeError(apiClientMessage('unexpectedFormat'))
+  }
+  return { blob: response.data, fileName: parseContentDispositionFileName(response.headers?.['content-disposition']) }
 }

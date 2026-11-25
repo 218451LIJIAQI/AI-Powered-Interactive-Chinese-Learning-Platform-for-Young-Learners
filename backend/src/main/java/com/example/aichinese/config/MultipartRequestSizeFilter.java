@@ -44,6 +44,7 @@ public class MultipartRequestSizeFilter extends OncePerRequestFilter {
 
     private static final Pattern LESSON_VIDEO_PATH = Pattern.compile("/api/v1/admin/lessons/\\d+/video");
     private static final String AI_PRACTICE_CHECK_PATH = "/api/v1/ai/practice-checks";
+    private static final String SUPPORT_PATH = "/api/v1/users/me/support";
     /**
      * Boundaries, part headers and small form fields sent with the file. Without this allowance a file
      * exactly at its documented limit (SDD 5.9) would be rejected because Content-Length covers the whole body.
@@ -60,6 +61,15 @@ public class MultipartRequestSizeFilter extends OncePerRequestFilter {
             FilterChain filterChain) throws ServletException, IOException {
         if (!isMultipart(request)) {
             filterChain.doFilter(request, response);
+            return;
+        }
+        Long routeMaxFileBytes = maxFileBytesForUploadRoute(request);
+        if (routeMaxFileBytes == null) {
+            ApiErrorResponseWriter.write(
+                    objectMapper,
+                    response,
+                    HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+                    FriendlyErrorMessageResolver.invalidRequestMessage());
             return;
         }
         long contentLength = request.getContentLengthLong();
@@ -80,7 +90,7 @@ public class MultipartRequestSizeFilter extends OncePerRequestFilter {
                 return;
             }
         }
-        long maxRequestBytes = maxFileBytes(request) + MULTIPART_OVERHEAD_BYTES;
+        long maxRequestBytes = routeMaxFileBytes + MULTIPART_OVERHEAD_BYTES;
         if (contentLength > maxRequestBytes) {
             ApiErrorResponseWriter.write(
                     objectMapper,
@@ -102,7 +112,10 @@ public class MultipartRequestSizeFilter extends OncePerRequestFilter {
         return total;
     }
 
-    private long maxFileBytes(HttpServletRequest request) {
+    private Long maxFileBytesForUploadRoute(HttpServletRequest request) {
+        if (!"POST".equalsIgnoreCase(request.getMethod())) {
+            return null;
+        }
         String path = UrlPathHelper.defaultInstance.getPathWithinApplication(request);
         if (path.equals(AI_PRACTICE_CHECK_PATH)) {
             // One endpoint takes either a recording or a photo; the service checks the cap of the kind it gets.
@@ -111,10 +124,10 @@ public class MultipartRequestSizeFilter extends OncePerRequestFilter {
         if (LESSON_VIDEO_PATH.matcher(path).matches()) {
             return uploadProperties.getMaxVideoFileSize().toBytes();
         }
-        if (path.equals("/api/v1/users/me/support")) {
+        if (path.equals(SUPPORT_PATH)) {
             return uploadProperties.getSupportScreenshotMaxFileSize().toBytes();
         }
-        return uploadProperties.getMaxFileSize().toBytes();
+        return null;
     }
 
     private static boolean isMultipart(HttpServletRequest request) {

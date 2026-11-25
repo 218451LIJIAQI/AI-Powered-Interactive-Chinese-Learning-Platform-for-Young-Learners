@@ -15,7 +15,7 @@ export type JavaMethod = {
   end: number
 }
 
-export type JavaConstant = { index: number; numeric: boolean }
+type JavaConstant = { index: number; numeric: boolean }
 
 export type JavaFile = {
   path: string
@@ -44,37 +44,6 @@ const MODIFIERS = new Set(['static', 'final', 'private', 'public', 'protected'])
 const OPENERS = new Set(['(', '[', '{'])
 const CLOSERS = new Set([')', ']', '}'])
 const PRIMITIVES = new Set(['boolean', 'byte', 'short', 'int', 'long', 'float', 'double', 'char'])
-const NON_TYPE_WORDS = new Set([
-  'abstract',
-  'case',
-  'class',
-  'default',
-  'else',
-  'enum',
-  'extends',
-  'final',
-  'implements',
-  'import',
-  'instanceof',
-  'interface',
-  'native',
-  'new',
-  'package',
-  'private',
-  'protected',
-  'public',
-  'record',
-  'return',
-  'static',
-  'strictfp',
-  'synchronized',
-  'throw',
-  'throws',
-  'transient',
-  'var',
-  'void',
-  'volatile',
-])
 
 function unescapeJava(body: string): string {
   let out = ''
@@ -165,13 +134,19 @@ export function splitTopLevel(
   from: number,
   to: number,
   separator: ',' | '+',
+  angleBrackets = false,
 ): Array<[number, number]> {
   const parts: Array<[number, number]> = []
   let depth = 0
   let start = from
   for (let k = from; k < to; k++) {
-    depth += depthStep(tokens[k])
-    if (depth === 0 && tokens[k].kind === 'mark' && tokens[k].value === separator) {
+    const token = tokens[k]
+    depth += depthStep(token)
+    if (angleBrackets && token.kind === 'mark') {
+      if (token.value === '<') depth += 1
+      else if (token.value === '>') depth = Math.max(0, depth - 1)
+    }
+    if (depth === 0 && token.kind === 'mark' && token.value === separator) {
       parts.push([start, k])
       start = k + 1
     }
@@ -193,9 +168,8 @@ export function expressionEnd(tokens: JavaToken[], from: number): number {
 }
 
 export function lastWord(tokens: JavaToken[], from: number, to: number): string {
-  let last = ''
-  for (let k = from; k < to; k++) if (tokens[k].kind === 'word') last = tokens[k].value
-  return last
+  const idx = lastWordIndex(tokens, from, to)
+  return idx >= 0 ? tokens[idx].value : ''
 }
 
 function lastWordIndex(tokens: JavaToken[], from: number, to: number): number {
@@ -208,35 +182,21 @@ function lastWordIndex(tokens: JavaToken[], from: number, to: number): number {
 function typeBefore(tokens: JavaToken[], nameIndex: number): string | null {
   let k = nameIndex - 1
   while (k >= 0 && tokens[k].kind === 'mark' && tokens[k].value === '.') k--
-  while (k >= 0) {
-    if (tokens[k].kind === 'mark' && tokens[k].value === ']') {
-      let depth = 0
-      while (k >= 0) {
-        if (tokens[k].kind === 'mark') {
-          if (tokens[k].value === ']') depth++
-          else if (tokens[k].value === '[') depth--
-        }
-        k--
-        if (depth === 0) break
+  while (k >= 0 && tokens[k].kind === 'mark' && (tokens[k].value === ']' || tokens[k].value === '>')) {
+    const close = tokens[k].value
+    const open = close === ']' ? '[' : '<'
+    let depth = 0
+    while (k >= 0) {
+      if (tokens[k].kind === 'mark') {
+        if (tokens[k].value === close) depth++
+        else if (tokens[k].value === open) depth--
       }
-      continue
+      k--
+      if (depth === 0) break
     }
-    if (tokens[k].kind === 'mark' && tokens[k].value === '>') {
-      let depth = 0
-      while (k >= 0) {
-        if (tokens[k].kind === 'mark') {
-          if (tokens[k].value === '>') depth++
-          else if (tokens[k].value === '<') depth--
-        }
-        k--
-        if (depth === 0) break
-      }
-      continue
-    }
-    break
   }
   const token = tokens[k]
-  if (!token || token.kind !== 'word' || NON_TYPE_WORDS.has(token.value)) return null
+  if (!token || token.kind !== 'word') return null
   if (!/^[A-Z]/.test(token.value) && !PRIMITIVES.has(token.value)) return null
   return token.value
 }
@@ -280,7 +240,9 @@ function findMethods(tokens: JavaToken[]): JavaMethod[] {
     if (token.kind !== 'word' || NOT_A_METHOD.has(token.value) || tokens[k + 1].value !== '(') continue
     const prev = tokens[k - 1]
     const declared =
-      prev.kind === 'word' ? !NOT_A_METHOD.has(prev.value) && prev.value !== 'else' : ['>', ']'].includes(prev.value)
+      prev.kind === 'word'
+        ? !NOT_A_METHOD.has(prev.value) && prev.value !== 'else'
+        : ['>', ']'].includes(prev.value) || (/^[A-Z]/.test(token.value) && ['{', ';', '}', ')'].includes(prev.value))
     if (!declared) continue
     const close = matchClose(tokens, k + 1)
     let body = close + 1
@@ -289,7 +251,7 @@ function findMethods(tokens: JavaToken[]): JavaMethod[] {
     }
     if (tokens[body]?.value !== '{') continue
     const paramTypes = new Map<string, string>()
-    const params = splitTopLevel(tokens, k + 2, close, ',').map(([s, e]) => {
+    const params = splitTopLevel(tokens, k + 2, close, ',', true).map(([s, e]) => {
       const idx = lastWordIndex(tokens, s, e)
       const name = idx >= 0 ? tokens[idx].value : ''
       if (name) {
@@ -371,20 +333,18 @@ export function isSwitchArrowArm(tokens: JavaToken[], arrowIndex: number): boole
   let depth = 0
   for (let k = arrowIndex - 1; k >= 0; k--) {
     const token = tokens[k]
-    if (token.kind === 'mark') {
-      if (token.value === ')' || token.value === ']' || token.value === '}') {
-        depth++
-        continue
-      }
-      if (token.value === '(' || token.value === '[' || token.value === '{') {
-        depth--
-        if (depth < 0) return false
-        continue
-      }
-      if (depth === 0 && (token.value === ';' || token.value === '=')) return false
+    const step = depthStep(token)
+    if (step !== 0) {
+      depth -= step
+      if (depth < 0) return false
       continue
     }
-    if (depth !== 0 || token.kind !== 'word') continue
+    if (depth !== 0) continue
+    if (token.kind === 'mark') {
+      if (token.value === ';' || token.value === '=') return false
+      continue
+    }
+    if (token.kind !== 'word') continue
     if (token.value === 'return' || token.value === 'yield' || token.value === 'throw') return false
     if (token.value === 'case' || token.value === 'default') return true
   }

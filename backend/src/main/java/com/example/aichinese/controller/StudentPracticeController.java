@@ -21,6 +21,7 @@ import com.example.aichinese.dto.learn.PracticeCompleteResponse;
 import com.example.aichinese.dto.learn.PracticeItemAnswer;
 import com.example.aichinese.dto.learn.PracticeSetResponse;
 import com.example.aichinese.dto.learn.PracticeSetsResponse;
+import com.example.aichinese.dto.learn.TypingCandidatesDto;
 import com.example.aichinese.entity.enums.PracticeType;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.learn.PracticeService;
@@ -77,11 +78,11 @@ public class StudentPracticeController {
 
     /** Typing only: the words the typed pinyin spells. */
     @PostMapping("/{setId}/candidates")
-    public ApiResponse<HintDto.Candidates> candidates(
+    public ApiResponse<TypingCandidatesDto.Response> candidates(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @PathVariable String type,
             @PathVariable Long setId,
-            @Valid @RequestBody HintDto.CandidatesRequest request) {
+            @Valid @RequestBody TypingCandidatesDto.Request request) {
         if (LearnParams.practiceType(type) != PracticeType.TYPING) {
             throw new ResponseStatusException(NOT_FOUND, "Only typing sets offer words to choose from.");
         }

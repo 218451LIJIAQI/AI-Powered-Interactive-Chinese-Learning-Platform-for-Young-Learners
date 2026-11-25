@@ -8,7 +8,9 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.TreeSet;
+import java.util.function.BiFunction;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -17,6 +19,8 @@ import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -71,41 +75,61 @@ public class NotificationService {
      * Best-effort notification: written in a transaction of its own after the caller's transaction commits (at once
      * when there is none), so a failure is only logged and never fails or rolls back the caller.
      */
-    public void safeCreateNotification(
-            User recipient,
-            NotificationType notificationType,
-            String title,
-            String message,
-            String targetType,
-            Long targetId,
-            String targetPath) {
-        saveAfterCommit(recipient.getId(), draft(notificationType, title, message, targetType, targetId, targetPath));
+    public void safeCreateNotification(User recipient, Notification draft) {
+        Long recipientId = recipient.getId();
+        AfterCommit.run(() -> runBestEffort(() -> {
+            // Account deletion removes notices too; single-account notices still allow inactive recipients (e.g.,
+            // reactivation or review updates), whereas batch broadcasts/reminders in deliverInChunks skip inactive accounts.
+            User lockedRecipient = userRepository.findWithReadLockById(recipientId).orElse(null);
+            if (lockedRecipient != null && lockedRecipient.getDeletedAt() == null) {
+                draft.setUser(lockedRecipient);
+                notificationRepository.save(draft);
+            }
+        }, exception -> log.warn("Notification creation failed for recipient user id {}: {}",
+                recipientId, ExceptionLogUtils.safeSummary(exception))));
     }
 
     /**
-     * Best-effort batch notification for multiple recipients: locks each chunk in ascending id order under a single
-     * {@code REQUIRES_NEW} transaction per chunk after the caller commits, avoiding N+1 transactions.
+     * Best-effort batch notification for multiple recipients: streams ascending user-id keyset slices after the caller
+     * commits and locks each chunk in ascending id order under a single {@code REQUIRES_NEW} transaction per chunk,
+     * avoiding both N+1 transactions and unbounded recipient-id lists in memory.
      */
     public void safeCreateNotifications(
-            Supplier<List<Long>> findRecipientIds,
-            NotificationType notificationType,
-            String title,
-            String message,
-            String targetType,
-            Long targetId,
-            String targetPath) {
+            BiFunction<Long, Pageable, List<Long>> findNextRecipientIds,
+            Supplier<Notification> draftSupplier,
+            String logContext) {
         AfterCommit.run(() -> {
-            List<Long> recipientIds;
-            try {
-                recipientIds = notificationTransactionTemplate.execute(status -> findRecipientIds.get());
-            } catch (RuntimeException exception) {
-                log.warn("Notification recipient lookup failed for {}:{}: {}",
-                        targetType, targetId, ExceptionLogUtils.safeSummary(exception));
-                ExceptionLogUtils.debugOrigin(log, exception);
-                return;
+            long afterId = 0L;
+            Pageable slice = PageRequest.of(0, DELIVERY_BATCH_SIZE);
+            while (true) {
+                long cursor = afterId;
+                List<Long> recipientIds;
+                try {
+                    recipientIds = notificationTransactionTemplate.execute(
+                            status -> findNextRecipientIds.apply(cursor, slice));
+                } catch (RuntimeException exception) {
+                    log.warn("Notification recipient lookup failed for {}: {}",
+                            logContext, ExceptionLogUtils.safeSummary(exception));
+                    ExceptionLogUtils.debugOrigin(log, exception);
+                    return;
+                }
+                if (recipientIds == null || recipientIds.isEmpty()) {
+                    return;
+                }
+                deliverInChunks(recipientIds, recipient -> draftSupplier.get(), logContext);
+                if (recipientIds.size() < DELIVERY_BATCH_SIZE) {
+                    return;
+                }
+                long nextAfterId = recipientIds.stream()
+                        .filter(Objects::nonNull)
+                        .mapToLong(Long::longValue)
+                        .max()
+                        .orElse(afterId);
+                if (nextAfterId <= afterId) {
+                    return;
+                }
+                afterId = nextAfterId;
             }
-            deliverInChunks(recipientIds, recipient -> draft(
-                    notificationType, title, message, targetType, targetId, targetPath), targetType + ":" + targetId);
         });
     }
 
@@ -141,7 +165,19 @@ public class NotificationService {
             Collection<Long> recipientIds,
             Function<User, Notification> buildNotification,
             String logContext) {
-        List<Long> orderedIds = new ArrayList<>(new TreeSet<>(recipientIds));
+        if (recipientIds == null || recipientIds.isEmpty()) {
+            return;
+        }
+        TreeSet<Long> uniqueIds = new TreeSet<>();
+        for (Long id : recipientIds) {
+            if (id != null) {
+                uniqueIds.add(id);
+            }
+        }
+        if (uniqueIds.isEmpty()) {
+            return;
+        }
+        List<Long> orderedIds = new ArrayList<>(uniqueIds);
         for (int start = 0; start < orderedIds.size(); start += DELIVERY_BATCH_SIZE) {
             List<Long> chunk = orderedIds.subList(start, Math.min(start + DELIVERY_BATCH_SIZE, orderedIds.size()));
             runBestEffort(() -> {
@@ -149,8 +185,10 @@ public class NotificationService {
                 for (User recipient : userRepository.findWithReadLockByIdInOrderByIdAsc(chunk)) {
                     if (recipient.getDeletedAt() == null && recipient.isActive()) {
                         Notification item = buildNotification.apply(recipient);
-                        item.setUser(recipient);
-                        items.add(item);
+                        if (item != null) {
+                            item.setUser(recipient);
+                            items.add(item);
+                        }
                     }
                 }
                 if (!items.isEmpty()) {
@@ -161,29 +199,12 @@ public class NotificationService {
         }
     }
 
-    private void saveAfterCommit(Long recipientId, Notification notification) {
-        AfterCommit.run(() -> runBestEffort(() -> {
-            // Account deletion removes notices too; single-account notices still allow inactive recipients (e.g.,
-            // reactivation or review updates), whereas batch broadcasts/reminders in deliverInChunks skip inactive accounts.
-            User recipient = userRepository.findWithReadLockById(recipientId).orElse(null);
-            if (recipient != null && recipient.getDeletedAt() == null) {
-                notification.setUser(recipient);
-                notificationRepository.save(notification);
-            }
-        }, exception -> log.warn("Notification creation failed for recipient user id {}: {}",
-                recipientId, ExceptionLogUtils.safeSummary(exception))));
-    }
-
     /** Checks the target under its read lock before saving: deletion may have removed these notices since commit. */
     public void notifyActiveAdmins(
-            NotificationType notificationType,
-            String title,
-            String message,
-            String targetType,
-            Long targetId,
-            String targetPath,
+            Supplier<Notification> draftSupplier,
+            String logContext,
             BooleanSupplier targetStillVisible) {
-        saveForActiveAdmins(notificationType, title, message, targetType, targetId, targetPath, null, targetStillVisible);
+        saveForActiveAdmins(draftSupplier, logContext, null, targetStillVisible);
     }
 
     /**
@@ -191,23 +212,15 @@ public class NotificationService {
      * with the admin rows in ascending id order so concurrent account deletion can never deadlock with this callback.
      */
     public void notifyActiveAdminsForUserTarget(
-            NotificationType notificationType,
-            String title,
-            String message,
-            String targetType,
-            Long targetId,
-            String targetPath,
+            Supplier<Notification> draftSupplier,
+            String logContext,
             Long targetUserId) {
-        saveForActiveAdmins(notificationType, title, message, targetType, targetId, targetPath, targetUserId, () -> true);
+        saveForActiveAdmins(draftSupplier, logContext, targetUserId, () -> true);
     }
 
     private void saveForActiveAdmins(
-            NotificationType notificationType,
-            String title,
-            String message,
-            String targetType,
-            Long targetId,
-            String targetPath,
+            Supplier<Notification> draftSupplier,
+            String logContext,
             Long targetUserId,
             BooleanSupplier targetStillVisible) {
         AfterCommit.run(() -> runBestEffort(() -> {
@@ -235,8 +248,7 @@ public class NotificationService {
             for (Long adminId : adminIds) {
                 User admin = lockedUsers.get(adminId);
                 if (admin != null && admin.getDeletedAt() == null && admin.isActive()) {
-                    Notification item = draft(
-                            notificationType, title, message, targetType, targetId, targetPath);
+                    Notification item = draftSupplier.get();
                     item.setUser(admin);
                     items.add(item);
                 }
@@ -244,8 +256,8 @@ public class NotificationService {
             if (!items.isEmpty()) {
                 notificationRepository.saveAll(items);
             }
-        }, exception -> log.warn("Admin notification creation failed for {}:{}: {}",
-                targetType, targetId, ExceptionLogUtils.safeSummary(exception))));
+        }, exception -> log.warn("Admin notification creation failed for {}: {}",
+                logContext, ExceptionLogUtils.safeSummary(exception))));
     }
 
     private void runBestEffort(Runnable work, Consumer<Exception> logFailure) {
@@ -292,11 +304,33 @@ public class NotificationService {
     /** Marks every unread notification of the user read; returns their ids (for the Undo, {@link #markUnread}). */
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public List<Long> markAllAsRead(SecurityUserDetails currentUser) {
-        List<Long> marked = notificationRepository.lockUnreadIds(currentUser.getUserId());
+        Long userId = currentUser.getUserId();
+        List<Long> marked = new ArrayList<>();
         LocalDateTime readAt = LocalDateTime.now();
-        for (int start = 0; start < marked.size(); start += STATUS_BATCH_SIZE) {
-            int end = Math.min(start + STATUS_BATCH_SIZE, marked.size());
-            notificationRepository.markLockedRead(currentUser.getUserId(), marked.subList(start, end), readAt);
+        long afterId = 0L;
+        Pageable slice = PageRequest.of(0, STATUS_BATCH_SIZE);
+        while (true) {
+            List<Long> batch = notificationRepository.findUnreadIdsAfter(userId, afterId, slice);
+            if (batch.isEmpty()) {
+                break;
+            }
+            List<Long> locked = notificationRepository.lockIdsInOrder(batch);
+            if (!locked.isEmpty()) {
+                List<Long> unread = notificationRepository.findIdsByUserIdAndStatusIn(
+                        userId, NotificationStatus.UNREAD, locked);
+                if (!unread.isEmpty()) {
+                    notificationRepository.markLockedRead(unread, readAt);
+                    marked.addAll(unread);
+                }
+            }
+            if (batch.size() < STATUS_BATCH_SIZE) {
+                break;
+            }
+            long nextAfterId = batch.getLast();
+            if (nextAfterId <= afterId) {
+                break;
+            }
+            afterId = nextAfterId;
         }
         return marked;
     }
@@ -314,11 +348,22 @@ public class NotificationService {
         if (ids.isEmpty()) {
             return List.of();
         }
-        List<Long> marked = notificationRepository.lockReadIds(currentUser.getUserId(), ids);
-        if (!marked.isEmpty()) {
-            notificationRepository.markLockedUnread(currentUser.getUserId(), marked, LocalDateTime.now());
+        Long userId = currentUser.getUserId();
+        List<Long> candidates = notificationRepository.findIdsByUserIdAndStatusIn(
+                userId, NotificationStatus.READ, ids);
+        if (candidates.isEmpty()) {
+            return List.of();
         }
-        return marked;
+        List<Long> locked = notificationRepository.lockIdsInOrder(candidates);
+        if (locked.isEmpty()) {
+            return List.of();
+        }
+        List<Long> read = notificationRepository.findIdsByUserIdAndStatusIn(
+                userId, NotificationStatus.READ, locked);
+        if (!read.isEmpty()) {
+            notificationRepository.markLockedUnread(read, LocalDateTime.now());
+        }
+        return read;
     }
 
     private static NotificationResponse toNotificationResponse(Notification notification) {

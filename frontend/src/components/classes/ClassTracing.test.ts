@@ -10,9 +10,9 @@ const characters = [
   { character: '大', pinyin: 'dà', meaning: 'big' },
 ]
 
-function mountTracing(done = false) {
+function mountTracing() {
   return mount(ClassTracing, {
-    props: { title: 'Trace 人 and 大', characters, busy: false, done },
+    props: { title: 'Trace 人 and 大', characters, busy: false, done: false },
     global: { stubs: { IconGlyph: true } },
   })
 }
@@ -71,7 +71,7 @@ describe('ClassTracing', () => {
   })
 
   it('keeps the tracing on show but takes no more input once done', async () => {
-    const wrapper = mountTracing(false)
+    const wrapper = mountTracing()
     await drawStrokeWithKeys(wrapper)
     const tracingPad = wrapper.getComponent(TracingPad)
     expect(tracingPad.props('strokes')).toHaveLength(1)

@@ -27,7 +27,7 @@ export const recoveryMessages = {
     confirmNewPassword: 'Confirm new password',
     confirmPlaceholder: 'Confirm your new password',
     readiness: 'Password readiness',
-    passwordTooLong: 'Use at most 72 UTF-8 bytes.',
+    passwordTooLong: 'Use a shorter password (up to 72 characters in English, fewer for non-Latin scripts).',
     ruleLength: 'At least 8 characters',
     ruleMatch: 'Passwords match',
     ruleMet: 'Met',
@@ -92,7 +92,8 @@ export const recoveryMessages = {
     confirmNewPassword: 'Sahkan kata laluan baharu',
     confirmPlaceholder: 'Sahkan kata laluan baharu anda',
     readiness: 'Kesediaan kata laluan',
-    passwordTooLong: 'Gunakan paling banyak 72 bait UTF-8.',
+    passwordTooLong:
+      'Gunakan kata laluan yang lebih pendek (sehingga 72 aksara biasa, lebih sedikit untuk aksara bukan Latin).',
     ruleLength: 'Sekurang-kurangnya 8 aksara',
     ruleMatch: 'Kata laluan sepadan',
     ruleMet: 'Dipenuhi',
@@ -158,7 +159,7 @@ export const recoveryMessages = {
     confirmNewPassword: '确认新密码',
     confirmPlaceholder: '再次输入新密码',
     readiness: '密码检查',
-    passwordTooLong: 'UTF-8 编码后最多可占 72 字节。',
+    passwordTooLong: '请使用更短的密码（英文最多 72 个字符，中文等非拉丁字符会更少）。',
     ruleLength: '至少 8 个字符',
     ruleMatch: '两次密码一致',
     ruleMet: '已满足',
@@ -198,4 +199,4 @@ export const recoveryMessages = {
     signupFailedHintSignedIn: '你可以在首页重新发送链接。',
     continueLearning: '继续学习',
   },
-}
+} as const

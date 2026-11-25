@@ -8,7 +8,7 @@ export const aiDisclosureMessages = {
     pronunciation:
       'When you submit a pronunciation check, our server sends the recording and the target text to Tencent Cloud for assessment. MandarinSpark saves the result.',
     liveVideo:
-      'When you start a live call with Xiaomei, Tavus receives the call audio and any recent messages from the current conversation. Your camera starts off.',
+      'When you start a live call with Xiaomei, your browser connects directly to Tavus, and Tavus receives the call audio and any recent messages from the current conversation. Your camera starts off.',
     providerDeepseek: 'DeepSeek',
     providerCompatible: 'an OpenAI-compatible AI service',
     piiFilter:
@@ -23,7 +23,7 @@ export const aiDisclosureMessages = {
     pronunciation:
       'Apabila anda menghantar semakan sebutan, pelayan kami menghantar rakaman dan teks sasaran kepada Tencent Cloud untuk dinilai. MandarinSpark menyimpan hasil penilaian.',
     liveVideo:
-      'Apabila anda memulakan panggilan langsung dengan Xiaomei, Tavus menerima audio panggilan dan mesej terkini daripada perbualan semasa. Kamera anda dimatikan apabila panggilan bermula.',
+      'Apabila anda memulakan panggilan langsung dengan Xiaomei, pelayar anda bersambung terus ke Tavus, dan Tavus menerima audio panggilan serta mesej terkini daripada perbualan semasa. Kamera anda dimatikan apabila panggilan bermula.',
     providerDeepseek: 'DeepSeek',
     providerCompatible: 'perkhidmatan AI yang serasi dengan OpenAI',
     piiFilter:
@@ -35,7 +35,8 @@ export const aiDisclosureMessages = {
     other: '{provider}保存请求的时长以及是否将其用于训练，由其自身条款决定。',
     off: 'AI 文字和照片服务暂不可用。',
     pronunciation: '提交发音评测时，我们的服务器会将录音和目标文字发送给腾讯云进行评测。MandarinSpark 会保存评测结果。',
-    liveVideo: '开始和小美实时通话时，Tavus 会收到通话语音和当前聊天的近期消息。通话开始时，你的摄像头默认关闭。',
+    liveVideo:
+      '开始和小美实时通话时，你的浏览器会直接连接 Tavus，Tavus 会收到通话语音和当前聊天的近期消息。通话开始时，你的摄像头默认关闭。',
     providerDeepseek: 'DeepSeek',
     providerCompatible: '兼容 OpenAI 的 AI 服务',
     piiFilter: '过滤器会移除文字中能够识别的邮箱地址、电话号码和类似身份证号码的数字，但可能遗漏个人信息。',

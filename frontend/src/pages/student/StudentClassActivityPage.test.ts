@@ -14,6 +14,10 @@ const queueClassNotice = vi.hoisted(() => vi.fn())
 vi.mock('@/api/classes', () => ({
   studentClassesApi: api,
 }))
+vi.mock('@/api/learn', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/api/learn')>()),
+  hintApi: { settings: vi.fn().mockResolvedValue({ mode: 'OFF', delaySeconds: 10 }) },
+}))
 vi.mock('@/composables/useClassNotice', () => ({ queueClassNotice }))
 
 import StudentClassActivityPage from './StudentClassActivityPage.vue'
@@ -38,7 +42,7 @@ const play: ActivityPlay = {
   meanings: [],
 }
 
-const outcome: ActivityOutcome = { done: true, pairs: [], lessonStatus: 'IN_PROGRESS' }
+const outcome: ActivityOutcome = { done: true, pairs: [], lessonCompletedNow: false }
 const PATH = '/student/classes/1/lessons/1/activities/flashcards/6'
 
 function mountActivity() {
@@ -147,7 +151,7 @@ describe('StudentClassActivityPage', () => {
 
   it('ends the last activity with Finish lesson, which confirms a completed lesson on the lesson page', async () => {
     api.activity.mockResolvedValue({ ...play, next: null })
-    api.completeActivity.mockResolvedValue({ ...outcome, lessonStatus: 'COMPLETED' })
+    api.completeActivity.mockResolvedValue({ ...outcome, lessonCompletedNow: true })
     const { wrapper } = await mountActivity()
 
     await reviewEveryCard(wrapper)
@@ -183,7 +187,7 @@ describe('StudentClassActivityPage', () => {
 
   it('shows Open lesson without re-queuing the completion notice on replay or when the lesson is still in progress', async () => {
     api.activity.mockResolvedValue({ ...play, next: null })
-    api.completeActivity.mockResolvedValueOnce({ ...outcome, lessonStatus: 'IN_PROGRESS' })
+    api.completeActivity.mockResolvedValueOnce({ ...outcome })
     const inProgress = await mountActivity()
 
     await reviewEveryCard(inProgress.wrapper)
@@ -194,7 +198,9 @@ describe('StudentClassActivityPage', () => {
     inProgress.wrapper.unmount()
 
     // Completing the lesson shows "Finish lesson", then replaying it switches back to "Open lesson".
-    api.completeActivity.mockResolvedValue({ ...outcome, lessonStatus: 'COMPLETED' })
+    api.completeActivity
+      .mockResolvedValueOnce({ ...outcome, lessonCompletedNow: true })
+      .mockResolvedValueOnce({ ...outcome, lessonCompletedNow: false })
     const completed = await mountActivity()
     await reviewEveryCard(completed.wrapper)
     expect(completed.wrapper.get('[data-testid="finish-lesson"]').text()).toBe('Finish lesson')
@@ -204,6 +210,16 @@ describe('StudentClassActivityPage', () => {
     const replayCta = completed.wrapper.get('[data-testid="finish-lesson"]')
     expect(replayCta.text()).toBe('Open lesson')
     await replayCta.trigger('click')
+    expect(queueClassNotice).not.toHaveBeenCalled()
+    completed.wrapper.unmount()
+
+    // Reopening an already-completed lesson on a fresh visit returns lessonCompletedNow: false.
+    api.completeActivity.mockResolvedValue({ ...outcome, lessonCompletedNow: false })
+    const revisit = await mountActivity()
+    await reviewEveryCard(revisit.wrapper)
+    const revisitCta = revisit.wrapper.get('[data-testid="finish-lesson"]')
+    expect(revisitCta.text()).toBe('Open lesson')
+    await revisitCta.trigger('click')
     expect(queueClassNotice).not.toHaveBeenCalled()
   })
 
@@ -230,7 +246,7 @@ describe('StudentClassActivityPage', () => {
     await router.push('/student/classes/1/lessons/1/activities/matching/9')
     await flushPromises()
 
-    firstSave.resolve({ ...outcome, lessonStatus: 'COMPLETED' })
+    firstSave.resolve({ ...outcome })
     await flushPromises()
     expect(wrapper.get('h1').text()).toBe('Match Phrases')
     expect(wrapper.find('[data-testid="activity-done"]').exists()).toBe(false)
@@ -245,9 +261,9 @@ describe('StudentClassActivityPage', () => {
     matching.vm.$emit('error', 'Could not check your match.')
     await flushPromises()
     expect(wrapper.text()).toContain('Could not check your match.')
-    matching.vm.$emit('outcome', { done: true, pairs: [], lessonStatus: 'COMPLETED' })
+    matching.vm.$emit('outcome', { done: true, pairs: [], lessonCompletedNow: true })
     await flushPromises()
-    expect(wrapper.get('[data-testid="activity-done"]').text()).toContain('All 1 pairs are correct.')
+    expect(wrapper.get('[data-testid="activity-done"]').text()).toContain('1 pair is correct.')
   })
 
   it('retries loading when the activity request fails', async () => {
@@ -258,5 +274,29 @@ describe('StudentClassActivityPage', () => {
     await buttonNamed(wrapper, 'Try again').trigger('click')
     await flushPromises()
     expect(wrapper.get('h1').text()).toBe('Classmate Phrases')
+  })
+
+  it('redirects to unauthorized with the activity deep link when the class has not been joined (409)', async () => {
+    api.activity.mockRejectedValueOnce({
+      response: { status: 409, data: { message: 'Join this class to open its lessons.' } },
+    })
+    const { router } = await mountActivity()
+
+    expect(router.currentRoute.value.name).toBe('unauthorized')
+    expect(router.currentRoute.value.query.redirect).toBe(PATH)
+  })
+
+  it('shows the archived conflict message without a Retry button when an archived class rejects the activity (409)', async () => {
+    api.activity.mockRejectedValueOnce({
+      response: {
+        status: 409,
+        data: { message: 'This class is archived. You can still open its lessons and your results.' },
+      },
+    })
+    const { wrapper, router } = await mountActivity()
+
+    expect(router.currentRoute.value.name).toBe('student-class-activity')
+    expect(wrapper.text()).toContain('This class is archived.')
+    expect(wrapper.findAll('button').filter((btn) => btn.text() === 'Try again')).toHaveLength(0)
   })
 })

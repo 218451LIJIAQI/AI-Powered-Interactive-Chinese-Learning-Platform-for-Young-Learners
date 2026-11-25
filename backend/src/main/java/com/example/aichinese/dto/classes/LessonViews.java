@@ -1,5 +1,7 @@
 package com.example.aichinese.dto.classes;
 
+import static com.example.aichinese.dto.DtoNormalization.redactLength;
+
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -100,7 +102,8 @@ public final class LessonViews {
     public record ActivityOutcome(
             boolean done,
             List<PairResult> pairs,
-            String lessonStatus) {
+            String lessonStatus,
+            boolean lessonCompletedNow) {
     }
 
     public record PairResult(Long wordId, boolean correct) {
@@ -126,6 +129,13 @@ public final class LessonViews {
     }
 
     public record SavedAnswer(Long questionId, Long optionId, String answerText) {
+
+        @Override
+        public String toString() {
+            return "SavedAnswer[questionId=" + questionId
+                    + ", optionId=" + optionId
+                    + ", answerText=" + redactLength(answerText) + "]";
+        }
     }
 
     /** The quiz and where it sits (its class and lesson), for the headers of the quiz and result pages. */
@@ -161,6 +171,18 @@ public final class LessonViews {
             boolean correct,
             String explanation,
             String optionFeedback) {
+
+        @Override
+        public String toString() {
+            return "ReviewedQuestion[questionId=" + questionId
+                    + ", number=" + number
+                    + ", text=" + text
+                    + ", yourAnswer=" + redactLength(yourAnswer)
+                    + ", correctAnswer=" + correctAnswer
+                    + ", correct=" + correct
+                    + ", explanation=" + explanation
+                    + ", optionFeedback=" + optionFeedback + "]";
+        }
     }
 
     /**

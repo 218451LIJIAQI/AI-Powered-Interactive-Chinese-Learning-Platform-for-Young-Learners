@@ -99,4 +99,4 @@ export const classCatalogueMessages = {
       noXp: '不加 XP · 不计入每日目标',
     },
   },
-}
+} as const

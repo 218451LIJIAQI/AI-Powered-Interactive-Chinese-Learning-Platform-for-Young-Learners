@@ -9,5 +9,5 @@ export const E2E_ACCOUNTS = {
 
 export type E2eAccount = (typeof E2E_ACCOUNTS)[keyof typeof E2E_ACCOUNTS]
 
-/** Password of the learners that 07-student-setup registers through the sign-up form (each with a new e-mail). */
+/** Password of the learners that E2E specs (02-auth-and-access, 07-student-setup) register through the sign-up form. */
 export const NEW_STUDENT_PASSWORD = 'E2e-New-Student-2026'

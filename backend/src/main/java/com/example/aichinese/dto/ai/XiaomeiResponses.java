@@ -59,9 +59,10 @@ public final class XiaomeiResponses {
     }
 
     /**
-     * One note Xiaomei remembers ("Xiaomei will remember"), oldest first. The goal of the learner's plan has
-     * {@code planReason}; its {@code text} is the plan's goal title, null for a plan built from rules (the page names the
-     * reason then, as the plan pages do). Any other note is a short fact from a chat, in {@code text}.
+     * One note Xiaomei remembers ("Xiaomei will remember"): the plan's goal first, then chat notes oldest first. The
+     * goal of the learner's plan has {@code planReason}; its {@code text} is the plan's goal title, null for a plan
+     * built from rules (the page names the reason then, as the plan pages do). Any other note is a short fact from a
+     * chat, in {@code text}.
      */
     public record MemoryNote(Long id, String text, PlanReason planReason) {
         @Override

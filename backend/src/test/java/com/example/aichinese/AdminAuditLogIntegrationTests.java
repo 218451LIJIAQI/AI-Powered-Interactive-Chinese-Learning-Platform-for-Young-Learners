@@ -13,8 +13,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -23,11 +27,16 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.web.servlet.MvcResult;
 
+import com.example.aichinese.config.PlatformProperties;
 import com.example.aichinese.entity.AuditLog;
 import com.example.aichinese.entity.User;
+import com.example.aichinese.service.AuditLogService;
+import com.example.aichinese.service.admin.AuditLogQueryService;
 import com.example.aichinese.service.learn.LearnClock;
 import com.example.aichinese.support.ApiIntegrationTest;
 import com.fasterxml.jackson.databind.JsonNode;
+
+import jakarta.persistence.EntityManager;
 
 /** The admin audit log (search, filters, one entry, actions in use, CSV export) and the public health check. */
 class AdminAuditLogIntegrationTests extends ApiIntegrationTest {
@@ -36,6 +45,12 @@ class AdminAuditLogIntegrationTests extends ApiIntegrationTest {
 
     @Autowired
     private LearnClock learnClock;
+
+    @Autowired
+    private AuditLogService auditLogService;
+
+    @Autowired
+    private EntityManager entityManager;
 
     @Test
     void auditLogFindsAnAdminDecisionByKeywordActionActorAndDate() throws Exception {
@@ -79,24 +94,77 @@ class AdminAuditLogIntegrationTests extends ApiIntegrationTest {
     void dateFiltersArePlatformDays() throws Exception {
         String action = "TEST_PLATFORM_DAY_" + uniqueSuffix().toUpperCase(Locale.ROOT);
         LocalDate day = learnClock.today().minusDays(400);
-        for (LocalDateTime at : List.of(learnClock.startOf(day).plusMinutes(1),
-                learnClock.startOf(day.plusDays(1)).minusMinutes(1))) {
-            AuditLog entry = new AuditLog();
-            entry.setActionType(action);
-            entry.setDescription("Platform day boundary.");
-            entry.setCreatedAt(at);
-            entry.setUpdatedAt(at);
-            auditLogRepository.save(entry);
-        }
-        String adminToken = api.adminToken();
+        ZoneOffset serverOffset = ZoneId.systemDefault().getRules().getOffset(Instant.now());
+        String offsetZone = serverOffset.getTotalSeconds() >= 8 * 3600 ? "Pacific/Pago_Pago" : "Pacific/Kiritimati";
+        LearnClock crossZoneClock = new LearnClock(new PlatformProperties(offsetZone));
+        AuditLogQueryService crossZoneQuery = new AuditLogQueryService(
+                auditLogRepository, auditLogService, crossZoneClock, entityManager);
+        List<Long> savedIds = new ArrayList<>();
+        try {
+            for (LocalDateTime at : List.of(learnClock.startOf(day).plusMinutes(1),
+                    learnClock.startOf(day.plusDays(1)).minusMinutes(1))) {
+                AuditLog entry = new AuditLog();
+                entry.setActionType(action);
+                entry.setDescription("Platform day boundary.");
+                entry.setCreatedAt(at);
+                entry.setUpdatedAt(at);
+                savedIds.add(auditLogRepository.save(entry).getId());
+            }
+            String adminToken = api.adminToken();
 
-        mockMvc.perform(api.authGet(AUDIT + "?actionType=" + action + "&from=" + day + "&to=" + day, adminToken))
+            mockMvc.perform(api.authGet(AUDIT + "?actionType=" + action + "&from=" + day + "&to=" + day, adminToken))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.totalItems").value(2));
+            mockMvc.perform(api.authGet(AUDIT + "?actionType=" + action + "&to=" + day.minusDays(1), adminToken))
+                    .andExpect(jsonPath("$.data.totalItems").value(0));
+            mockMvc.perform(api.authGet(AUDIT + "?actionType=" + action + "&from=" + day.plusDays(1), adminToken))
+                    .andExpect(jsonPath("$.data.totalItems").value(0));
+
+            LocalDate crossDay = LocalDate.of(2000, 3, 15);
+            for (LocalDateTime at : List.of(crossZoneClock.startOf(crossDay).plusMinutes(1),
+                    crossZoneClock.startOf(crossDay.plusDays(1)).minusMinutes(1))) {
+                AuditLog entry = new AuditLog();
+                entry.setActionType(action);
+                entry.setDescription("Cross-zone platform day boundary.");
+                entry.setCreatedAt(at);
+                entry.setUpdatedAt(at);
+                savedIds.add(auditLogRepository.save(entry).getId());
+            }
+            assertThat(crossZoneQuery.search(
+                    new AuditLogQueryService.AuditFilter(null, action, null, crossDay, crossDay, null), 0, 10)
+                    .totalItems()).isEqualTo(2L);
+            assertThat(crossZoneQuery.search(
+                    new AuditLogQueryService.AuditFilter(null, action, null, null, crossDay.minusDays(1), null), 0, 10)
+                    .totalItems()).isZero();
+        } finally {
+            auditLogRepository.deleteAllById(savedIds);
+        }
+    }
+
+    @Test
+    void practiceSetAuditEntriesPopulateTargetLabelAndSupportTitleKeywordSearch() throws Exception {
+        String adminToken = api.adminToken();
+        String setTitle = "Night Market Words " + uniqueSuffix();
+        long setId = api.id(mockMvc.perform(api.jsonPost("/api/v1/admin/practice-sets/FLASHCARDS", adminToken, Map.of(
+                        "title", setTitle,
+                        "stage", "GUIDED",
+                        "hskLevel", 1,
+                        "items", List.of(
+                                Map.of("hanzi", "夜市", "pinyin", "yèshì", "meaning", "night market"),
+                                Map.of("hanzi", "小吃", "pinyin", "xiǎochī", "meaning", "street snacks")))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.totalItems").value(2));
-        mockMvc.perform(api.authGet(AUDIT + "?actionType=" + action + "&to=" + day.minusDays(1), adminToken))
-                .andExpect(jsonPath("$.data.totalItems").value(0));
-        mockMvc.perform(api.authGet(AUDIT + "?actionType=" + action + "&from=" + day.plusDays(1), adminToken))
-                .andExpect(jsonPath("$.data.totalItems").value(0));
+                .andReturn());
+
+        MvcResult searchResult = mockMvc.perform(api.authGet(AUDIT + "?actionType=PRACTICE_SET_CREATE&keyword=" + setTitle, adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalItems").value(1))
+                .andExpect(jsonPath("$.data.items[0].targetLabel").value(setTitle))
+                .andReturn();
+        long entryId = api.data(searchResult).path("items").get(0).path("id").asLong();
+        assertThat(auditLogRepository.findById(entryId)).get().satisfies(saved -> {
+            assertThat(saved.getTargetId()).isEqualTo(setId);
+            assertThat(saved.getTargetLabel()).isEqualTo(setTitle);
+        });
     }
 
     /** Sign-out and password rows are about the account too: they name it and open it, like the admin's rows above. */

@@ -9,7 +9,7 @@ const TYPING_SAVE_DELAY_MS = 700
 
 interface UseQuizAttemptOptions {
   session: QuizSession
-  /** True while navigation, submission, or account switch locks answer edits. */
+  /** True while navigation, submission, or leaving locks answer edits. */
   locked: ComputedRef<boolean>
   /** True while discarding the attempt on leave; prevents in-flight saves from racing with discard. */
   leaving: ComputedRef<boolean>
@@ -40,8 +40,8 @@ export function useQuizAttempt(options: UseQuizAttemptOptions) {
     if (answer.answerText !== null && typedQuestionIds.has(answer.questionId))
       typed.value[answer.questionId] = answer.answerText
   }
-  const savedTyped = ref<Record<number, string>>({})
-  for (const id of typedQuestionIds) savedTyped.value[id] = typed.value[id] ?? ''
+  const savedTyped: Record<number, string> = {}
+  for (const id of typedQuestionIds) savedTyped[id] = typed.value[id] ?? ''
 
   /** A typed answer counts while its box holds text; Submit flushes any unsaved draft before grading. */
   function isAnswered(questionId: number): boolean {
@@ -60,6 +60,7 @@ export function useQuizAttempt(options: UseQuizAttemptOptions) {
 
   async function choose(questionId: number, optionId: number): Promise<void> {
     if (savingOption.value || options.locked.value || !canPersist()) return
+    if (chosen.value[questionId] === optionId) return
     options.onActionError(null)
     options.onClearSubmitError()
     // No other answer can be chosen while this one saves, so a failure puts back the choices from before it.
@@ -96,12 +97,12 @@ export function useQuizAttempt(options: UseQuizAttemptOptions) {
       if (value) await studentClassesApi.saveAnswer(session.attemptId, { questionId, answerText: value })
       else await studentClassesApi.clearAnswer(session.attemptId, questionId)
       if (!canPersist()) return false
-      savedTyped.value[questionId] = value
+      savedTyped[questionId] = value
       return true
     } catch (reason) {
       if (canPersist()) {
         // The server may have committed the write before the response was lost.
-        delete savedTyped.value[questionId]
+        delete savedTyped[questionId]
         options.onActionError(resolveApiError(reason, options.saveErrorMessage()))
       }
       return false
@@ -121,7 +122,7 @@ export function useQuizAttempt(options: UseQuizAttemptOptions) {
       if (!saved && (typed.value[questionId] ?? '').trim() === active.text) return false
     }
     const value = (typed.value[questionId] ?? '').trim()
-    if (value === savedTyped.value[questionId]) return true
+    if (value === savedTyped[questionId]) return true
     const entry = { text: value, promise: persistTyped(questionId, value) }
     pendingTyped.set(questionId, entry)
     try {
@@ -142,7 +143,6 @@ export function useQuizAttempt(options: UseQuizAttemptOptions) {
   return {
     chosen,
     typed,
-    savedTyped,
     savingOption,
     isAnswered,
     answeredCount,

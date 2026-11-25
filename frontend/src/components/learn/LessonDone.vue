@@ -6,7 +6,7 @@
         {{ result.passed ? t('learn.bangCaption') : t('learn.jiayouCaption') }}
       </figcaption>
     </figure>
-    <h2 class="focus-headline">{{ title }}</h2>
+    <h2 class="focus-headline" tabindex="-1">{{ title }}</h2>
     <dl class="learn-done-stats">
       <div class="is-xp">
         <dt>{{ t('learn.xpEarned') }}</dt>
@@ -31,7 +31,9 @@
       <span class="learn-done-label">{{
         result.nextLesson.unlockedNow ? t('learn.unlocked') : t('learn.upNext')
       }}</span>
-      <span class="learn-done-next-title">{{ t('learn.nextUp', { title: result.nextLesson.title }) }}</span>
+      <span class="learn-done-next-title">{{
+        result.nextLesson.unlockedNow ? t('learn.nextUp', { title: result.nextLesson.title }) : result.nextLesson.title
+      }}</span>
     </p>
     <ul v-if="result.xp.newBadges.length" class="learn-done-badges">
       <li v-for="badge in result.xp.newBadges" :key="badge">

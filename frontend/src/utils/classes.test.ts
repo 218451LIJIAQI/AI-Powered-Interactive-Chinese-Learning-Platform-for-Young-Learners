@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { classesMessages } from '@/plugins/classesMessages'
 import { QUIZ_QUESTION_TYPES } from '@/types/api'
 
-import { classInitials, isQuestionType, isWebLink, questionTypeKey } from './classes'
+import { classInitials, isWebLink, normalizeQuestionType, questionTypeKey } from './classes'
 
 describe('question types', () => {
   it('names every type of the question builder in every language', () => {
@@ -17,9 +17,10 @@ describe('question types', () => {
   })
 
   it('reads a type it does not know as multiple choice', () => {
-    expect(isQuestionType('FILL_BLANK')).toBe(true)
-    expect(isQuestionType('ESSAY')).toBe(false)
-    expect(isQuestionType('toString')).toBe(false)
+    expect(normalizeQuestionType('FILL_BLANK')).toBe('FILL_BLANK')
+    expect(normalizeQuestionType('ESSAY')).toBe('MULTIPLE_CHOICE')
+    expect(normalizeQuestionType('toString')).toBe('MULTIPLE_CHOICE')
+    expect(normalizeQuestionType(null)).toBe('MULTIPLE_CHOICE')
     expect(questionTypeKey('ESSAY')).toBe('classes.questionType.MULTIPLE_CHOICE')
   })
 })
@@ -51,6 +52,8 @@ describe('isWebLink', () => {
     expect(isWebLink('data:text/html,<script>alert(1)</script>')).toBe(false)
     expect(isWebLink('vbscript:msgbox(1)')).toBe(false)
     expect(isWebLink('file:///etc/passwd')).toBe(false)
+    expect(isWebLink('https://user:pass@example.com/lesson')).toBe(false)
+    expect(isWebLink('https://example.com/lesson\n')).toBe(false)
     expect(isWebLink('//example.com/lesson')).toBe(false)
     expect(isWebLink('/student/classes')).toBe(false)
     expect(isWebLink('')).toBe(false)

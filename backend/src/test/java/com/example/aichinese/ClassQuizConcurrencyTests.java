@@ -1,11 +1,11 @@
 package com.example.aichinese;
 
+import static com.example.aichinese.support.ConcurrentTransactions.readCommitted;
 import static com.example.aichinese.support.ConcurrentTransactions.withRowLock;
 import static com.example.aichinese.support.LearningApiTestClient.ADMIN_EMAIL;
 import static com.example.aichinese.support.LearningApiTestClient.uniqueEmail;
 import static com.example.aichinese.support.LearningApiTestClient.uniqueSuffix;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -18,9 +18,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
-import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.server.ResponseStatusException;
 
 import com.example.aichinese.dto.classes.QuizSubmissionAnswerRequest;
 import com.example.aichinese.repository.QuizAttemptAnswerRepository;
@@ -59,7 +56,7 @@ class ClassQuizConcurrencyTests extends ApiIntegrationTest {
                 question.path("options").get(0).path("id").asLong(), null);
         SecurityUserDetails learner = principalFor(email);
 
-        readCommitted().executeWithoutResult(status -> {
+        readCommitted(transactions).executeWithoutResult(status -> {
             quizzes.saveAnswer(learner, attemptId, answer);
             var saved = answers.findByQuizAttemptIdOrderByCreatedAtAscIdAsc(attemptId).getFirst();
             assertThat(entityManager.contains(saved)).isTrue();
@@ -98,15 +95,14 @@ class ClassQuizConcurrencyTests extends ApiIntegrationTest {
         long questionId = quizzes.start(learner, published.quizId()).questions().stream()
                 .filter(question -> "FILL_BLANK".equals(question.type())).findFirst().orElseThrow().id();
 
-        assertThatThrownBy(() -> whileFirstWriteCommits("student_profiles", () -> quizzes.submit(learner, attemptId), () -> {
+        assertHttpError(() -> whileFirstWriteCommits("student_profiles", () -> quizzes.submit(learner, attemptId), () -> {
             if (discard) {
                 quizzes.discard(learner, attemptId);
             } else {
                 quizzes.saveAnswer(learner, attemptId, new QuizSubmissionAnswerRequest(questionId, null, "late edit"));
             }
             return null;
-        })).isInstanceOfSatisfying(ResponseStatusException.class,
-                failure -> assertThat(failure.getStatusCode().value()).isEqualTo(409));
+        }), 409);
         assertThat(quizzes.result(learner, attemptId).questions())
                 .anyMatch(question -> question.questionId().equals(questionId)
                         && question.correct() && "hǎo".equals(question.yourAnswer()));
@@ -156,13 +152,9 @@ class ClassQuizConcurrencyTests extends ApiIntegrationTest {
         SecurityUserDetails admin = principalFor(ADMIN_EMAIL);
         SecurityUserDetails learner = principalFor(email);
 
-        assertThatThrownBy(() -> whileFirstWriteCommits("quizzes",
+        assertHttpError(() -> whileFirstWriteCommits("quizzes",
                 () -> lessonEditor.publish(admin, published.lessonId()),
-                () -> quizzes.submit(learner, attemptId)))
-                .isInstanceOfSatisfying(ResponseStatusException.class, failure -> {
-                    assertThat(failure.getStatusCode().value()).isEqualTo(400);
-                    assertThat(failure.getReason()).isEqualTo("Answer every question before you submit.");
-                });
+                () -> quizzes.submit(learner, attemptId)), 400, "Answer every question before you submit.");
 
         assertThat(jdbc.queryForObject(
                 "select count(*) from quiz_attempts where id = ? and submitted = true", Integer.class, attemptId))
@@ -170,23 +162,46 @@ class ClassQuizConcurrencyTests extends ApiIntegrationTest {
         assertThat(answers.findByQuizAttemptIdOrderByCreatedAtAscIdAsc(attemptId)).isEmpty();
     }
 
+    /**
+     * Saving an answer takes a share lock on the quiz row too: when publishing acquires the write lock first and
+     * replaces questions, a concurrent saveAnswer referencing the replaced question waits on the quiz lock and is
+     * cleanly rejected with 400 instead of inserting an orphaned answer against a deleted question.
+     */
+    @Test
+    void aSaveAnswerWaitingBehindPublishedQuestionReplacementIsRejectedCleanly() throws Exception {
+        String adminToken = api.adminToken();
+        PublishedClass published = api.publishedClass(adminToken, "Save-publish race " + uniqueSuffix());
+        String email = uniqueEmail("save-publish-learner");
+        String learnerToken = api.registerStudent(email);
+        var session = api.startQuiz(learnerToken, published.quizId());
+        long attemptId = session.path("attemptId").asLong();
+        var thirdQuestion = session.path("questions").get(2);
+        long oldQuestionId = thirdQuestion.path("id").asLong();
+        long oldOptionId = thirdQuestion.path("options").get(0).path("id").asLong();
+        editThirdQuestion(adminToken, published.lessonId(), "Which word means see you soon?");
+        SecurityUserDetails admin = principalFor(ADMIN_EMAIL);
+        SecurityUserDetails learner = principalFor(email);
+
+        assertHttpError(() -> whileFirstWriteCommits("quizzes",
+                () -> lessonEditor.publish(admin, published.lessonId()),
+                () -> quizzes.saveAnswer(learner, attemptId,
+                        new QuizSubmissionAnswerRequest(oldQuestionId, oldOptionId, null))),
+                400, "Question does not belong to this quiz.");
+
+        assertThat(answers.findByQuizAttemptIdOrderByCreatedAtAscIdAsc(attemptId)).isEmpty();
+    }
+
     private void editThirdQuestion(String adminToken, long lessonId, String prompt) throws Exception {
         String lesson = "/api/v1/admin/lessons/" + lessonId;
         long thirdQuestion = api.data(mockMvc.perform(api.authGet(lesson, adminToken)).andReturn())
                 .path("quizzes").get(0).path("questions").get(2).path("id").asLong();
-        Map<String, Object> changed = new HashMap<>(LearningApiTestClient.quizQuestions(null).get(2));
+        Map<String, Object> changed = new HashMap<>(LearningApiTestClient.quizQuestions().get(2));
         changed.put("questionText", prompt);
         mockMvc.perform(api.jsonPut(lesson + "/questions/" + thirdQuestion, adminToken, changed))
                 .andExpect(status().isOk());
     }
 
     private <T> T whileFirstWriteCommits(String table, Runnable first, Callable<T> later) throws Exception {
-        return withRowLock(jdbc, table, readCommitted(), first, later);
-    }
-
-    private TransactionTemplate readCommitted() {
-        TransactionTemplate transaction = new TransactionTemplate(transactions);
-        transaction.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
-        return transaction;
+        return withRowLock(jdbc, table, readCommitted(transactions), first, later);
     }
 }

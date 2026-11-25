@@ -1,7 +1,5 @@
-import type { AxiosAdapter } from 'axios'
 import { describe, expect, it } from 'vitest'
 
-import { http } from '@/api/http'
 import { axiosResponse, expectRequests, installAxiosCapture, restoreAxiosAdapterAfterEach } from '@/test/axiosCapture'
 
 import { publicClassesApi, studentClassesApi, videoBlob } from './classes'
@@ -55,21 +53,13 @@ describe('class API wrappers', () => {
   it('downloads an uploaded lesson video blob, stripping /api/v1 and forwarding timeout and abort signal', async () => {
     const controller = new AbortController()
     const payload = new Blob(['mp4-bytes'], { type: 'video/mp4' })
-    const seen: Array<{ url?: string; responseType?: string; timeout?: number; signal?: unknown }> = []
-    http.defaults.adapter = (async (config) => {
-      seen.push({
-        url: config.url,
-        responseType: config.responseType,
-        timeout: config.timeout,
-        signal: config.signal,
-      })
-      return axiosResponse(config, 200, payload)
-    }) satisfies AxiosAdapter
+    const calls = installAxiosCapture((config) => axiosResponse(config, 200, payload))
 
     const blob = await videoBlob('/api/v1/students/classes/lessons/11/video', controller.signal)
 
     expect(blob).toBe(payload)
-    expect(seen).toEqual([
+    expect(calls).toHaveLength(1)
+    expect(calls).toMatchObject([
       {
         url: '/students/classes/lessons/11/video',
         responseType: 'blob',

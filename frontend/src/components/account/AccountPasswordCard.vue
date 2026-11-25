@@ -13,22 +13,25 @@
           :type="showPasswords ? 'text' : 'password'"
           :readonly="changingPassword"
           :autocomplete="field.autocomplete"
+          spellcheck="false"
+          autocapitalize="off"
+          autocorrect="off"
           required
-          :aria-invalid="Boolean(passwordFieldError(field.key))"
+          :aria-invalid="Boolean(passwordErrors[field.key])"
           :aria-describedby="describedBy(field.key)"
         />
         <p v-if="field.key === 'newPassword'" id="account-newPassword-hint" class="field-hint">
           {{ t('account.newPasswordHint') }}
         </p>
-        <p v-if="passwordFieldError(field.key)" :id="`account-${field.key}-error`" class="field-error" role="alert">
-          {{ passwordFieldError(field.key) }}
+        <p v-if="passwordErrors[field.key]" :id="`account-${field.key}-error`" class="field-error" role="alert">
+          {{ t(passwordErrors[field.key]!) }}
         </p>
       </div>
       <p class="callout">
         <IconGlyph name="info" :size="18" />
         <span>{{ t('account.passwordSignOutNote') }}</span>
       </p>
-      <div v-if="passwordError" class="alert alert-danger" role="alert">
+      <div v-if="passwordError" class="callout is-danger" role="alert">
         <IconGlyph name="alert" :size="18" />
         <span>{{ passwordError }}</span>
       </div>
@@ -76,9 +79,6 @@ const PASSWORD_FIELDS = [
   { key: 'confirmPassword', label: 'account.confirmPassword', autocomplete: 'new-password' },
 ] as const satisfies readonly { key: keyof PasswordChangeForm; label: string; autocomplete: string }[]
 
-/** The server's answer to a wrong current password (AuthService), shown under that field in the page's words. */
-const WRONG_CURRENT_PASSWORD = SERVER_MESSAGE.WRONG_CURRENT_PASSWORD
-
 const emit = defineEmits<{ changed: [] }>()
 
 const { t } = useLocalMessages({ account: accountMessages })
@@ -99,36 +99,28 @@ const canChangePassword = computed(
     PASSWORD_FIELDS.every((field) => !isBlankPassword(password[field.key])),
 )
 
-for (const field of PASSWORD_FIELDS) {
-  watch(
-    () => password[field.key],
-    () => {
-      passwordError.value = null
-      const next = { ...passwordErrors.value, [field.key]: undefined }
-      if (
-        field.key === 'currentPassword' &&
-        next.newPassword === 'account.sameAsCurrent' &&
-        password.newPassword !== password.currentPassword
-      ) {
-        next.newPassword = undefined
-      }
-      if (field.key === 'newPassword' && password.confirmPassword === password.newPassword) {
-        next.confirmPassword = undefined
-      }
-      passwordErrors.value = next
-    },
-  )
-}
-
-function passwordFieldError(key: keyof PasswordChangeForm): string | null {
-  const rule = passwordErrors.value[key]
-  return rule ? t(rule) : null
-}
+watch([() => password.currentPassword, () => password.newPassword, () => password.confirmPassword], (next, prev) => {
+  if (passwordError.value === null && !Object.values(passwordErrors.value).some(Boolean)) return
+  passwordError.value = null
+  const updated = { ...passwordErrors.value }
+  if (next[0] !== prev[0]) {
+    updated.currentPassword = undefined
+    if (updated.newPassword === 'account.sameAsCurrent' && password.newPassword !== password.currentPassword) {
+      updated.newPassword = undefined
+    }
+  }
+  if (next[1] !== prev[1]) {
+    updated.newPassword = undefined
+    if (password.confirmPassword === password.newPassword) updated.confirmPassword = undefined
+  }
+  if (next[2] !== prev[2]) updated.confirmPassword = undefined
+  passwordErrors.value = updated
+})
 
 function describedBy(key: keyof PasswordChangeForm): string | undefined {
   const ids = [
     key === 'newPassword' ? 'account-newPassword-hint' : '',
-    passwordFieldError(key) ? `account-${key}-error` : '',
+    passwordErrors.value[key] ? `account-${key}-error` : '',
   ]
   return ids.filter(Boolean).join(' ') || undefined
 }
@@ -152,10 +144,11 @@ async function changePassword(): Promise<void> {
     if (version !== getAuthSessionVersion() || !auth.replaceAccessToken(response.token, version) || isUnmounted())
       return
     Object.assign(password, { currentPassword: '', newPassword: '', confirmPassword: '' })
+    showPasswords.value = false
     emit('changed')
   } catch (reason) {
     if (isUnmounted() || version !== getAuthSessionVersion()) return
-    if (hasServerMessage(reason, WRONG_CURRENT_PASSWORD)) {
+    if (hasServerMessage(reason, SERVER_MESSAGE.WRONG_CURRENT_PASSWORD)) {
       passwordErrors.value.currentPassword = 'account.currentPasswordWrong'
       await nextTick()
       document.getElementById('account-currentPassword')?.focus()

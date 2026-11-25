@@ -45,7 +45,7 @@ const ready = ref(false)
 let active = true
 
 function startConversation(): void {
-  if (!active) return
+  if (!active || ready.value) return
   ready.value = true
   // The Talk tab's own microphone button mounted this element: the call starts once Tavus has its session methods.
   void embed.value?.startConversation?.().catch(() => {
@@ -136,7 +136,7 @@ tavus-embed {
 }
 
 .xiaomei-live-portrait {
-  --ai-avatar-size: clamp(76px, 15dvh, 124px);
+  --ai-avatar-size: clamp(76px, 15vh, 124px);
 }
 
 @media (prefers-reduced-motion: no-preference) {

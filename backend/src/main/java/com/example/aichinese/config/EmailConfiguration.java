@@ -79,49 +79,48 @@ public class EmailConfiguration {
 
         // Refuses a From address (or its SMTP username fallback) that is not one clean header line.
         String resolvedFrom = emailProperties.resolveFrom(username);
-
-        if (productionProfileActive) {
-            rejectPlaceholder("spring.mail.host", host);
-            if (smtpAuth) {
-                rejectPlaceholder("spring.mail.username", username);
-                rejectPlaceholder("spring.mail.password", password);
-            }
-            rejectPlaceholder("app.email.from", resolvedFrom);
-            if (!StringUtils.hasText(emailProperties.from()) && !StringUtils.hasText(username)) {
+        if (!productionProfileActive) {
+            return;
+        }
+        rejectPlaceholder("spring.mail.host", host);
+        if (smtpAuth) {
+            rejectPlaceholder("spring.mail.username", username);
+            rejectPlaceholder("spring.mail.password", password);
+        }
+        rejectPlaceholder("app.email.from", resolvedFrom);
+        if (!StringUtils.hasText(emailProperties.from()) && !StringUtils.hasText(username)) {
+            throw new IllegalStateException(
+                    "app.email.from must be configured when the prod profile is active without an SMTP username.");
+        }
+        validateInternetAddress(resolvedFrom);
+        boolean encryptedTransport;
+        boolean checkServerIdentity;
+        if ("smtps".equals(protocol)) {
+            encryptedTransport = true;
+            // Angus Mail defaults mail.smtps.ssl.checkserveridentity to true for implicit TLS.
+            checkServerIdentity = jakartaBoolean(mailProperties, keyPrefix + ".ssl.checkserveridentity", true);
+        } else {
+            boolean startTlsEnabled = jakartaBoolean(mailProperties, keyPrefix + ".starttls.enable", false);
+            boolean startTlsRequired = jakartaBoolean(mailProperties, keyPrefix + ".starttls.required", false);
+            boolean sslEnabled = jakartaBoolean(mailProperties, keyPrefix + ".ssl.enable", false);
+            encryptedTransport = (startTlsEnabled && startTlsRequired) || sslEnabled;
+            checkServerIdentity = jakartaBoolean(mailProperties, keyPrefix + ".ssl.checkserveridentity", false);
+        }
+        if (!encryptedTransport || !checkServerIdentity) {
+            throw new IllegalStateException(
+                    "SMTP TLS with server identity verification must remain enabled when the prod profile is active.");
+        }
+        // Jakarta Mail trusts '*' (every host) or each host listed in ssl.trust without validating its certificate
+        // chain, and a socket factory replaces the certificate checks altogether: either would leave at most the
+        // host-name check.
+        if (StringUtils.hasText(mailProperties.get(keyPrefix + ".ssl.trust"))) {
+            throw new IllegalStateException(
+                    propertyPrefix + ".ssl.trust must not be set when the prod profile is active.");
+        }
+        for (String suffix : SOCKET_FACTORY_SUFFIXES) {
+            if (StringUtils.hasText(mailProperties.get(keyPrefix + suffix))) {
                 throw new IllegalStateException(
-                        "app.email.from must be configured when the prod profile is active without an SMTP username.");
-            }
-            validateInternetAddress(resolvedFrom);
-            boolean encryptedTransport;
-            boolean checkServerIdentity;
-            if ("smtps".equals(protocol)) {
-                encryptedTransport = true;
-                // Angus Mail defaults mail.smtps.ssl.checkserveridentity to true for implicit TLS.
-                checkServerIdentity = jakartaBoolean(mailProperties, keyPrefix + ".ssl.checkserveridentity", true);
-            } else {
-                boolean startTlsEnabled = jakartaBoolean(mailProperties, keyPrefix + ".starttls.enable", false);
-                boolean startTlsRequired = jakartaBoolean(mailProperties, keyPrefix + ".starttls.required", false);
-                boolean sslEnabled = jakartaBoolean(mailProperties, keyPrefix + ".ssl.enable", false);
-                encryptedTransport = (startTlsEnabled && startTlsRequired) || sslEnabled;
-                checkServerIdentity = jakartaBoolean(mailProperties, keyPrefix + ".ssl.checkserveridentity", false);
-            }
-            if (!encryptedTransport || !checkServerIdentity) {
-                throw new IllegalStateException(
-                        "SMTP TLS with server identity verification must remain enabled when the prod profile is active.");
-            }
-            // Jakarta Mail trusts '*' (every host) or each host listed in ssl.trust without validating its certificate
-            // chain, and a socket factory replaces the certificate checks altogether: either would leave at most the
-            // host-name check.
-            String sslTrustKey = keyPrefix + ".ssl.trust";
-            if (StringUtils.hasText(mailProperties.get(sslTrustKey))) {
-                throw new IllegalStateException(
-                        propertyPrefix + ".ssl.trust must not be set when the prod profile is active.");
-            }
-            for (String suffix : SOCKET_FACTORY_SUFFIXES) {
-                if (StringUtils.hasText(mailProperties.get(keyPrefix + suffix))) {
-                    throw new IllegalStateException(
-                            propertyPrefix + suffix + " must not be set when the prod profile is active.");
-                }
+                        propertyPrefix + suffix + " must not be set when the prod profile is active.");
             }
         }
     }

@@ -1,6 +1,6 @@
 <template>
   <div class="practice-player">
-    <PracticeProgress :label="counterLabel" />
+    <p class="practice-counter" aria-live="polite" data-testid="practice-counter">{{ counterLabel }}</p>
 
     <div class="practice-match">
       <ul class="practice-match-column" :aria-label="t('practice.words')">
@@ -8,7 +8,7 @@
           <button
             :ref="(el) => setWordButton(item.key, el as HTMLButtonElement | null)"
             class="practice-match-tile"
-            :class="[{ 'is-selected': selected === item.key }, pairClass(item.key)]"
+            :class="tileClass(item.key, selected === item.key)"
             type="button"
             :aria-pressed="selected === item.key"
             :disabled="locked"
@@ -19,6 +19,12 @@
             <span class="practice-match-word">
               <span class="hanzi practice-match-hanzi" lang="zh-CN">{{ item.hanzi }}</span>
               <span class="practice-match-pinyin">{{ item.pinyin }}</span>
+              <span v-if="pairs.has(item.key)" class="sr-only">
+                — {{ t('practice.wordPairedWith', { meaning: pairs.get(item.key) }) }}
+              </span>
+              <span v-if="checked" class="sr-only">
+                — {{ t(results.get(item.key) ? 'practice.rightPair' : 'practice.wrongPair') }}
+              </span>
             </span>
             <IconGlyph
               v-if="checked"
@@ -33,10 +39,10 @@
         <li v-for="{ meaning, word } in meaningRows" :key="meaning">
           <button
             class="practice-match-tile"
-            :class="word && pairClass(word.key)"
+            :class="word && tileClass(word.key)"
             type="button"
             :disabled="locked || selected === null"
-            :aria-label="word?.hanzi ? t('practice.pairedWith', { meaning, word: word.hanzi }) : meaning"
+            :aria-label="meaningLabel(meaning, word?.key, word?.hanzi)"
             :data-testid="`meaning-${meaning}`"
             @click="pairWith(meaning)"
           >
@@ -109,15 +115,17 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 
+import { getAuthSessionVersion } from '@/api/http'
 import { practiceApi } from '@/api/learn'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
+import { notifyProgressChanged } from '@/composables/useProgressRefresh'
 import { practiceMessages } from '@/plugins/practiceMessages'
-import type { AnswerCheck, PracticeResult, PracticeSet } from '@/types/learn'
+import type { AnswerCheck, PracticeSet } from '@/types/learn'
 
 import PracticeFeedback from './PracticeFeedback.vue'
 import PracticeHint from './PracticeHint.vue'
-import PracticeProgress from './PracticeProgress.vue'
+import type { PracticeCompletion } from './practiceTypes'
 import { usePracticeRun } from './usePracticeRun'
 import { hintReportContext, useStuckHint } from './useStuckHint'
 
@@ -127,7 +135,7 @@ import { hintReportContext, useStuckHint } from './useStuckHint'
  * The learner can ask for at most one pair as a hint for the whole board.
  */
 const props = defineProps<{ set: PracticeSet }>()
-const emit = defineEmits<{ finished: [result: PracticeResult, recap: string] }>()
+const emit = defineEmits<{ finished: [completion: PracticeCompletion] }>()
 
 const { t } = useLocalMessages({ practice: practiceMessages })
 const run = usePracticeRun(() => props.set, t)
@@ -208,12 +216,18 @@ function reset(): void {
   run.error.value = null
 }
 
-function pairClass(key: string): Record<string, boolean> {
-  return {
-    'is-paired': pairs.value.has(key),
-    'is-correct': results.value.get(key) === true,
-    'is-wrong': results.value.get(key) === false,
-  }
+function tileClass(key: string, isSelected = false): string | undefined {
+  const verdict = results.value.get(key)
+  if (verdict !== undefined) return verdict ? 'is-correct' : 'is-wrong'
+  if (isSelected) return 'is-selected'
+  return pairs.value.has(key) ? 'is-paired' : undefined
+}
+
+function meaningLabel(meaning: string, wordKey?: string, wordHanzi?: string | null): string {
+  if (!wordKey || !wordHanzi) return meaning
+  const base = t('practice.pairedWith', { meaning, word: wordHanzi })
+  if (!checked.value) return base
+  return `${base} — ${t(results.value.get(wordKey) ? 'practice.rightPair' : 'practice.wrongPair')}`
 }
 
 const answers = computed(() =>
@@ -224,22 +238,29 @@ const checkedPairs = new Map<string, { answer: string | null; verdict: AnswerChe
 async function checkPairs(): Promise<void> {
   if (locked.value || pairs.value.size < props.set.items.length) return
   const current = props.set
+  const session = getAuthSessionVersion()
   const runKey = `${current.type}:${current.id}:${current.runSignature ?? ''}`
   const verdicts = await run.run(async () => {
-    const checks = await Promise.allSettled(
-      answers.value.map(async (answer) => {
-        const cacheKey = `${runKey}:${answer.itemKey}`
-        const previous = checkedPairs.get(cacheKey)
-        if (previous && previous.answer === answer.answer) return previous.verdict
-        const verdict = await practiceApi.check(current.type, current.id, answer)
-        checkedPairs.set(cacheKey, { answer: answer.answer, verdict })
-        return verdict
-      }),
-    )
-    return checks.map((check) => {
-      if (check.status === 'rejected') throw check.reason
-      return check.value
-    })
+    let recordedMistake = false
+    try {
+      const checks = await Promise.allSettled(
+        answers.value.map(async (answer) => {
+          const cacheKey = `${runKey}:${answer.itemKey}`
+          const previous = checkedPairs.get(cacheKey)
+          if (previous && previous.answer === answer.answer) return previous.verdict
+          const verdict = await practiceApi.check(current.type, current.id, answer)
+          checkedPairs.set(cacheKey, { answer: answer.answer, verdict })
+          if (!verdict.correct) recordedMistake = true
+          return verdict
+        }),
+      )
+      return checks.map((check) => {
+        if (check.status === 'rejected') throw check.reason
+        return check.value
+      })
+    } finally {
+      if (recordedMistake && session === getAuthSessionVersion()) notifyProgressChanged()
+    }
   })
   if (!verdicts) return
   results.value = new Map(props.set.items.map((item, index) => [item.key, verdicts[index]?.correct === true]))
@@ -251,6 +272,6 @@ async function finish(): Promise<void> {
   const result = await run.complete(answers.value)
   if (!result) return
   const recap = props.set.items.map((item) => `${item.hanzi} ${pairs.value.get(item.key)}`).join(' · ')
-  emit('finished', result, recap)
+  emit('finished', { result, recap })
 }
 </script>

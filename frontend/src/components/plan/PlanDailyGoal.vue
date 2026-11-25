@@ -1,6 +1,7 @@
 <template>
-  <div class="plan-daily-goal" data-testid="plan-daily-goal">
+  <div ref="root" class="plan-daily-goal" :aria-busy="saving || undefined">
     <FilterChips
+      ref="chipsRef"
       :model-value="current"
       :options="options"
       :label="t('common.dailyGoal')"
@@ -8,7 +9,7 @@
       :disabled="saving || current === null"
       @update:model-value="choose"
     />
-    <span v-if="current !== null" class="plan-daily-goal-lessons">
+    <span v-if="current !== null" data-testid="plan-daily-goal-lessons">
       {{ t('plan.result.dailyGoalLessons', { count: lessons }, lessons) }}
     </span>
     <p v-if="error || resource.error.value" class="field-error" role="alert">
@@ -21,11 +22,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 
 import { getAuthSessionVersion } from '@/api/http'
 import { xpApi } from '@/api/learn'
-import FilterChips, { type FilterChipOption } from '@/components/common/FilterChips.vue'
+import FilterChips, { type FilterChipOption, type FilterChipsHandle } from '@/components/common/FilterChips.vue'
 import { useIsUnmounted } from '@/composables/useIsUnmounted'
 import { notifyProgressChanged } from '@/composables/useProgressRefresh'
 import { useLocalMessages } from '@/composables/useLocalMessages'
@@ -36,8 +37,8 @@ import { DAILY_GOALS } from '@/utils/xpLevel'
 
 /**
  * The daily goal on the plan result (S1.09): 10, 20 or 30 XP a day, the learner's current goal picked (20 for a new
- * account), and how many lessons it means (a Learn lesson pays 10 XP). It is an account setting, so a pick saves at
- * once, as it does on Home and the Account page; the time a day only sets the plan's weeks.
+ * account), and how many lessons it means (a Learn lesson pays 10 XP). It is an account setting (also editable on Home
+ * and the Account page), so a pick saves at once, as it does on Home; the time a day only sets the plan's weeks.
  */
 const emit = defineEmits<{ saved: [message: string] }>()
 
@@ -46,6 +47,8 @@ const LESSON_XP = 10
 
 const { t } = useLocalMessages({ plan: planSummaryMessages })
 const resource = useResource(xpApi.dailyGoal)
+const root = ref<HTMLElement | null>(null)
+const chipsRef = ref<FilterChipsHandle | null>(null)
 const saving = ref(false)
 const error = ref<string | null>(null)
 const isUnmounted = useIsUnmounted()
@@ -58,6 +61,7 @@ const options = computed<FilterChipOption<number | null>[]>(() =>
 
 async function choose(xp: number | null): Promise<void> {
   if (xp === null || saving.value || xp === current.value) return
+  const hadFocus = Boolean(root.value?.contains(document.activeElement))
   const session = getAuthSessionVersion()
   saving.value = true
   error.value = null
@@ -72,7 +76,10 @@ async function choose(xp: number | null): Promise<void> {
     if (isUnmounted() || session !== getAuthSessionVersion()) return
     error.value = resolveApiError(reason, t('plan.result.dailyGoalError'))
   } finally {
-    if (!isUnmounted()) saving.value = false
+    if (!isUnmounted()) {
+      saving.value = false
+      if (hadFocus) void nextTick(() => chipsRef.value?.focusSelected())
+    }
   }
 }
 </script>

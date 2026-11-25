@@ -42,7 +42,7 @@ class StudentClassJourneyIntegrationTests extends ApiIntegrationTest {
     void catalogueShowsPublishedClassesAndLessonsOpenOnlyAfterJoining() throws Exception {
         String adminToken = api.adminToken();
         String title = "Journey class " + uniqueSuffix();
-        PublishedClass published = api.publishedClass(adminToken, title, "First words", "Hello and thanks");
+        PublishedClass published = api.publishedClass(adminToken, title, "First words");
         String draftTitle = "Journey hidden draft " + uniqueSuffix();
         api.draftClass(adminToken, draftTitle);
         String studentToken = api.registerStudent(uniqueEmail("journey-student"));
@@ -137,7 +137,7 @@ class StudentClassJourneyIntegrationTests extends ApiIntegrationTest {
         String adminToken = api.adminToken();
         PublishedClass earlier = api.publishedClass(adminToken, "Earlier catalogue class " + uniqueSuffix());
         PublishedClass latest = api.publishedClass(adminToken, "Latest catalogue class " + uniqueSuffix());
-        api.publishedLesson(adminToken, earlier.unitId(), "One more lesson", "An extra published lesson", true, null);
+        api.publishedLesson(adminToken, earlier.unitId(), "One more lesson");
         api.draftClass(adminToken, "Draft catalogue class " + uniqueSuffix());
         String studentToken = api.registerStudent(uniqueEmail("catalogue-pages"));
         api.join(studentToken, latest.classId());
@@ -219,38 +219,9 @@ class StudentClassJourneyIntegrationTests extends ApiIntegrationTest {
 
     @Test
     void activitiesAndTheLessonQuizDriveLessonAndClassProgress() throws Exception {
-        String adminToken = api.adminToken();
-        Long classId = api.draftClass(adminToken, "Progress class " + uniqueSuffix());
-        Long unitId = api.unit(adminToken, classId, "Unit 1");
-        Long secondUnitId = api.unit(adminToken, classId, "Unit 2");
-        Long lessonId = api.draftLesson(adminToken, unitId, "Family");
-        JsonNode ready = api.readyLesson(adminToken, lessonId, "Family words");
-        String editor = "/api/v1/admin/lessons/" + lessonId;
-        Map<String, Long> editorIds = activityIds(ready);
-        String matchingEditor = editor + "/activities/MATCHING/" + editorIds.get("MATCHING");
-        mockMvc.perform(api.jsonPut(matchingEditor, adminToken, Map.of(
-                        "type", "MATCHING", "title", "Match the family",
-                        "pairs", List.of(
-                                Map.of("chinese", "妈妈", "pinyin", "māma", "meaning", "ＡＢ"),
-                                Map.of("chinese", "爸爸", "pinyin", "bàba", "meaning", "a b")))))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("Each meaning can only be used once."));
-        mockMvc.perform(api.jsonPut(matchingEditor, adminToken, Map.of(
-                        "type", "MATCHING", "title", "Match the family",
-                        "pairs", List.of(
-                                Map.of("chinese", "妈妈", "pinyin", "māma", "meaning", "mum"),
-                                Map.of("chinese", "爸爸", "pinyin", "bàba", "meaning", "dad")))))
-                .andExpect(status().isOk());
-        mockMvc.perform(api.jsonPut(editor + "/activities/TRACING/" + editorIds.get("TRACING"), adminToken, Map.of(
-                        "type", "TRACING", "title", "Trace 家",
-                        "characters", List.of(Map.of("character", "家", "pinyin", "jiā", "meaning", "home")))))
-                .andExpect(status().isOk());
-        api.publishLesson(adminToken, lessonId);
-        long secondLessonId = api.publishedLesson(adminToken, unitId, "Family 2", "More family words", true, null)
-                .path("lessonId").asLong();
-        api.publishedLesson(adminToken, secondUnitId, "Family 3", "Family at home", true, null);
-        api.publishedLesson(adminToken, secondUnitId, "Family 4", "Family at work", true, null);
-        api.publishClass(adminToken, classId);
+        PublishedClass published = api.publishedClass(api.adminToken(), "Progress class " + uniqueSuffix(), "Family");
+        long classId = published.classId();
+        long lessonId = published.lessonId();
 
         String studentToken = api.registerStudent(uniqueEmail("progress-student"));
         api.join(studentToken, classId);
@@ -263,8 +234,6 @@ class StudentClassJourneyIntegrationTests extends ApiIntegrationTest {
         Map<String, Long> activityIds = activityIds(lesson);
         long quizId = lesson.path("quizzes").get(0).path("id").asLong();
 
-        assertEmptyActivitiesLeaveProgressUntouched(studentToken, lessonId, secondLessonId, activityIds);
-        // Restoring the legacy cards' key phrases and the tracing character makes both playable again.
         mockMvc.perform(api.authGet(STUDENT + "/activities/flashcards/" + activityIds.get("FLASHCARDS"), studentToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.classId").value(classId))
@@ -291,24 +260,24 @@ class StudentClassJourneyIntegrationTests extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.data.words.length()").value(2))
                 .andExpect(jsonPath("$.data.meanings.length()").value(2))
                 .andReturn());
-        long mumId = wordId(play, "妈妈");
-        long dadId = wordId(play, "爸爸");
+        long helloId = wordId(play, "你好");
+        long goodbyeId = wordId(play, "再见");
         mockMvc.perform(api.jsonPost(matchingPath + "/check", studentToken, Map.of("pairs", List.of(
-                        new ChosenPair(mumId, null), new ChosenPair(mumId, "mum"), new ChosenPair(dadId, "dad")))))
+                        new ChosenPair(helloId, null), new ChosenPair(helloId, "hello"), new ChosenPair(goodbyeId, "goodbye")))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Choose one meaning per word."));
         assertStepsDone(studentToken, lessonId, 2);
-        mockMvc.perform(api.jsonPost(matchingPath + "/hint", studentToken, Map.of("wordId", dadId)))
+        mockMvc.perform(api.jsonPost(matchingPath + "/hint", studentToken, Map.of("wordId", goodbyeId)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.meaning").value("dad"));
+                .andExpect(jsonPath("$.data.meaning").value("goodbye"));
         mockMvc.perform(api.jsonPost(matchingPath + "/check", studentToken, Map.of("pairs", List.of(
-                        Map.of("wordId", mumId, "meaning", "dad"), Map.of("wordId", dadId, "meaning", "mum")))))
+                        Map.of("wordId", helloId, "meaning", "goodbye"), Map.of("wordId", goodbyeId, "meaning", "hello")))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.done").value(false))
                 .andExpect(jsonPath("$.data.pairs[?(@.correct == false)].wordId").isNotEmpty());
         assertStepsDone(studentToken, lessonId, 2);
         mockMvc.perform(api.jsonPost(matchingPath + "/check", studentToken, Map.of("pairs", List.of(
-                        Map.of("wordId", mumId, "meaning", "mum"), Map.of("wordId", dadId, "meaning", "dad")))))
+                        Map.of("wordId", helloId, "meaning", "hello"), Map.of("wordId", goodbyeId, "meaning", "goodbye")))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.done").value(true));
         assertStepsDone(studentToken, lessonId, 3);
@@ -352,6 +321,54 @@ class StudentClassJourneyIntegrationTests extends ApiIntegrationTest {
         assertThat(result.path("bestPercent").asInt()).isEqualTo(100);
         assertThat(result.path("bestCorrect").asInt()).isEqualTo(5);
         assertThat(result.path("bestTotal").asInt()).isEqualTo(5);
+    }
+
+    @Test
+    void emptyLegacyActivitiesLeaveProgressUntouched() throws Exception {
+        PublishedClass published = api.publishedClass(api.adminToken(), "Empty activity class " + uniqueSuffix());
+        String studentToken = api.registerStudent(uniqueEmail("empty-activity-student"));
+        api.join(studentToken, published.classId());
+        JsonNode classPage = api.data(mockMvc.perform(api.authGet(STUDENT + "/" + published.classId(), studentToken))
+                .andExpect(status().isOk()).andReturn());
+        long otherLessonId = classPage.path("units").get(0).path("lessons").get(1).path("id").asLong();
+        JsonNode lesson = api.data(mockMvc.perform(api.authGet(STUDENT + "/lessons/" + published.lessonId(), studentToken))
+                .andExpect(status().isOk()).andReturn());
+        Map<String, Long> activities = activityIds(lesson);
+
+        long phraseId = jdbc.queryForObject("select id from lesson_key_phrases where lesson_id = ?",
+                Long.class, published.lessonId());
+        long tracingId = activities.get("TRACING");
+        String characters = jdbc.queryForObject("select target_character from tracing_exercises where id = ?",
+                String.class, tracingId);
+        // Reproduce an old lesson without material, restoring it afterwards.
+        jdbc.update("update lesson_key_phrases set lesson_id = ? where id = ?", otherLessonId, phraseId);
+        try {
+            jdbc.update("update tracing_exercises set target_character = null where id = ?", tracingId);
+            for (String type : List.of("FLASHCARDS", "TRACING")) {
+                mockMvc.perform(api.authPost(STUDENT + "/activities/" + type + "/" + activities.get(type) + "/complete",
+                                studentToken))
+                        .andExpect(status().isBadRequest())
+                        .andExpect(jsonPath("$.message").value("This activity has no learning material yet."));
+            }
+            jdbc.update("update tracing_exercises set target_character = ? where id = ?", "\u00a0\u2007\u202f\ufeff", tracingId);
+            mockMvc.perform(api.authPost(STUDENT + "/activities/TRACING/" + tracingId + "/complete", studentToken))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.message").value("This activity has no learning material yet."));
+            assertStepsDone(studentToken, published.lessonId(), 0);
+        } finally {
+            jdbc.update("update lesson_key_phrases set lesson_id = ? where id = ?", published.lessonId(), phraseId);
+            jdbc.update("update tracing_exercises set target_character = ? where id = ?", characters, tracingId);
+        }
+    }
+
+    @Test
+    void legacyWeightedAndAnswerlessAttemptsKeepTheirSavedBestScore() throws Exception {
+        PublishedClass published = api.publishedClass(api.adminToken(), "Legacy attempt class " + uniqueSuffix());
+        String studentToken = api.registerStudent(uniqueEmail("legacy-attempt-student"));
+        long firstAttemptId = api.data(api.submitQuiz(studentToken, published.quizId(), false, "hǎo"))
+                .path("attemptId").asLong();
+        long bestAttemptId = api.data(api.submitQuiz(studentToken, published.quizId(), true, "hǎo"))
+                .path("attemptId").asLong();
 
         // An earlier weighted attempt had four saved answers, three right, and scored 9 of 10 points.
         jdbc.update("delete from quiz_attempt_answers where quiz_attempt_id = ? order by id limit 1", bestAttemptId);
@@ -359,12 +376,14 @@ class StudentClassJourneyIntegrationTests extends ApiIntegrationTest {
         jdbc.update("update quiz_attempts set score = 9, max_score = 10 where id = ?", bestAttemptId);
         String resultPath = STUDENT + "/quiz-attempts/" + firstAttemptId;
         mockMvc.perform(api.authGet(resultPath, studentToken))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.bestPercent").value(90))
                 .andExpect(jsonPath("$.data.bestCorrect").value(3))
                 .andExpect(jsonPath("$.data.bestTotal").value(4));
         // An old attempt may retain its points without any answer rows.
         jdbc.update("delete from quiz_attempt_answers where quiz_attempt_id = ?", bestAttemptId);
         mockMvc.perform(api.authGet(resultPath, studentToken))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.bestPercent").value(90))
                 .andExpect(jsonPath("$.data.bestCorrect").value(0))
                 .andExpect(jsonPath("$.data.bestTotal").value(0));
@@ -588,12 +607,14 @@ class StudentClassJourneyIntegrationTests extends ApiIntegrationTest {
         mockMvc.perform(api.authGet(STUDENT, studentToken))
                 .andExpect(jsonPath("$.data.classes[0].archived").value(true))
                 .andExpect(jsonPath("$.data.classes[0].archivedAt").isString())
-                .andExpect(jsonPath("$.data.classes[0].completedLessons").value(0));
+                .andExpect(jsonPath("$.data.classes[0].completedLessons").value(0))
+                .andExpect(jsonPath("$.data.classes[0].nextStep").doesNotExist());
         mockMvc.perform(api.authGet(STUDENT + "/" + published.classId(), studentToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.joined").value(true))
                 .andExpect(jsonPath("$.data.archived").value(true))
-                .andExpect(jsonPath("$.data.archivedAt").isString());
+                .andExpect(jsonPath("$.data.archivedAt").isString())
+                .andExpect(jsonPath("$.data.nextStep").doesNotExist());
         mockMvc.perform(api.authGet(STUDENT + "/lessons/" + published.lessonId(), studentToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.archived").value(true))
@@ -627,10 +648,16 @@ class StudentClassJourneyIntegrationTests extends ApiIntegrationTest {
         mockMvc.perform(api.authPost(STUDENT + "/" + published.classId() + "/join", newcomer))
                 .andExpect(status().isNotFound());
 
-        // Restored, it is open again.
+        // Restored, it is open again; an archived lesson inside it returns 404 (not 409) to non-members.
         mockMvc.perform(api.authPost("/api/v1/admin/classes/" + published.classId() + "/restore", adminToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("PUBLISHED"));
+        mockMvc.perform(api.authPost("/api/v1/admin/lessons/" + published.lessonId() + "/archive", adminToken))
+                .andExpect(status().isOk());
+        mockMvc.perform(api.authGet(STUDENT + "/lessons/" + published.lessonId(), newcomer))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(api.authPost("/api/v1/admin/lessons/" + published.lessonId() + "/restore", adminToken))
+                .andExpect(status().isOk());
         mockMvc.perform(api.authGet(STUDENT + "/" + published.classId(), studentToken))
                 .andExpect(jsonPath("$.data.archived").value(false))
                 .andExpect(jsonPath("$.data.archivedAt").doesNotExist());
@@ -641,32 +668,6 @@ class StudentClassJourneyIntegrationTests extends ApiIntegrationTest {
     private void assertStepsDone(String studentToken, Long lessonId, int stepsDone) throws Exception {
         mockMvc.perform(api.authGet(STUDENT + "/lessons/" + lessonId, studentToken))
                 .andExpect(jsonPath("$.data.stepsDone").value(stepsDone));
-    }
-
-    private void assertEmptyActivitiesLeaveProgressUntouched(
-            String token, long lessonId, long otherLessonId, Map<String, Long> activities) throws Exception {
-        long phraseId = jdbc.queryForObject("select id from lesson_key_phrases where lesson_id = ?", Long.class, lessonId);
-        long tracingId = activities.get("TRACING");
-        String characters = jdbc.queryForObject("select target_character from tracing_exercises where id = ?",
-                String.class, tracingId);
-        // Reproduce an old lesson without material, preserving its original records for the rest of the journey.
-        jdbc.update("update lesson_key_phrases set lesson_id = ? where id = ?", otherLessonId, phraseId);
-        try {
-            jdbc.update("update tracing_exercises set target_character = null where id = ?", tracingId);
-            for (String type : List.of("FLASHCARDS", "TRACING")) {
-                mockMvc.perform(api.authPost(STUDENT + "/activities/" + type + "/" + activities.get(type) + "/complete", token))
-                        .andExpect(status().isBadRequest())
-                        .andExpect(jsonPath("$.message").value("This activity has no learning material yet."));
-            }
-            jdbc.update("update tracing_exercises set target_character = ? where id = ?", "\u00a0\u2007\u202f\ufeff", tracingId);
-            mockMvc.perform(api.authPost(STUDENT + "/activities/TRACING/" + tracingId + "/complete", token))
-                    .andExpect(status().isBadRequest())
-                    .andExpect(jsonPath("$.message").value("This activity has no learning material yet."));
-            assertStepsDone(token, lessonId, 0);
-        } finally {
-            jdbc.update("update lesson_key_phrases set lesson_id = ? where id = ?", lessonId, phraseId);
-            jdbc.update("update tracing_exercises set target_character = ? where id = ?", characters, tracingId);
-        }
     }
 
     private static Map<String, Long> activityIds(JsonNode lesson) {

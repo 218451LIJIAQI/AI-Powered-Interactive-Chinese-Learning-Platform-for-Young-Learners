@@ -4,7 +4,7 @@
  */
 import { AI_REQUEST_CONFIG } from '@/api/ai'
 import { apiDelete, apiGet, apiPost, apiPut } from '@/api/request'
-import type { AiAvailabilityResponse, AiQuizGeneratorResponse, AppLanguage, PageResponse } from '@/types/api'
+import type { AiQuizGeneratorResponse, AppLanguage, PageResponse } from '@/types/api'
 import type {
   ActivityPayload,
   AdminClassPage,
@@ -122,6 +122,14 @@ export const lessonEditorApi = {
   publish(lessonId: number) {
     return apiPost<LessonEditor>(`${lessonPath(lessonId)}/publish`)
   },
+  /** Archives a lesson so learners no longer see it while keeping existing learner history intact. */
+  archive(lessonId: number) {
+    return apiPost<LessonEditor>(`${lessonPath(lessonId)}/archive`)
+  },
+  /** Restores an archived lesson to its pre-archive status (published lessons become live again; drafts return to draft). */
+  restore(lessonId: number) {
+    return apiPost<LessonEditor>(`${lessonPath(lessonId)}/restore`)
+  },
   /** Drops the unpublished changes of a published lesson: the editor shows the published version again. */
   discardChanges(lessonId: number) {
     return apiDelete<LessonEditor>(`${lessonPath(lessonId)}/revision`)
@@ -134,7 +142,7 @@ export const lessonEditorApi = {
  */
 export const adminQuizDraftApi = {
   availability() {
-    return apiGet<AiAvailabilityResponse>('/admin/ai/quiz-draft/availability')
+    return apiGet<{ available: boolean }>('/admin/ai/quiz-draft/availability')
   },
   draft(payload: {
     lessonId: number

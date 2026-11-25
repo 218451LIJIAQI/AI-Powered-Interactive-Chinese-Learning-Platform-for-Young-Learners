@@ -11,11 +11,10 @@ import { computed } from 'vue'
 
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { practiceAnswerMessages } from '@/plugins/practiceAnswerMessages'
-import type { AnswerCheck } from '@/types/learn'
+import type { AnswerCheck, PracticeItemAnswer } from '@/types/learn'
 import { hasHan } from '@/utils/cjkText'
 
 import PracticeFeedback from './PracticeFeedback.vue'
-import type { CheckedAnswer } from './usePracticeRun'
 
 /**
  * The verdict on one answer, by how sure the student was: right and sure; right but guessed (it comes back once more
@@ -26,7 +25,7 @@ import type { CheckedAnswer } from './usePracticeRun'
 const props = defineProps<{
   check: AnswerCheck
   /** The answer as checked: its text and how sure the student was, both null for a skip. */
-  sent: CheckedAnswer
+  sent: PracticeItemAnswer
   /** The item is queued once more (a right guess asked for the first time). */
   comesBack?: boolean
   xp?: number

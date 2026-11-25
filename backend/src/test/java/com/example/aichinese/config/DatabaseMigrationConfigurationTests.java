@@ -16,7 +16,9 @@ import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.core.env.PropertySource;
 import org.springframework.core.io.FileSystemResource;
 
+import com.example.aichinese.support.DemoProfileTest;
 import com.example.aichinese.support.FlywayMigrationFiles;
+import org.springframework.test.context.ActiveProfiles;
 
 /**
  * Pins the MySQL migration contract and explicitly documents the separate schema strategy of the demo and test
@@ -39,23 +41,14 @@ class DatabaseMigrationConfigurationTests {
     void runtimeProfilesUseFlywayWithHibernateValidationOnly() throws IOException {
         List<PropertySource<?>> appDocs = loadYamlDocuments(APPLICATION_YML);
         List<PropertySource<?>> localDocs = loadYamlDocuments(APPLICATION_LOCAL_YML);
-        String application = Files.readString(APPLICATION_YML);
-        String local = Files.readString(APPLICATION_LOCAL_YML);
 
         assertSchemaStrategy(APPLICATION_YML, appDocs, "validate", true, true);
         assertNoSchemaResetDatabase(APPLICATION_YML, appDocs);
-        assertThat(application)
-                .contains(
-                        "username: ${DB_USERNAME:}",
-                        "password: ${DB_PASSWORD:}",
-                        "connectionTimeZone=${APP_DEFAULT_TIME_ZONE:Asia/Singapore}",
-                        "useUnicode=true",
-                        "characterEncoding=utf8")
-                .doesNotContain(
-                        "username: ${DB_USERNAME:root}",
-                        "password: ${DB_PASSWORD:root}",
-                        "ddl-auto: update",
-                        "ddl-auto: create-drop");
+        PropertySource<?> baseApp = appDocs.getFirst();
+        assertThat(baseApp.getProperty("spring.datasource.username")).isEqualTo("${DB_USERNAME:}");
+        assertThat(baseApp.getProperty("spring.datasource.password")).isEqualTo("${DB_PASSWORD:}");
+        assertThat(String.valueOf(baseApp.getProperty("spring.datasource.url")))
+                .contains("connectionTimeZone=${APP_DEFAULT_TIME_ZONE:Asia/Singapore}", "useUnicode=true", "characterEncoding=utf8");
 
         PropertySource<?> prodDoc = appDocs.stream()
                 .filter(doc -> "prod | production".equals(doc.getProperty("spring.config.activate.on-profile")))
@@ -65,13 +58,14 @@ class DatabaseMigrationConfigurationTests {
                 .contains("sslMode=${DB_SSL_MODE:REQUIRED}&allowPublicKeyRetrieval=false");
         assertThat(prodDoc.getProperty("spring.flyway.baseline-on-migrate")).isEqualTo(false);
 
-        assertThat(local)
-                .contains(
-                        "on-profile: local",
-                        "username: ${DB_USERNAME:aichinese_app}",
-                        "password: ${DB_PASSWORD:replace-with-a-strong-application-db-password}",
-                        "address: 127.0.0.1",
-                        "secret: ${JWT_SECRET:LocalComposeOnlyJwtSecret1234567890AB}");
+        PropertySource<?> localDoc = localDocs.getFirst();
+        assertThat(localDoc.getProperty("spring.config.activate.on-profile")).isEqualTo("local");
+        assertThat(localDoc.getProperty("spring.datasource.username")).isEqualTo("${DB_USERNAME:aichinese_app}");
+        assertThat(localDoc.getProperty("spring.datasource.password"))
+                .isEqualTo("${DB_PASSWORD:replace-with-a-strong-application-db-password}");
+        assertThat(localDoc.getProperty("server.address")).isEqualTo("127.0.0.1");
+        assertThat(localDoc.getProperty("app.security.jwt.secret"))
+                .isEqualTo("${JWT_SECRET:LocalComposeOnlyJwtSecret1234567890AB}");
         assertSchemaStrategy(APPLICATION_LOCAL_YML, localDocs, "validate", true, false);
         assertNoSchemaResetDatabase(APPLICATION_LOCAL_YML, localDocs);
     }
@@ -80,26 +74,31 @@ class DatabaseMigrationConfigurationTests {
     @Test
     void rebuiltProfilesUseTheirOwnDatabases() throws IOException {
         List<PropertySource<?>> demoDocs = loadYamlDocuments(APPLICATION_DEMO_YML);
-        assertThat(Files.readString(APPLICATION_DEMO_YML))
-                .contains("on-profile: demo", "/${DEMO_DB_NAME:ai_chinese_learning_demo}?createDatabaseIfNotExist=true")
+        PropertySource<?> demoDoc = demoDocs.getFirst();
+        assertThat(demoDoc.getProperty("spring.config.activate.on-profile")).isEqualTo("demo");
+        assertThat(String.valueOf(demoDoc.getProperty("spring.datasource.url")))
+                .contains("/${DEMO_DB_NAME:ai_chinese_learning_demo}?createDatabaseIfNotExist=true")
                 .doesNotContain("DB_NAME:ai_chinese_learning}");
         assertSchemaStrategy(APPLICATION_DEMO_YML, demoDocs, "create-only", false, true);
-        assertThat(demoDocs.get(0).getProperty("app.schema-reset.database"))
+        assertThat(demoDoc.getProperty("app.schema-reset.database"))
                 .isEqualTo("${DEMO_DB_NAME:ai_chinese_learning_demo}");
 
         List<PropertySource<?>> testDocs = loadYamlDocuments(APPLICATION_TEST_YML);
-        List<PropertySource<?>> demoTestDocs = loadYamlDocuments(APPLICATION_DEMO_TEST_YML);
-        for (Path testProfile : List.of(APPLICATION_TEST_YML, APPLICATION_DEMO_TEST_YML)) {
-            assertThat(Files.readString(testProfile))
-                    .as(testProfile.toString())
-                    .contains("/${TEST_DB_NAME:ai_chinese_learning_test}?createDatabaseIfNotExist=true");
-        }
+        PropertySource<?> testDoc = testDocs.getFirst();
+        assertThat(String.valueOf(testDoc.getProperty("spring.datasource.url")))
+                .contains("/${TEST_DB_NAME:ai_chinese_learning_test}?createDatabaseIfNotExist=true");
         assertSchemaStrategy(APPLICATION_TEST_YML, testDocs, "create-only", false, true);
+        assertThat(testDoc.getProperty("app.schema-reset.database"))
+                .isEqualTo("${TEST_DB_NAME:ai_chinese_learning_test}");
+
+        // Demo seeder tests layer demo -> test -> demo-test, so demo-test must not override the test DB or schema rules.
+        ActiveProfiles demoProfiles = DemoProfileTest.class.getAnnotation(ActiveProfiles.class);
+        assertThat(demoProfiles).isNotNull();
+        assertThat(demoProfiles.value()).containsExactly("demo", "test", "demo-test");
+        List<PropertySource<?>> demoTestDocs = loadYamlDocuments(APPLICATION_DEMO_TEST_YML);
         assertSchemaStrategy(APPLICATION_DEMO_TEST_YML, demoTestDocs, "create-only", false, false);
-        assertThat(testDocs.get(0).getProperty("app.schema-reset.database"))
-                .isEqualTo("${TEST_DB_NAME:ai_chinese_learning_test}");
-        assertThat(demoTestDocs.get(0).getProperty("app.schema-reset.database"))
-                .isEqualTo("${TEST_DB_NAME:ai_chinese_learning_test}");
+        assertNoSchemaResetDatabase(APPLICATION_DEMO_TEST_YML, demoTestDocs);
+        assertThat(demoTestDocs.getFirst().getProperty("spring.datasource.url")).isNull();
     }
 
     /**
@@ -125,9 +124,11 @@ class DatabaseMigrationConfigurationTests {
         List<String> versions = migrations.stream().map(FlywayMigrationFiles::version).toList();
 
         try (Stream<Path> files = Files.list(FlywayMigrationFiles.MIGRATION_DIRECTORY)) {
-            assertThat(migrations).as("every V*.sql file is read as a migration")
-                    .hasSize((int) files.filter(file -> file.getFileName().toString().startsWith("V")).count());
+            List<Path> sqlFiles = files.filter(file -> file.getFileName().toString().endsWith(".sql")).toList();
+            assertThat(migrations).as("every .sql file in db/migration is a valid versioned migration")
+                    .hasSize(sqlFiles.size());
         }
+        assertThat(versions).containsExactlyElementsOf(FlywayMigrationFiles.EXPECTED_VERSIONS);
         assertThat(migrations.get(0)).isEqualTo(BASELINE_MIGRATION);
         assertThat(versions.get(0)).isEqualTo("1");
         for (int index = 1; index < versions.size(); index++) {

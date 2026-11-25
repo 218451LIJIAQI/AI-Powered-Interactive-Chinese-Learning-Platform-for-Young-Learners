@@ -10,14 +10,12 @@ import java.time.LocalDateTime;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -28,6 +26,7 @@ import com.example.aichinese.dto.support.SupportRequestCreatedResponse;
 import com.example.aichinese.dto.support.SupportRequestDetailResponse;
 import com.example.aichinese.dto.support.SupportRequestSummaryResponse;
 import com.example.aichinese.dto.support.VisitorSupportRequest;
+import com.example.aichinese.entity.Notification;
 import com.example.aichinese.entity.SupportMessage;
 import com.example.aichinese.entity.SupportRequest;
 import com.example.aichinese.entity.UploadedFile;
@@ -48,6 +47,7 @@ import com.example.aichinese.service.AuthService;
 import com.example.aichinese.service.FileStorageService;
 import com.example.aichinese.service.NotificationService;
 import com.example.aichinese.service.StoredFileDownload;
+import com.example.aichinese.service.TransactionRunner;
 import com.example.aichinese.service.TransactionalEmailDispatcher;
 import com.example.aichinese.service.account.CurrentAccount;
 import com.example.aichinese.util.PaginationUtils;
@@ -56,6 +56,7 @@ import com.example.aichinese.util.TextUtils;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.persistence.LockModeType;
+import lombok.RequiredArgsConstructor;
 
 /**
  * Support requests: a learner's "Report a problem" and a visitor's message on the public Help page, answered by admins
@@ -67,6 +68,7 @@ import jakarta.persistence.LockModeType;
  * checks the expiry of the request it locks.</p>
  */
 @Service
+@RequiredArgsConstructor
 public class SupportService {
 
     private static final Duration AUTO_CLOSE_AFTER = Duration.ofDays(7);
@@ -85,34 +87,7 @@ public class SupportService {
     private final AuditLogService auditLogService;
     private final TransactionalEmailDispatcher emailDispatcher;
     private final EntityManager entityManager;
-    private final TransactionTemplate readOnlyTransaction;
-    private final TransactionTemplate writeTransaction;
-
-    public SupportService(
-            SupportRequestRepository requestRepository,
-            SupportMessageRepository messageRepository,
-            SupportRequestNumberSequence numberSequence,
-            CurrentAccount currentAccount,
-            FileStorageService fileStorageService,
-            NotificationService notificationService,
-            AuditLogService auditLogService,
-            TransactionalEmailDispatcher emailDispatcher,
-            EntityManager entityManager,
-            PlatformTransactionManager transactionManager) {
-        this.requestRepository = requestRepository;
-        this.messageRepository = messageRepository;
-        this.numberSequence = numberSequence;
-        this.currentAccount = currentAccount;
-        this.fileStorageService = fileStorageService;
-        this.notificationService = notificationService;
-        this.auditLogService = auditLogService;
-        this.emailDispatcher = emailDispatcher;
-        this.entityManager = entityManager;
-        this.readOnlyTransaction = new TransactionTemplate(transactionManager);
-        this.readOnlyTransaction.setReadOnly(true);
-        this.writeTransaction = new TransactionTemplate(transactionManager);
-        this.writeTransaction.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
-    }
+    private final TransactionRunner transactions;
 
     // A learner ("Report a problem")
 
@@ -122,7 +97,7 @@ public class SupportService {
      */
     public SupportRequestCreatedResponse create(
             SecurityUserDetails currentUser, CreateSupportRequest form, MultipartFile screenshot) {
-        readOnlyTransaction.executeWithoutResult(status -> {
+        transactions.readOnly(() -> {
             User preview = currentAccount.require(currentUser);
             if (preview.requirePrimaryRole() != RoleName.STUDENT) {
                 throw new ResponseStatusException(FORBIDDEN, FriendlyErrorMessageResolver.permissionDeniedMessage());
@@ -130,7 +105,7 @@ public class SupportService {
         });
         requireSelectableTopic(form.topic());
         try (var staged = stageScreenshot(screenshot)) {
-            return writeTransaction.execute(status -> {
+            return transactions.writeReadCommitted(() -> {
                 User requester = currentAccount.lock(currentUser);
                 if (requester.requirePrimaryRole() != RoleName.STUDENT) {
                     throw new ResponseStatusException(FORBIDDEN, FriendlyErrorMessageResolver.permissionDeniedMessage());
@@ -163,30 +138,36 @@ public class SupportService {
 
     // Admin queue
 
-    @Transactional(isolation = Isolation.READ_COMMITTED)
     public SupportQueueResponse queue(SupportRequestStatus status, int page, int size) {
         LocalDateTime now = LocalDateTime.now();
-        // Lock candidate expired requests on PRIMARY in ascending id order (matching account deletion) in bounded batches.
-        List<Long> expiredIds = requestRepository.findExpiredIds(now);
-        for (int from = 0; from < expiredIds.size(); from += AUTO_CLOSE_BATCH_SIZE) {
-            List<Long> batch = expiredIds.subList(from, Math.min(from + AUTO_CLOSE_BATCH_SIZE, expiredIds.size()));
-            List<Long> lockedIds = requestRepository.lockIdsInOrder(batch);
-            if (!lockedIds.isEmpty()) {
-                requestRepository.closeExpiredByIds(lockedIds, now);
+        // Close expired requests in bounded, separately committed batches so locks never span the whole backlog.
+        PageRequest autoCloseBatch = PageRequest.of(0, AUTO_CLOSE_BATCH_SIZE);
+        boolean moreExpired = true;
+        while (moreExpired) {
+            Boolean continueClosing = transactions.writeReadCommitted(() -> {
+                List<Long> batch = requestRepository.findExpiredIds(now, autoCloseBatch);
+                if (batch.isEmpty()) {
+                    return false;
+                }
+                int closed = closeExpiredLocked(batch, now);
+                return batch.size() == AUTO_CLOSE_BATCH_SIZE && closed > 0;
+            });
+            moreExpired = Boolean.TRUE.equals(continueClosing);
+        }
+        return transactions.readOnly(() -> {
+            PageRequest pageRequest = PaginationUtils.pageRequest(page, size);
+            Map<SupportRequestStatus, Long> counts = counts();
+            long total = counts.getOrDefault(status, 0L);
+            List<SupportRequest> requests = List.of();
+            if (pageRequest.getOffset() < total && pageRequest.getOffset() <= Integer.MAX_VALUE) {
+                requests = status == SupportRequestStatus.SOLVED
+                        ? requestRepository.findByStatusOrderBySolvedAtDescIdDesc(status, pageRequest)
+                        : requestRepository.findByStatusOrderByUpdatedAtAscIdAsc(status, pageRequest);
             }
-        }
-        PageRequest pageRequest = PaginationUtils.pageRequest(page, size);
-        Map<SupportRequestStatus, Long> counts = counts();
-        long total = counts.getOrDefault(status, 0L);
-        List<SupportRequest> requests = List.of();
-        if (pageRequest.getOffset() < total && pageRequest.getOffset() <= Integer.MAX_VALUE) {
-            requests = status == SupportRequestStatus.SOLVED
-                    ? requestRepository.findByStatusOrderBySolvedAtDescIdDesc(status, pageRequest)
-                    : requestRepository.findByStatusOrderByUpdatedAtAscIdAsc(status, pageRequest);
-        }
-        return new SupportQueueResponse(counts, new PageResponse<>(
-                requests.stream().map(SupportService::toSummary).toList(), pageRequest.getPageNumber(),
-                pageRequest.getPageSize(), total));
+            return new SupportQueueResponse(counts, new PageResponse<>(
+                    requests.stream().map(SupportService::toSummary).toList(), pageRequest.getPageNumber(),
+                    pageRequest.getPageSize(), total));
+        });
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
@@ -194,10 +175,21 @@ public class SupportService {
         SupportRequest request = require(requestId);
         LocalDateTime now = LocalDateTime.now();
         if (isAutoCloseDue(request, now)) {
-            requestRepository.closeExpiredByIds(List.of(request.getId()), now);
+            if (closeExpiredLocked(List.of(request.getId()), now) == 0) {
+                entityManager.clear();
+            }
             request = require(requestId);
         }
         return toDetail(request);
+    }
+
+    private int closeExpiredLocked(List<Long> candidateIds, LocalDateTime now) {
+        List<Long> lockedIds = requestRepository.lockIdsInOrder(candidateIds);
+        if (lockedIds.isEmpty()) {
+            return 0;
+        }
+        List<Long> expiredIds = requestRepository.findExpiredIdsIn(lockedIds, now);
+        return expiredIds.isEmpty() ? 0 : requestRepository.closeLockedByIds(expiredIds, now);
     }
 
     /**
@@ -385,13 +377,17 @@ public class SupportService {
     }
 
     /** {@code sender} names who sent the request: the learner, or the visitor with the address. */
-    private void notifyAdminsOfNewRequest(SupportRequest request, String sender) {
+    public static Notification newRequestDraft(SupportRequest request, String sender) {
         String message = sender + " sent #" + request.getNumber() + " “" + request.getSubject()
                 + "”. Reply within 2 working days.";
+        return NotificationService.draft(NotificationType.SUPPORT_REQUEST, "New support request", message,
+                TARGET_TYPE, request.getId(), ADMIN_SUPPORT_PATH + "?request=" + request.getId());
+    }
+
+    private void notifyAdminsOfNewRequest(SupportRequest request, String sender) {
         Long requestId = request.getId();
-        notificationService.notifyActiveAdmins(NotificationType.SUPPORT_REQUEST, "New support request", message,
-                TARGET_TYPE, requestId, ADMIN_SUPPORT_PATH + "?request=" + requestId,
-                () -> requestRepository.findIdWithReadLock(requestId).isPresent());
+        notificationService.notifyActiveAdmins(() -> newRequestDraft(request, sender),
+                TARGET_TYPE + ":" + requestId, () -> requestRepository.findIdWithReadLock(requestId).isPresent());
     }
 
     private Map<SupportRequestStatus, Long> counts() {
@@ -445,21 +441,14 @@ public class SupportService {
     private static String subjectFrom(String message) {
         return message.lines()
                 .map(line -> TextUtils.truncateWithEllipsis(line, VISITOR_SUBJECT_LENGTH))
-                .filter(subject -> subject != null)
+                .filter(Objects::nonNull)
                 .findFirst()
-                .orElseGet(() -> TextUtils.truncateWithEllipsis(message, VISITOR_SUBJECT_LENGTH));
+                .orElseThrow(() -> new ResponseStatusException(
+                        BAD_REQUEST, FriendlyErrorMessageResolver.validationFailedMessage()));
     }
 
     private static AuditTarget target(SupportRequest request) {
-        return new AuditTarget(TARGET_TYPE, request.getId(), numberLabel(request) + " " + request.getSubject());
-    }
-
-    /**
-     * "#1041": the audit label of a request deleted with its requester's account, which keeps the number but not the
-     * subject (the requester's own words).
-     */
-    public static String numberLabel(SupportRequest request) {
-        return "#" + request.getNumber();
+        return new AuditTarget(TARGET_TYPE, request.getId(), "#" + request.getNumber() + " " + request.getSubject());
     }
 
     private SupportRequest require(Long requestId) {

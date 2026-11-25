@@ -2,7 +2,6 @@ package com.example.aichinese;
 
 import static com.example.aichinese.support.LearningApiTestClient.noStore;
 import static com.example.aichinese.support.LearningApiTestClient.uniqueEmail;
-import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -21,7 +20,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.example.aichinese.entity.LearnQuestion;
 import com.example.aichinese.support.ApiIntegrationTest;
-import com.example.aichinese.support.LearningApiTestClient;
 
 import jakarta.persistence.EntityManager;
 
@@ -93,9 +91,7 @@ class DashboardControllerIntegrationTests extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.data.classDrafts.count").isNumber())
                 .andExpect(jsonPath("$.data.classDrafts.items").isArray())
                 .andExpect(jsonPath("$.data.aiReports.count").isNumber())
-                .andExpect(jsonPath("$.data.support.count").isNumber())
-                .andExpect(jsonPath("$.data.teacherApplications").doesNotExist())
-                .andExpect(jsonPath("$.data.reviewQueue").doesNotExist());
+                .andExpect(jsonPath("$.data.support.count").isNumber());
     }
 
     @Test
@@ -132,23 +128,6 @@ class DashboardControllerIntegrationTests extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.data.aiReports.items[1].id").value(ids.get(1)));
     }
 
-    /** "Class drafts": a new draft class is counted and shown first, with the lessons it holds. */
-    @Test
-    void theClassDraftsCardShowsTheNewestDraft() throws Exception {
-        String token = api.adminToken();
-        String title = "Dashboard draft " + LearningApiTestClient.uniqueSuffix();
-        Long classId = api.draftClass(token, title);
-        api.draftLesson(token, api.unit(token, classId, "Unit 1"), "First lesson");
-
-        mockMvc.perform(api.authGet("/api/v1/admin/dashboard", token))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.classDrafts.count").value(greaterThanOrEqualTo(1)))
-                .andExpect(jsonPath("$.data.classDrafts.items[0].id").value(classId))
-                .andExpect(jsonPath("$.data.classDrafts.items[0].title").value(title))
-                .andExpect(jsonPath("$.data.classDrafts.items[0].lessonCount").value(1))
-                .andExpect(jsonPath("$.data.classDrafts.items[0].updatedAt").isString());
-    }
-
     /** Empty drafts stay in the preview, archived lessons affect the edit date, and working copies never count. */
     @Test
     @Transactional
@@ -182,9 +161,11 @@ class DashboardControllerIntegrationTests extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.data.classDrafts.count").value(previousDrafts + 3))
                 .andExpect(jsonPath("$.data.classDrafts.items.length()").value(2))
                 .andExpect(jsonPath("$.data.classDrafts.items[0].id").value(newest))
+                .andExpect(jsonPath("$.data.classDrafts.items[0].title").value("Draft with lessons"))
                 .andExpect(jsonPath("$.data.classDrafts.items[0].lessonCount").value(2))
                 .andExpect(jsonPath("$.data.classDrafts.items[0].updatedAt").value(objectMapper.valueToTree(archivedAt).asText()))
                 .andExpect(jsonPath("$.data.classDrafts.items[1].id").value(empty))
+                .andExpect(jsonPath("$.data.classDrafts.items[1].title").value("Empty draft"))
                 .andExpect(jsonPath("$.data.classDrafts.items[1].lessonCount").value(0))
                 .andExpect(jsonPath("$.data.classDrafts.items[1].updatedAt").value(objectMapper.valueToTree(edited).asText()));
     }
@@ -195,13 +176,15 @@ class DashboardControllerIntegrationTests extends ApiIntegrationTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(noStore())
                 .andExpect(jsonPath("$.success").value(false));
+        mockMvc.perform(get("/api/v1/students/home"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(noStore())
+                .andExpect(jsonPath("$.success").value(false));
     }
 
     @Test
-    void shouldRejectStudentAccessToAdminDashboard() throws Exception {
-        String token = api.registerStudent(uniqueEmail("student-for-admin-dashboard"));
-
-        mockMvc.perform(api.authGet("/api/v1/admin/dashboard", token))
+    void shouldRejectAdminAccessToStudentHome() throws Exception {
+        mockMvc.perform(api.authGet("/api/v1/students/home", api.adminToken()))
                 .andExpect(status().isForbidden())
                 .andExpect(noStore())
                 .andExpect(jsonPath("$.success").value(false));

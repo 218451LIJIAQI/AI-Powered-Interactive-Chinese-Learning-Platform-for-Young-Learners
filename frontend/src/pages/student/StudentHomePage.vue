@@ -1,11 +1,11 @@
 <template>
-  <div class="home-page">
-    <PageHeaderBlock :title="greeting" hide-title />
+  <div class="page-stack">
+    <h1 class="sr-only">{{ greeting }}</h1>
 
     <!-- No connection: say so once, above everything, with a way to try again. -->
-    <div v-if="!online" class="home-notice is-warning" role="status" data-testid="home-offline">
+    <div v-if="!online" class="callout home-notice is-warning" data-testid="home-offline">
       <IconGlyph name="alert" :size="18" />
-      <p class="home-notice-copy">{{ t('studentHome.offline') }}</p>
+      <p class="home-notice-copy" role="status">{{ t('studentHome.offline') }}</p>
       <button
         class="btn btn-secondary btn-sm"
         type="button"
@@ -17,6 +17,8 @@
         {{ t('common.retry') }}
       </button>
     </div>
+
+    <DataNotice v-if="home" :error="resource.error.value" @retry="retryLoad" />
 
     <StatePanel
       v-if="(resource.loading.value && !home) || redirectingToSetup"
@@ -30,15 +32,14 @@
       v-else-if="resource.error.value && !home"
       heading-tag="h2"
       tone="error"
-      icon="alert"
       :title="t('studentHome.loadError')"
       :message="resource.error.value"
       spacious
       @retry="resource.reload"
     />
 
-    <template v-else-if="home && !redirectingToSetup">
-      <div v-if="!home.email.confirmed" class="home-notice is-info" role="status" data-testid="home-email">
+    <template v-else-if="home">
+      <div v-if="!home.email.confirmed" class="callout home-notice is-info" data-testid="home-email">
         <IconGlyph name="mail" :size="18" />
         <p class="home-notice-copy">{{ t('studentHome.confirmEmail', { email: home.email.email }) }}</p>
         <p v-if="sendError" class="field-error" role="alert">{{ sendError }}</p>
@@ -73,7 +74,7 @@
       </section>
 
       <!-- A plan that is behind, or whose date has passed: what happened and what to do, in one line. -->
-      <div v-if="planNotice" class="home-notice is-warning" role="status" data-testid="home-plan-notice">
+      <div v-if="planNotice" class="callout home-notice is-warning" role="status" data-testid="home-plan-notice">
         <IconGlyph :name="ended ? 'calendar' : 'alert'" :size="18" />
         <p class="home-notice-copy">{{ planNotice }}</p>
       </div>
@@ -149,18 +150,18 @@ import { RouterLink, type RouteLocationRaw } from 'vue-router'
 
 import { getAuthSessionVersion } from '@/api/http'
 import { xpApi } from '@/api/learn'
-import { emailConfirmationApi, planApi } from '@/api/plan'
+import { accountOpsApi } from '@/api/ops'
+import { planApi } from '@/api/plan'
 import AppToast from '@/components/common/AppToast.vue'
+import DataNotice from '@/components/common/DataNotice.vue'
 import FilterChips from '@/components/common/FilterChips.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import ProgressBar from '@/components/common/ProgressBar.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
 import HomeNextTile from '@/components/home/HomeNextTile.vue'
 import HomeTimeline, { type TimelineItem } from '@/components/home/HomeTimeline.vue'
-import { mistakesReview, practiceSetRoute } from '@/components/learn/practice/practiceTypes'
 import { goalTitle, planExpired, practiceSetTitle } from '@/components/plan/planFormat'
 import { REASON_ICONS } from '@/components/plan/planLabels'
-import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useIsUnmounted } from '@/composables/useIsUnmounted'
 import { usePageRedirect } from '@/composables/usePageNavigation'
 import { notifyProgressChanged } from '@/composables/useProgressRefresh'
@@ -168,6 +169,7 @@ import { useLocalMessages } from '@/composables/useLocalMessages'
 import { useOnlineStatus } from '@/composables/useOnlineStatus'
 import { useResource } from '@/composables/useResource'
 import { useToast } from '@/composables/useToast'
+import { mistakesReview, practiceSetRoute } from '@/config/practiceActivities'
 import { planSummaryMessages } from '@/plugins/planSummaryMessages'
 import { studentHomeMessages } from '@/plugins/studentHomeMessages'
 import { hasServerMessage, resolveApiError } from '@/utils/apiError'
@@ -189,10 +191,10 @@ const { t, locale } = useLocalMessages({ studentHome: studentHomeMessages, plan:
 const resource = useResource(planApi.home)
 const isUnmounted = useIsUnmounted()
 const { toast, showToast } = useToast()
-// Offline is said on the page; when the connection returns, Home reads today again.
-const { online } = useOnlineStatus(() => {
-  showToast(t('studentHome.backOnline'))
-  void resource.reload()
+// Offline is said on the page; when the connection returns, Home reads today again before confirming recovery.
+const { online } = useOnlineStatus(async () => {
+  await resource.reload()
+  if (!isUnmounted() && !resource.error.value) showToast(t('studentHome.backOnline'))
 })
 
 const home = resource.data
@@ -210,7 +212,7 @@ async function retryLoad(): Promise<void> {
   try {
     await resource.reload()
   } finally {
-    retrying.value = false
+    if (!isUnmounted()) retrying.value = false
   }
 }
 
@@ -236,11 +238,14 @@ const goalLine = computed(() => {
   const summary = plan.value
   if (!summary) return ''
   const goal = goalTitle(t, summary.goalTitle, summary.reason)
+  if (ended.value && summary.deadline) {
+    return t('studentHome.goalWasDue', { goal, date: formatWeekdayDate(summary.deadline, locale.value) })
+  }
+  if (summary.milestoneDate) {
+    return t('studentHome.goalMilestone', { goal, date: formatWeekdayDate(summary.milestoneDate, locale.value) })
+  }
   if (!summary.deadline) return t('studentHome.goalNoDate', { goal })
-  if (ended.value) return t('studentHome.goalWasDue', { goal, date: formatWeekdayDate(summary.deadline, locale.value) })
-  return summary.milestoneDate
-    ? t('studentHome.goalMilestone', { goal, date: formatWeekdayDate(summary.milestoneDate, locale.value) })
-    : t('studentHome.goalBy', { goal, date: formatWeekdayDate(summary.deadline, locale.value) })
+  return t('studentHome.goalBy', { goal, date: formatWeekdayDate(summary.deadline, locale.value) })
 })
 
 /** "Week 2 of 10 · on track": each number once, the plan's own words for where it stands. */
@@ -369,7 +374,7 @@ async function sendAgain(): Promise<void> {
   sending.value = true
   sendError.value = null
   try {
-    const sent = await emailConfirmationApi.resend()
+    const sent = await accountOpsApi.resendEmailConfirmation()
     if (stillActive()) showToast(t('studentHome.linkSent', { email: sent.email }))
   } catch (reason) {
     if (!stillActive()) return

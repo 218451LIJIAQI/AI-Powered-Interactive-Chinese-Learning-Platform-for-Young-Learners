@@ -15,7 +15,6 @@
       v-else-if="resource.error.value"
       heading-tag="h2"
       tone="error"
-      icon="alert"
       :title="t('plan.page.loadError')"
       :message="resource.error.value"
     >

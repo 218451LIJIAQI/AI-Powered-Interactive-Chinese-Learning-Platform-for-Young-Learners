@@ -35,6 +35,7 @@ import com.example.aichinese.service.StudentLearningAccessService;
 import com.example.aichinese.service.QuizScoring;
 import com.example.aichinese.service.RewardBadge;
 import com.example.aichinese.service.RewardRules;
+import com.example.aichinese.service.learn.HintPolicyService;
 import com.example.aichinese.service.learn.XpService;
 
 import jakarta.persistence.EntityManager;
@@ -62,6 +63,7 @@ public class ClassQuizService {
     private final QuizAttemptRepository attemptRepository;
     private final QuizAttemptAnswerRepository answerRepository;
     private final QuizOptionRepository optionRepository;
+    private final HintPolicyService hintPolicyService;
     private final XpService xpService;
     private final EntityManager entityManager;
 
@@ -74,6 +76,8 @@ public class ClassQuizService {
                 .filter(ClassContentSupport::isLive)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Quiz was not found."));
         ClassAccessService.StudentLesson found = access.requireOpenLesson(student, quiz.getLesson().getId());
+        // Share-lock the quiz row (student_profiles -> quizzes) so concurrent lesson publishing waits before replacing questions.
+        entityManager.lock(quiz, LockModeType.PESSIMISTIC_READ);
         List<QuizQuestion> questions = content.questions(quizId);
         if (questions.isEmpty()) {
             throw new ResponseStatusException(BAD_REQUEST, "This quiz has no questions yet.");
@@ -95,6 +99,7 @@ public class ClassQuizService {
             Long attemptId,
             QuizSubmissionAnswerRequest request) {
         QuizAttempt attempt = requireOpenAttempt(studentAccess.requireLockedStudent(currentUser), attemptId);
+        entityManager.lock(attempt.getQuiz(), LockModeType.PESSIMISTIC_READ);
         QuizQuestion question = requireQuestion(attempt, request.questionId());
         List<QuizOption> options = request.optionId() == null ? List.of()
                 : optionRepository.findInDisplayOrder(List.of(question.getId()));
@@ -108,6 +113,7 @@ public class ClassQuizService {
 
     public void clearAnswer(SecurityUserDetails currentUser, Long attemptId, Long questionId) {
         QuizAttempt attempt = requireOpenAttempt(studentAccess.requireLockedStudent(currentUser), attemptId);
+        entityManager.lock(attempt.getQuiz(), LockModeType.PESSIMISTIC_READ);
         QuizQuestion question = requireQuestion(attempt, questionId);
         answerRepository.findByQuizAttemptAndQuestion(attempt, question).ifPresent(answerRepository::delete);
     }
@@ -115,10 +121,12 @@ public class ClassQuizService {
     /** Shows the hint of a question, in a quiz that allows hints. */
     @Transactional(readOnly = true)
     public LessonViews.QuizHint hint(SecurityUserDetails currentUser, Long attemptId, Long questionId) {
-        QuizAttempt attempt = requireOpenAttempt(studentAccess.requireStudent(currentUser), attemptId);
+        StudentProfile student = studentAccess.requireStudent(currentUser);
+        QuizAttempt attempt = requireOpenAttempt(student, attemptId);
         if (!attempt.getQuiz().isHintsAllowed()) {
             throw new ResponseStatusException(BAD_REQUEST, "Hints are not available in this quiz.");
         }
+        hintPolicyService.requireHintsOn(student);
         QuizQuestion question = requireQuestion(attempt, questionId);
         if (question.getHint() == null || question.getHint().isBlank()) {
             throw new ResponseStatusException(NOT_FOUND, "This question has no hint.");
@@ -173,6 +181,7 @@ public class ClassQuizService {
         if (attempt.isSubmitted()) {
             throw new ResponseStatusException(CONFLICT, ALREADY_SUBMITTED);
         }
+        entityManager.lock(attempt.getQuiz(), LockModeType.PESSIMISTIC_READ);
         answerRepository.deleteByQuizAttempt(attempt);
         answerRepository.flush();
         attemptRepository.delete(attempt);

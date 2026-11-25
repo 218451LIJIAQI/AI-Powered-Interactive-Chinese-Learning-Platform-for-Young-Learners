@@ -14,7 +14,7 @@
 
     <ol class="plan-road-list" :aria-label="t('plan.path.listLabel')" data-testid="plan-path">
       <li class="plan-road-here">
-        <span class="plan-road-mark is-you" data-road="you">{{ t('plan.result.you') }}</span>
+        <span class="plan-road-mark is-you" data-road="you" aria-hidden="true">{{ t('plan.result.you') }}</span>
         <div class="plan-road-copy">
           <p class="plan-road-title">{{ hereTitle }}</p>
           <p v-if="hereMeta" class="plan-road-meta">{{ hereMeta }}</p>
@@ -36,7 +36,7 @@
           <p v-if="!live" class="plan-road-why">
             <strong>{{ t('plan.path.why') }}</strong> {{ why(current) }}
           </p>
-          <div v-else class="plan-road-actions">
+          <div v-else class="btn-group is-sm plan-road-actions">
             <RouterLink
               v-if="current.nextLesson"
               class="btn btn-primary btn-sm"
@@ -58,7 +58,7 @@
       >
         <p class="page-eyebrow">{{ t('plan.path.yourClass') }}</p>
         <p class="plan-road-joined-title">
-          <span
+          <span :id="`${baseId}-joined-${step.refId}`"
             ><span class="sr-only">{{ t('plan.path.classPrefix') }} </span>{{ step.title }}</span
           >
           <span class="tag is-sm">{{ step.percent }}%</span>
@@ -69,6 +69,7 @@
         <RouterLink
           v-if="live"
           class="btn btn-secondary btn-sm"
+          :aria-describedby="`${baseId}-joined-${step.refId}`"
           :to="{ name: 'student-class', params: { classId: step.refId } }"
         >
           {{ t('plan.path.openClass') }}
@@ -112,7 +113,7 @@
           <IconGlyph name="classes" :size="22" />
         </span>
         <div class="plan-road-copy">
-          <p class="plan-road-class">
+          <p :id="`${baseId}-branch-${branch.step.refId}`" class="plan-road-class">
             <span class="sr-only">{{ t('plan.path.classPrefix') }} </span>{{ branch.step.title }}
           </p>
           <p class="plan-road-meta">{{ branch.meta }}</p>
@@ -121,6 +122,7 @@
             <RouterLink
               v-if="live"
               class="btn btn-secondary btn-sm"
+              :aria-describedby="`${baseId}-branch-${branch.step.refId}`"
               :to="{ name: 'student-class', params: { classId: branch.step.refId } }"
             >
               {{ t('plan.path.viewClass') }}
@@ -131,6 +133,7 @@
               :class="branch.step.refId === picked ? 'btn-primary' : 'btn-secondary'"
               type="button"
               :aria-pressed="branch.step.refId === picked"
+              :aria-describedby="`${baseId}-branch-${branch.step.refId}`"
               :data-testid="`pick-class-${branch.step.refId}`"
               @click="emit('pick', branch.step.refId)"
             >
@@ -152,7 +155,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import IconGlyph from '@/components/common/IconGlyph.vue'
@@ -162,7 +165,7 @@ import { planPathMessages } from '@/plugins/planPathMessages'
 import { planSetupMessages } from '@/plugins/planSetupMessages'
 import { planSummaryMessages } from '@/plugins/planSummaryMessages'
 import type { LearningPlan, PlanStep } from '@/types/plan'
-import { formatWeekdayDate } from '@/utils/format'
+import { formatList, formatWeekdayDate } from '@/utils/format'
 
 import { goalTitle, unitsWord } from './planFormat'
 import { LEVEL_KEYS } from './planLabels'
@@ -178,6 +181,7 @@ const props = defineProps<{ plan: LearningPlan; live?: boolean; picked: number |
 const emit = defineEmits<{ pick: [classId: number] }>()
 
 const { t, locale } = useLocalMessages({ plan: [planSummaryMessages, planSetupMessages, planPathMessages] })
+const baseId = useId()
 
 const title = computed(() => goalTitle(t, props.plan.goal.title, props.plan.goal.reason))
 
@@ -190,12 +194,12 @@ const goalMeta = computed(() => {
     : t('plan.path.goalNodeNoDate', { level: target })
 })
 
-const current = computed(
-  () =>
-    props.plan.steps.find(
-      (step) => step.kind === 'LEARN_UNIT' && step.status !== 'DONE' && step.status !== 'UNAVAILABLE',
-    ) ?? null,
+const activeLearnSteps = computed(() =>
+  props.plan.steps.filter(
+    (step) => step.kind === 'LEARN_UNIT' && step.status !== 'DONE' && step.status !== 'UNAVAILABLE',
+  ),
 )
+const current = computed(() => activeLearnSteps.value[0] ?? null)
 
 const joinedClasses = computed(() => props.plan.steps.filter((step) => step.joined))
 const optionalSteps = computed(() => optionalClassesInOrder(props.plan, props.picked))
@@ -215,39 +219,32 @@ const canPick = computed(
 
 const quietSteps = computed(() =>
   props.plan.steps.filter((step) =>
-    step.kind === 'LEARN_UNIT' ? step !== current.value : step.status === 'UNAVAILABLE',
+    step.kind === 'LEARN_UNIT' ? step !== current.value : !step.joined && step.status === 'UNAVAILABLE',
   ),
 )
 
-const unitsBefore = computed(() => {
-  const firstClass = branches.value[0]?.step.position ?? Infinity
-  const units = []
-  for (const step of props.plan.steps) {
-    if (
-      step.kind === 'LEARN_UNIT' &&
-      step.status !== 'DONE' &&
-      step !== current.value &&
-      step.position < firstClass &&
-      step.unitNumber !== null
-    ) {
-      units.push(step.unitNumber)
-    }
-  }
-  return units
-})
+const remainingUnits = computed(() =>
+  activeLearnSteps.value.slice(1).flatMap((step) => (step.unitNumber === null ? [] : [step.unitNumber])),
+)
 
 function forkMeta(units: readonly number[]): string {
   if (props.picked === null) {
     if (!units.length) return t('plan.path.forkNext')
-    return t('plan.path.forkUnits', { units: unitsWord(t, units) }, units.length)
+    return t('plan.path.forkUnits', { units: unitsWord(t, units, locale.value) }, units.length)
   }
   const [first, ...rest] = optionalSteps.value
   if (!props.live) return t('plan.path.forkPickedShort', { first: first?.title })
-  return t('plan.path.forkPicked', { first: first?.title, second: rest.map((step) => step.title).join(', ') })
+  return t('plan.path.forkPicked', {
+    first: first?.title,
+    second: formatList(
+      rest.map((step) => step.title),
+      locale.value,
+    ),
+  })
 }
 
 const waypoint = computed<{ title: string; meta: string } | null>(() => {
-  const units = unitsBefore.value
+  const units = remainingUnits.value
   if (branches.value.length > 1) {
     const fork = canPick.value ? 'fork' : 'then'
     return {
@@ -257,7 +254,7 @@ const waypoint = computed<{ title: string; meta: string } | null>(() => {
   }
   if (!units.length) return null
   return {
-    title: t('plan.path.thenUnits', { units: unitsWord(t, units) }),
+    title: t('plan.path.thenUnits', { units: unitsWord(t, units, locale.value) }),
     meta: branches.value.length ? t('plan.path.thenClass') : t('plan.path.thenGoal'),
   }
 })
@@ -312,7 +309,12 @@ function statusLabel(step: PlanStep): string {
 function why(step: PlanStep): string {
   if (step.reason) return step.reason
   if (step.goals.length) {
-    return t('plan.path.whyGoals', { goals: step.goals.map((goal) => t(`plan.goal.${goal}`)).join(', ') })
+    return t('plan.path.whyGoals', {
+      goals: formatList(
+        step.goals.map((goal) => t(`plan.goal.${goal}`)),
+        locale.value,
+      ),
+    })
   }
   if (step.kind === 'CLASS') return t('plan.path.whyClass')
   return step.quickReview ? t('plan.path.whyReview') : t('plan.path.whyPath')
@@ -365,7 +367,7 @@ function draw(): void {
   })
 }
 
-watch(() => [props.plan, props.picked, locale.value], draw, { flush: 'post' })
+watch(() => [props.plan, props.picked, props.live, locale.value], draw, { flush: 'post' })
 
 onMounted(() => {
   draw()

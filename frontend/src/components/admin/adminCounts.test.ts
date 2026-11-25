@@ -105,7 +105,25 @@ describe('shared admin content counts', () => {
     expect(contentCounts.value).toEqual({ classes: 10, units: 12, practice: 4 })
   })
 
+  it('skips fetching classes when skipClasses is set and preserves synced class counts', async () => {
+    setAccessToken('classes-session')
+    api.path.mockResolvedValue({ unitCount: 5 })
+    api.practice.mockResolvedValue({ totalItems: 4 })
+    vi.clearAllMocks()
+
+    mount(AdminContentTabs, {
+      props: { skipClasses: true },
+      global: { stubs: { RouteTabs: { name: 'RouteTabs', props: ['tabs', 'label'], template: '<div />' } } },
+    })
+    syncContentCount('classes', 14)
+    await flushPromises()
+
+    expect(api.classes).not.toHaveBeenCalled()
+    expect(contentCounts.value).toEqual({ classes: 14, units: 5, practice: 4 })
+  })
+
   it('keeps a count synced while a full reload (including units) is in flight', async () => {
+    setAccessToken('in-flight-session')
     const pathPending = deferred<{ unitCount: number }>()
     api.path.mockReturnValueOnce(pathPending.promise)
     const reloading = reloadContentCounts()

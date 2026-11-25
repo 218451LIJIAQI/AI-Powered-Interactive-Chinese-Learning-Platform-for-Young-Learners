@@ -31,7 +31,7 @@ public interface LessonRepository extends JpaRepository<Lesson, Long> {
     @Query("select coalesce(max(l.unitPosition), 0) from Lesson l where l.module.id = :unitId and l.revisionOf is null")
     int lastPositionInUnit(@Param("unitId") Long unitId);
 
-    Optional<Lesson> findFirstByRevisionOfId(Long lessonId);
+    Optional<Lesson> findFirstByRevisionOfIdOrderByIdDesc(Long lessonId);
 
     /** Demo histories refer to the original lesson in a named class. Lesson titles can repeat across classes. */
     @Query("""

@@ -4,6 +4,9 @@ import type { MessageRow } from './types'
 export const NO_PENDING_EMAIL_CHANGE_MESSAGE =
   'No email change is waiting for confirmation. Use Change email to start again.'
 
+/** Canonical backend refusal when acting on an admin invite that was already accepted. */
+export const INVITE_ALREADY_ACCEPTED_MESSAGE = 'This invite was already accepted.'
+
 /** Backend messages of the ops module, translated like the rows in utils/serverMessages.ts. */
 export const OPS_MESSAGES: readonly MessageRow[] = [
   // Accounts, profiles, e-mail change and deletion
@@ -49,11 +52,21 @@ export const OPS_MESSAGES: readonly MessageRow[] = [
   ],
   // "Cancel invite"
   ['This invite was not found.', 'Jemputan ini tidak ditemui.', '找不到该邀请。'],
-  ['This invite was already accepted.', 'Jemputan ini sudah diterima.', '该邀请已被接受。'],
+  [INVITE_ALREADY_ACCEPTED_MESSAGE, 'Jemputan ini sudah diterima.', '该邀请已被接受。'],
   [
     'This invite has expired. Send a new invite.',
     'Jemputan ini telah tamat tempoh. Hantar jemputan baharu.',
     '该邀请已过期，请重新发送邀请。',
+  ],
+  [
+    "A deleted account can't be deactivated.",
+    'Akaun yang telah dipadam tidak boleh dinyahaktifkan.',
+    '已删除的账号无法停用。',
+  ],
+  [
+    "This account has no role any more, so it can't be deactivated.",
+    'Akaun ini tidak lagi mempunyai peranan, jadi ia tidak boleh dinyahaktifkan.',
+    '此账号已没有角色，因此无法停用。',
   ],
   [
     "A deleted account can't be reactivated.",
@@ -101,5 +114,10 @@ export const OPS_MESSAGES: readonly MessageRow[] = [
     'The from date must be on or before the to date.',
     'Tarikh mula mestilah sama dengan atau sebelum tarikh akhir.',
     '开始日期不能晚于结束日期。',
+  ],
+  [
+    'Date filter is out of the supported range.',
+    'Penapis tarikh berada di luar julat yang disokong.',
+    '日期筛选超出支持的范围。',
   ],
 ]

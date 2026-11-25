@@ -120,6 +120,12 @@ final class HintBuilder {
         Step clue = clue(item, answer, listening);
         List<Step> rungs = new ArrayList<>(listening ? Arrays.asList(clue, ruleOut) : Arrays.asList(ruleOut, clue));
         rungs.removeIf(Objects::isNull);
+        if (rungs.isEmpty()) {
+            Step fallback = fallbackClue(answer, listening);
+            if (fallback != null) {
+                rungs.add(fallback);
+            }
+        }
         if (wrong.size() >= 3) {
             // Keep the answer and the first wrong one; rule out the rest.
             List<String> rest = wrong.subList(1, wrong.size());
@@ -132,16 +138,32 @@ final class HintBuilder {
         return rungs;
     }
 
+    /** Fallback rung for a valid 2-option Hanzi question that has neither pinyin nor a maskable explanation. */
+    private static Step fallbackClue(ChoiceOption answer, boolean listening) {
+        String text = answer.text() == null ? "" : answer.text().strip();
+        if (text.codePointCount(0, text.length()) >= 2) {
+            String first = Character.toString(text.codePointAt(0));
+            return new Step("FIRST_LETTER", List.of(first), List.of(), null, text.codePointCount(0, text.length()),
+                    List.of());
+        }
+        if (listening) {
+            return new Step("LISTEN_SLOW", List.of(), List.of(), null, null, List.of());
+        }
+        return null;
+    }
+
     /** The middle step of a choice: the explanation without the answer, else the answer's first sound or letter. */
     private static Step clue(GradableItem item, ChoiceOption answer, boolean listening) {
-        String masked = maskedExplanation(item.explanation(), answer);
+        String extraMaskPinyin = item.type() == LearnQuestionType.HANZI ? item.pinyin() : null;
+        String masked = maskedExplanation(
+                item.explanation(), answer, item.hanzi(), item.pinyin(), item.meaning(), extraMaskPinyin);
         String soundSource = answer.pinyin();
-        if ((soundSource == null || soundSource.isBlank()) && listening) {
+        if ((soundSource == null || soundSource.isBlank()) && (listening || item.type() == LearnQuestionType.HANZI)) {
             // Unit 1 Learn listening options carry pinyin directly in option text (or on the item) with no separate
             // pinyin field; Practice listening sets (type == null) often have English options that are not pinyin.
             soundSource = item.pinyin() != null && !item.pinyin().isBlank()
                     ? item.pinyin()
-                    : (item.type() == LearnQuestionType.LISTEN_CHOOSE
+                    : (listening && item.type() == LearnQuestionType.LISTEN_CHOOSE
                             && answer.text() != null && !HAN.matcher(answer.text()).find() ? answer.text() : null);
         }
         List<String> syllables = Pinyin.syllables(soundSource);
@@ -168,7 +190,13 @@ final class HintBuilder {
      * other words, and one that is mostly the answer is no clue. Case is ignored beyond ASCII too, so "Café" or a
      * capital tone-marked "Ài" opening a sentence is masked like its lower-case spelling.
      */
-    static String maskedExplanation(String explanation, ChoiceOption answer) {
+    static String maskedExplanation(
+            String explanation,
+            ChoiceOption answer,
+            String promptHanzi,
+            String promptPinyin,
+            String promptMeaning,
+            String extraMaskPinyin) {
         if (explanation == null || explanation.isBlank() || answer.text() == null || answer.text().isBlank()) {
             return null;
         }
@@ -179,9 +207,24 @@ final class HintBuilder {
         String masked = answerInExplanation.replaceAll(BLANK);
         if (answer.pinyin() != null && !answer.pinyin().isBlank()) {
             masked = anyCase(answer.pinyin()).matcher(masked).replaceAll(BLANK);
+        } else if (extraMaskPinyin != null && !extraMaskPinyin.isBlank()) {
+            masked = anyCase(extraMaskPinyin).matcher(masked).replaceAll(BLANK);
         }
-        String rest = masked.replace(BLANK, "").replaceAll("[\\s\\p{P}]", "");
+        // Exclude prompt fields already shown to the learner so vacuous templates ("茶 (chá) means “___”.") fall back
+        // to FIRST_LETTER / FIRST_SOUND rather than returning an uninformative CLUE.
+        String informative = masked.replace(BLANK, "");
+        informative = removePromptField(informative, promptHanzi);
+        informative = removePromptField(informative, promptPinyin);
+        informative = removePromptField(informative, promptMeaning);
+        String rest = informative.replaceAll("[\\s\\p{P}]", "");
         return rest.length() >= 8 ? masked.strip() : null;
+    }
+
+    private static String removePromptField(String text, String field) {
+        if (field == null || field.isBlank()) {
+            return text;
+        }
+        return anyCase(field).matcher(text).replaceAll("");
     }
 
     /** The text, stripped, as a case-insensitive literal with word boundaries on non-Han letter/digit edges. */

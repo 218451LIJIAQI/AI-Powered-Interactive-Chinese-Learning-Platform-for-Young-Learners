@@ -1,5 +1,5 @@
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { aiSafetyMessages } from '@/plugins/aiSafetyMessages'
 import { i18n } from '@/plugins/i18n'
@@ -8,7 +8,10 @@ const mocks = vi.hoisted(() => ({
   platformSettings: vi.fn(),
 }))
 
-vi.mock('vue-router', async () => ({ RouterLink: (await import('@/test/helpers')).routerLinkStub }))
+vi.mock('vue-router', async () => ({
+  RouterLink: (await import('@/test/helpers')).routerLinkStub,
+  useRoute: () => ({ hash: '' }),
+}))
 
 vi.mock('@/api/services', () => ({
   publicApi: {
@@ -34,12 +37,9 @@ const OPENAI_ONLY = /OpenAI|store=false|transcription/
 
 describe('ResponsibleAiPage (FRPUB02)', () => {
   beforeEach(() => {
-    vi.stubEnv('VITE_TAVUS_DEPLOYMENT_ID', '')
     mocks.platformSettings.mockReset()
     mocks.platformSettings.mockResolvedValue({ aiDisclaimerText: 'x', aiModelName: null, aiProvider: 'openai' })
   })
-
-  afterEach(() => vi.unstubAllEnvs())
 
   it('has the seven sections of the guidance in the rail', async () => {
     const wrapper = await mountPage()

@@ -18,10 +18,12 @@ spring:
     baseline-on-migrate: ${FLYWAY_BASELINE_ON_MIGRATE:false}
   servlet:
     multipart:
+      resolve-lazily: true
       # Each feature enforces its own file limit. Leave room for form fields and multipart boundaries.
       max-file-size: ${MAX_REQUEST_SIZE:201MB}
       max-request-size: ${MAX_REQUEST_SIZE:201MB}
   mail:
+    protocol: ${SMTP_PROTOCOL:smtp}
     host: ${SMTP_HOST:}
     port: ${SMTP_PORT:587}
     username: ${SMTP_USERNAME:}
@@ -84,7 +86,7 @@ app:
       refresh-token-same-site: ${JWT_REFRESH_COOKIE_SAME_SITE:Strict}
     forwarded:
       # Comma-separated proxy IPs/CIDRs whose X-Forwarded-For names the client address that the per-IP rate
-      # limits and the refresh-token records use (ClientIpResolver). Loopback addresses are always trusted.
+      # limits use (ClientIpResolver). Loopback addresses are always trusted.
       trusted-proxies: ${APP_SECURITY_FORWARDED_TRUSTED_PROXIES:}
   cors:
     # Comma-separated exact origins of the web app, allowed to call the API with credentials (CorsConfig). Empty:
@@ -92,7 +94,6 @@ app:
     allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:}
   upload:
     directory: ${UPLOAD_DIR:./uploads}
-    max-file-size: ${MAX_FILE_SIZE:10MB}
     support-screenshot-max-file-size: ${MAX_SUPPORT_SCREENSHOT_FILE_SIZE:5MB}
     ai-audio-max-file-size: ${MAX_AI_AUDIO_FILE_SIZE:10MB}
     ai-image-max-file-size: ${MAX_AI_IMAGE_FILE_SIZE:10MB}

@@ -37,6 +37,8 @@ import com.example.aichinese.config.AiProperties;
 abstract class HttpAiProviderClient implements AiProviderClient {
 
     private static final String EMPTY_BODY_ERROR = "Provider returned an empty response body.";
+    static final String FILTERED_ERROR = "Provider response was filtered.";
+    static final String INCOMPLETE_ERROR = "Provider response was incomplete.";
 
     private static final ParameterizedTypeReference<Map<String, Object>> JSON_OBJECT =
             new ParameterizedTypeReference<>() {
@@ -164,8 +166,7 @@ abstract class HttpAiProviderClient implements AiProviderClient {
     }
 
     /** The reply text as the result: a failure when it is missing or blank, otherwise stripped, with its token count. */
-    static AiProviderResult textResult(String text, Map<String, Object> responseBody) {
-        Integer tokens = extractTokenCount(responseBody.get("usage"));
+    static AiProviderResult textResult(String text, Integer tokens) {
         if (text == null || text.isBlank()) {
             return AiProviderResult.failure(AiGateway.EMPTY_REPLY_ERROR, tokens);
         }

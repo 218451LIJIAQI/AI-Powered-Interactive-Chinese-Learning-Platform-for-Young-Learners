@@ -5,6 +5,7 @@ import com.example.aichinese.entity.base.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -19,7 +20,9 @@ import lombok.Setter;
 @Getter
 @Setter
 @Entity
-@Table(name = "drag_drop_items")
+@Table(name = "drag_drop_items", indexes = {
+        @Index(name = "idx_drag_drop_items_activity_order", columnList = "drag_drop_activity_id,sort_order,created_at")
+})
 public class DragDropItem extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

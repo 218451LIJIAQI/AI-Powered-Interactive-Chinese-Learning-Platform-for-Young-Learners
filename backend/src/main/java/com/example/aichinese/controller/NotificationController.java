@@ -19,6 +19,7 @@ import com.example.aichinese.dto.PageResponse;
 import com.example.aichinese.dto.communication.NotificationIdsRequest;
 import com.example.aichinese.dto.communication.NotificationResponse;
 import com.example.aichinese.dto.communication.NotificationUnreadCountResponse;
+import com.example.aichinese.entity.enums.EnumLookups;
 import com.example.aichinese.entity.enums.NotificationStatus;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.NotificationService;
@@ -43,7 +44,7 @@ public class NotificationController {
             @RequestParam(value = "size", defaultValue = "20") int size) {
         NotificationStatus statusFilter = status == null || status.isBlank() || "ALL".equalsIgnoreCase(status.strip())
                 ? null
-                : NotificationStatus.tryFrom(status)
+                : EnumLookups.tryFrom(NotificationStatus.class, status)
                         .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Status must be UNREAD, READ or ALL."));
         return ApiResponse.success(
                 "Notifications retrieved successfully.",

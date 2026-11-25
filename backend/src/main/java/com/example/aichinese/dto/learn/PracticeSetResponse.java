@@ -1,5 +1,7 @@
 package com.example.aichinese.dto.learn;
 
+import static com.example.aichinese.dto.DtoNormalization.redactValue;
+
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -29,6 +31,18 @@ public record PracticeSetResponse(
         List<Integer> characterStrokes,
         LocalDateTime runStartedAt,
         String runSignature) {
+
+    @Override
+    public String toString() {
+        return "PracticeSetResponse[id=" + id
+                + ", type=" + type
+                + ", stage=" + stage
+                + ", xpReward=" + xpReward
+                + ", done=" + done
+                + ", items=" + (items == null ? 0 : items.size())
+                + ", runStartedAt=" + runStartedAt
+                + ", runSignature=" + redactValue(runSignature) + "]";
+    }
 
     public record Item(
             String key,

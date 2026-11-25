@@ -30,8 +30,8 @@ import lombok.RequiredArgsConstructor;
  * <ul>
  *   <li>{@code ai_disclaimer_text} &ndash; the AI notice shown with every AI answer;</li>
  *   <li>{@code sensitive_word_filter_enabled} &ndash; enforced by {@link ContentSafetyService} for class content and
- *       for student AI requests;</li>
- *   <li>{@code ai_safety_check_enabled} &ndash; enforced by {@code AiSafetyGuard} for student AI requests and replies.</li>
+ *       by {@code AiSafetyGuard} for AI requests;</li>
+ *   <li>{@code ai_safety_check_enabled} &ndash; enforced by {@code AiSafetyGuard} for AI requests and replies.</li>
  * </ul>
  * The AI request limits are shown with them but come from the server configuration.
  */
@@ -41,8 +41,9 @@ public class PlatformSettingsService {
 
     public static final String SENSITIVE_WORD_FILTER_KEY = "sensitive_word_filter_enabled";
     public static final String AI_SAFETY_CHECK_KEY = "ai_safety_check_enabled";
-    /** The audit action of a settings change; the latest one is the settings' "last changed". */
+    /** The audit action and target type of a settings change; the latest entry is the settings' "last changed". */
     public static final String SETTINGS_UPDATED_ACTION = "ADMIN_PLATFORM_SETTINGS_UPDATED";
+    public static final String TARGET_SYSTEM_SETTING = "SYSTEM_SETTING";
 
     public static final String DEFAULT_AI_DISCLAIMER_TEXT =
             "AI can make mistakes.";
@@ -74,8 +75,8 @@ public class PlatformSettingsService {
                 .orElse(null);
         return aiSettingsResponse(
                 AI_DISCLAIMER_TEXT.valueOrDefault(stored.get(AI_DISCLAIMER_TEXT.key())),
-                !"false".equalsIgnoreCase(SENSITIVE_WORD_FILTER.valueOrDefault(stored.get(SENSITIVE_WORD_FILTER.key()))),
-                !"false".equalsIgnoreCase(AI_SAFETY_CHECK.valueOrDefault(stored.get(AI_SAFETY_CHECK.key()))),
+                SENSITIVE_WORD_FILTER.booleanOrDefault(stored.get(SENSITIVE_WORD_FILTER.key())),
+                AI_SAFETY_CHECK.booleanOrDefault(stored.get(AI_SAFETY_CHECK.key())),
                 lastChange);
     }
 
@@ -105,7 +106,7 @@ public class PlatformSettingsService {
                 ai.available() ? ai.provider() : null);
     }
 
-    /** Admin "Sensitive-word filter" toggle: {@link ContentSafetyService} screens class content and AI requests. */
+    /** Admin "Sensitive-word filter" toggle, enforced by {@link ContentSafetyService} for class content and {@code AiSafetyGuard} for AI requests. */
     @Transactional(readOnly = true)
     public boolean sensitiveWordFilterEnabled() {
         return booleanSetting(SENSITIVE_WORD_FILTER);
@@ -128,7 +129,7 @@ public class PlatformSettingsService {
         upsertSetting(existing, SENSITIVE_WORD_FILTER, Boolean.toString(request.sensitiveWordFilter()));
         upsertSetting(existing, AI_SAFETY_CHECK, Boolean.toString(request.aiSafetyCheck()));
 
-        AuditLog lastChange = auditLogService.record(admin, SETTINGS_UPDATED_ACTION, "SYSTEM_SETTING", null,
+        AuditLog lastChange = auditLogService.record(admin, SETTINGS_UPDATED_ACTION, TARGET_SYSTEM_SETTING, null,
                 "Admin updated the AI notice, sensitive-word filter and AI safety check settings.");
         return aiSettingsResponse(notice, request.sensitiveWordFilter(), request.aiSafetyCheck(), lastChange);
     }
@@ -149,7 +150,8 @@ public class PlatformSettingsService {
 
     /** On unless explicitly "false". */
     private boolean booleanSetting(SettingDefinition definition) {
-        return !"false".equalsIgnoreCase(stringSetting(definition));
+        String stored = systemSettingRepository.findValueByKey(definition.key()).orElse(null);
+        return definition.booleanOrDefault(stored);
     }
 
     public record SettingDefinition(String key, String defaultValue) {
@@ -157,6 +159,10 @@ public class PlatformSettingsService {
         private String valueOrDefault(String stored) {
             String value = TextUtils.trimToNull(stored);
             return value == null ? defaultValue : value;
+        }
+
+        private boolean booleanOrDefault(String stored) {
+            return !"false".equalsIgnoreCase(valueOrDefault(stored));
         }
 
         public SystemSetting newSetting() {

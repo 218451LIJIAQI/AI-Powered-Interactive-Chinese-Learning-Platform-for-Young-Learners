@@ -10,8 +10,7 @@ import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "flashcards", indexes = {
-        @Index(name = "idx_flashcards_status_updated", columnList = "content_status,updated_at"),
-        @Index(name = "idx_flashcards_hsk_level", columnList = "hsk_level")
+        @Index(name = "idx_flashcards_status_updated", columnList = "content_status,updated_at")
 })
 // The schema has always allowed a flashcard set without a title, so this column alone is nullable.
 @AttributeOverride(name = "title", column = @Column(name = "title", length = 200))

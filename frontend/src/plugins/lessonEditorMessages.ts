@@ -17,6 +17,7 @@ export const lessonEditorMessages = {
       title: 'Lesson details',
       titleMissing: 'Add a lesson title.',
       unit: 'Unit',
+      unitMoveLive: 'Moving a published lesson to another unit updates live as soon as you save.',
     },
     phrases: {
       title: 'Key phrases',
@@ -38,10 +39,11 @@ export const lessonEditorMessages = {
       saved: 'Video saved.',
       removed: 'Video removed.',
       error: 'The video could not be saved.',
+      removeError: 'The video could not be removed.',
       wrongType: 'Choose an MP4, WebM or MOV file.',
       emptyFile: 'This video file is empty. Choose another file.',
       tooLarge: 'The file is larger than {max}. Choose a smaller file.',
-      none: 'No videos yet.',
+      none: 'No video yet.',
     },
     footer: {
       label: 'Saving and publishing',
@@ -63,6 +65,8 @@ export const lessonEditorMessages = {
       saveDraft: 'Save draft',
     },
     saved: 'Draft saved.',
+    savedUnitMoved: 'Lesson moved to the new unit.',
+    savedWithUnitMove: 'Draft saved. The lesson’s unit updated live.',
     saveFailedTitle: 'Your draft didn’t save.',
     saveFailed: 'Check your connection, then try again. Your edits are still on this page.',
     activities: {
@@ -131,7 +135,7 @@ export const lessonEditorMessages = {
       generating: 'Generating…',
       checking: 'Checking whether AI drafts are available…',
       unavailable: 'AI drafts are not available right now. You can still write questions yourself.',
-      error: 'Couldn’t create a draft. Try again, or add the question yourself.',
+      error: 'Couldn’t create a draft. Try again, or add questions yourself.',
       note: 'AI drafts may contain errors. Check every question.',
     },
     question: {
@@ -195,6 +199,18 @@ export const lessonEditorMessages = {
       done: 'Changes discarded.',
       error: 'The changes could not be discarded.',
     },
+    archive: {
+      title: 'Archive “{title}”?',
+      message: 'Learners can’t open it any more, though their progress is kept. You can restore it later.',
+      unsavedNote: 'Your unsaved edits on this page will be discarded.',
+      confirm: 'Archive lesson',
+      keep: 'Keep lesson',
+      done: 'Lesson archived.',
+      error: 'The lesson could not be archived.',
+      restored: '“{title}” is restored and published.',
+      restoredDraft: '“{title}” is restored as a draft.',
+      restoreError: 'The lesson could not be restored.',
+    },
     leave: {
       title: 'Leave without saving?',
       message: 'This lesson has changes you haven’t saved. Keep editing to save a draft, or leave and lose them.',
@@ -202,7 +218,6 @@ export const lessonEditorMessages = {
       keep: 'Keep editing',
     },
     loading: 'Loading the lesson',
-    loadErrorTitle: 'This lesson could not be loaded',
   },
   ms: {
     created: 'Pelajaran dicipta sebagai draf.',
@@ -222,6 +237,8 @@ export const lessonEditorMessages = {
       title: 'Butiran pelajaran',
       titleMissing: 'Tambah tajuk pelajaran.',
       unit: 'Unit',
+      unitMoveLive:
+        'Memindahkan pelajaran yang diterbitkan ke unit lain akan berkuat kuasa serta-merta apabila anda menyimpan.',
     },
     phrases: {
       title: 'Frasa utama',
@@ -243,6 +260,7 @@ export const lessonEditorMessages = {
       saved: 'Video disimpan.',
       removed: 'Video dibuang.',
       error: 'Video tidak dapat disimpan.',
+      removeError: 'Video tidak dapat dibuang.',
       wrongType: 'Pilih fail MP4, WebM atau MOV.',
       emptyFile: 'Fail video ini kosong. Pilih fail lain.',
       tooLarge: 'Fail melebihi {max}. Pilih fail yang lebih kecil.',
@@ -266,6 +284,8 @@ export const lessonEditorMessages = {
       saveDraft: 'Simpan draf',
     },
     saved: 'Draf disimpan.',
+    savedUnitMoved: 'Pelajaran dipindahkan ke unit baharu.',
+    savedWithUnitMove: 'Draf disimpan. Unit pelajaran dikemas kini serta-merta.',
     saveFailedTitle: 'Draf anda tidak disimpan.',
     saveFailed: 'Semak sambungan anda, kemudian cuba lagi. Suntingan anda masih ada di halaman ini.',
     activities: {
@@ -334,7 +354,7 @@ export const lessonEditorMessages = {
       generating: 'Menjana…',
       checking: 'Menyemak sama ada draf AI tersedia…',
       unavailable: 'Draf AI tidak tersedia sekarang. Anda masih boleh menulis soalan sendiri.',
-      error: 'Draf tidak dapat dibuat. Cuba lagi, atau tambah soalan itu sendiri.',
+      error: 'Draf tidak dapat dibuat. Cuba lagi, atau tambah soalan sendiri.',
       note: 'Draf AI mungkin mengandungi kesilapan. Semak setiap soalan.',
     },
     question: {
@@ -374,7 +394,7 @@ export const lessonEditorMessages = {
       cardsFromPhrases: 'Kad daripada frasa utama pelajaran',
       quizTitle: 'Kuiz pelajaran: {title}',
       questions: 'Tiada soalan | 1 soalan | {count} soalan',
-      startQuiz: 'Mula kuiz',
+      startQuiz: 'Mulakan kuiz',
       empty: 'Belum ada apa-apa di sini.',
       emptyTitle: 'Belum ada apa-apa untuk dipratonton',
       emptyMessage: 'Tambah video dan frasa utama untuk pratonton pelajaran ini.',
@@ -399,6 +419,19 @@ export const lessonEditorMessages = {
       done: 'Perubahan dibuang.',
       error: 'Perubahan tidak dapat dibuang.',
     },
+    archive: {
+      title: 'Arkibkan “{title}”?',
+      message:
+        'Pelajar tidak boleh membukanya lagi, tetapi kemajuan mereka disimpan. Anda boleh memulihkannya kemudian.',
+      unsavedNote: 'Suntingan yang belum disimpan pada halaman ini akan dibuang.',
+      confirm: 'Arkibkan pelajaran',
+      keep: 'Kekalkan pelajaran',
+      done: 'Pelajaran diarkibkan.',
+      error: 'Pelajaran tidak dapat diarkibkan.',
+      restored: '“{title}” dipulihkan dan diterbitkan.',
+      restoredDraft: '“{title}” dipulihkan sebagai draf.',
+      restoreError: 'Pelajaran tidak dapat dipulihkan.',
+    },
     leave: {
       title: 'Keluar tanpa menyimpan?',
       message:
@@ -407,7 +440,6 @@ export const lessonEditorMessages = {
       keep: 'Teruskan menyunting',
     },
     loading: 'Memuatkan pelajaran',
-    loadErrorTitle: 'Pelajaran ini tidak dapat dimuatkan',
   },
   'zh-CN': {
     created: '课时已创建为草稿。',
@@ -426,6 +458,7 @@ export const lessonEditorMessages = {
       title: '课时信息',
       titleMissing: '请填写课时标题。',
       unit: '单元',
+      unitMoveLive: '将已发布课时移动到其他单元后，保存即会立即生效。',
     },
     phrases: {
       title: '重点短语',
@@ -447,6 +480,7 @@ export const lessonEditorMessages = {
       saved: '视频已保存。',
       removed: '视频已移除。',
       error: '无法保存视频。',
+      removeError: '无法移除视频。',
       wrongType: '请选择 MP4、WebM 或 MOV 文件。',
       emptyFile: '视频文件为空，请选择其他文件。',
       tooLarge: '文件超过 {max}，请选择更小的文件。',
@@ -469,6 +503,8 @@ export const lessonEditorMessages = {
       saveDraft: '保存草稿',
     },
     saved: '草稿已保存。',
+    savedUnitMoved: '课时已移动到新单元。',
+    savedWithUnitMove: '草稿已保存，所属单元已立即更新。',
     saveFailedTitle: '草稿没有保存。',
     saveFailed: '请检查网络连接后重试。你的修改仍保留在此页面上。',
     activities: {
@@ -536,7 +572,7 @@ export const lessonEditorMessages = {
       generating: '正在生成…',
       checking: '正在检查 AI 草稿是否可用…',
       unavailable: 'AI 草稿暂时不可用。你仍然可以自己编写题目。',
-      error: '无法生成草稿。请重试，或自己添加这道题。',
+      error: '无法生成草稿。请重试，或自己添加题目。',
       note: 'AI 草稿可能有错误，请逐题检查。',
     },
     question: {
@@ -600,6 +636,18 @@ export const lessonEditorMessages = {
       done: '修改已放弃。',
       error: '无法放弃修改。',
     },
+    archive: {
+      title: '归档“{title}”？',
+      message: '学习者将无法再打开这节课时，但已有进度会保留。你之后可以恢复它。',
+      unsavedNote: '当前页面尚未保存的修改将被放弃。',
+      confirm: '归档课时',
+      keep: '保留课时',
+      done: '课时已归档。',
+      error: '无法归档课时。',
+      restored: '“{title}”已恢复并发布。',
+      restoredDraft: '“{title}”已恢复为草稿。',
+      restoreError: '无法恢复课时。',
+    },
     leave: {
       title: '不保存就离开？',
       message: '这节课时有尚未保存的修改。继续编辑以保存草稿，或者离开并放弃这些修改。',
@@ -607,6 +655,5 @@ export const lessonEditorMessages = {
       keep: '继续编辑',
     },
     loading: '正在加载课时',
-    loadErrorTitle: '无法加载这节课时',
   },
-}
+} as const

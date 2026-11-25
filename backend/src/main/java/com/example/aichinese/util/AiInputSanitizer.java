@@ -3,7 +3,6 @@ package com.example.aichinese.util;
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 
 import java.util.List;
-import java.util.regex.Pattern;
 
 import org.springframework.web.server.ResponseStatusException;
 
@@ -51,10 +50,6 @@ public final class AiInputSanitizer {
     private static final String RESERVED_TOKEN_PREFIX = "<|reserved_special_token_";
     private static final String RESERVED_TOKEN_SUFFIX = "|>";
 
-    /** ASCII controls other than tab and line breaks, plus zero-width and bidirectional controls and the BOM. */
-    private static final Pattern UNSAFE_CHARACTERS = Pattern.compile(
-            "[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F\\x7F\\u200B-\\u200F\\u202A-\\u202E\\u2060\\u2066-\\u2069\\uFEFF]");
-
     private AiInputSanitizer() {
     }
 
@@ -90,9 +85,35 @@ public final class AiInputSanitizer {
 
     private static String cleanText(String input) {
         // Characters are removed before tokens so that a control or invisible character placed
-        // inside a sentinel (for example a U+200B zero-width space) cannot hide it from the token pass.
-        String clean = UNSAFE_CHARACTERS.matcher(input).replaceAll("");
+        // inside a sentinel (for example a U+200B zero-width space or U+00AD soft hyphen) cannot hide it.
+        String clean = stripUnsafeCharacters(input);
         return TextUtils.stripFormSpaces(stripChatControlTokens(clean));
+    }
+
+    /** Strips ISO control characters (except tab and line breaks) and Unicode format characters (Cf: bidi, ZW*, tags). */
+    private static String stripUnsafeCharacters(String input) {
+        StringBuilder out = null;
+        for (int index = 0; index < input.length();) {
+            int codePoint = input.codePointAt(index);
+            int charCount = Character.charCount(codePoint);
+            if (isUnsafeCodePoint(codePoint)) {
+                if (out == null) {
+                    out = new StringBuilder(input.length());
+                    out.append(input, 0, index);
+                }
+            } else if (out != null) {
+                out.appendCodePoint(codePoint);
+            }
+            index += charCount;
+        }
+        return out == null ? input : out.toString();
+    }
+
+    private static boolean isUnsafeCodePoint(int codePoint) {
+        if (codePoint == '\t' || codePoint == '\n' || codePoint == '\r') {
+            return false;
+        }
+        return Character.isISOControl(codePoint) || Character.getType(codePoint) == Character.FORMAT;
     }
 
     /**

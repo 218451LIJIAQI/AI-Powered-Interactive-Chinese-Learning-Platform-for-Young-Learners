@@ -13,19 +13,19 @@ public class AiAvailabilityService {
     public static final String FRIENDLY_UNAVAILABLE_MESSAGE =
             "AI tutor is currently unavailable. Please try again later.";
 
-    static final String DISABLED_MESSAGE =
+    private static final String DISABLED_MESSAGE =
             "AI provider is disabled in the current backend configuration.";
 
-    static final String UNSUPPORTED_PROVIDER_MESSAGE =
+    private static final String UNSUPPORTED_PROVIDER_MESSAGE =
             "AI provider is not supported by the current backend configuration.";
 
-    static final String MISSING_API_KEY_MESSAGE =
+    private static final String MISSING_API_KEY_MESSAGE =
             "AI API key is missing in the current backend configuration.";
 
-    static final String MISSING_MODEL_MESSAGE =
+    private static final String MISSING_MODEL_MESSAGE =
             "AI model name is missing in the current backend configuration.";
 
-    static final String INVALID_BASE_URL_MESSAGE =
+    private static final String INVALID_BASE_URL_MESSAGE =
             "AI API base URL is missing or invalid in the current backend configuration.";
 
     private final AiProperties aiProperties;

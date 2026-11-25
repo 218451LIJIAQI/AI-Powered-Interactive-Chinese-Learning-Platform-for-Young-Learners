@@ -1,7 +1,7 @@
 <template>
   <section class="focus-stage plan-wide" aria-labelledby="plan-path-title">
     <div class="plan-path-head">
-      <h2 id="plan-path-title" class="focus-headline">
+      <h2 id="plan-path-title" class="focus-headline" tabindex="-1">
         {{ t('plan.path.title', { goal: goalTitle(t, plan.goal.title, plan.goal.reason) }) }}
       </h2>
       <p v-if="plan.aiAssisted" class="plan-form-note" data-testid="path-ai">
@@ -10,11 +10,13 @@
       </p>
     </div>
     <div class="plan-layout">
-      <div class="plan-road-card" :inert="starting">
-        <PlanPath :plan="plan" :picked="picked" @pick="emit('pick', $event)" />
+      <div class="panel plan-road-card">
+        <div :inert="starting">
+          <PlanPath :plan="plan" :picked="picked" @pick="emit('pick', $event)" />
+        </div>
         <p v-if="pickError" class="field-error" role="alert" data-testid="pick-error">{{ pickError }}</p>
       </div>
-      <aside class="plan-rail">
+      <aside class="panel plan-rail">
         <PlanWeeks :plan="plan" :picked="picked" />
         <PlanOutcomes :plan="plan" />
         <section class="plan-rail-block" aria-labelledby="plan-working-title">
@@ -43,16 +45,17 @@
 import { computed } from 'vue'
 
 import IconGlyph from '@/components/common/IconGlyph.vue'
-import { goalTitle } from '@/components/plan/planFormat'
-import PlanOutcomes from '@/components/plan/PlanOutcomes.vue'
-import PlanPath from '@/components/plan/PlanPath.vue'
-import PlanReportLink from '@/components/plan/PlanReportLink.vue'
-import PlanWeeks from '@/components/plan/PlanWeeks.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { planPathMessages } from '@/plugins/planPathMessages'
 import { planSummaryMessages } from '@/plugins/planSummaryMessages'
 import type { LearningPlan } from '@/types/plan'
 import { formatShortDate } from '@/utils/format'
+
+import { goalTitle } from './planFormat'
+import PlanOutcomes from './PlanOutcomes.vue'
+import PlanPath from './PlanPath.vue'
+import PlanReportLink from './PlanReportLink.vue'
+import PlanWeeks from './PlanWeeks.vue'
 
 const props = defineProps<{
   plan: LearningPlan

@@ -11,7 +11,5 @@ public interface QuizRepository extends JpaRepository<Quiz, Long> {
 
     boolean existsByLessonId(Long lessonId);
 
-    List<Quiz> findByLessonIdOrderByCreatedAtAscIdAsc(Long lessonId);
-
     List<Quiz> findByLessonIdInOrderByCreatedAtAscIdAsc(Collection<Long> lessonIds);
 }

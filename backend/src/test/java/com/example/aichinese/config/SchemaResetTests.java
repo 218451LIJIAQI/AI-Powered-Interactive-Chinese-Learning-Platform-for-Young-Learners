@@ -42,7 +42,7 @@ class SchemaResetTests {
 
     @Test
     void emptiesTheDatabaseItIsFor() throws Exception {
-        new SchemaResetConfig.SchemaReset(database.dataSource(), database.name()).afterPropertiesSet();
+        new SchemaResetConfig.SchemaReset(database.dataSource(), database.name(), false).afterPropertiesSet();
 
         assertThat(tables()).isEmpty();
         // Foreign key checks are back on for the connection that did the reset.
@@ -51,7 +51,7 @@ class SchemaResetTests {
 
     @Test
     void refusesAnyOtherDatabase() {
-        assertThatThrownBy(() -> new SchemaResetConfig.SchemaReset(database.dataSource(), "ai_chinese_learning").afterPropertiesSet())
+        assertThatThrownBy(() -> new SchemaResetConfig.SchemaReset(database.dataSource(), "ai_chinese_learning", false).afterPropertiesSet())
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("Refusing to empty database " + database.name() + ": the schema reset is for ai_chinese_learning only.");
 

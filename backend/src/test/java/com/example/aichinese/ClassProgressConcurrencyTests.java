@@ -1,10 +1,11 @@
 package com.example.aichinese;
 
+import static com.example.aichinese.support.ConcurrentTransactions.readCommitted;
 import static com.example.aichinese.support.ConcurrentTransactions.withRowLock;
+import static com.example.aichinese.support.LearningApiTestClient.ADMIN_EMAIL;
 import static com.example.aichinese.support.LearningApiTestClient.uniqueEmail;
 import static com.example.aichinese.support.LearningApiTestClient.uniqueSuffix;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.within;
 
 import java.time.temporal.ChronoUnit;
@@ -14,16 +15,13 @@ import java.util.function.Supplier;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
-import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.server.ResponseStatusException;
 
 import com.example.aichinese.dto.classes.LessonViews.QuizResult;
 import com.example.aichinese.repository.StudentBadgeRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.RewardBadge;
+import com.example.aichinese.service.classes.ClassAuthoringService;
 import com.example.aichinese.service.classes.ClassQuizService;
 import com.example.aichinese.service.classes.StudentClassActivityService;
 import com.example.aichinese.service.classes.StudentClassService;
@@ -43,6 +41,9 @@ class ClassProgressConcurrencyTests extends ApiIntegrationTest {
 
     @Autowired
     private StudentClassActivityService activities;
+
+    @Autowired
+    private ClassAuthoringService authoring;
 
     @Autowired
     private StudentBadgeRepository studentBadgeRepository;
@@ -71,8 +72,11 @@ class ClassProgressConcurrencyTests extends ApiIntegrationTest {
             return classes.lesson(learner, published.lessonId()).video().watched();
         };
         assertThat(whileTheFirstHoldsTheLock(watch, watch)).containsExactly(true, true);
-        assertThat(jdbc.queryForObject("select count(*) from video_progress where student_id = ? and lesson_id = ?",
-                Long.class, studentId, published.lessonId())).isOne();
+        assertThat(jdbc.queryForObject("""
+                select count(*) from video_progress vp
+                join recorded_lesson_videos v on v.id = vp.recorded_video_id
+                where vp.student_id = ? and v.lesson_id = ?
+                """, Long.class, studentId, published.lessonId())).isOne();
     }
 
     @Test
@@ -81,14 +85,15 @@ class ClassProgressConcurrencyTests extends ApiIntegrationTest {
         api.registerStudentAccount(email);
         long classId = api.publishedClass(api.adminToken(), "Archive during join " + uniqueSuffix()).classId();
         var learner = principalFor(email);
+        var admin = principalFor(ADMIN_EMAIL);
         long studentId = studentProfile(email).getId();
 
-        withRowLock(jdbc, "course_packages", new TransactionTemplate(transactions), () -> jdbc.update("""
-                update course_packages set status_before_archive = content_status, content_status = 'ARCHIVED',
-                       archived_at = current_timestamp where id = ?
-                """, classId), () -> assertThatExceptionOfType(ResponseStatusException.class)
-                .isThrownBy(() -> classes.join(learner, classId))
-                .satisfies(error -> assertThat(error.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND)));
+        withRowLock(jdbc, "course_packages", readCommitted(transactions),
+                () -> authoring.archive(admin, classId),
+                () -> {
+                    assertHttpError(() -> classes.join(learner, classId), 404);
+                    return null;
+                });
         assertThat(jdbc.queryForObject("select count(*) from class_enrolments where student_id = ? and course_package_id = ?",
                 Long.class, studentId, classId)).isZero();
     }
@@ -104,18 +109,13 @@ class ClassProgressConcurrencyTests extends ApiIntegrationTest {
         var flashcards = classes.lesson(learner, published.lessonId()).activities().stream()
                 .filter(step -> step.type().equals("FLASHCARDS")).findFirst().orElseThrow();
 
-        whileTheFirstHoldsTheLock(() -> {
-            classes.leave(learner, published.classId());
-            return true;
-        }, () -> {
-            assertThatExceptionOfType(ResponseStatusException.class)
-                    .isThrownBy(() -> activities.complete(learner, flashcards.type(), flashcards.id()))
-                    .satisfies(failure -> {
-                        assertThat(failure.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-                        assertThat(failure.getReason()).isEqualTo("Join this class to open its lessons.");
-                    });
-            return true;
-        });
+        withRowLock(jdbc, "student_profiles", readCommitted(transactions),
+                () -> classes.leave(learner, published.classId()),
+                () -> {
+                    assertHttpError(() -> activities.complete(learner, flashcards.type(), flashcards.id()),
+                            409, "Join this class to open its lessons.");
+                    return null;
+                });
 
         assertThat(classes.classPage(learner, published.classId()).joined()).isFalse();
         assertThat(jdbc.queryForObject("select count(*) from class_activity_completions where student_id = ? and lesson_id = ?",
@@ -166,10 +166,8 @@ class ClassProgressConcurrencyTests extends ApiIntegrationTest {
      */
     private <T> List<T> whileTheFirstHoldsTheLock(Supplier<T> first, Supplier<T> second)
             throws Exception {
-        TransactionTemplate transaction = new TransactionTemplate(transactions);
-        transaction.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
         AtomicReference<T> firstResult = new AtomicReference<>();
-        T secondResult = withRowLock(jdbc, "student_profiles", transaction,
+        T secondResult = withRowLock(jdbc, "student_profiles", readCommitted(transactions),
                 () -> firstResult.set(first.get()), second::get);
         return List.of(firstResult.get(), secondResult);
     }

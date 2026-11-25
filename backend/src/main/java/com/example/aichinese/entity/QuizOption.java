@@ -5,6 +5,7 @@ import com.example.aichinese.entity.base.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
@@ -15,7 +16,9 @@ import lombok.Setter;
 @Getter
 @Setter
 @Entity
-@Table(name = "quiz_options")
+@Table(name = "quiz_options", indexes = {
+        @Index(name = "idx_quiz_options_question_order", columnList = "question_id,sort_order,created_at")
+})
 public class QuizOption extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

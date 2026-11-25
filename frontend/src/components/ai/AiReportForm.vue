@@ -37,7 +37,7 @@
         <IconGlyph name="status" :size="14" />
         {{ attached }}
       </p>
-      <div v-if="error" class="alert alert-danger" role="alert" :data-testid="`${testIdPrefix}-error`">
+      <div v-if="error" class="callout is-danger" role="alert" :data-testid="`${testIdPrefix}-error`">
         <IconGlyph name="alert" :size="18" />
         <span>{{ error }}</span>
       </div>

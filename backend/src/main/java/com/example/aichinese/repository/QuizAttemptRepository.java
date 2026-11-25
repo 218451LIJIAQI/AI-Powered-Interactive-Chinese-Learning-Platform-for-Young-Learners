@@ -14,7 +14,7 @@ import com.example.aichinese.entity.QuizAttempt;
 
 public interface QuizAttemptRepository extends JpaRepository<QuizAttempt, Long> {
 
-    @EntityGraph(attributePaths = { "quiz.lesson", "student.user" })
+    @EntityGraph(attributePaths = "quiz.lesson")
     Optional<QuizAttempt> findByIdAndStudentId(Long id, Long studentId);
 
     boolean existsByQuizIdAndSubmittedTrue(Long quizId);
@@ -25,11 +25,10 @@ public interface QuizAttemptRepository extends JpaRepository<QuizAttempt, Long> 
             """)
     Set<Long> findSubmittedQuizIds(@Param("quizIds") Collection<Long> quizIds);
 
-    /** The student's submitted attempts on quizzes of the given lessons, newest first. */
-    @EntityGraph(attributePaths = "quiz")
-    List<QuizAttempt> findByStudentIdAndQuizLessonIdInAndSubmittedTrueOrderByCompletedAtDescIdDesc(
+    /** The student's submitted attempts on the given quizzes, newest first. */
+    List<QuizAttempt> findByStudentIdAndQuizIdInAndSubmittedTrueOrderByCompletedAtDescIdDesc(
             Long studentId,
-            Collection<Long> lessonIds);
+            Collection<Long> quizIds);
 
     /** The most recent open attempt of the student on the quiz. */
     Optional<QuizAttempt> findFirstByStudentIdAndQuizIdAndSubmittedFalseOrderByIdDesc(Long studentId, Long quizId);

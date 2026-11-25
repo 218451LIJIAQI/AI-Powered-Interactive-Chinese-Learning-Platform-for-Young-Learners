@@ -10,17 +10,16 @@ function isEditableTarget(target: EventTarget | null): boolean {
 export function usePublicSectionNav(
   sections: () => readonly { id: string }[],
   rail: Readonly<Ref<HTMLElement | null>>,
-  hash?: () => string | undefined,
+  hash: () => string,
 ) {
   const activeId = ref<string | undefined>(sections()[0]?.id)
   // A linked short section may never reach the top. Keep it selected until scrolling resumes.
   let pinned = false
-  let settling = false
   let settleTimer: ReturnType<typeof setTimeout> | null = null
   let scrollFrame: number | null = null
 
   function currentHash(): string {
-    return hash?.() ?? window.location.hash
+    return window.location.hash || hash()
   }
 
   function clearSettleTimer(): void {
@@ -30,29 +29,22 @@ export function usePublicSectionNav(
     }
   }
 
-  function finishSettling(): void {
-    settling = false
-    clearSettleTimer()
-  }
-
   function armSettleTimer(): void {
     clearSettleTimer()
     settleTimer = window.setTimeout(() => {
       settleTimer = null
-      settling = false
     }, 150)
   }
 
   function pinSection(id: string): void {
     activeId.value = id
     pinned = true
-    settling = true
     armSettleTimer()
   }
 
   function unpin(): void {
     pinned = false
-    finishSettling()
+    clearSettleTimer()
   }
 
   function unpinOnKeydown(event: KeyboardEvent): void {
@@ -82,7 +74,7 @@ export function usePublicSectionNav(
 
   function onScroll(): void {
     if (pinned) {
-      if (settling) {
+      if (settleTimer !== null) {
         armSettleTimer()
         return
       }
@@ -95,13 +87,10 @@ export function usePublicSectionNav(
     })
   }
 
-  function followHash(rawHash = currentHash()): void {
+  function followHash(rawHash: string): void {
     const linked = rawHash.slice(1)
     if (sections().some(({ id }) => id === linked)) pinSection(linked)
-    else {
-      unpin()
-      markSectionInView()
-    }
+    else sync()
   }
 
   function onBrowserHashChange(): void {
@@ -113,6 +102,12 @@ export function usePublicSectionNav(
     markSectionInView()
   }
 
+  function followCurrentHash(): void {
+    const raw = currentHash()
+    if (raw) followHash(raw)
+    else markSectionInView()
+  }
+
   // Re-evaluate when the section list itself changes (e.g. conditional sections mount/unmount).
   watch(
     () => sections().map((entry) => entry.id),
@@ -122,28 +117,18 @@ export function usePublicSectionNav(
         activeId.value = undefined
         return
       }
-      if (!activeId.value) {
-        if (currentHash()) followHash()
-        else markSectionInView()
-        return
-      }
-      if (!ids.includes(activeId.value)) {
-        unpin()
-        markSectionInView()
-      }
+      if (!activeId.value || !ids.includes(activeId.value)) sync()
     },
     { flush: 'post' },
   )
 
-  if (hash) {
-    watch(
-      hash,
-      () => {
-        followHash()
-      },
-      { flush: 'post' },
-    )
-  }
+  watch(
+    hash,
+    (next) => {
+      followHash(next)
+    },
+    { flush: 'post' },
+  )
 
   // A short desktop window can scroll the rail itself. Reveal the current link without moving the article.
   watch(
@@ -165,14 +150,12 @@ export function usePublicSectionNav(
   )
 
   onMounted(() => {
-    if (currentHash()) followHash()
-    else markSectionInView()
+    followCurrentHash()
     window.addEventListener('hashchange', onBrowserHashChange)
     window.addEventListener('popstate', onBrowserHashChange)
     window.addEventListener('scroll', onScroll, { passive: true })
-    window.addEventListener('scrollend', finishSettling)
+    window.addEventListener('scrollend', clearSettleTimer)
     window.addEventListener('wheel', unpin, { passive: true })
-    window.addEventListener('touchmove', unpin, { passive: true })
     window.addEventListener('keydown', unpinOnKeydown)
   })
 
@@ -185,11 +168,10 @@ export function usePublicSectionNav(
     window.removeEventListener('hashchange', onBrowserHashChange)
     window.removeEventListener('popstate', onBrowserHashChange)
     window.removeEventListener('scroll', onScroll)
-    window.removeEventListener('scrollend', finishSettling)
+    window.removeEventListener('scrollend', clearSettleTimer)
     window.removeEventListener('wheel', unpin)
-    window.removeEventListener('touchmove', unpin)
     window.removeEventListener('keydown', unpinOnKeydown)
   })
 
-  return { activeId, pinSection, sync }
+  return { activeId, pinSection }
 }

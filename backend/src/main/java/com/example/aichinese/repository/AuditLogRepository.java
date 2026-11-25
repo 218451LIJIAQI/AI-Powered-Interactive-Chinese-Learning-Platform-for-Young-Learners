@@ -73,6 +73,16 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long>, JpaSp
             @Param("targetId") Long targetId,
             @Param("anonymousLabel") String anonymousLabel);
 
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update AuditLog a set a.targetLabel = :anonymousLabel
+            where a.targetType = :targetType and lower(a.targetLabel) = lower(:email)
+            """)
+    int anonymiseTargetLabelByEmail(
+            @Param("targetType") String targetType,
+            @Param("email") String email,
+            @Param("anonymousLabel") String anonymousLabel);
+
     /**
      * Replaces every support-request audit target label for {@code requestIds} with {@code #<number>} in one statement.
      * Must run before those {@code SupportRequest} rows are deleted.
@@ -86,16 +96,4 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long>, JpaSp
     int anonymiseSupportTargetLabels(
             @Param("targetType") String targetType,
             @Param("requestIds") Collection<Long> requestIds);
-
-    /** Descriptions that quote one of the account's e-mail addresses ("previously …") are replaced. */
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("""
-            update AuditLog a set a.description = :description
-            where a.actionType = :actionType and a.targetType = :targetType and a.targetId = :targetId
-            """)
-    int replaceDescriptions(
-            @Param("actionType") String actionType,
-            @Param("targetType") String targetType,
-            @Param("targetId") Long targetId,
-            @Param("description") String description);
 }

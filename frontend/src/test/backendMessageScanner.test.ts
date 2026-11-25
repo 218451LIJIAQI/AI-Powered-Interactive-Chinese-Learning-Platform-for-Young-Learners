@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { BackendMessageExtractor, javaStringLiterals, messageText, tokenize } from './backendMessageScanner'
+import { BackendMessageExtractor, javaStringLiterals, messageText } from './backendMessageScanner'
+import { tokenize } from './javaSourceIndex'
 
 describe('backend message source scanning', () => {
   it('joins adjacent Java string literals and ignores quoted text inside comments', () => {
@@ -175,10 +176,10 @@ describe('backend message source scanning', () => {
         path: 'LessonService.java',
         source: `class LessonService {
           private static final String TITLE = "Lesson moved";
-          void move(Lesson lesson, boolean early) {
-            tell(lesson.getTeacher(), TITLE, lesson.getTitle() + (early ? " starts earlier." : " starts later."));
-            notificationService.safeCreateNotification(lesson.getTeacher(), "Note", summary(lesson));
-            notificationService.safeCreateNotification(lesson.getTeacher(), String.format("%s", lesson), "x" + lesson);
+          void move(User recipient, Lesson lesson, boolean early) {
+            tell(recipient, TITLE, lesson.getTitle() + (early ? " starts earlier." : " starts later."));
+            notificationService.safeCreateNotification(recipient, "Note", summary(lesson));
+            notificationService.safeCreateNotification(recipient, String.format("%s", lesson), "x" + lesson);
           }
           private void tell(User user, String title, String message) {
             notificationService.safeCreateNotification(user, title, message);
@@ -489,5 +490,30 @@ describe('backend message source scanning', () => {
         .map(({ parts }) => messageText(parts))
         .sort(),
     ).toEqual(['Limit is {} and {}.', 'Tag v1.'])
+  })
+
+  it('indexes multi-argument generic parameters accurately and scopes package-private constructor locals', () => {
+    const extractor = new BackendMessageExtractor([
+      {
+        path: 'GenericHelper.java',
+        source: `class GenericHelper {
+          GenericHelper(int capacity) {
+            final String LOCAL_ONLY = "Constructor local should not become a class constant.";
+            for (int i = 0; i < capacity; i++) {}
+          }
+          void run(Map<String, Object> payload) {
+            failWithMap(payload, "Missing field in payload.");
+          }
+          private void failWithMap(Map<String, Object> metadata, String detail) {
+            throw new ResponseStatusException(BAD_REQUEST, detail);
+          }
+        }`,
+      },
+    ])
+    expect(extractor.files[0]?.constants.has('LOCAL_ONLY')).toBe(false)
+    expect(extractor.files[0]?.fieldTypes.has('i')).toBe(false)
+    expect(extractor.extract().map(({ status, parts }) => `${status} ${messageText(parts)}`)).toEqual([
+      '400 Missing field in payload.',
+    ])
   })
 })

@@ -11,13 +11,10 @@ import {
   lastWord,
   matchClose,
   splitTopLevel,
-  tokenize,
   type JavaFile,
   type JavaMethod,
   type JavaToken,
 } from './javaSourceIndex'
-
-export { tokenize, type JavaFile, type JavaToken }
 
 /*
  * Completeness: the backend's Java sources are read, and every message that can reach a user must be translated.
@@ -26,10 +23,10 @@ export { tokenize, type JavaFile, type JavaToken }
  */
 
 /** A message part: fixed text, a parameter or record component of the code around it, or any other value. */
-export type MessagePart =
+type MessagePart =
   | { lit: string }
   | { param: number; text: string }
-  | { field: string; index: number; text: string }
+  | { record: string; arity: number; index: number; text: string }
   | { hole: string }
 export type MessageParts = MessagePart[]
 type StatusExpression = { code: number } | { param: number }
@@ -37,7 +34,6 @@ type StatusExpression = { code: number } | { param: number }
 export type ExtractedMessage = {
   status: number
   parts: MessageParts
-  file: string
   /** A template message finished with a fixed value that the code passes in. */
   example: boolean
 }
@@ -49,8 +45,6 @@ type MessageSink = {
   name: string
   arity: number
   isPrivate: boolean
-  /** Parameter indices referenced by `template` (empty when only `status` or a record `fieldIndex` is forwarded). */
-  slots: number[]
   /** Record component index when `kind === 'new'`. */
   fieldIndex: number | null
   status: StatusExpression
@@ -59,8 +53,6 @@ type MessageSink = {
   embedded: boolean
   /** True once a template slot has been filled with a fixed literal value from a caller. */
   example: boolean
-  /** Source file where the throw/sink originated (used when no caller matches). */
-  origin: string
 }
 
 const HTTP_STATUS: Readonly<Record<string, number>> = {
@@ -80,11 +72,24 @@ function paramSlots(parts: MessageParts): number[] {
   return [...new Set(parts.flatMap((part) => ('param' in part ? [part.param] : [])))]
 }
 
+/** Replaces unresolved parameter/record placeholders with opaque `{}` holes. */
+function asHoles(parts: MessageParts): MessageParts {
+  return parts.map((p) => ('record' in p || 'param' in p ? { hole: p.text } : p))
+}
+
 const NUMERIC_TYPES = new Set(['byte', 'short', 'int', 'long', 'float', 'double', 'Integer', 'Long'])
 
 /** A forwarded call can reach the same value along several paths. Keep each distinct value in discovery order. */
 function collectDistinct<T>(items: Map<string, T>, value: T): void {
   items.set(JSON.stringify(value), value)
+}
+
+/** Concatenates each alternative group in order across their cartesian product. */
+function concatAlternatives(groups: readonly MessageParts[][]): MessageParts[] {
+  return groups.reduce<MessageParts[]>(
+    (acc, alternatives) => acc.flatMap((prefix) => alternatives.map((alt) => [...prefix, ...alt])),
+    [[]],
+  )
 }
 
 /** Substitutes every parameter in `slots` across the cartesian product of caller argument alternatives. */
@@ -184,7 +189,7 @@ export class BackendMessageExtractor {
     const t = file.tokens
     for (let k = 0; k < t.length - 2; k++) {
       if (t[k].value !== 'record' || t[k + 1].kind !== 'word' || t[k + 2].value !== '(') continue
-      const components = splitTopLevel(t, k + 3, matchClose(t, k + 2), ',')
+      const components = splitTopLevel(t, k + 3, matchClose(t, k + 2), ',', true)
       components.forEach(([s, e], index) => {
         const name = lastWord(t, s, e)
         const records = this.recordComponents.get(name) ?? []
@@ -211,12 +216,7 @@ export class BackendMessageExtractor {
       // `a + b + c` concatenates.
       const operands = splitTopLevel(t, from, to, '+')
       if (operands.length < 2) return this.evaluateOperand(file, from, to, method)
-      let result: MessageParts[] = [[]]
-      for (const [s, e] of operands) {
-        const alternatives = this.evaluate(file, s, e, method)
-        result = result.flatMap((prefix) => alternatives.map((alt) => [...prefix, ...alt]))
-      }
-      return result
+      return concatAlternatives(operands.map(([s, e]) => this.evaluate(file, s, e, method)))
     } finally {
       this.evaluating.delete(key)
     }
@@ -271,13 +271,39 @@ export class BackendMessageExtractor {
     return [[{ hole: fallbackText }]]
   }
 
+  /** Unwraps parenthesised ternaries, single operands, and string concatenations; keeps numeric sums opaque. */
+  private evaluateParenthesised(
+    file: JavaFile,
+    innerFrom: number,
+    innerTo: number,
+    method: JavaMethod | null,
+    fallbackText: string,
+  ): MessageParts[] {
+    const t = file.tokens
+    if (findTopLevelTernary(t, innerFrom, innerTo)) {
+      return this.evaluate(file, innerFrom, innerTo, method)
+    }
+    const operands = splitTopLevel(t, innerFrom, innerTo, '+')
+    if (operands.length === 1) return this.evaluate(file, innerFrom, innerTo, method)
+    const evaluated = operands.map(([s, e]) => ({
+      isNumber: this.isNumericOperand(file, s, e, method),
+      alts: this.evaluate(file, s, e, method),
+    }))
+    const producesText = evaluated.some(
+      ({ isNumber, alts }) => !isNumber && alts.some((alt) => alt.some((part) => 'lit' in part)),
+    )
+    if (!producesText) return [[{ hole: fallbackText }]]
+    return concatAlternatives(evaluated.map(({ alts }) => alts))
+  }
+
   private evaluateOperand(file: JavaFile, from: number, to: number, method: JavaMethod | null): MessageParts[] {
     const t = file.tokens
     const size = to - from
-    const text = t
-      .slice(from, to)
-      .map((token) => (token.kind === 'text' ? JSON.stringify(token.value) : token.value))
-      .join('')
+    const sourceText = () =>
+      t
+        .slice(from, to)
+        .map((token) => (token.kind === 'text' ? JSON.stringify(token.value) : token.value))
+        .join('')
     if (size === 1 && t[from].kind === 'text') return [[{ lit: t[from].value }]]
     if (size === 1 && t[from].kind === 'number' && /^[0-9]+[lL]?$/.test(t[from].value)) {
       return [[{ lit: t[from].value.replace(/[lL]$/, '') }]]
@@ -294,43 +320,14 @@ export class BackendMessageExtractor {
       const constant = this.constant(this.classes.get(t[from].value)!, t[from + 2].value)
       if (constant) return constant
     }
-    // Parenthesised expressions: unwrap ternaries, single operands, and string concatenations; keep numeric sums opaque.
     if (t[from].value === '(' && matchClose(t, from) === to - 1) {
-      const innerFrom = from + 1
-      const innerTo = to - 1
-      if (findTopLevelTernary(t, innerFrom, innerTo)) {
-        return this.evaluate(file, innerFrom, innerTo, method)
-      }
-      const operands = splitTopLevel(t, innerFrom, innerTo, '+')
-      if (operands.length === 1) return this.evaluate(file, innerFrom, innerTo, method)
-      const evaluated = operands.map(([s, e]) => ({
-        isNumber: this.isNumericOperand(file, s, e, method),
-        alts: this.evaluate(file, s, e, method),
-      }))
-      const producesText = evaluated.some(
-        ({ isNumber, alts }) => !isNumber && alts.some((alt) => alt.some((part) => 'lit' in part)),
-      )
-      if (!producesText) return [[{ hole: text }]]
-      return evaluated.reduce<MessageParts[]>(
-        (acc, { alts }) => acc.flatMap((prefix) => alts.map((alt) => [...prefix, ...alt])),
-        [[]],
-      )
+      return this.evaluateParenthesised(file, from + 1, to - 1, method, sourceText())
     }
     // `helper(x)` or `this.helper(x)`: all same-file implementations (including inner-class overrides) of that arity.
-    if (t[from].kind === 'word' && t[from + 1]?.value === '(' && matchClose(t, from + 1) === to - 1) {
-      const arity = splitTopLevel(t, from + 2, to - 1, ',').length
-      const returned = this.evaluateSameFileCall(file, t[from].value, arity, text)
-      if (returned) return returned
-    }
-    if (
-      t[from].value === 'this' &&
-      t[from + 1]?.value === '.' &&
-      t[from + 2]?.kind === 'word' &&
-      t[from + 3]?.value === '(' &&
-      matchClose(t, from + 3) === to - 1
-    ) {
-      const arity = splitTopLevel(t, from + 4, to - 1, ',').length
-      const returned = this.evaluateSameFileCall(file, t[from + 2].value, arity, text)
+    const callStart = t[from].value === 'this' && t[from + 1]?.value === '.' ? from + 2 : from
+    if (t[callStart]?.kind === 'word' && t[callStart + 1]?.value === '(' && matchClose(t, callStart + 1) === to - 1) {
+      const arity = splitTopLevel(t, callStart + 2, to - 1, ',').length
+      const returned = this.evaluateSameFileCall(file, t[callStart].value, arity, sourceText())
       if (returned) return returned
     }
     // A fixed-message helper, or `value.component()` of a record that carries the message.
@@ -346,11 +343,12 @@ export class BackendMessageExtractor {
         const receiverType = declaredType(file, method, t[from].value, from)
         const matched = receiverType ? records.filter((r) => r.record === receiverType) : records
         if (matched.length) {
-          return matched.map((r) => [{ field: `${r.record}/${r.arity}`, index: r.index, text }])
+          const text = sourceText()
+          return matched.map((r) => [{ record: r.record, arity: r.arity, index: r.index, text }])
         }
       }
     }
-    return [[{ hole: text }]]
+    return [[{ hole: sourceText() }]]
   }
 
   /**
@@ -442,206 +440,182 @@ export class BackendMessageExtractor {
     }
   }
 
-  extract(): ExtractedMessage[] {
-    const found = new Map<string, ExtractedMessage>()
-    const sinks = new Map<string, MessageSink>()
-    const asHoles = (alt: MessageParts): MessageParts =>
-      alt.map((p) => ('field' in p || 'param' in p ? { hole: p.text } : p))
-    const addCallSink = (
-      file: JavaFile,
-      method: JavaMethod,
-      sink: Pick<MessageSink, 'slots' | 'status' | 'template' | 'embedded' | 'example' | 'origin'>,
-    ) => {
-      collectDistinct(sinks, {
-        kind: 'call',
-        cls: file.cls,
-        name: method.name,
-        arity: method.params.length,
-        isPrivate: method.isPrivate,
-        fieldIndex: null,
-        ...sink,
-      })
-    }
+  private addCallSink(
+    sinks: Map<string, MessageSink>,
+    file: JavaFile,
+    method: JavaMethod,
+    sink: Pick<MessageSink, 'status' | 'template' | 'embedded' | 'example'>,
+  ): void {
+    collectDistinct(sinks, {
+      kind: 'call',
+      cls: file.cls,
+      name: method.name,
+      arity: method.params.length,
+      isPrivate: method.isPrivate,
+      fieldIndex: null,
+      ...sink,
+    })
+  }
 
-    /**
-     * Records the messages of one throw, or of one place that supplies a helper's message. A parameter or record
-     * component that is the whole message is followed to its callers. Inside a longer text it is a value (a status, a
-     * content label, a title): the text is a template, and each caller that passes a fixed value adds an example.
-     */
-    const record = (
-      file: JavaFile,
-      method: JavaMethod | null,
-      status: StatusExpression,
-      alternatives: MessageParts[],
-      example = false,
-    ) => {
-      for (const alt of alternatives) {
-        const forwarded = alt.find((p) => 'param' in p || 'field' in p)
-        if (forwarded && alt.length === 1) {
-          if ('field' in forwarded) {
-            const [name, arity] = forwarded.field.split('/')
-            collectDistinct(sinks, {
-              kind: 'new',
-              cls: '',
-              name,
-              arity: Number(arity),
-              isPrivate: false,
-              slots: [],
-              fieldIndex: forwarded.index,
-              status,
-              template: alt,
-              embedded: false,
-              example: false,
-              origin: file.path,
-            })
-            continue
-          }
-          if ('param' in forwarded && method) {
-            addCallSink(file, method, {
-              slots: [forwarded.param],
-              status,
-              template: alt,
-              embedded: false,
-              example: false,
-              origin: file.path,
-            })
-            continue
-          }
-        }
-        if ('code' in status) {
-          collectDistinct(found, {
-            status: status.code,
-            parts: asHoles(alt),
-            file: file.path,
-            example: example && alt.every((p) => 'lit' in p),
-          })
-        }
-        const slots = paramSlots(alt)
-        if ((slots.length > 0 || 'param' in status) && method) {
-          addCallSink(file, method, {
-            slots,
+  /**
+   * Records the messages of one throw, or of one place that supplies a helper's message. A parameter or record
+   * component that is the whole message is followed to its callers. Inside a longer text it is a value (a status, a
+   * content label, a title): the text is a template, and each caller that passes a fixed value adds an example.
+   */
+  private recordThrown(
+    state: { found: Map<string, ExtractedMessage>; sinks: Map<string, MessageSink> },
+    file: JavaFile,
+    method: JavaMethod | null,
+    status: StatusExpression,
+    alternatives: MessageParts[],
+    example = false,
+  ): void {
+    for (const alt of alternatives) {
+      const forwarded = alt.find((p) => 'param' in p || 'record' in p)
+      if (forwarded && alt.length === 1) {
+        if ('record' in forwarded) {
+          collectDistinct(state.sinks, {
+            kind: 'new',
+            cls: '',
+            name: forwarded.record,
+            arity: forwarded.arity,
+            isPrivate: false,
+            fieldIndex: forwarded.index,
             status,
             template: alt,
-            embedded: true,
-            example,
-            origin: file.path,
+            embedded: false,
+            example: false,
           })
+          continue
+        }
+        if ('param' in forwarded && method) {
+          this.addCallSink(state.sinks, file, method, {
+            status,
+            template: alt,
+            embedded: false,
+            example: false,
+          })
+          continue
         }
       }
+      if ('code' in status) {
+        collectDistinct(state.found, {
+          status: status.code,
+          parts: asHoles(alt),
+          example: example && alt.every((p) => 'lit' in p),
+        })
+      }
+      if ((paramSlots(alt).length > 0 || 'param' in status) && method) {
+        this.addCallSink(state.sinks, file, method, {
+          status,
+          template: alt,
+          embedded: true,
+          example,
+        })
+      }
+    }
+  }
+
+  private expandEmbeddedSink(
+    state: { found: Map<string, ExtractedMessage>; sinks: Map<string, MessageSink> },
+    sink: MessageSink,
+    slots: readonly number[],
+    call: { file: JavaFile; args: Array<[number, number]>; method: JavaMethod | null },
+    status: StatusExpression,
+  ): void {
+    const { file, args, method } = call
+    if (slots.length === 0) {
+      this.recordThrown(state, file, method, status, [sink.template], sink.example)
+      return
+    }
+    if ('param' in sink.status && 'code' in status && !sink.example) {
+      collectDistinct(state.found, {
+        status: status.code,
+        parts: asHoles(sink.template),
+        example: false,
+      })
+    }
+    const enqueue = (template: MessageParts, example: boolean) => {
+      if (method) {
+        this.addCallSink(state.sinks, file, method, { status, template, embedded: true, example })
+      }
+    }
+    const choices = slots.map((slot) => this.evaluate(file, ...args[slot], method))
+    for (const { parts, substitutedLiteral } of substituteSlots(sink.template, slots, choices)) {
+      const nextExample = sink.example || substitutedLiteral
+      if (paramSlots(parts).length > 0) {
+        enqueue(parts, nextExample)
+        if (nextExample && 'param' in status && !sink.example) enqueue(asHoles(sink.template), false)
+      } else if (parts.every((p) => 'lit' in p)) {
+        if ('code' in status) {
+          collectDistinct(state.found, { status: status.code, parts, example: true })
+        } else {
+          enqueue(parts, true)
+          if (!sink.example) enqueue(asHoles(sink.template), false)
+        }
+      } else if ('param' in status) {
+        enqueue(asHoles(parts), false)
+      }
+    }
+  }
+
+  extract(): ExtractedMessage[] {
+    const state = {
+      found: new Map<string, ExtractedMessage>(),
+      sinks: new Map<string, MessageSink>(),
     }
 
     for (const file of this.files) {
       const t = file.tokens
       for (let k = 0; k < t.length - 2; k++) {
         if (t[k].value !== 'new' || t[k + 2].value !== '(') continue
-        if (t[k + 1].value !== 'ResponseStatusException') continue
+        const exceptionType = t[k + 1].value
+        if (exceptionType !== 'ResponseStatusException' && exceptionType !== 'RetryLaterException') continue
         const args = splitTopLevel(t, k + 3, matchClose(t, k + 2), ',')
-        const messageArg = args[1]
+        const isRetryLater = exceptionType === 'RetryLaterException'
+        const messageArg = isRetryLater ? args[0] : args[1]
         if (!messageArg) continue
         const method = enclosingMethod(file.methods, k)
-        const status = this.evaluateStatus(file, args[0][0], args[0][1], method)
-        record(file, method, status, this.evaluate(file, messageArg[0], messageArg[1], method))
+        const status: StatusExpression = isRetryLater
+          ? { code: 429 }
+          : this.evaluateStatus(file, args[0][0], args[0][1], method)
+        this.recordThrown(state, file, method, status, this.evaluate(file, messageArg[0], messageArg[1], method))
       }
     }
 
     // Follow each forwarded parameter or record component to the places that supply it, until nothing new is found.
-    for (const sink of sinks.values()) {
+    for (const sink of state.sinks.values()) {
+      const slots = paramSlots(sink.template)
       let called = false
-      for (const { file, args, method } of this.callsOf(sink)) {
+      for (const call of this.callsOf(sink)) {
         called = true
+        const { file, args, method } = call
         const status: StatusExpression =
           'param' in sink.status ? this.evaluateStatus(file, ...args[sink.status.param], method) : sink.status
         if (!sink.embedded) {
-          const argIndex = sink.kind === 'new' ? sink.fieldIndex! : sink.slots[0]
-          record(file, method, status, this.evaluate(file, ...args[argIndex], method))
+          const argIndex = sink.kind === 'new' ? sink.fieldIndex! : slots[0]
+          this.recordThrown(state, file, method, status, this.evaluate(file, ...args[argIndex], method))
           continue
         }
-        if (sink.slots.length === 0) {
-          record(file, method, status, [sink.template], sink.example)
-          continue
-        }
-        if ('param' in sink.status && 'code' in status && !sink.example) {
-          collectDistinct(found, {
-            status: status.code,
-            parts: asHoles(sink.template),
-            file: file.path,
-            example: false,
-          })
-        }
-        const choices = sink.slots.map((slot) => this.evaluate(file, ...args[slot], method))
-        for (const { parts, substitutedLiteral } of substituteSlots(sink.template, sink.slots, choices)) {
-          const nextExample = sink.example || substitutedLiteral
-          const remainingParams = paramSlots(parts)
-          const addFallbackTemplate = () => {
-            if (!method || !('param' in status)) return
-            addCallSink(file, method, {
-              slots: [],
-              status,
-              template: asHoles(sink.template),
-              embedded: true,
-              example: false,
-              origin: sink.origin,
-            })
-          }
-          if (remainingParams.length > 0 && method) {
-            addCallSink(file, method, {
-              slots: remainingParams,
-              status,
-              template: parts,
-              embedded: true,
-              example: nextExample,
-              origin: sink.origin,
-            })
-            if (nextExample) addFallbackTemplate()
-          } else if (parts.every((p) => 'lit' in p)) {
-            if ('code' in status) {
-              collectDistinct(found, {
-                status: status.code,
-                parts,
-                file: file.path,
-                example: true,
-              })
-            } else if ('param' in status && method) {
-              addCallSink(file, method, {
-                slots: [],
-                status,
-                template: parts,
-                embedded: true,
-                example: true,
-                origin: sink.origin,
-              })
-              addFallbackTemplate()
-            }
-          } else if ('param' in status && method) {
-            addCallSink(file, method, {
-              slots: [],
-              status,
-              template: asHoles(parts),
-              embedded: true,
-              example: false,
-              origin: sink.origin,
-            })
-          }
-        }
+        this.expandEmbeddedSink(state, sink, slots, call, status)
       }
       // Fail loudly when a forwarded message or parameterized-status sink has no matching Java call site.
       if (!called && (!sink.embedded || !('code' in sink.status))) {
-        collectDistinct(found, {
+        collectDistinct(state.found, {
           status: 'code' in sink.status ? sink.status.code : 400,
           parts: asHoles(sink.template),
-          file: sink.origin,
           example: sink.example && sink.template.every((p) => 'lit' in p),
         })
       }
     }
-    return [...found.values()]
+    return [...state.found.values()]
   }
 
   /**
    * The titles and messages of in-app notifications: the text set as a `Notification`'s title or message
-   * (NotificationService.draft, DemoOpsSeeder.notify), followed through the parameters that carry it
-   * (safeCreateNotification, notifyActiveAdmins and the helpers around them) to the places that write it. A value the
-   * code computes (a name, a title, a number) is a hole.
+   * (`NotificationService.draft`), followed through the parameters that carry it (the `*Draft` helpers and callers of
+   * `NotificationService.draft`) to the places that write it. A value the code computes (a name, a title, a number) is
+   * a hole.
    */
   notificationTexts(): NotificationText[] {
     type TextSink = {
@@ -680,32 +654,18 @@ export class BackendMessageExtractor {
       }
       collectDistinct(found, {
         field,
-        parts: parts.map((p) => ('lit' in p || 'hole' in p ? p : { hole: p.text })),
+        parts: asHoles(parts),
         file: origin ?? file.path,
       })
     }
 
     for (const file of this.files) {
       const t = file.tokens
-      const entitiesByMethod = new Map<JavaMethod | null, Set<string>>()
-      for (let k = 0; k < t.length - 4; k++) {
-        const declared =
-          (t[k].value === 'Notification' || t[k].value === 'var') && t[k + 1].kind === 'word' && t[k + 2].value === '='
-        if (declared && t[k + 3].value === 'new' && t[k + 4].value === 'Notification') {
-          const method = enclosingMethod(file.methods, k)
-          let names = entitiesByMethod.get(method)
-          if (!names) {
-            names = new Set<string>()
-            entitiesByMethod.set(method, names)
-          }
-          names.add(t[k + 1].value)
-        }
-      }
       for (let k = 0; k < t.length - 3; k++) {
         const field = NOTIFICATION_SETTERS.get(t[k + 2].value)
-        if (!field || t[k + 1].value !== '.' || t[k + 3].value !== '(') continue
+        if (!field || t[k].kind !== 'word' || t[k + 1].value !== '.' || t[k + 3].value !== '(') continue
         const method = enclosingMethod(file.methods, k)
-        if (!entitiesByMethod.get(method)?.has(t[k].value)) continue
+        if (declaredType(file, method, t[k].value, k) !== 'Notification') continue
         for (const alt of this.evaluate(file, k + 4, matchClose(t, k + 3), method)) resolve(file, method, field, alt)
       }
     }
@@ -728,7 +688,7 @@ export class BackendMessageExtractor {
   }
 }
 
-export type NotificationField = 'title' | 'message'
+type NotificationField = 'title' | 'message'
 /** A notification title or message as the backend writes it, and the file that writes it. */
 export type NotificationText = { field: NotificationField; parts: MessageParts; file: string }
 const NOTIFICATION_SETTERS = new Map<string, NotificationField>([

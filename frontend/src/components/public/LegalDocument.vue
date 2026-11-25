@@ -43,9 +43,14 @@
               <strong>{{ section.note.label }}</strong> {{ section.note.text }}
             </span>
           </p>
-          <p v-for="paragraph in section.paragraphs ?? []" :key="paragraph">{{ paragraph }}</p>
+          <p v-for="(paragraph, pIndex) in section.paragraphs ?? []" :key="`${section.id}-p-${pIndex}`">
+            {{ paragraph }}
+          </p>
           <ul v-if="section.bullets?.length" class="legal-bullets">
-            <li v-for="bullet in section.bullets" :key="typeof bullet === 'string' ? bullet : bullet.slot">
+            <li
+              v-for="(bullet, bIndex) in section.bullets"
+              :key="typeof bullet === 'string' ? `${section.id}-b-${bIndex}` : bullet.slot"
+            >
               <template v-if="typeof bullet === 'string'">{{ bullet }}</template>
               <slot v-else :name="bullet.slot" />
             </li>
@@ -58,11 +63,12 @@
 
 <script setup lang="ts">
 import { computed, useTemplateRef } from 'vue'
+import { useRoute } from 'vue-router'
 
 import AppBreadcrumb from '@/components/common/AppBreadcrumb.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import { usePublicSectionNav } from '@/components/public/usePublicSectionNav'
-import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
+import PageHeaderBlock from '@/components/layout/PageHeaderBlock.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { legalMessages } from '@/plugins/legalMessages'
 import { formatDate } from '@/utils/format'
@@ -96,5 +102,10 @@ const updatedLine = computed(() =>
   props.updated ? t('legal.lastUpdated', { date: formatDate(props.updated, UPDATED_DATE, locale.value) }) : '',
 )
 
-const { activeId, pinSection } = usePublicSectionNav(() => props.sections, useTemplateRef<HTMLElement>('rail'))
+const route = useRoute()
+const { activeId, pinSection } = usePublicSectionNav(
+  () => props.sections,
+  useTemplateRef<HTMLElement>('rail'),
+  () => route.hash,
+)
 </script>

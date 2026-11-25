@@ -9,10 +9,11 @@ export default defineConfig({
     environment: 'jsdom',
     include: ['src/**/*.test.ts'],
     setupFiles: './src/test/setup.ts',
-    // Each test starts with cleared mock calls, restored vi.spyOn spies and unstubbed globals.
+    // Each test starts with cleared mock calls, restored vi.spyOn spies and unstubbed globals/envs.
     clearMocks: true,
     restoreMocks: true,
     unstubGlobals: true,
+    unstubEnvs: true,
   },
   resolve: {
     alias: {

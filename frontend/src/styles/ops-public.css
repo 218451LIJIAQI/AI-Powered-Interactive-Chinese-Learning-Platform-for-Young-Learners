@@ -1,5 +1,36 @@
 /* Public site header, landing, Help, legal, authentication, class catalogue and error pages. */
 
+/* The header spans the window above a centred content column. */
+.public-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  /* A full-bleed band may paint past the window; it is clipped here without making a scroll container. */
+  overflow-x: clip;
+}
+
+.public-shell-content {
+  flex: 1 0 auto;
+  width: min(calc(100% - 2 * var(--page-gutter)), var(--public-max));
+  margin: 0 auto;
+  padding-block: var(--space-10) var(--space-16);
+}
+
+/* The sign-in and recovery pages fill the whole window with their own layout (AuthShell). */
+.public-shell--auth .public-shell-content {
+  width: 100%;
+  padding-block: 0;
+}
+
+.public-nav {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-glass);
+  backdrop-filter: saturate(180%) blur(14px);
+}
+
 .public-brand {
   gap: var(--space-2-5);
 }
@@ -876,14 +907,6 @@ body:has(.public-nav) .toast-region {
   gap: var(--space-4);
 }
 
-.help-questions > li:first-child {
-  padding-top: 0;
-}
-
-.help-questions > li:last-child {
-  padding-bottom: 0;
-}
-
 .help-questions .row-list-copy {
   gap: var(--space-1-5);
 }
@@ -944,6 +967,7 @@ body:has(.public-nav) .toast-region {
 .seal.help-sent-seal {
   --seal-size: 44px;
   background: var(--surface-card);
+  box-shadow: inset 0 0 0 1px var(--color-success-border);
   color: var(--color-success-text);
 }
 
@@ -1083,21 +1107,6 @@ body:has(.public-nav) .toast-region {
   justify-content: flex-end;
 }
 
-.auth-password {
-  position: relative;
-}
-
-.auth-password .input {
-  padding-right: var(--space-12);
-}
-
-.auth-password-toggle {
-  position: absolute;
-  top: 50%;
-  right: var(--space-1);
-  translate: 0 -50%;
-}
-
 .auth-form-row {
   display: flex;
   flex-wrap: wrap;
@@ -1125,9 +1134,16 @@ body:has(.public-nav) .toast-region {
 }
 
 .auth-passwords {
+  container-type: inline-size;
   display: grid;
   gap: var(--space-2);
   min-width: 0;
+}
+
+@container (max-width: 28rem) {
+  .auth-passwords .form-grid.two {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .auth-consent-field {
@@ -1410,12 +1426,13 @@ body:has(.public-nav) .toast-region {
   }
 
   .public-nav-inner {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr);
     gap: 0 var(--space-3);
   }
 
   .public-nav-links {
     grid-area: 2 / 1 / 3 / -1;
+    flex-wrap: wrap;
   }
 
   .public-nav-links::before {
@@ -1423,6 +1440,8 @@ body:has(.public-nav) .toast-region {
   }
 
   .public-nav-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
     justify-self: end;
   }
 }
@@ -1434,10 +1453,6 @@ body:has(.public-nav) .toast-region {
 
   .auth-side {
     padding: var(--space-5);
-  }
-
-  .auth-passwords .form-grid.two {
-    grid-template-columns: minmax(0, 1fr);
   }
 
   .hanzi-tile.auth-word-tile {
@@ -1528,33 +1543,8 @@ body:has(.public-nav) .toast-region {
   }
 }
 
-@media (max-width: 40rem) {
-  .public-nav-actions {
-    display: contents;
-  }
-
-  .public-nav-account {
-    grid-area: 1 / 2;
-    justify-self: end;
-  }
-
-  .public-nav-links {
-    grid-area: 2 / 1;
-    flex-wrap: wrap;
-    justify-self: start;
-    gap: var(--space-1) var(--space-3);
-  }
-
-  .public-languages.pill-switch {
-    grid-area: 2 / 2;
-    justify-self: end;
-    padding: 0;
-    border: 0;
-  }
-}
-
-/* In a highly magnified split window the masthead can occupy three rows. Let it scroll with the page. */
-@media (max-width: 29rem) {
+/* In a magnified or split window the masthead can occupy three rows. Let it scroll with the page. */
+@media (max-width: 38rem) {
   html:has(.public-nav) {
     --topbar-sticky-offset: 0px;
   }
@@ -1575,8 +1565,30 @@ body:has(.public-nav) .toast-region {
     justify-content: space-between;
   }
 
+  .public-languages.pill-switch {
+    padding-inline-end: 0;
+    border-inline-end: 0;
+  }
+}
+
+@media (max-width: 29rem) {
   .panel.landing-how-list {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-height: 37.5rem) {
+  html:has(.public-nav) {
+    --topbar-sticky-offset: 0px;
+  }
+
+  .public-nav,
+  .public-rail {
+    position: static;
+  }
+
+  .public-rail {
+    max-height: none;
   }
 }
 
@@ -1584,5 +1596,16 @@ body:has(.public-nav) .toast-region {
   .public-rail-link.is-active {
     padding-inline-start: calc(var(--space-3) - 3px);
     border-inline-start: 3px solid Highlight;
+  }
+
+  .btn.public-nav-cta {
+    border-color: ButtonText;
+  }
+
+  .hanzi-tile.auth-word-tile,
+  .help-sent,
+  .help-sent-seal,
+  .auth-checks {
+    border: 1px solid CanvasText;
   }
 }

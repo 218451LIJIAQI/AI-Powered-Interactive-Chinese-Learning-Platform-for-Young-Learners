@@ -42,7 +42,6 @@ class AiServiceTransactionBoundaryTests {
                 AiGateway.class.getMethod("execute", AiGateway.AiCall.class),
                 AiGateway.class.getMethod("assessPronunciation", User.class, String.class, String.class,
                         String.class, FileStorageService.PracticeUpload.class),
-                AiService.class.getMethod("chat", SecurityUserDetails.class, AiChatRequest.class),
                 AiService.class.getMethod("prepareChat", SecurityUserDetails.class, AiChatRequest.class),
                 AiService.class.getMethod("completeChat", SecurityUserDetails.class, AiService.PreparedChat.class),
                 AiService.class.getMethod("quizGenerator", SecurityUserDetails.class, AiQuizGeneratorRequest.class),

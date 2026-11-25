@@ -25,6 +25,7 @@ import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.StudentLearningAccessService;
 import com.example.aichinese.service.account.EmailConfirmationService;
 import com.example.aichinese.service.learn.XpService;
+import com.example.aichinese.util.TextUtils;
 
 import lombok.RequiredArgsConstructor;
 
@@ -80,6 +81,10 @@ public class StudentHomeService {
                 .map(stop -> new HomeView.Stop(stop.id(), stop.position(), stop.state(), stop.id().equals(next.id())))
                 .toList();
         HomeView.Phrase phrase = keyPhrase(next.id());
+        String tileHanzi = phrase == null ? null : firstHanzi(phrase.hanzi());
+        if (tileHanzi == null) {
+            tileHanzi = firstHanzi(next.unitTitleZh());
+        }
         return new HomeView.NextLesson(
                 next.id(),
                 next.title(),
@@ -90,7 +95,7 @@ public class StudentHomeService {
                 next.unitTitleZh(),
                 next.minutes(),
                 next.xpReward(),
-                firstHanzi(phrase == null ? next.unitTitleZh() : phrase.hanzi()),
+                tileHanzi,
                 phrase,
                 stops,
                 planned.map(LearningPlanStep::isQuickReview).orElse(false),
@@ -130,18 +135,18 @@ public class StudentHomeService {
     /** The shortest full sentence the lesson teaches (with its meaning), else its first word with a meaning. */
     private HomeView.Phrase keyPhrase(Long lessonId) {
         List<HomeView.Phrase> phrases = questionRepository.findPhrasesByLessonIdOrderByPositionAscIdAsc(lessonId).stream()
-                .filter(phrase -> phrase.hanzi() != null && !phrase.hanzi().isBlank())
-                .filter(phrase -> phrase.meaning() != null && !phrase.meaning().isBlank())
+                .filter(phrase -> !TextUtils.isBlankOrSpaces(phrase.hanzi()))
+                .filter(phrase -> !TextUtils.isBlankOrSpaces(phrase.meaning()))
                 .toList();
         return phrases.stream()
                 .filter(phrase -> isSentence(phrase.hanzi()))
-                .min(Comparator.comparingInt(phrase -> phrase.hanzi().length()))
+                .min(Comparator.comparingInt(phrase -> TextUtils.stripFormSpaces(phrase.hanzi()).length()))
                 .or(() -> phrases.stream().findFirst())
                 .orElse(null);
     }
 
     private static boolean isSentence(String hanzi) {
-        String text = hanzi.strip();
+        String text = TextUtils.stripFormSpaces(hanzi);
         return text.endsWith("。") || text.endsWith("！") || text.endsWith("？");
     }
 

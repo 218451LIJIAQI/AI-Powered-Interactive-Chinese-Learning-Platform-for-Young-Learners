@@ -1,4 +1,4 @@
-/* Practice: the tabs, one stage per tab (a set's players and result, Mistakes), and the Mistakes review.
+/* Practice: the tabs and one stage per tab (a set's players, result, and Mistakes list).
    Shared DailyGoalMeter, ListenButtons, QuestionStage, tile and CheckBar primitives live in learn-shared.css. */
 
 /* The section fills the content column to the bottom of the window; the stage takes what the tabs and the goal leave. */
@@ -36,7 +36,17 @@
 }
 
 .practice-stage-state .skeleton {
-  background-image: linear-gradient(90deg, var(--surface-card), var(--color-ink-50), var(--surface-card));
+  --skeleton-edge: var(--surface-card);
+}
+
+.practice-set-row-meta,
+.practice-set-empty-text,
+.practice-typing-nomatch,
+.practice-typing-help,
+.practice-mistake-answers {
+  color: var(--text-secondary);
+  font-size: var(--type-caption-size);
+  line-height: var(--line-height-normal);
 }
 
 /* Where the learner is, once and as text ("Card 1 of 6"), at the top left of the stage. */
@@ -176,12 +186,6 @@
   line-height: var(--line-height-normal);
 }
 
-.practice-set-row-meta {
-  color: var(--text-secondary);
-  font-size: var(--type-caption-size);
-  line-height: var(--line-height-normal);
-}
-
 /* No set matches the search: a dashed tile that says why and offers to clear it. */
 .practice-set-empty {
   display: grid;
@@ -202,12 +206,6 @@
   font-weight: var(--font-weight-heading);
   line-height: var(--line-height-normal);
   overflow-wrap: anywhere;
-}
-
-.practice-set-empty-text {
-  color: var(--text-secondary);
-  font-size: var(--type-caption-size);
-  line-height: var(--line-height-normal);
 }
 
 .practice-set-empty .btn {
@@ -263,7 +261,7 @@
   padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-btn-lg);
   font-size: var(--type-body-size);
-  animation: practice-rise var(--duration-base) var(--ease-out);
+  animation: learn-rise var(--duration-base) var(--ease-out);
 }
 
 .practice-feedback.is-correct {
@@ -297,8 +295,7 @@
 .practice-feedback-copy p,
 .practice-typing p,
 .practice-card p,
-.practice-trace-model p,
-.practice-review-done p {
+.practice-trace-model p {
   margin: 0;
 }
 
@@ -319,18 +316,6 @@
   color: var(--color-ink-700);
   font-size: var(--type-caption-size);
   font-weight: var(--font-weight-medium);
-}
-
-@keyframes practice-rise {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-
-  to {
-    opacity: 1;
-    transform: none;
-  }
 }
 
 /* How sure are you? The label, then two buttons that look the same, so neither is the expected one. */
@@ -429,10 +414,6 @@
   color: var(--color-white);
 }
 
-.practice-candidate:disabled {
-  cursor: default;
-}
-
 .practice-candidate.is-ruled-out {
   background: var(--surface-subtle);
   box-shadow: inset 0 0 0 1px var(--border-subtle);
@@ -450,13 +431,6 @@
   color: var(--text-secondary);
   font-size: var(--type-caption-size);
   font-weight: var(--font-weight-strong);
-}
-
-.practice-typing-nomatch,
-.practice-typing-help {
-  color: var(--text-secondary);
-  font-size: var(--type-caption-size);
-  line-height: var(--line-height-normal);
 }
 
 .practice-typing-nomatch {
@@ -749,7 +723,15 @@
   background: var(--surface-card);
 }
 
+.practice-trace-pad.is-scrollable {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-gutter: stable;
+}
+
 .practice-trace-pad:has(:focus-visible) {
+  outline: var(--border-width-focus) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
   box-shadow: var(--focus-halo);
 }
 
@@ -758,7 +740,6 @@
   width: 100%;
   height: 100%;
   cursor: crosshair;
-  touch-action: none;
 }
 
 .practice-trace-canvas:focus-visible {
@@ -814,10 +795,6 @@
   box-shadow: inset 0 0 0 1px var(--border-interactive);
 }
 
-.practice-match-tile:disabled {
-  cursor: default;
-}
-
 .practice-match-tile.is-paired {
   background: var(--color-primary-500);
   box-shadow: none;
@@ -826,7 +803,6 @@
 
 .practice-match-tile.is-paired:where(:hover:not(:disabled)) {
   background: var(--color-primary-600);
-  box-shadow: none;
 }
 
 .practice-match-tile.is-selected {
@@ -835,7 +811,7 @@
   color: var(--text-primary);
 }
 
-.practice-match-tile.is-paired.is-selected:not(.is-correct, .is-wrong) .practice-match-index {
+.practice-match-tile.is-selected .practice-match-index {
   background: var(--color-primary-500);
   color: var(--text-on-primary);
 }
@@ -894,10 +870,6 @@
 
 .practice-match-tile:is(.is-paired, .is-correct, .is-wrong) .practice-match-pinyin {
   color: inherit;
-}
-
-.practice-match-tile.is-selected:not(.is-correct, .is-wrong) .practice-match-pinyin {
-  color: var(--text-secondary);
 }
 
 .practice-match-mark {
@@ -994,12 +966,6 @@
   line-height: var(--line-height-normal);
 }
 
-.practice-mistake-answers {
-  color: var(--text-secondary);
-  font-size: var(--type-caption-size);
-  line-height: var(--line-height-normal);
-}
-
 .practice-mistake-tags {
   display: flex;
   flex: 0 0 auto;
@@ -1014,52 +980,7 @@
   white-space: nowrap;
 }
 
-/* The review question keeps its place between steps and leaves room for feedback in a short desktop window. */
-.practice-review {
-  --focus-label-width: 176px;
-  --focus-stage-top: clamp(var(--space-6), calc(45dvh - 16rem), 152px);
-}
-
-.practice-review-done {
-  display: grid;
-  justify-items: center;
-  gap: var(--space-4);
-  text-align: center;
-}
-
-.practice-review-streak {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: var(--space-8);
-  padding: var(--space-1) var(--space-4) var(--space-1) var(--space-3);
-  border-radius: var(--radius-pill);
-  background: var(--surface-sunken);
-  font-size: var(--type-label-size);
-  font-weight: var(--font-weight-strong);
-}
-
 /* Responsive */
-/* A narrow stage (a small window, the set list beside it) puts the answers in one column. */
-@container (max-width: 35rem) {
-  .practice-stage .learn-options {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .practice-stage .option-row {
-    min-height: 60px;
-  }
-}
-
-/* A narrower set list puts a set's status under its size and XP so neither is clipped. */
-@container (max-width: 16rem) {
-  .practice-set-row {
-    grid-template-columns: minmax(0, 1fr);
-    justify-items: start;
-    gap: var(--space-1);
-  }
-}
-
 @media (max-width: 75rem) {
   .practice-workspace {
     --practice-list-width: clamp(11rem, 30%, 15.5rem);
@@ -1083,6 +1004,47 @@
   }
 }
 
+/* A narrow stage (a small window, the set list beside it) puts the answers in one column. */
+@container (max-width: 35rem) {
+  .practice-stage .learn-options,
+  .practice-trace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .practice-trace {
+    gap: var(--space-4);
+  }
+
+  .practice-stage .option-row {
+    min-height: 60px;
+  }
+
+  .practice-match {
+    gap: var(--space-3);
+  }
+
+  .practice-match-tile {
+    grid-template-columns: var(--space-5) minmax(0, 1fr) var(--space-5);
+    gap: var(--space-2);
+    padding-inline: var(--space-2-5);
+  }
+}
+
+@container (max-width: 22rem) {
+  .practice-match {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* A narrower set list puts a set's status under its size and XP so neither is clipped. */
+@container (max-width: 16rem) {
+  .practice-set-row {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: start;
+    gap: var(--space-1);
+  }
+}
+
 @media (max-width: 63.9375rem) {
   .practice-workspace {
     grid-template-columns: minmax(0, 1fr);
@@ -1098,30 +1060,6 @@
   }
 }
 
-@container (max-width: 28rem) {
-  .practice-match {
-    gap: var(--space-3);
-  }
-
-  .practice-match-tile {
-    grid-template-columns: var(--space-5) minmax(0, 1fr) var(--space-5);
-    gap: var(--space-2);
-    padding: var(--space-2) var(--space-2-5);
-  }
-
-  .practice-match-index {
-    width: var(--space-5);
-    height: var(--space-5);
-  }
-}
-
-@container (max-width: 26rem) {
-  .practice-trace {
-    grid-template-columns: minmax(0, 1fr);
-    align-content: center;
-  }
-}
-
 @media (max-height: 37.5rem) {
   .practice-player {
     min-height: 0;
@@ -1129,9 +1067,21 @@
 }
 
 @media (forced-colors: active) {
+  .practice-done,
+  .practice-mistake {
+    border: 1px solid CanvasText;
+  }
+
+  .practice-feedback.is-correct {
+    border: var(--border-width-thick) solid Highlight;
+  }
+
+  .practice-feedback.is-wrong {
+    border: var(--border-width-thick) dashed Highlight;
+  }
+
   .practice-trace-pad:has(:focus-visible) {
-    outline: var(--border-width-focus) solid Highlight;
-    outline-offset: var(--focus-ring-offset);
+    outline-color: Highlight;
   }
 
   .practice-candidate,
@@ -1149,13 +1099,21 @@
 
   /* Filled states stay solid Highlight so correct/paired/placed answers remain distinct from selected or wrong picks. */
   .practice-candidate.is-correct,
-  .practice-match-tile.is-paired:not(.is-selected, .is-correct, .is-wrong),
+  .practice-match-tile.is-paired,
   .practice-match-tile.is-correct,
   .practice-stage .learn-build-answer .learn-tile {
     border: var(--border-width-thick) solid Highlight;
     background: Highlight;
     color: HighlightText;
     forced-color-adjust: none;
+  }
+
+  .practice-candidate.is-correct .practice-candidate-key,
+  .practice-match-tile:is(.is-paired, .is-correct) .practice-match-index {
+    border: 1px solid HighlightText;
+    background: transparent;
+    color: HighlightText;
+    box-shadow: none;
   }
 
   .practice-candidate.is-wrong,

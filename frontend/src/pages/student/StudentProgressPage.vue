@@ -1,6 +1,6 @@
 <template>
   <div class="page-stack">
-    <PageHeaderBlock :title="t('nav.progress')" hide-title />
+    <h1 class="sr-only">{{ t('nav.progress') }}</h1>
 
     <PlanProgressCard />
 
@@ -55,7 +55,7 @@
 
         <!-- The rank, kept small: progress is about skills first. -->
         <StatePanel
-          v-if="overview.loading.value"
+          v-if="overview.loading.value && !data"
           heading-tag="h2"
           tone="loading"
           spacious
@@ -100,14 +100,13 @@
 
       <div v-if="data" class="progress-row">
         <!-- The streak: the number, then the month with every day the daily goal was reached. -->
-        <section class="panel progress-streak" aria-labelledby="progress-streak-title" data-testid="streak">
-          <DataNotice v-if="overview.error.value" :error="overview.error.value">
-            <template #actions>
-              <button class="btn btn-secondary btn-sm" type="button" @click="overview.reload">
-                {{ t('common.retry') }}
-              </button>
-            </template>
-          </DataNotice>
+        <section
+          class="panel progress-streak"
+          aria-labelledby="progress-streak-title"
+          :aria-busy="pendingMonth !== null || undefined"
+          data-testid="streak"
+        >
+          <DataNotice :error="overview.error.value" @retry="retryMonth" />
           <StreakCalendar :calendar="data.calendar" @month="showMonth">
             <div class="progress-streak-head">
               <strong class="stat-figure" aria-hidden="true">{{ data.currentStreak }}</strong>
@@ -187,7 +186,6 @@ import StatePanel from '@/components/common/StatePanel.vue'
 import ProgressAnswers from '@/components/learn/ProgressAnswers.vue'
 import StreakCalendar from '@/components/learn/StreakCalendar.vue'
 import PlanProgressCard from '@/components/plan/PlanProgressCard.vue'
-import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { useResource } from '@/composables/useResource'
 import { PRACTICE_ACTIVITIES } from '@/config/practiceActivities'
@@ -215,6 +213,7 @@ const SKILLS: Readonly<Record<ProgressSkill, { label: string; action: string; pr
 const { t } = useLocalMessages({ progress: progressMessages, learn: learnBadgeMessages })
 
 const month = ref<string | null>(null)
+const pendingMonth = ref<string | null>(null)
 const overview = useResource(() => xpApi.progress(month.value))
 const skills = useResource(xpApi.progressSkills)
 const data = overview.data
@@ -245,8 +244,24 @@ const streakHint = computed(() => {
     : t('progress.best', { days: value.bestStreak }, value.bestStreak)
 })
 
-function showMonth(next: string): void {
+async function reloadMonth(target: string): Promise<void> {
+  pendingMonth.value = target
+  try {
+    await overview.reload()
+  } finally {
+    if (pendingMonth.value === target) pendingMonth.value = null
+  }
+}
+
+async function showMonth(next: string): Promise<void> {
+  if (next === pendingMonth.value) return
+  if (next === data.value?.calendar.month && !overview.error.value && pendingMonth.value === null) return
   month.value = next
-  void overview.reload()
+  await reloadMonth(next)
+}
+
+async function retryMonth(): Promise<void> {
+  if (pendingMonth.value !== null) return
+  await reloadMonth(month.value ?? data.value?.calendar.month ?? '')
 }
 </script>

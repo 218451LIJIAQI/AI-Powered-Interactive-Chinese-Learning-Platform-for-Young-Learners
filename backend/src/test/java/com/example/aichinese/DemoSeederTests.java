@@ -3,6 +3,7 @@ package com.example.aichinese;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.groups.Tuple.tuple;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -10,8 +11,7 @@ import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.example.aichinese.config.seed.DemoClassesSeeder;
 import com.example.aichinese.config.seed.DemoContentSeeder;
@@ -19,14 +19,20 @@ import com.example.aichinese.config.seed.DemoPersonas;
 import com.example.aichinese.dto.classes.AdminClassViews;
 import com.example.aichinese.dto.classes.ClassViews;
 import com.example.aichinese.entity.ClassEnrolment;
+import com.example.aichinese.entity.CoursePackage;
+import com.example.aichinese.entity.Lesson;
 import com.example.aichinese.entity.Role;
 import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.ContentStatus;
 import com.example.aichinese.entity.enums.RoleName;
+import com.example.aichinese.repository.ClassActivityCompletionRepository;
 import com.example.aichinese.repository.ClassEnrolmentRepository;
 import com.example.aichinese.repository.CoursePackageRepository;
+import com.example.aichinese.repository.LessonProgressRepository;
 import com.example.aichinese.repository.LessonRepository;
+import com.example.aichinese.repository.PackageItemRepository;
+import com.example.aichinese.repository.QuizAttemptRepository;
 import com.example.aichinese.repository.RoleRepository;
 import com.example.aichinese.repository.StudentProfileRepository;
 import com.example.aichinese.repository.UserRepository;
@@ -36,9 +42,9 @@ import com.example.aichinese.service.classes.ClassAuthoringService;
 import com.example.aichinese.service.classes.ClassCatalogueService;
 import com.example.aichinese.service.classes.LessonEditorService;
 import com.example.aichinese.service.classes.StudentClassService;
+import com.example.aichinese.support.DemoProfileTest;
 
-@SpringBootTest
-@ActiveProfiles({"demo", "demo-test"})
+@DemoProfileTest
 class DemoSeederTests {
 
     @Autowired
@@ -57,10 +63,22 @@ class DemoSeederTests {
     private LessonRepository lessonRepository;
 
     @Autowired
+    private PackageItemRepository packageItemRepository;
+
+    @Autowired
     private CoursePackageRepository coursePackageRepository;
 
     @Autowired
     private ClassEnrolmentRepository enrolmentRepository;
+
+    @Autowired
+    private QuizAttemptRepository attemptRepository;
+
+    @Autowired
+    private ClassActivityCompletionRepository completionRepository;
+
+    @Autowired
+    private LessonProgressRepository progressRepository;
 
     @Autowired
     private ClassCatalogueService catalogue;
@@ -82,7 +100,7 @@ class DemoSeederTests {
 
     @Test
     void seedsThePrototypeClassesOnceWithEightInTheCatalogue() {
-        assertThat(userRepository.existsByEmailIgnoreCase("student@fyp.local")).isTrue();
+        assertThat(userRepository.existsByEmailIgnoreCase(DemoPersonas.STUDENT.email())).isTrue();
         assertThat(catalogue.search(null, 0, 50).totalItems()).isEqualTo(8);
         var packages = coursePackageRepository.findAll();
         assertThat(packages).filteredOn(pkg -> pkg.getContentStatus() == ContentStatus.DRAFT)
@@ -101,12 +119,11 @@ class DemoSeederTests {
         assertThat(enrolmentRepository.count()).isEqualTo(enrolments);
     }
 
-    /** Learners and admins only: no teacher accounts, and no TEACHER role. */
+    /** Seeded roles and learner accounts match the five demo personas. */
     @Test
-    void theDemoHasNoTeachers() {
+    void seedsOnlyLearnerAndAdminRolesWithTheFiveDemoLearners() {
         assertThat(roleRepository.findAll()).extracting(Role::getName)
                 .containsExactlyInAnyOrder(RoleName.STUDENT, RoleName.ADMIN);
-        assertThat(userRepository.existsByEmailIgnoreCase("teacher@fyp.local")).isFalse();
         assertThat(userRepository.findAllByRoleName(RoleName.STUDENT)).extracting(User::getEmail)
                 .containsExactlyInAnyOrder(DemoPersonas.STUDENT.email(), DemoPersonas.CHEN_HAO.email(),
                         DemoPersonas.ZHANG_YI.email(), DemoPersonas.NUR_AISYAH.email(), DemoPersonas.ZHANG_YUXI.email());
@@ -226,6 +243,93 @@ class DemoSeederTests {
                     .isNotEmpty()
                     .allSatisfy(enrolment -> assertThat(enrolment.getJoinedAt()).isAfter(student.getCreatedAt()));
         }
+    }
+
+    /**
+     * Learners have submitted attempts on the Ordering Food quiz, so the editor locks its questions; no seeded lesson has
+     * unpublished changes.
+     */
+    @Test
+    void aQuizWithSubmittedAttemptsIsLockedInTheEditor() {
+        List<Lesson> lessons = lessonRepository.findAll();
+        assertThat(lessons).allSatisfy(lesson -> assertThat(lesson.getRevisionOf()).isNull());
+        Lesson orderingFood = lessons.stream()
+                .filter(lesson -> lesson.getTitle().equals("Ordering Food at the Canteen"))
+                .findFirst()
+                .orElseThrow();
+
+        AdminClassViews.LessonEditor editor = lessonEditor.editor(orderingFood.getId());
+
+        assertThat(editor.hasUnpublishedChanges()).isFalse();
+        assertThat(editor.quizzes()).singleElement().satisfies(quiz -> {
+            assertThat(quiz.questionsLocked()).isTrue();
+            assertThat(quiz.questions()).hasSize(5);
+        });
+    }
+
+    /**
+     * Nobody joins a draft class, and an archived class is read-only to the learners who joined it: all their work in
+     * Mandarin Foundations is from before an admin archived it, and its last change is when it was archived.
+     */
+    @Test
+    @Transactional
+    void learnersWorkOnlyInClassesThatWereLive() {
+        List<CoursePackage> packages = coursePackageRepository.findAll();
+        List<CoursePackage> draftPackages = packages.stream()
+                .filter(pkg -> pkg.getContentStatus() == ContentStatus.DRAFT)
+                .toList();
+        assertThat(draftPackages).isNotEmpty();
+        for (CoursePackage draft : draftPackages) {
+            assertThat(enrolmentRepository.existsByCoursePackageId(draft.getId())).as(draft.getTitle()).isFalse();
+        }
+        CoursePackage foundations = packages.stream()
+                .filter(pkg -> pkg.getContentStatus() == ContentStatus.ARCHIVED)
+                .findFirst()
+                .orElseThrow();
+        assertThat(foundations.getStatusBeforeArchive()).isEqualTo(ContentStatus.PUBLISHED);
+        assertThat(foundations.getUpdatedAt()).isEqualTo(foundations.getArchivedAt());
+
+        LocalDateTime archivedAt = foundations.getArchivedAt();
+        List<Long> lessonsAttemptedSinceArchiving = attemptRepository.findAll().stream()
+                .filter(attempt -> attempt.getQuiz().getLesson() != null)
+                .filter(attempt -> attempt.getCompletedAt().isAfter(archivedAt))
+                .map(attempt -> attempt.getQuiz().getLesson().getId())
+                .toList();
+        List<Long> unitIds = packageItemRepository.findUnitsInOrder(List.of(foundations.getId())).stream()
+                .map(unit -> unit.unit().getId())
+                .toList();
+        List<Long> foundationLessons = lessonRepository
+                .findByModuleIdInAndRevisionOfIsNullOrderByUnitPositionAscCreatedAtAscIdAsc(unitIds).stream()
+                .map(Lesson::getId)
+                .toList();
+        assertThat(foundationLessons).hasSize(5);
+        assertThat(lessonsAttemptedSinceArchiving).doesNotContainAnyElementsOf(foundationLessons);
+        assertThat(completionRepository.findAll())
+                .filteredOn(completion -> foundationLessons.contains(completion.getLesson().getId()))
+                .hasSize(15)
+                .allSatisfy(completion -> assertThat(completion.getCompletedAt()).isBefore(archivedAt));
+    }
+
+    /** Timestamps are server-local: what the learners did is in the past and falls within their lesson visits. */
+    @Test
+    @Transactional
+    void seededLearnerWorkIsInThePastAndWithinLessonVisits() {
+        LocalDateTime now = LocalDateTime.now();
+        assertThat(lessonRepository.findAll()).isNotEmpty()
+                .allSatisfy(lesson -> assertThat(lesson.getUpdatedAt()).isAfterOrEqualTo(lesson.getCreatedAt()));
+        assertThat(attemptRepository.findAll()).isNotEmpty()
+                .allSatisfy(attempt -> {
+                    assertThat(attempt.getCompletedAt()).isBeforeOrEqualTo(now);
+                    assertThat(attempt.getCreatedAt()).isBeforeOrEqualTo(attempt.getCompletedAt());
+                    assertThat(attempt.getUpdatedAt()).isEqualTo(attempt.getCompletedAt());
+                });
+        assertThat(completionRepository.findAll()).isNotEmpty().allSatisfy(activity -> {
+            assertThat(activity.getCompletedAt()).isBeforeOrEqualTo(now);
+            var progress = progressRepository.findByStudentIdAndLessonId(
+                    activity.getStudent().getId(), activity.getLesson().getId()).orElseThrow();
+            assertThat(activity.getCompletedAt()).as("%s in %s", activity.getActivityType(), activity.getLesson().getTitle())
+                    .isBetween(progress.getCreatedAt(), progress.getLastAccessedAt());
+        });
     }
 
     private static void assertCard(Map<String, ClassViews.ClassCard> cards, String title, String theme, int bestAfter,

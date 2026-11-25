@@ -21,7 +21,6 @@ import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.AuditLogService;
 import com.example.aichinese.service.SecureTokens;
 import com.example.aichinese.service.TransactionalEmailDispatcher;
-import com.example.aichinese.service.admin.AuditLogQueryService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -87,7 +86,7 @@ public class EmailConfirmationService {
         User user = claimed.user();
         if (user.getEmailVerifiedAt() == null) {
             user.setEmailVerifiedAt(claimed.claimedAt());
-            auditLogService.safeRecord(user, "EMAIL_CONFIRMED", AuditLogQueryService.TARGET_USER, user.getId(),
+            auditLogService.safeRecord(user, "EMAIL_CONFIRMED", AuditLogService.TARGET_USER, user.getId(),
                     "User confirmed the email address of their new account.");
         }
         return user.getEmail();

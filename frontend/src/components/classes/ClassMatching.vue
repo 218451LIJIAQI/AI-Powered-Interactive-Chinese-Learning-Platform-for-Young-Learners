@@ -14,7 +14,7 @@
       </div>
     </header>
 
-    <div class="class-matching">
+    <div ref="board" class="class-matching">
       <div class="class-matching-column">
         <h2 class="page-eyebrow">
           {{ answersInChinese ? t('classPlayer.matching.question') : t('classPlayer.matching.chinese') }}
@@ -38,7 +38,9 @@
           <span v-if="pairs[word.id]" class="class-matching-pair">
             <IconGlyph :name="markIcon(word.id)" :size="14" />
             <CjkText :text="pairs[word.id]" />
-            <span v-if="results[word.id] === false" class="sr-only">{{ t('classPlayer.matching.wrongPair') }}</span>
+            <span v-if="results[word.id] !== undefined" class="sr-only">{{
+              t(results[word.id] ? 'classPlayer.matching.rightPair' : 'classPlayer.matching.wrongPair')
+            }}</span>
           </span>
         </button>
       </div>
@@ -61,7 +63,9 @@
           <span v-if="word" class="class-matching-pair">
             <IconGlyph :name="markIcon(word.id)" :size="14" />
             <span class="cjk-text" lang="zh-CN">{{ word.chinese }}</span>
-            <span v-if="results[word.id] === false" class="sr-only">{{ t('classPlayer.matching.wrongPair') }}</span>
+            <span v-if="results[word.id] !== undefined" class="sr-only">{{
+              t(results[word.id] ? 'classPlayer.matching.rightPair' : 'classPlayer.matching.wrongPair')
+            }}</span>
           </span>
         </button>
       </div>
@@ -91,15 +95,18 @@
             <p class="class-focus-sub">{{ t('classPlayer.matching.wrongHint') }}</p>
           </div>
         </div>
-        <ClassHint
+        <HintPanel
           v-else-if="hintsAllowed"
+          variant="class"
           :offered="offer.offered.value"
-          :hint-id="hint?.wordId ?? null"
+          :hint-key="hint?.wordId ?? null"
           :text="hintText"
           :loading="hintLoading"
           :error="hintError"
-          :context="hintContext"
-          :reported-ids="reportedHintIds"
+          :footnote="t('classPlayer.hint.changeInAccount')"
+          :report-context="hintContext"
+          :reported="hint !== null && reportedHintIds.has(hint.wordId)"
+          :own-toast="false"
           @show="askHint"
           @reported="onHintReported"
         />
@@ -108,6 +115,7 @@
            button, to send the same pairs again. -->
       <template v-if="checkFailed" #end>
         <button
+          ref="checkAgainButton"
           type="button"
           class="btn btn-primary btn-lg"
           :disabled="busy"
@@ -130,6 +138,7 @@ import AppToast from '@/components/common/AppToast.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import FocusFooter from '@/components/layout/FocusFooter.vue'
 import CjkText from '@/components/learning/CjkText.vue'
+import HintPanel from '@/components/learning/HintPanel.vue'
 import { useHintOffer } from '@/composables/useHintOffer'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { useToast } from '@/composables/useToast'
@@ -137,8 +146,6 @@ import { classPlayerMessages } from '@/plugins/classPlayerMessages'
 import type { ActivityOutcome, MatchHint, MatchWord } from '@/types/classes'
 import { resolveApiError } from '@/utils/apiError'
 import { hasHan } from '@/utils/cjkText'
-
-import ClassHint from './ClassHint.vue'
 
 /**
  * Match each Chinese word with its meaning, or each question with its answer when the right column is Chinese too. The
@@ -167,14 +174,16 @@ const emit = defineEmits<{
 const { t } = useLocalMessages({ classPlayer: classPlayerMessages })
 const { toast, showToast } = useToast()
 
+const board = ref<HTMLDivElement | null>(null)
+const checkAgainButton = ref<HTMLButtonElement | null>(null)
 const pairs = ref<Record<number, string>>({})
 const selectedWord = ref<number | null>(null)
 const results = ref<Record<number, boolean>>({})
 const busy = ref(false)
 watch(busy, (value) => emit('busy', value), { flush: 'sync' })
 const reportedHintIds = reactive(new Set<number>())
-function onHintReported(hintId: number): void {
-  reportedHintIds.add(hintId)
+function onHintReported(): void {
+  if (hint.value) reportedHintIds.add(hint.value.wordId)
   showToast(t('aiSafety.reportSent'))
 }
 /** The last check of a full board did not reach the server: the same pairs can be sent again. */
@@ -249,13 +258,11 @@ const offer = useHintOffer({
 /** What a report of the hint is about: the lesson and the activity. */
 const hintContext = computed(() => `${props.lessonTitle} · ${props.title}`)
 
-function itemClass(wordId: number) {
-  return {
-    'is-selected': selectedWord.value === wordId,
-    'is-paired': Boolean(pairs.value[wordId]),
-    'is-wrong': results.value[wordId] === false,
-    'is-right': results.value[wordId] === true,
-  }
+function itemClass(wordId: number): string | undefined {
+  const verdict = results.value[wordId]
+  if (verdict !== undefined) return verdict ? 'is-right' : 'is-wrong'
+  if (selectedWord.value === wordId) return 'is-selected'
+  return pairs.value[wordId] ? 'is-paired' : undefined
 }
 
 function markIcon(wordId: number): string {
@@ -330,6 +337,9 @@ async function askHint(): Promise<void> {
 
 async function check(): Promise<void> {
   if (busy.value) return
+  const hadBoardFocus = Boolean(
+    board.value?.contains(document.activeElement) || document.activeElement === checkAgainButton.value,
+  )
   busy.value = true
   checkFailed.value = false
   emit('error', null)
@@ -347,7 +357,20 @@ async function check(): Promise<void> {
     checkFailed.value = true
     emit('error', resolveApiError(reason, t('classPlayer.matching.checkError')))
   } finally {
-    if (active) busy.value = false
+    if (active) {
+      busy.value = false
+      if (hadBoardFocus && !props.done) {
+        void nextTick(() => {
+          if (!active || props.done) return
+          if (checkFailed.value) {
+            checkAgainButton.value?.focus({ preventScroll: true })
+            return
+          }
+          const firstWrong = props.words.find((word) => results.value[word.id] === false)
+          if (firstWrong) wordButtons.get(firstWrong.id)?.focus({ preventScroll: true })
+        })
+      }
+    }
   }
 }
 </script>

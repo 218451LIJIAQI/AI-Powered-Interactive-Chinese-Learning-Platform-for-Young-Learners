@@ -14,16 +14,16 @@
           <span class="ai-summary-face"><XiaomeiAvatar state="idle" /></span>
           <div v-if="summary?.goodbye" class="ai-summary-goodbye">
             <p class="ai-summary-goodbye-line" lang="zh-CN">{{ summary.goodbye.chinese }}</p>
-            <p v-if="summary.goodbye.pinyin" class="ai-line-pinyin">{{ summary.goodbye.pinyin }}</p>
+            <p v-if="summary.goodbye.pinyin" class="ai-line-pinyin" lang="zh-Latn">{{ summary.goodbye.pinyin }}</p>
             <p v-if="summary.goodbye.translation" class="ai-line-pinyin">{{ summary.goodbye.translation }}</p>
           </div>
-          <p v-else-if="loading" class="ai-thinking">
+          <p v-else-if="loading" class="ai-thinking" role="status">
             <span class="spinner is-sm" aria-hidden="true" />{{ t('aiHelper.summaryLoading') }}
           </p>
           <AiResultLabel v-if="summary" />
         </div>
 
-        <div v-if="error" class="alert alert-danger ai-summary-error" role="alert">
+        <div v-if="error" class="callout is-danger" role="alert">
           <IconGlyph name="alert" :size="16" />
           <span>{{ error }}</span>
           <button class="btn btn-secondary btn-sm" type="button" :disabled="loading" @click="emit('retry')">
@@ -42,7 +42,7 @@
           <ul class="ai-expressions">
             <li v-for="(line, index) in summary.newExpressions" :key="`${index}-${line.chinese}`">
               <p class="ai-expression-zh" lang="zh-CN">{{ line.chinese }}</p>
-              <p v-if="line.pinyin" class="ai-line-pinyin">{{ line.pinyin }}</p>
+              <p v-if="line.pinyin" class="ai-line-pinyin" lang="zh-Latn">{{ line.pinyin }}</p>
               <p v-if="line.translation" class="ai-line-pinyin">{{ line.translation }}</p>
               <button
                 v-if="canListen"
@@ -159,20 +159,12 @@ import { useMandarinReadAloud } from '@/composables/useMandarinSpeech'
 import { aiHelperMessages } from '@/plugins/aiHelperMessages'
 import { aiTalkMessages } from '@/plugins/aiTalkMessages'
 import { planSummaryMessages } from '@/plugins/planSummaryMessages'
-import type { XiaomeiMemoryNote, XiaomeiSummary, XiaomeiTurn } from '@/types/ai'
+import type { XiaomeiMemoryNote, XiaomeiSummary } from '@/types/ai'
 
 import AiNotice from './AiNotice.vue'
 import AiResultLabel from './AiResultLabel.vue'
 import XiaomeiAvatar from './XiaomeiAvatar.vue'
-
-/** A line of the chat; the learner's lines can carry Xiaomei's more natural version and its tip. */
-interface ChatLine {
-  id: number
-  speaker: XiaomeiTurn['speaker']
-  chinese: string
-  natural?: string | null
-  tip?: string | null
-}
+import { summaryNaturalTips, type TalkEntry } from './xiaomeiTalk'
 
 /**
  * The end of a Talk with Xiaomei: she says goodbye, SparkBot's feedback, new expressions to listen to again and "Say it
@@ -184,7 +176,7 @@ interface ChatLine {
 const props = defineProps<{
   scenarioLabel: string
   minutes: number
-  entries: readonly ChatLine[]
+  entries: readonly TalkEntry[]
   summary: XiaomeiSummary | null
   loading: boolean
   error: string | null
@@ -202,7 +194,7 @@ const { t } = useLocalMessages({ aiHelper: [aiHelperMessages, aiTalkMessages], p
 const baseId = useId()
 const { canSpeak: canListen, speak } = useMandarinReadAloud()
 /** "Say it more naturally": the learner's last two lines that have a more natural version. */
-const tips = computed(() => props.entries.filter((entry) => entry.speaker === 'STUDENT' && entry.natural).slice(-2))
+const tips = computed(() => summaryNaturalTips(props.entries))
 /** Once a note was forgotten here, the section stays, saying there is nothing left, rather than vanishing. */
 const forgotOne = ref(false)
 

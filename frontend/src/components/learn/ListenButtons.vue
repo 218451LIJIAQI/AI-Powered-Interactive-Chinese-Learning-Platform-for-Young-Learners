@@ -2,12 +2,20 @@
   <!-- The audio of a listening question did not play: it says so, with Retry while the browser can speak at all. -->
   <div v-if="large && playbackFailed" class="learn-listen is-large is-failed" data-testid="audio-failed">
     <p class="learn-listen-failed" role="alert"><IconGlyph name="alert" :size="20" />{{ t('learn.audioFailed') }}</p>
-    <button v-if="supportsRetry" class="btn btn-secondary" type="button" data-testid="audio-retry" @click="play()">
+    <button
+      v-if="supportsRetry && hasText"
+      ref="retryButton"
+      class="btn btn-secondary"
+      type="button"
+      data-testid="audio-retry"
+      @click="play()"
+    >
       <IconGlyph name="retry" :size="16" />{{ t('learn.retryAudio') }}
     </button>
   </div>
-  <div v-else-if="speechAvailable" class="learn-listen" :class="{ 'is-large': large, 'is-prompt': prompt }">
+  <div v-else-if="speechAvailable && hasText" class="learn-listen" :class="{ 'is-large': large, 'is-prompt': prompt }">
     <button
+      ref="playButton"
       class="btn learn-listen-play"
       :class="large || prompt ? 'btn-primary' : 'btn-secondary btn-sm'"
       type="button"
@@ -30,7 +38,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
@@ -54,27 +62,39 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+const emit = defineEmits<{ play: [] }>()
 /** A skipped listening question is exempt only if the learner could not hear this item. */
 const failed = defineModel<boolean>('failed', { default: false })
 const playbackFailed = ref(false)
+const playButton = ref<HTMLButtonElement | null>(null)
+const retryButton = ref<HTMLButtonElement | null>(null)
 let heard = false
 
 const { t } = useLocalMessages({ learn: learnSharedMessages })
 const { canSpeak: speechAvailable, speak, stopSpeaking } = useMandarinReadAloud()
 const supportsRetry = supportsSpeechSynthesis()
+const hasText = computed(() => Boolean(props.text.trim()))
 /** What the accessible name says is played. The audio of a listening question is its answer, so it is not spelt out. */
 const name = computed(() => (props.large ? t('learn.theAudio') : props.text))
 
-function reportPlaybackFailure(): void {
+function reportPlaybackFailure(hadFocus = false): void {
   playbackFailed.value = true
   failed.value = !heard
+  if (hadFocus) void nextTick(() => retryButton.value?.focus())
 }
 
 function play(slow = false): void {
+  if (!hasText.value) {
+    if (props.large) reportPlaybackFailure()
+    return
+  }
+  emit('play')
   if (!props.large) {
     speak(props.text, slow)
     return
   }
+  const hadFocus = document.activeElement === playButton.value || document.activeElement === retryButton.value
+  const wasFailed = playbackFailed.value
   let started = false
   const asked = speak(props.text, slow, (speaking, reason) => {
     if (speaking) {
@@ -82,18 +102,19 @@ function play(slow = false): void {
       heard = true
       playbackFailed.value = false
       failed.value = false
+      if (hadFocus && wasFailed) void nextTick(() => playButton.value?.focus())
     } else if (!started && reason !== 'cancelled') {
       // It ended without ever starting: the browser's speech failed.
-      reportPlaybackFailure()
+      reportPlaybackFailure(hadFocus)
     }
   })
-  if (!asked) reportPlaybackFailure()
+  if (!asked) reportPlaybackFailure(hadFocus)
 }
 
-/** An unavailable Mandarin voice gives a listening question the same skip protection as a failed playback. */
+/** An unavailable Mandarin voice or blank text gives a listening question skip protection. */
 function expectAudio(): void {
   heard = false
-  playbackFailed.value = Boolean(props.large) && !speechAvailable.value
+  playbackFailed.value = Boolean(props.large) && (!speechAvailable.value || !hasText.value)
   failed.value = playbackFailed.value
 }
 

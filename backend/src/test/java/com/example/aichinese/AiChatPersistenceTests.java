@@ -30,15 +30,16 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import com.example.aichinese.dto.ai.AiChatRequest;
+import com.example.aichinese.dto.ai.AiChatResponse;
 import com.example.aichinese.entity.AiChatMessage;
 import com.example.aichinese.entity.AiChatSession;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.AiChatSenderRole;
-import com.example.aichinese.entity.enums.AiFeatureKey;
 import com.example.aichinese.repository.AiChatMessageRepository;
 import com.example.aichinese.repository.AiChatSessionRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.AiService;
+import com.example.aichinese.service.TransactionRunner;
 import com.example.aichinese.service.account.CurrentAccount;
 import com.example.aichinese.service.ai.AiExecutionResult;
 import com.example.aichinese.service.ai.AiGateway;
@@ -75,7 +76,8 @@ class AiChatPersistenceTests extends ApiIntegrationTest {
         gateway = mock(AiGateway.class);
         messageWrites = mock(AiChatMessageRepository.class, delegatesTo(messages));
         service = new AiService(
-                currentAccount, gateway, sessions, messageWrites, mock(LessonEditorService.class), transactionManager);
+                currentAccount, gateway, sessions, messageWrites, mock(LessonEditorService.class),
+                new TransactionRunner(transactionManager));
         when(gateway.execute(any())).thenAnswer(invocation -> {
             assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
             return AiExecutionResult.success("A Mandarin answer", Map.of());
@@ -96,7 +98,7 @@ class AiChatPersistenceTests extends ApiIntegrationTest {
             return messages.save(message);
         }).when(messageWrites).save(any(AiChatMessage.class));
 
-        assertThatThrownBy(() -> service.chat(principal,
+        assertThatThrownBy(() -> completeTurn(
                 new AiChatRequest("How do I say hello?", "en", session == null ? null : session.getId())))
                 .isInstanceOf(IllegalStateException.class).hasMessage("Simulated answer write failure");
 
@@ -116,11 +118,15 @@ class AiChatPersistenceTests extends ApiIntegrationTest {
             return AiExecutionResult.success("A late answer", Map.of());
         });
 
-        try (var worker = Executors.newSingleThreadExecutor()) {
-            var turn = worker.submit(() -> service.chat(principal,
+        var worker = Executors.newSingleThreadExecutor();
+        try {
+            var turn = worker.submit(() -> completeTurn(
                     new AiChatRequest("How do I say hello?", "en", session == null ? null : session.getId())));
             assertThatThrownBy(() -> turn.get(5, TimeUnit.SECONDS))
                     .hasCauseInstanceOf(IllegalStateException.class);
+        } finally {
+            worker.shutdownNow();
+            worker.awaitTermination(5, TimeUnit.SECONDS);
         }
 
         assertThat(messages.count()).isEqualTo(messageCount);
@@ -145,8 +151,8 @@ class AiChatPersistenceTests extends ApiIntegrationTest {
                 }
                 return message;
             }).when(messageWrites).save(any(AiChatMessage.class));
-            firstAnswerId.set(service.chat(principal, new AiChatRequest("first question", "en", session.getId())).chatMessageId());
-        }, () -> service.chat(principal, new AiChatRequest("second question", "en", session.getId())));
+            firstAnswerId.set(completeTurn(new AiChatRequest("first question", "en", session.getId())).chatMessageId());
+        }, () -> completeTurn(new AiChatRequest("second question", "en", session.getId())));
         assertQuestionBefore(firstAnswerId.get(), session.getId(), "first question");
         assertQuestionBefore(secondAnswer.chatMessageId(), session.getId(), "second question");
         assertThat(messages.findBySessionIdOrderByCreatedAtDescIdDesc(session.getId(), Pageable.unpaged())).hasSize(4);
@@ -166,7 +172,7 @@ class AiChatPersistenceTests extends ApiIntegrationTest {
         }).toList();
         messages.saveAll(history);
 
-        service.chat(principal, new AiChatRequest("Next question", "en", session.getId()));
+        completeTurn(new AiChatRequest("Next question", "en", session.getId()));
 
         ArgumentCaptor<AiGateway.AiCall> sent = ArgumentCaptor.forClass(AiGateway.AiCall.class);
         verify(gateway).execute(sent.capture());
@@ -174,10 +180,13 @@ class AiChatPersistenceTests extends ApiIntegrationTest {
         assertThat(sent.getValue().history()).extracting(turn -> turn.content()).containsExactlyElementsOf(expected);
     }
 
+    private AiChatResponse completeTurn(AiChatRequest request) {
+        return service.completeChat(principal, service.prepareChat(principal, request));
+    }
+
     private AiChatSession newSession() {
         AiChatSession session = new AiChatSession();
         session.setUser(student);
-        session.setFeatureKey(AiFeatureKey.CHAT_TUTOR);
         return sessions.save(session);
     }
 

@@ -13,7 +13,7 @@ vi.mock('vue-router', async () => ({
   useRoute: () => router.route,
 }))
 
-vi.mock('@/api/ops', () => ({ publicOpsApi: { sendHelpMessage: mocks.sendHelpMessage } }))
+vi.mock('@/api/services', () => ({ publicApi: { sendHelpMessage: mocks.sendHelpMessage } }))
 
 import HelpPage from './HelpPage.vue'
 
@@ -90,9 +90,19 @@ describe('HelpPage (FRSUP01)', () => {
     expect(answer.text()).toContain('your level and the lesson topic')
     expect(answer.text()).toContain('the handwriting photo you submit')
     expect(answer.text()).toContain('Tencent Cloud receives your recording and target text')
-    expect(answer.text()).toContain('Tavus receives the call audio and recent messages')
+    expect(answer.text()).not.toContain('Tavus')
     expect(answer.text()).toContain('Leave personal details out of your text, recordings and photos.')
     expect(answer.get('a').attributes('href')).toBe('/responsible-ai')
+  })
+
+  it('discloses Tavus live calls in the AI FAQ only when the live-call deployment is configured', () => {
+    vi.stubEnv('VITE_TAVUS_DEPLOYMENT_ID', ' example ')
+    try {
+      const answer = mountPage().get('#ai-and-safety li:last-child .help-answer')
+      expect(answer.text()).toContain('Tavus receives the call audio and recent messages')
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 
   it('marks every contact field as required', () => {
@@ -206,7 +216,7 @@ describe('HelpPage (FRSUP01)', () => {
   )
 
   it('sends a message, says so in a toast and shows where the reply will go in place of the form', async () => {
-    mocks.sendHelpMessage.mockResolvedValue({ email: 'mei@example.com', number: 42 })
+    mocks.sendHelpMessage.mockResolvedValue({ email: 'mei@example.com' })
     const wrapper = mountPage(document.body)
 
     await fillForm(wrapper)
@@ -237,7 +247,7 @@ describe('HelpPage (FRSUP01)', () => {
   })
 
   it('sends the language the visitor reads the page in, so the e-mailed replies use it', async () => {
-    mocks.sendHelpMessage.mockResolvedValue({ email: 'mei@example.com', number: 43 })
+    mocks.sendHelpMessage.mockResolvedValue({ email: 'mei@example.com' })
     i18n.global.locale.value = 'zh-CN'
     const wrapper = mountPage()
 
@@ -248,7 +258,7 @@ describe('HelpPage (FRSUP01)', () => {
   })
 
   it('goes back to the form in place with "Send another message", keeping the address and topic', async () => {
-    mocks.sendHelpMessage.mockResolvedValue({ email: 'mei@example.com', number: 42 })
+    mocks.sendHelpMessage.mockResolvedValue({ email: 'mei@example.com' })
     const wrapper = mountPage(document.body)
     await fillForm(wrapper)
     await sendForm(wrapper)
@@ -283,7 +293,7 @@ describe('HelpPage (FRSUP01)', () => {
     expect(wrapper.get<HTMLSelectElement>('#help-topic').element.value).toBe('LEARNING')
     expect(wrapper.get<HTMLTextAreaElement>('#help-message').element.value).toBe('  I cannot open my lesson.  ')
 
-    mocks.sendHelpMessage.mockResolvedValueOnce({ email: 'mei@example.com', number: 43 })
+    mocks.sendHelpMessage.mockResolvedValueOnce({ email: 'mei@example.com' })
     await sendForm(wrapper)
 
     expect(mocks.sendHelpMessage).toHaveBeenCalledTimes(2)
@@ -302,7 +312,6 @@ describe('HelpPage (FRSUP01)', () => {
       'We couldn’t send your message. You are doing that too often. Please wait a moment and try again. What you wrote is still here.',
     )
     i18n.global.locale.value = 'zh-CN'
-    document.documentElement.lang = 'zh-CN'
     await flushPromises()
     expect(wrapper.get('#help-send-error').text()).toBe(
       '留言未能发送。操作过于频繁，请稍等片刻再试。你写的内容都还在。',
@@ -350,6 +359,31 @@ describe('HelpPage (FRSUP01)', () => {
     wrapper.get<HTMLTextAreaElement>('#help-message').element.focus()
     await sendForm(wrapper)
     expect(document.activeElement).toBe(wrapper.get('#help-message').element)
+    wrapper.unmount()
+  })
+
+  it('does not steal focus if the visitor moved elsewhere while their message was sending', async () => {
+    const pending = deferred<{ email: string }>()
+    mocks.sendHelpMessage.mockReturnValueOnce(pending.promise)
+    const wrapper = mountPage(document.body)
+    try {
+      await fillForm(wrapper)
+      await wrapper.get('form.help-form').trigger('submit')
+      const search = wrapper.get<HTMLInputElement>('#help-search').element
+      search.focus()
+      pending.resolve({ email: 'mei@example.com' })
+      await flushPromises()
+      expect(document.activeElement).toBe(search)
+    } finally {
+      wrapper.unmount()
+    }
+  })
+
+  it('prevents mousedown on Send from blurring an active field before submit runs', () => {
+    const wrapper = mountPage()
+    const event = new MouseEvent('mousedown', { cancelable: true })
+    wrapper.get(SEND).element.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(true)
   })
 })
 

@@ -9,7 +9,7 @@ import { withSetup } from '@/test/helpers'
 import { planOptions } from '@/test/planFixtures'
 import type { PlanPace, PlanPaceBand } from '@/types/plan'
 
-import { levelSpan, paceDaily, studyFormula } from './planFormat'
+import { levelSpan, paceDaily, studyFormula, unitsWord } from './planFormat'
 
 function planTranslator() {
   const { result } = withSetup(() =>
@@ -54,5 +54,8 @@ describe('plan labels', () => {
     expect(paceDaily(t, band('HOURS_1_TO_2'))).toBe('1–2 hours a day')
     expect(levelSpan(t, 'BEGINNER_1', 'BEGINNER_2')).toBe('HSK 1 → HSK 2')
     expect(levelSpan(t, 'BEGINNER_2', 'BEGINNER_2')).toBe('HSK 2')
+    expect(unitsWord(t, [2], 'en')).toBe('Unit 2')
+    expect(unitsWord(t, [2, 3, 4], 'en')).toBe('Units 2–4')
+    expect(unitsWord(t, [1, 3, 4], 'en')).toBe('Unit 1 and Units 3–4')
   })
 })

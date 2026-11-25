@@ -1,7 +1,8 @@
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { nextTick } from 'vue'
+import { nextTick, ref } from 'vue'
 
+import { useOverlayFocus } from '@/composables/useOverlayFocus'
 import type { ToastAction } from '@/composables/useToast'
 
 import AppToast from './AppToast.vue'
@@ -99,6 +100,46 @@ describe('AppToast', () => {
     // Clicking the action button invokes run().
     document.body.querySelector<HTMLButtonElement>('.toast-action')!.click()
     expect(second.run).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
+
+  it('syncs hover hold on in-place update under a stationary cursor and releases when an overlay opens', async () => {
+    const action = makeAction()
+    const wrapper = mount(AppToast, {
+      attachTo: document.body,
+      props: { message: 'Plain notice.', action: null },
+      global: { stubs: { IconGlyph: true } },
+    })
+
+    const toast = document.body.querySelector<HTMLElement>('[data-testid="toast"]')!
+    const matchesSpy = vi.spyOn(toast, 'matches').mockReturnValue(true)
+
+    await wrapper.setProps({ message: 'Archived.', action })
+    await nextTick()
+    expect(action.hold).toHaveBeenCalledTimes(1)
+
+    matchesSpy.mockReturnValue(false)
+    const overlayActive = ref(false)
+    const overlayHost = mount({
+      setup() {
+        const container = ref<HTMLElement | null>(null)
+        useOverlayFocus({ active: overlayActive, container, onClose: () => {} })
+        return { container }
+      },
+      template: '<div ref="container" tabindex="-1" />',
+    })
+    overlayActive.value = true
+    await flushPromises()
+    expect(action.release).toHaveBeenCalledTimes(1)
+
+    // An action toast updated while an overlay is already open must not start a new hover hold.
+    const nextAction = makeAction()
+    matchesSpy.mockReturnValue(true)
+    await wrapper.setProps({ message: 'Updated behind modal.', action: nextAction })
+    await nextTick()
+    expect(nextAction.hold).not.toHaveBeenCalled()
+
+    overlayHost.unmount()
     wrapper.unmount()
   })
 })

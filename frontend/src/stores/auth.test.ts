@@ -280,6 +280,19 @@ describe('auth operation ownership', () => {
     return auth
   }
 
+  function announcedUserId(): number | null | undefined {
+    return JSON.parse(window.localStorage.getItem(storageKeys.sessionOwner) ?? 'null')?.userId
+  }
+
+  async function withAuthInvalidated<T>(listener: EventListener, run: () => T | Promise<T>): Promise<T> {
+    window.addEventListener(AUTH_INVALIDATED_EVENT, listener)
+    try {
+      return await run()
+    } finally {
+      window.removeEventListener(AUTH_INVALIDATED_EVENT, listener)
+    }
+  }
+
   it('does not restore a session after sign-out while refresh is pending', async () => {
     const refresh = deferred<string>()
     mocks.refresh.mockReturnValueOnce(refresh.promise)
@@ -291,7 +304,8 @@ describe('auth operation ownership', () => {
     expect(auth.isAuthenticated).toBe(false)
     expect(auth.currentUser).toBeNull()
     expect(mocks.me).not.toHaveBeenCalled()
-    expect(auth.bootstrapped).toBe(true)
+    await auth.bootstrap()
+    expect(mocks.refresh).toHaveBeenCalledTimes(1)
   })
 
   it.each([true, false])('ignores old bootstrap hydration after explicit sign-in (success=%s)', async (succeeds) => {
@@ -358,14 +372,13 @@ describe('auth operation ownership', () => {
   })
 
   it('tells the other tabs which account signed in here, and that it signed out', async () => {
-    const announced = () => JSON.parse(window.localStorage.getItem(storageKeys.sessionOwner) ?? 'null')?.userId
     const auth = useAuthStore()
 
     await auth.login(studentUser.email, 'password', false)
-    expect(announced()).toBe(studentUser.id)
+    expect(announcedUserId()).toBe(studentUser.id)
 
     await auth.logout()
-    expect(announced()).toBeNull()
+    expect(announcedUserId()).toBeNull()
   })
 
   it('remembers the account of a session that ended by itself, for the sign-in page, until someone signs in', async () => {
@@ -416,11 +429,10 @@ describe('auth operation ownership', () => {
     ['another account signed in', { userId: 2, at: 1 }, true],
     ['the account signed out', { userId: null, at: 1 }, true],
     ['the same account signed in again', { userId: studentUser.id, at: 1 }, false],
-  ])('ends this tab’s session when, in another tab, %s: %s', (_case, announcement, ends) => {
+  ])('ends this tab’s session when, in another tab, %s: %s', async (_case, announcement, ends) => {
     // Otherwise this tab's next refresh would run on the other tab's cookie while it still shows this account.
     const invalidated = vi.fn()
-    window.addEventListener(AUTH_INVALIDATED_EVENT, invalidated)
-    try {
+    await withAuthInvalidated(invalidated, () => {
       const auth = signedIn()
       setAccessToken('student-token')
 
@@ -428,33 +440,29 @@ describe('auth operation ownership', () => {
 
       expect(invalidated).toHaveBeenCalledTimes(ends ? 1 : 0)
       expect(getAccessToken()).toBe(ends ? null : 'student-token')
-    } finally {
-      window.removeEventListener(AUTH_INVALIDATED_EVENT, invalidated)
-    }
+    })
   })
 
   it.each([
     ['another account signed in', { userId: 2, at: 1 }, studentUser.email],
     ['the account signed out', { userId: null, at: 1 }, null],
-  ])('when, in another tab, %s, leaves this address for the sign-in page: %s', (_case, announcement, address) => {
+  ])('when, in another tab, %s, leaves this address for the sign-in page: %s', async (_case, announcement, address) => {
     const auth = signedIn()
     // main.ts ends the session when the invalidation event arrives.
-    const endSession = () => auth.clearSession()
-    window.addEventListener(AUTH_INVALIDATED_EVENT, endSession)
-    try {
-      auth.followOtherTabSession(JSON.stringify(announcement))
+    await withAuthInvalidated(
+      () => auth.clearSession(),
+      () => {
+        auth.followOtherTabSession(JSON.stringify(announcement))
 
-      expect(auth.isAuthenticated).toBe(false)
-      expect(auth.endedSessionEmail).toBe(address)
-    } finally {
-      window.removeEventListener(AUTH_INVALIDATED_EVENT, endSession)
-    }
+        expect(auth.isAuthenticated).toBe(false)
+        expect(auth.endedSessionEmail).toBe(address)
+      },
+    )
   })
 
   it('ignores another tab’s announcement while signed out, mid sign-in, or when it cannot be read', async () => {
     const invalidated = vi.fn()
-    window.addEventListener(AUTH_INVALIDATED_EVENT, invalidated)
-    try {
+    await withAuthInvalidated(invalidated, async () => {
       const auth = useAuthStore()
       auth.followOtherTabSession(JSON.stringify({ userId: 2, at: 1 }))
       const hydration = deferred<CurrentUserResponse>()
@@ -471,9 +479,7 @@ describe('auth operation ownership', () => {
       auth.followOtherTabSession(null)
 
       expect(invalidated).not.toHaveBeenCalled()
-    } finally {
-      window.removeEventListener(AUTH_INVALIDATED_EVENT, invalidated)
-    }
+    })
   })
 
   it('rejects profile and password responses belonging to an earlier session', async () => {
@@ -500,7 +506,6 @@ describe('auth operation ownership', () => {
   })
 
   it('completes logout cleanly after a concurrent 401 expiry without clobbering another tab’s new login', async () => {
-    const announced = () => JSON.parse(window.localStorage.getItem(storageKeys.sessionOwner) ?? 'null')?.userId
     // Case 1: concurrent 401 expiry while logout is in flight still returns true and announces sign-out.
     const expiryLogout = deferred<void>()
     mocks.logout.mockReturnValueOnce(expiryLogout.promise)
@@ -512,7 +517,7 @@ describe('auth operation ownership', () => {
     expiryLogout.resolve()
     await expect(first).resolves.toBe(true)
     expect(auth.endedSessionEmail).toBeNull()
-    expect(announced()).toBeNull()
+    expect(announcedUserId()).toBeNull()
 
     // Case 2: another tab signs in as user 2 mid-logout; logout still returns true but preserves user 2's ownership.
     const switchLogout = deferred<void>()
@@ -524,7 +529,7 @@ describe('auth operation ownership', () => {
     switchLogout.resolve()
     await expect(second).resolves.toBe(true)
     expect(auth2.endedSessionEmail).toBeNull()
-    expect(announced()).toBe(2)
+    expect(announcedUserId()).toBe(2)
   })
 
   it.each([
@@ -598,6 +603,23 @@ describe('auth operation ownership', () => {
     expect(auth.loading).toBe(false)
     expect(auth.isAuthenticated).toBe(false)
     expect(getAccessToken()).toBeNull()
+    expect(mocks.logout).toHaveBeenCalledOnce()
+  })
+
+  it('refreshes once and retries backend logout when the access token expired before sign-out', async () => {
+    const unauthorized = { isAxiosError: true, response: { status: 401 } }
+    mocks.logout.mockRejectedValueOnce(unauthorized).mockResolvedValueOnce(undefined)
+    mocks.refresh.mockResolvedValueOnce('fresh-logout-token')
+    const auth = signedIn()
+    setAccessToken('expired-token')
+
+    await expect(auth.logout()).resolves.toBe(true)
+
+    expect(mocks.refresh).toHaveBeenCalledOnce()
+    expect(mocks.logout).toHaveBeenCalledTimes(2)
+    expect(auth.isAuthenticated).toBe(false)
+    expect(auth.currentUser).toBeNull()
+    expect(getAccessToken()).toBeNull()
   })
 
   it('does not let an older profile update revert a concurrent language switch', async () => {
@@ -656,34 +678,31 @@ describe('auth operation ownership', () => {
   })
 
   it('preserves another tab’s new login when it arrives during a rotated-token logout retry or before storage sync', async () => {
-    const announced = () => JSON.parse(window.localStorage.getItem(storageKeys.sessionOwner) ?? 'null')?.userId
-
     // Case 1: rotated-token second logout is in flight when another tab signs in as user 2.
     const firstLogout = deferred<void>()
     const retryLogout = deferred<void>()
     mocks.logout.mockReturnValueOnce(firstLogout.promise).mockReturnValueOnce(retryLogout.promise)
     window.localStorage.setItem(storageKeys.sessionOwner, JSON.stringify({ userId: studentUser.id, at: 1 }))
     const auth = signedIn()
-    const endSession = () => auth.clearSession()
-    window.addEventListener(AUTH_INVALIDATED_EVENT, endSession)
-    try {
-      const version = getAuthSessionVersion()
-      const pendingLogout = auth.logout()
-      auth.replaceAccessToken('rotated-after-password-change', version)
-      firstLogout.resolve()
-      await flushPromises()
+    await withAuthInvalidated(
+      () => auth.clearSession(),
+      async () => {
+        const version = getAuthSessionVersion()
+        const pendingLogout = auth.logout()
+        auth.replaceAccessToken('rotated-after-password-change', version)
+        firstLogout.resolve()
+        await flushPromises()
 
-      const otherTabAnnouncement = JSON.stringify({ userId: 2, at: 2 })
-      window.localStorage.setItem(storageKeys.sessionOwner, otherTabAnnouncement)
-      auth.followOtherTabSession(otherTabAnnouncement)
-      retryLogout.resolve()
+        const otherTabAnnouncement = JSON.stringify({ userId: 2, at: 2 })
+        window.localStorage.setItem(storageKeys.sessionOwner, otherTabAnnouncement)
+        auth.followOtherTabSession(otherTabAnnouncement)
+        retryLogout.resolve()
 
-      await expect(pendingLogout).resolves.toBe(true)
-      expect(announced()).toBe(2)
-      expect(auth.endedSessionEmail).toBeNull()
-    } finally {
-      window.removeEventListener(AUTH_INVALIDATED_EVENT, endSession)
-    }
+        await expect(pendingLogout).resolves.toBe(true)
+        expect(announcedUserId()).toBe(2)
+        expect(auth.endedSessionEmail).toBeNull()
+      },
+    )
 
     // Case 2: another tab already wrote user 2 to localStorage before its storage event reached this tab.
     const singleLogout = deferred<void>()
@@ -693,7 +712,7 @@ describe('auth operation ownership', () => {
     window.localStorage.setItem(storageKeys.sessionOwner, JSON.stringify({ userId: 2, at: 3 }))
     singleLogout.resolve()
     await expect(pendingSecond).resolves.toBe(true)
-    expect(announced()).toBe(2)
+    expect(announcedUserId()).toBe(2)
     expect(auth2.isAuthenticated).toBe(false)
   })
 })

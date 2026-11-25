@@ -75,7 +75,7 @@ describe('LevelCheckRunner', () => {
       await flushPromises()
 
       // The server got "I don't know yet" for this question and answered with the feedback first.
-      expect(api.next).toHaveBeenLastCalledWith('BEGINNER_1', [{ questionId: number, optionId: null }])
+      expect(api.next).toHaveBeenLastCalledWith('BEGINNER_1', [{ questionId: number, optionId: null }], null)
       // The feedback stays on the same question.
       expect(wrapper.get('.page-eyebrow').text()).toBe(`Question ${number} of 8 · Vocabulary · 词语`)
       const bar = wrapper.get('[data-testid="check-bar"]')
@@ -122,7 +122,7 @@ describe('LevelCheckRunner', () => {
       await wrapper.get(skip ? '[data-testid="skip"]' : '[data-testid="check"]').trigger('click')
       await flushPromises()
 
-      expect(api.next).toHaveBeenLastCalledWith('BEGINNER_1', [{ questionId: 1, optionId: skip ? null : 11 }])
+      expect(api.next).toHaveBeenLastCalledWith('BEGINNER_1', [{ questionId: 1, optionId: skip ? null : 11 }], null)
       expect(wrapper.get('[data-testid="option-1"]').classes()).toContain('is-correct')
       expect(wrapper.findAll('.learn-option.is-correct')).toHaveLength(1)
       expect(wrapper.get('[data-testid="option-0"]').classes().includes('is-wrong')).toBe(!skip)
@@ -162,7 +162,7 @@ describe('LevelCheckRunner', () => {
     expect(wrapper.get('[data-testid="option-1"]').attributes('aria-pressed')).toBe('true')
     key('Enter')
     await flushPromises()
-    expect(api.next).toHaveBeenLastCalledWith('BEGINNER_1', [{ questionId: 1, optionId: 12 }])
+    expect(api.next).toHaveBeenLastCalledWith('BEGINNER_1', [{ questionId: 1, optionId: 12 }], null)
     expect(wrapper.get('[data-testid="check-bar"]').text()).toContain('Nice!')
 
     // The answers count only once they are in: a key after the check picks nothing.
@@ -193,8 +193,46 @@ describe('LevelCheckRunner', () => {
     await wrapper.get('[data-testid="continue"]').trigger('click')
     await flushPromises()
 
-    const [answers, result] = wrapper.emitted('finished')![0] as [unknown, LevelCheckStep['result']]
+    const [answers, result, runToken] = wrapper.emitted('finished')![0] as [
+      unknown,
+      LevelCheckStep['result'],
+      string | null,
+    ]
     expect(answers).toEqual([{ questionId: 1, optionId: 12 }])
     expect(result).toMatchObject({ level: 'BEGINNER_1' })
+    expect(runToken).toBeNull()
+  })
+
+  it('forwards the server-signed runToken across steps and into finished', async () => {
+    api.next
+      .mockResolvedValueOnce({ ...question(1, 0), runToken: 'v1.step0.sig' })
+      .mockResolvedValueOnce(checkDone({ runToken: 'v1.done.sig' }))
+    const wrapper = await mountRunner()
+
+    await checkChoice(wrapper, 1)
+    expect(api.next).toHaveBeenLastCalledWith('BEGINNER_1', [{ questionId: 1, optionId: 12 }], 'v1.step0.sig')
+    await wrapper.get('[data-testid="continue"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.emitted('finished')![0]![2]).toBe('v1.done.sig')
+  })
+
+  it('focuses the first question heading on mount and restores focus after a 400 restart', async () => {
+    api.next
+      .mockResolvedValueOnce(question(1, 0))
+      .mockRejectedValueOnce({ isAxiosError: true, response: { status: 400, data: { message: 'Run expired.' } } })
+      .mockResolvedValueOnce(question(2, 0))
+    const wrapper = await mountRunner()
+
+    expect(document.activeElement).toBe(wrapper.get('h2.focus-title').element)
+
+    await checkChoice(wrapper, 1)
+    const retry = wrapper.get('.callout.is-danger button')
+    ;(retry.element as HTMLButtonElement).focus()
+    await retry.trigger('click')
+    await flushPromises()
+
+    expect(document.activeElement).toBe(wrapper.get('h2.focus-title').element)
+    wrapper.unmount()
   })
 })

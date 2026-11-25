@@ -7,9 +7,9 @@
           v-if="url"
           ref="player"
           class="lesson-video-player"
+          playsinline
           :src="url"
           :aria-label="video.title"
-          playsinline
           @click="togglePlay"
           @play="state = 'playing'"
           @pause="onPause"
@@ -57,11 +57,11 @@
           :value="current"
           :disabled="state === 'loading' || state === 'error' || length <= 0"
           :aria-label="t('studentClasses.lesson.position', { title: video.title })"
-          :aria-valuetext="`${formatClock(current)} / ${formatClock(length)}`"
+          :aria-valuetext="`${formatClock(current)} / ${durationLabel}`"
           :style="{ '--seek-progress': `${seekProgress}%` }"
           @input="seek(Number(($event.target as HTMLInputElement).value))"
         />
-        <span class="lesson-video-time">{{ formatClock(length) }}</span>
+        <span class="lesson-video-time">{{ durationLabel }}</span>
         <button ref="closeButton" type="button" class="btn btn-ghost btn-sm" data-testid="video-close" @click="close">
           <IconGlyph name="close" :size="16" />{{ t('studentClasses.lesson.closeVideo') }}
         </button>
@@ -108,7 +108,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 
 import { videoBlob } from '@/api/classes'
 import IconGlyph from '@/components/common/IconGlyph.vue'
@@ -139,12 +139,30 @@ const url = ref<string | null>(null)
 const player = ref<HTMLVideoElement | null>(null)
 const primaryButton = ref<HTMLButtonElement | null>(null)
 const closeButton = ref<HTMLButtonElement | null>(null)
+function normalizedDuration(seconds: number | null | undefined): number {
+  return typeof seconds === 'number' && Number.isFinite(seconds) && seconds > 0 ? Math.max(1, Math.round(seconds)) : 0
+}
+
 const current = ref(0)
-const length = ref(props.video.durationSeconds ?? 0)
+const length = ref(normalizedDuration(props.video.durationSeconds))
+const durationLabel = computed(() => (length.value > 0 ? formatClock(length.value) : '--:--'))
 const seekProgress = computed(() =>
   length.value > 0 ? Math.min(100, Math.max(0, (current.value / length.value) * 100)) : 0,
 )
 let download: AbortController | null = null
+
+watch(
+  () => [props.video.streamPath, props.video.durationSeconds] as const,
+  ([nextStream, nextDuration], [prevStream]) => {
+    if (nextStream !== prevStream) {
+      release()
+      state.value = 'closed'
+    }
+    if (state.value === 'closed' || !player.value || !Number.isFinite(player.value.duration)) {
+      length.value = normalizedDuration(nextDuration)
+    }
+  },
+)
 
 function release(): void {
   download?.abort()
@@ -220,12 +238,14 @@ function readTime(): void {
   const element = player.value
   if (!element) return
   current.value = Math.floor(element.currentTime)
-  if (Number.isFinite(element.duration) && element.duration > 0) length.value = Math.round(element.duration)
+  const measured = normalizedDuration(element.duration)
+  if (measured > 0) length.value = measured
 }
 
 function seek(seconds: number): void {
-  current.value = seconds
-  if (player.value) player.value.currentTime = seconds
+  const clamped = Math.min(Math.max(0, seconds), length.value)
+  current.value = clamped
+  if (player.value) player.value.currentTime = clamped
 }
 
 function close(): void {

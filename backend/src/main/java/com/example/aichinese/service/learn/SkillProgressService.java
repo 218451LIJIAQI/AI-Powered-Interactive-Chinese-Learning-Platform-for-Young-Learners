@@ -70,11 +70,7 @@ public class SkillProgressService {
 
     @Transactional(readOnly = true)
     public SkillProgressResponse skills(SecurityUserDetails currentUser) {
-        return skills(accessService.requireStudent(currentUser));
-    }
-
-    @Transactional(readOnly = true)
-    public SkillProgressResponse skills(StudentProfile student) {
+        StudentProfile student = accessService.requireStudent(currentUser);
         String query = """
                 select skill, count(*) as total, count(first_completed_at) as done,
                        count(case when first_completed_at < :weekStart then 1 end) as done_before

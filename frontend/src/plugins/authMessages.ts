@@ -38,7 +38,7 @@ export const authMessages = {
     emailTaken: 'This email is already registered. Sign in or use another email.',
     passwordRequired: 'Enter a password.',
     passwordShort: 'Use at least 8 characters.',
-    passwordLong: 'Use at most 72 UTF-8 bytes.',
+    passwordLong: 'Use a shorter password (up to 72 characters in English, fewer for non-Latin scripts).',
     passwordMismatch: 'Passwords do not match.',
     consentRequired: 'Tick the box to create your account.',
     registerFailed: 'Your account was not created. Try again.',
@@ -81,7 +81,8 @@ export const authMessages = {
     emailTaken: 'E-mel ini sudah didaftarkan. Log masuk atau gunakan e-mel lain.',
     passwordRequired: 'Masukkan kata laluan.',
     passwordShort: 'Gunakan sekurang-kurangnya 8 aksara.',
-    passwordLong: 'Gunakan paling banyak 72 bait UTF-8.',
+    passwordLong:
+      'Gunakan kata laluan yang lebih pendek (sehingga 72 aksara biasa, lebih sedikit untuk aksara bukan Latin).',
     passwordMismatch: 'Kata laluan tidak sepadan.',
     consentRequired: 'Tandakan kotak ini untuk mencipta akaun anda.',
     registerFailed: 'Akaun anda tidak dicipta. Cuba lagi.',
@@ -123,10 +124,10 @@ export const authMessages = {
     emailTaken: '该邮箱已注册。请登录或使用其他邮箱。',
     passwordRequired: '请输入密码。',
     passwordShort: '请至少使用 8 个字符。',
-    passwordLong: 'UTF-8 编码后最多可占 72 字节。',
+    passwordLong: '请使用更短的密码（英文最多 72 个字符，中文等非拉丁字符会更少）。',
     passwordMismatch: '两次输入的密码不一致。',
     consentRequired: '请勾选此项以创建账号。',
     registerFailed: '账号未创建，请重试。',
     createdSignIn: '你的账号已就绪。请登录以继续。',
   },
-}
+} as const

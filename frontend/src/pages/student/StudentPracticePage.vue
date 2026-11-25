@@ -1,6 +1,6 @@
 <template>
   <div class="page-stack practice-page">
-    <PageHeaderBlock :title="t('nav.practice')" hide-title />
+    <h1 class="sr-only">{{ t('nav.practice') }}</h1>
     <RouteTabs :tabs="tabs" :label="t('practice.tabsLabel')" />
     <!-- Holds its line while today's numbers load, so the stage does not jump. -->
     <div class="practice-goal-line">
@@ -19,15 +19,15 @@
 
 <script setup lang="ts">
 import { computed, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 
 import { xpApi } from '@/api/learn'
 import RouteTabs, { type RouteTab } from '@/components/common/RouteTabs.vue'
 import DailyGoalMeter from '@/components/learn/DailyGoalMeter.vue'
 import PracticeMistakesPanel from '@/components/learn/practice/PracticeMistakesPanel.vue'
 import PracticeTypeView from '@/components/learn/practice/PracticeTypeView.vue'
-import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
+import { usePageRedirect } from '@/composables/usePageNavigation'
 import { progressVersion } from '@/composables/useProgressRefresh'
 import { useResource } from '@/composables/useResource'
 import { PRACTICE_ACTIVITIES, PRACTICE_TYPES } from '@/config/practiceActivities'
@@ -43,7 +43,6 @@ import '@/styles/learn-practice.css'
 const FIRST_TAB = PRACTICE_TYPES[0]!
 
 const route = useRoute()
-const router = useRouter()
 const { t } = useLocalMessages({ practice: practiceMessages })
 
 const today = useResource(xpApi.today)
@@ -74,20 +73,20 @@ const tabs = computed<RouteTab[]>(() => [
 ])
 
 // A link without a tab of its own (the sidebar, Home) lands on the first tab; the stage is already showing it.
-watch(
-  () => route.name === 'student-practice' && slug.value !== 'mistakes' && !activity.value,
-  (noTab) => {
-    if (noTab) {
-      void router.replace({
+usePageRedirect(() =>
+  slug.value !== 'mistakes' && !activity.value
+    ? {
         name: 'student-practice',
         params: { type: PRACTICE_ACTIVITIES[FIRST_TAB].slug },
         query: route.query,
-      })
-    }
-  },
-  { immediate: true },
+        hash: route.hash,
+      }
+    : null,
 )
 
-// Practice here (a finished set) changes today's goal, the streak and the mistakes waiting.
+// Practice here (a finished set or a recorded mistake) changes today's goal, the streak and the mistakes waiting.
 watch(progressVersion, () => void today.reload())
+watch(view, (next, previous) => {
+  if ((next === 'mistakes' && previous !== 'mistakes') || today.error.value !== null) void today.reload()
+})
 </script>

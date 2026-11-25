@@ -1,20 +1,19 @@
 <template>
   <div class="page-stack">
-    <PageHeaderBlock :title="t('nav.auditLog')" hide-title>
-      <template #actions>
-        <button
-          class="btn btn-secondary"
-          type="button"
-          :disabled="exporting || Boolean(rangeError)"
-          :aria-busy="exporting"
-          data-testid="admin-audit-export"
-          @click="exportCsv"
-        >
-          <IconGlyph name="download" :size="16" />
-          <span>{{ t('common.exportCsv') }}</span>
-        </button>
-      </template>
-    </PageHeaderBlock>
+    <h1 class="sr-only">{{ t('nav.auditLog') }}</h1>
+    <div class="page-toolbar">
+      <button
+        class="btn btn-secondary"
+        type="button"
+        :disabled="exporting || Boolean(rangeError)"
+        :aria-busy="exporting"
+        data-testid="admin-audit-export"
+        @click="exportCsv"
+      >
+        <IconGlyph name="download" :size="16" />
+        <span>{{ t('common.exportCsv') }}</span>
+      </button>
+    </div>
 
     <DataNotice :error="exportError" />
 
@@ -44,7 +43,8 @@
             v-model="from"
             class="input"
             type="date"
-            :max="to || undefined"
+            :min="MIN_AUDIT_DATE"
+            :max="validTo || MAX_AUDIT_DATE"
             :aria-invalid="Boolean(rangeError)"
             :aria-describedby="rangeError ? 'admin-audit-range-error' : undefined"
             data-testid="admin-audit-from"
@@ -57,7 +57,8 @@
             v-model="to"
             class="input"
             type="date"
-            :min="from || undefined"
+            :min="validFrom || MIN_AUDIT_DATE"
+            :max="MAX_AUDIT_DATE"
             :aria-invalid="Boolean(rangeError)"
             :aria-describedby="rangeError ? 'admin-audit-range-error' : undefined"
             data-testid="admin-audit-to"
@@ -82,20 +83,17 @@
             maxlength="200"
             autocomplete="off"
             placeholder="name@example.com"
-            data-testid="admin-audit-actor"
           />
         </div>
         <p v-if="rangeError" id="admin-audit-range-error" class="field-error" role="alert">
           {{ rangeError }}
         </p>
       </form>
-      <DataNotice :error="actions.error.value" :error-title="t('adminAudit.actionsLoadFailed')">
-        <template #actions>
-          <button type="button" class="btn btn-secondary btn-sm" @click="actions.reload">
-            {{ t('common.retry') }}
-          </button>
-        </template>
-      </DataNotice>
+      <DataNotice
+        :error="actions.error.value"
+        :error-title="t('adminAudit.actionsLoadFailed')"
+        @retry="actions.reload"
+      />
       <div v-if="userId !== null" class="filter-chips" role="group" :aria-label="t('adminAudit.userFilterLabel')">
         <button
           class="filter-chip is-removable"
@@ -118,7 +116,6 @@
       <StatePanel
         v-else-if="log.error.value"
         tone="error"
-        icon="alert"
         :title="t('adminAudit.loadError')"
         :message="log.error.value"
         @retry="log.reload"
@@ -130,7 +127,7 @@
           aria-labelledby="admin-audit-table-title"
           tabindex="0"
         >
-          <table class="data-table admin-table admin-table-fixed admin-audit-table">
+          <table class="data-table admin-table admin-table-fixed">
             <thead>
               <tr>
                 <th scope="col">{{ t('adminAudit.colEvent') }}</th>
@@ -148,7 +145,7 @@
                 :key="entry.id"
                 :class="{ 'is-selected': entry.id === selectedEntryId }"
                 data-testid="admin-audit-row"
-                @click="selectEntry(entry.id)"
+                @click="onRowClick(entry.id)"
               >
                 <td>
                   <span class="admin-cell-title">
@@ -229,7 +226,6 @@ import DataNotice from '@/components/common/DataNotice.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import PaginationBar from '@/components/common/PaginationBar.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
-import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { usePageFilters, useRecordById, useResource, useServerPage } from '@/composables/useResource'
@@ -239,22 +235,27 @@ import type { PageResponse } from '@/types/api'
 import type { AuditEntry } from '@/types/ops'
 import { auditActionLabel, auditCategoryLabel } from '@/utils/auditActions'
 import { formatDateTime, formatNumber, isoDay, parseDate } from '@/utils/format'
-import { pageFromQuery, pageQuery } from '@/utils/pageQuery'
-import { firstQueryText } from '@/utils/queryText'
+import { firstQueryText, pageFromQuery, pageQuery } from '@/utils/routeQuery'
 import { parseRecordId } from '@/utils/recordId'
 import '@/styles/admin-shared.css'
 import '@/styles/ops-admin.css'
 
 const PAGE_SIZE = 10
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
+const MIN_AUDIT_DATE = '1001-01-01'
+const MAX_AUDIT_DATE = '9998-12-31'
 
 const route = useRoute()
 const router = useRouter()
 const { t, locale } = useLocalMessages({ adminAudit: adminAuditMessages, auditActions: auditActionMessages })
 
+function isAuditDateInBounds(value: string): boolean {
+  return DATE_PATTERN.test(value) && Boolean(parseDate(value)) && value >= MIN_AUDIT_DATE && value <= MAX_AUDIT_DATE
+}
+
 function queryDate(name: string): string {
   const value = firstQueryText(route.query[name])
-  return DATE_PATTERN.test(value) && parseDate(value) ? value : ''
+  return isAuditDateInBounds(value) ? value : ''
 }
 
 // Filters and page, kept in the address: q, from, to, action, actor, user and page.
@@ -273,6 +274,8 @@ const {
 } = useDebouncedSearch(firstQueryText(route.query.actor))
 const from = ref(queryDate('from'))
 const to = ref(queryDate('to'))
+const validFrom = computed(() => (from.value && isAuditDateInBounds(from.value) ? from.value : ''))
+const validTo = computed(() => (to.value && isAuditDateInBounds(to.value) ? to.value : ''))
 const action = ref(firstQueryText(route.query.action))
 const userId = ref<number | null>(parseRecordId(route.query.user))
 const page = ref(pageFromQuery(route.query.page))
@@ -281,25 +284,28 @@ function listQuery(): LocationQueryRaw {
   return {
     q: keyword.value || undefined,
     actor: actor.value || undefined,
-    from: from.value || undefined,
-    to: to.value || undefined,
+    from: validFrom.value || undefined,
+    to: validTo.value || undefined,
     action: action.value || undefined,
     user: userId.value === null ? undefined : String(userId.value),
     page: pageQuery(page.value),
   }
 }
 
-const rangeError = computed(() =>
-  from.value && to.value && from.value > to.value ? t('adminAudit.invalidRange') : null,
-)
+const rangeError = computed(() => {
+  if ((from.value && !isAuditDateInBounds(from.value)) || (to.value && !isAuditDateInBounds(to.value))) {
+    return t('adminAudit.outOfRange')
+  }
+  return validFrom.value && validTo.value && validFrom.value > validTo.value ? t('adminAudit.invalidRange') : null
+})
 
 function filters() {
   return {
     keyword: keyword.value || undefined,
     actionType: action.value || undefined,
     actor: actor.value || undefined,
-    from: from.value || undefined,
-    to: to.value || undefined,
+    from: validFrom.value || undefined,
+    to: validTo.value || undefined,
     userId: userId.value ?? undefined,
   }
 }
@@ -325,7 +331,14 @@ function writeAddress(): void {
   void router.replace({ query: { ...route.query, ...listQuery() } })
 }
 
-const followAddress = usePageFilters([keyword, actor, from, to, action, userId], page, log, writeAddress)
+const followAddress = usePageFilters(
+  [keyword, actor, validFrom, validTo, action, userId, rangeError],
+  page,
+  log,
+  () => {
+    if (!rangeError.value) writeAddress()
+  },
+)
 
 watch(
   [
@@ -381,17 +394,23 @@ const actionOptions = computed(() => {
 
 const selectedEntryId = computed(() => parseRecordId(route.query.entry))
 const listedEntry = computed(() => entries.value.find((entry) => entry.id === selectedEntryId.value))
-const loadedOffPageId = ref<number | null>(null)
-const offPageId = computed<number | null>(() => {
-  if (listedEntry.value || selectedEntryId.value === null) return null
-  if (log.loading.value && loadedOffPageId.value !== selectedEntryId.value) return null
-  return selectedEntryId.value
-})
+const offPageId = ref<number | null>(null)
+watch(
+  [selectedEntryId, listedEntry, log.loading],
+  ([id, listed, listLoading]) => {
+    if (listed || id === null) offPageId.value = null
+    else if (!listLoading) offPageId.value = id
+    else if (offPageId.value !== id) offPageId.value = null
+  },
+  { immediate: true },
+)
 const entryDetail = useRecordById(offPageId, adminOverviewApi.auditEntry)
-watch(entryDetail.data, (entry) => {
-  loadedOffPageId.value = entry?.id ?? null
-})
 const selectedEntry = computed(() => listedEntry.value ?? entryDetail.data.value)
+
+function onRowClick(id: number): void {
+  if (window.getSelection()?.toString()) return
+  selectEntry(id)
+}
 
 function selectEntry(id: number | null): void {
   void router.replace({ query: { ...route.query, ...listQuery(), entry: id === null ? undefined : String(id) } })

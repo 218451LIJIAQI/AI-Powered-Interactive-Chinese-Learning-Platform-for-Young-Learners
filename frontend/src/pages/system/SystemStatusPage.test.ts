@@ -17,7 +17,11 @@ const { auth, route, router, health, join } = vi.hoisted(() => ({
       return this.roles[0] ?? null
     },
   },
-  router: { replace: vi.fn(), push: vi.fn() },
+  router: {
+    replace: vi.fn(),
+    push: vi.fn(),
+    currentRoute: { value: { meta: {} as { roles?: UserRole[] } } },
+  },
   route: { query: {} as Record<string, string> },
 }))
 
@@ -61,6 +65,9 @@ beforeEach(() => {
   join.mockReset()
   router.push.mockReset()
   router.replace.mockReset()
+  router.push.mockResolvedValue(undefined)
+  router.replace.mockResolvedValue(undefined)
+  router.currentRoute.value.meta = {}
   auth.isAuthenticated = false
   auth.roles = []
   route.query = {}
@@ -155,6 +162,33 @@ describe('SystemStatusPage 403', () => {
     expect(wrapper.get('[data-testid="system-join-error"]').text()).toBe('The class could not be joined. Try again.')
     expect(router.replace).not.toHaveBeenCalled()
     expect(wrapper.get('[data-testid="system-join"]').text()).toBe('Join class')
+  })
+
+  it('does not misreport a post-join navigation failure as a class-join error', async () => {
+    signInAs('STUDENT')
+    route.query = { redirect: '/student/classes/12/lessons/34' }
+    join.mockResolvedValueOnce(undefined)
+    router.replace.mockRejectedValueOnce(new Error('chunk load failed'))
+    const wrapper = mountPage('unauthorized')
+
+    await wrapper.get('[data-testid="system-join"]').trigger('click')
+    await flushPromises()
+
+    expect(join).toHaveBeenCalledExactlyOnceWith(12)
+    expect(wrapper.get('[data-testid="system-join-error"]').text()).toBe('Something went wrong')
+  })
+
+  it('reports an inline error instead of throwing when switching accounts cannot navigate', async () => {
+    signInAs('STUDENT')
+    route.query = { redirect: '/admin/users' }
+    auth.logout.mockResolvedValueOnce(true)
+    router.push.mockRejectedValueOnce(new Error('chunk load failed'))
+    const wrapper = mountPage('unauthorized')
+
+    await wrapper.get('[data-testid="system-switch-account"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="system-join-error"]').text()).toBe('Something went wrong')
   })
 
   it.each(['/student/classes/9007199254740993/lessons/34', '/student/classes/12/lessons/old'])(
@@ -257,7 +291,23 @@ describe('SystemStatusPage 403', () => {
     signOut.resolve(change === 'leave')
     await flushPromises()
     expect(router.push).not.toHaveBeenCalled()
+    expect(router.replace).not.toHaveBeenCalled()
     if (change !== 'leave') wrapper.unmount()
+  })
+
+  it('redirects away from a protected route if sign-out completes after leaving /unauthorized', async () => {
+    const signOut = deferred<boolean>()
+    auth.logout.mockReturnValueOnce(signOut.promise)
+    signInAs('STUDENT')
+    route.query = { redirect: '/admin/users' }
+    const wrapper = mountPage('unauthorized')
+    await wrapper.get('[data-testid="system-switch-account"]').trigger('click')
+    router.currentRoute.value.meta = { roles: ['STUDENT'] }
+    wrapper.unmount()
+    signOut.resolve(true)
+    await flushPromises()
+    expect(router.push).not.toHaveBeenCalled()
+    expect(router.replace).toHaveBeenCalledExactlyOnceWith({ path: '/auth', query: { redirect: '/admin/users' } })
   })
 })
 

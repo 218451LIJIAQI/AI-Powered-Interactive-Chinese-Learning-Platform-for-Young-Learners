@@ -16,6 +16,8 @@ public record AdminUserDetailResponse(
         String email,
         RoleName role,
         boolean active,
+        /** True once the learner has permanently deleted their account (cannot be deactivated or reactivated). */
+        boolean deleted,
         LocalDateTime joinedAt,
         /** The latest deactivation while the account is deactivated: who, when and why. */
         StatusChange deactivation,
@@ -41,6 +43,7 @@ public record AdminUserDetailResponse(
                 + ", email=" + redactValue(email)
                 + ", role=" + role
                 + ", active=" + active
+                + ", deleted=" + deleted
                 + ", joinedAt=" + joinedAt
                 + ", deactivation=" + deactivation
                 + ", self=" + self

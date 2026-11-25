@@ -13,8 +13,6 @@ import './styles/main.css'
 
 const pinia = createPinia()
 
-createApp(App).use(pinia).use(i18n).use(router).mount('#app')
-
 function handleAuthInvalidated(): void {
   const auth = useAuthStore(pinia)
   // Read before the session is cleared: a signed-in page sends its user to sign in again, a public page stays open.
@@ -37,3 +35,5 @@ window.addEventListener('storage', (event) => {
 // An API 503 is confirmed with the health check before the maintenance page opens.
 const checkMaintenance = createMaintenanceCheck(router, () => systemApi.health())
 window.addEventListener(SERVICE_UNAVAILABLE_EVENT, () => void checkMaintenance())
+
+createApp(App).use(pinia).use(i18n).use(router).mount('#app')

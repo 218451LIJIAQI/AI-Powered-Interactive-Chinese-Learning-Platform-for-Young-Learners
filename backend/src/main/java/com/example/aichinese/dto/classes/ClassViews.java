@@ -12,7 +12,7 @@ public final class ClassViews {
     private ClassViews() {
     }
 
-    /** One class in the catalogue (public Classes, Find classes, featured classes). */
+    /** One class in the catalogue (public Classes, Find classes). */
     public record ClassCard(
             Long id,
             String title,
@@ -69,9 +69,9 @@ public final class ClassViews {
     }
 
     /**
-     * The learner's class page. Before joining only {@code summary} and {@code preview} are filled; after joining the
-     * progress and units are too. An {@code archived} class (since {@code archivedAt}, else null) is read-only: its
-     * lessons and results stay open.
+     * The learner's class page. Before joining only {@code summary} and {@code preview} are filled; after joining
+     * {@code preview} is empty and {@code summary}, progress and {@code units} are filled. An {@code archived} class
+     * (since {@code archivedAt}, else null) is read-only: its lessons and results stay open.
      */
     public record StudentClass(
             boolean joined,

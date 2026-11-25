@@ -4,6 +4,7 @@ import static org.springframework.http.HttpStatus.BAD_REQUEST;
 import static org.springframework.http.HttpStatus.CONFLICT;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Arrays;
@@ -14,11 +15,8 @@ import java.util.Objects;
 import java.util.Optional;
 
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.example.aichinese.dto.plan.PlanRequests;
@@ -35,9 +33,9 @@ import com.example.aichinese.entity.enums.PlanSetupState;
 import com.example.aichinese.entity.enums.PlanStepKind;
 import com.example.aichinese.repository.LearningPlanRepository;
 import com.example.aichinese.repository.LearningPlanStepRepository;
-import com.example.aichinese.repository.StudentProfileRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.StudentLearningAccessService;
+import com.example.aichinese.service.TransactionRunner;
 import com.example.aichinese.service.account.CurrentAccount;
 import com.example.aichinese.service.learn.LearnClock;
 import com.example.aichinese.service.learn.LevelCheckService;
@@ -47,6 +45,7 @@ import com.example.aichinese.util.TextUtils;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
+import lombok.RequiredArgsConstructor;
 
 /**
  * The student's learning plan: built at the end of the setup (or later from Home) and saved once the learner starts it,
@@ -61,6 +60,7 @@ import jakarta.persistence.LockModeType;
  * before it can be started.
  */
 @Service
+@RequiredArgsConstructor
 public class LearningPlanService {
 
     /** How long a built plan can wait for "Start my path". */
@@ -69,7 +69,6 @@ public class LearningPlanService {
     private static final int MAX_GOAL_TEXT = 200;
 
     private final StudentLearningAccessService accessService;
-    private final StudentProfileRepository studentProfileRepository;
     private final LearningPlanRepository planRepository;
     private final LearningPlanStepRepository stepRepository;
     private final PlanCatalogue planCatalogue;
@@ -78,39 +77,8 @@ public class LearningPlanService {
     private final LevelCheckService levelCheckService;
     private final CurrentAccount currentAccount;
     private final LearnClock clock;
-    private final TransactionTemplate writeTransaction;
-    private final TransactionTemplate readOnlyTransaction;
+    private final TransactionRunner transactions;
     private final EntityManager entityManager;
-
-    public LearningPlanService(
-            StudentLearningAccessService accessService,
-            StudentProfileRepository studentProfileRepository,
-            LearningPlanRepository planRepository,
-            LearningPlanStepRepository stepRepository,
-            PlanCatalogue planCatalogue,
-            PlanAdvisor planAdvisor,
-            PlanViewAssembler assembler,
-            LevelCheckService levelCheckService,
-            CurrentAccount currentAccount,
-            LearnClock clock,
-            PlatformTransactionManager transactionManager,
-            EntityManager entityManager) {
-        this.accessService = accessService;
-        this.studentProfileRepository = studentProfileRepository;
-        this.planRepository = planRepository;
-        this.stepRepository = stepRepository;
-        this.planCatalogue = planCatalogue;
-        this.planAdvisor = planAdvisor;
-        this.assembler = assembler;
-        this.levelCheckService = levelCheckService;
-        this.currentAccount = currentAccount;
-        this.clock = clock;
-        this.writeTransaction = new TransactionTemplate(transactionManager);
-        this.writeTransaction.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
-        this.readOnlyTransaction = new TransactionTemplate(transactionManager);
-        this.readOnlyTransaction.setReadOnly(true);
-        this.entityManager = entityManager;
-    }
 
     // Setup
 
@@ -150,22 +118,24 @@ public class LearningPlanService {
      * to "how much Mandarin do you know"), saved as a draft that "Start my path" ({@link #confirm}) makes the plan.
      */
     public PlanViews.Plan build(SecurityUserDetails currentUser, PlanRequests.BuildRequest request) {
-        LocalDate today = clock.today();
+        Instant now = clock.now();
+        LocalDate today = clock.dayAt(now);
+        LocalDateTime checkedAt = clock.serverTimeAt(now);
         PlanComposer.Goal requestedGoal = goal(request.goal(), today);
-        ComposeInputs inputs = readOnlyTransaction.execute(status -> {
+        ComposeInputs inputs = transactions.readOnly(() -> {
             User user = currentAccount.require(currentUser);
             StudentProfile student = accessService.requireStudent(currentUser);
             if (active(student).isPresent()) {
                 throw planChanged();
             }
             SetupSnapshot setup = SetupSnapshot.of(student, draft(student).orElse(null));
-            PlanComposer.Placement placement = placement(request.levelCheck());
+            PlanComposer.Placement placement = placement(student.getId(), request.levelCheck());
             PlanComposer.Candidates candidates = PlanComposer.candidates(
                     requestedGoal, placement, planCatalogue.forNewPlan(student));
             return new ComposeInputs(user, null, setup, requestedGoal, placement,
-                    placement.checked() ? LocalDateTime.now() : null, candidates, today);
+                    placement.checked() ? checkedAt : null, candidates, today);
         });
-        return planView(currentUser, compose(currentUser, inputs, request.language(), false));
+        return planView(currentUser, compose(currentUser, inputs, request.language(), false, false));
     }
 
     /**
@@ -176,7 +146,7 @@ public class LearningPlanService {
     public PlanViews.Plan updateGoal(SecurityUserDetails currentUser, PlanRequests.UpdateGoalRequest request) {
         LocalDate today = clock.today();
         PlanComposer.Goal requestedGoal = goal(request.goal(), today);
-        ComposeInputs inputs = readOnlyTransaction.execute(status -> {
+        ComposeInputs inputs = transactions.readOnly(() -> {
             User user = currentAccount.require(currentUser);
             StudentProfile student = accessService.requireStudent(currentUser);
             Optional<LearningPlan> current = active(student);
@@ -189,7 +159,7 @@ public class LearningPlanService {
             return new ComposeInputs(user, expected, setup, requestedGoal, placement,
                     plan.getLevelCheckedAt(), candidates, today);
         });
-        return planView(currentUser, compose(currentUser, inputs, request.language(), true));
+        return planView(currentUser, compose(currentUser, inputs, request.language(), true, false));
     }
 
     /**
@@ -197,20 +167,22 @@ public class LearningPlanService {
      * click) returns the plan; without a plan, or with one built more than a day ago, there is nothing to start.
      */
     public PlanViews.Plan confirm(SecurityUserDetails currentUser) {
-        LearningPlan started = writeTransaction.execute(status -> {
+        LearningPlan started = transactions.writeReadCommitted(() -> {
             StudentProfile locked = lockStudent(currentUser);
             Long studentId = locked.getId();
             Optional<LearningPlan> draft = lockedDraft(studentId);
             if (draft.isEmpty()) {
                 return lockedActive(studentId).orElseThrow(LearningPlanService::noPlan);
             }
-            LocalDate today = clock.today();
+            Instant now = clock.now();
+            LocalDate today = clock.dayAt(now);
+            LocalDateTime serverNow = clock.serverTimeAt(now);
             LocalDate draftDeadline = draft.get().getDeadline();
             // Check expired goal date before the 24-hour draft lifetime so overnight expiry always surfaces the date reason.
             if (draftDeadline != null && !draftDeadline.isAfter(today)) {
                 throw new ResponseStatusException(CONFLICT, "This plan's goal date has passed. Build it again.");
             }
-            if (draft.get().getCreatedAt().isBefore(LocalDateTime.now().minus(DRAFT_LIFETIME))) {
+            if (draft.get().getCreatedAt().isBefore(serverNow.minus(DRAFT_LIFETIME))) {
                 throw new ResponseStatusException(CONFLICT, "This plan was built more than a day ago. Build it again.");
             }
             locked.setPlanSetupState(PlanSetupState.COMPLETED);
@@ -242,7 +214,7 @@ public class LearningPlanService {
      * screen: the learner's plan, or before one was started, the setup's plan.
      */
     public PlanViews.Plan pickClass(SecurityUserDetails currentUser, Long classId) {
-        LearningPlan picked = writeTransaction.execute(status -> {
+        LearningPlan picked = transactions.writeReadCommitted(() -> {
             Long studentId = lockStudent(currentUser).getId();
             LearningPlan plan = lockedActive(studentId)
                     .or(() -> lockedDraft(studentId))
@@ -268,19 +240,25 @@ public class LearningPlanService {
                 LevelCheckService.Placement result,
                 ComposeInputs rebuildInputs) {
         }
-        LocalDateTime checkedAt = LocalDateTime.now();
-        RetakeSnapshot snapshot = readOnlyTransaction.execute(status -> {
+        Instant now = clock.now();
+        LocalDateTime checkedAt = clock.serverTimeAt(now);
+        LocalDate today = clock.dayAt(now);
+        RetakeSnapshot snapshot = transactions.readOnly(() -> {
             User user = currentAccount.require(currentUser);
             StudentProfile student = accessService.requireStudent(currentUser);
             LearningPlan current = active(student).orElseThrow(LearningPlanService::noPlan);
             PlanSnapshot expected = PlanSnapshot.of(current);
             // The retake starts at the plan's level.
-            LevelCheckService.Placement result = levelCheckService.evaluate(current.getPlacedLevel(), request.answers());
-            boolean samePlacement = result.level() == current.getPlacedLevel() && result.headStart() == current.isHeadStart();
+            LevelCheckService.Placement result = levelCheckService.evaluate(
+                    student.getId(), current.getPlacedLevel(), request.answers(), request.runToken());
+            boolean sameQuickReviewEligibility = result.knownSkills().isEmpty()
+                    == PlanCodec.skills(current.getKnownSkills()).isEmpty();
+            boolean samePlacement = result.level() == current.getPlacedLevel()
+                    && result.headStart() == current.isHeadStart()
+                    && (result.level() != MandarinLevel.BEGINNER_1 || sameQuickReviewEligibility);
             if (result.answeredCount() == 0 || samePlacement) {
                 return new RetakeSnapshot(expected, result, null);
             }
-            LocalDate today = clock.today();
             PlanComposer.Goal effectiveGoal = PlanCodec.goal(current).startingOn(today);
             PlanComposer.Placement placement = placementOf(current.getSelfLevel(), result);
             PlanComposer.Candidates candidates = PlanComposer.candidates(
@@ -295,9 +273,9 @@ public class LearningPlanService {
         }
         boolean rebuild = snapshot.rebuildInputs() != null;
         if (rebuild) {
-            compose(currentUser, snapshot.rebuildInputs(), request.language(), true);
+            compose(currentUser, snapshot.rebuildInputs(), request.language(), true, true);
         } else {
-            writeTransaction.executeWithoutResult(status -> {
+            transactions.writeReadCommitted(() -> {
                 StudentProfile locked = lockStudent(currentUser);
                 LearningPlan plan = lockUnchangedPlan(locked, snapshot.expected());
                 plan.setKnownSkills(PlanCodec.names(snapshot.result().knownSkills()));
@@ -330,7 +308,7 @@ public class LearningPlanService {
 
     /** The saved plan as the plan page shows it, read in a new read-only transaction after the save. */
     private PlanViews.Plan planView(SecurityUserDetails currentUser, LearningPlan plan) {
-        return readOnlyTransaction.execute(status -> assembler.plan(accessService.requireStudent(currentUser), plan));
+        return transactions.readOnly(() -> assembler.plan(accessService.requireStudent(currentUser), plan));
     }
 
     /** Inputs read before calling SparkBot. Only a setup draft carries the setup state to verify before saving. */
@@ -355,22 +333,36 @@ public class LearningPlanService {
             SecurityUserDetails currentUser,
             ComposeInputs inputs,
             String requestedLanguage,
-            boolean keepPick) {
+            boolean keepPick,
+            boolean stripExpiredDeadline) {
         String language = LanguageCodes.forRequest(requestedLanguage, inputs.user().getPreferredLanguage());
         Optional<PlanComposer.AiDraft> aiDraft = planAdvisor.draft(
                 inputs.user(), currentUser.getSessionId(), language, inputs.goal(), inputs.placement(),
                 inputs.candidates(), inputs.today());
         PlanComposer.Composed composed = PlanComposer.compose(
                 inputs.goal(), inputs.placement(), inputs.candidates(), aiDraft, inputs.today());
-        return writeTransaction.execute(status -> {
+        return transactions.writeReadCommitted(() -> {
             StudentProfile locked = lockStudent(currentUser);
             LearningPlan current = lockUnchangedPlan(locked, inputs.expected());
             LearningPlan edited = inputs.expectedSetup() == null
                     ? null : requireUnchangedSetup(locked, inputs.expectedSetup());
+            Instant saveInstant = clock.now();
+            LocalDate saveToday = clock.dayAt(saveInstant);
+            PlanComposer.Goal effectiveGoal = inputs.goal();
+            PlanComposer.Composed saveComposed = composed;
+            if (!saveToday.equals(inputs.today())) {
+                if (stripExpiredDeadline) {
+                    effectiveGoal = effectiveGoal.startingOn(saveToday);
+                } else {
+                    validateDeadline(effectiveGoal.deadline(), saveToday);
+                }
+                saveComposed = PlanComposer.compose(
+                        effectiveGoal, inputs.placement(), inputs.candidates(), aiDraft, saveToday);
+            }
             LearningPlan rebuilt = current != null ? current : edited;
             Long pick = keepPick && rebuilt != null ? rebuilt.getPickedClassId() : null;
-            return save(locked, inputs.goal(), inputs.placement(), composed, aiDraft, inputs.today(),
-                    inputs.checkedAt(), LocalDateTime.now(), inputs.expectedSetup() != null, pick);
+            return save(locked, effectiveGoal, inputs.placement(), saveComposed, aiDraft, saveToday,
+                    inputs.checkedAt(), clock.serverTimeAt(saveInstant), inputs.expectedSetup() != null, pick);
         });
     }
 
@@ -390,7 +382,7 @@ public class LearningPlanService {
         PlanComposer.Goal goal = seeded.startingOn(startsOn);
         PlanComposer.Candidates candidates = PlanComposer.candidates(goal, placement, planCatalogue.forNewPlan(student));
         PlanComposer.Composed composed = PlanComposer.compose(goal, placement, candidates, draft, startsOn);
-        StudentProfile locked = studentProfileRepository.findLockedById(student.getId()).orElseThrow();
+        StudentProfile locked = accessService.lockProfile(student);
         save(locked, goal, placement, composed, draft, startsOn, placement.checked() ? builtAt : null, builtAt, false,
                 null);
     }
@@ -459,7 +451,8 @@ public class LearningPlanService {
 
         if (!draft) {
             // The bulk writes cleared the persistence context. Read the locked row again before updating it.
-            StudentProfile locked = studentProfileRepository.findLockedById(studentId).orElseThrow();
+            StudentProfile locked = Objects.requireNonNull(
+                    entityManager.find(StudentProfile.class, studentId, LockModeType.PESSIMISTIC_WRITE));
             locked.setPlanSetupState(PlanSetupState.COMPLETED);
         }
         return saved;
@@ -551,16 +544,20 @@ public class LearningPlanService {
             throw new ResponseStatusException(BAD_REQUEST, "Tell us your reason in your own words.");
         }
         LocalDate deadline = input.deadline();
+        validateDeadline(deadline, today);
+        return new PlanComposer.Goal(input.reason(), input.reason() == PlanReason.OTHER ? reasonText : null,
+                input.goals(), ownWords, deadline, input.pace(), input.focus());
+    }
+
+    private static void validateDeadline(LocalDate deadline, LocalDate today) {
         // The calendar offers tomorrow up to two years from today.
         if (deadline != null
                 && (!deadline.isAfter(today) || deadline.isAfter(today.plusDays(PlanComposer.MAX_GOAL_DAYS)))) {
             throw new ResponseStatusException(BAD_REQUEST, "Pick a date in the future, within 2 years.");
         }
-        return new PlanComposer.Goal(input.reason(), input.reason() == PlanReason.OTHER ? reasonText : null,
-                input.goals(), ownWords, deadline, input.pace(), input.focus());
     }
 
-    private PlanComposer.Placement placement(PlanRequests.LevelCheckInput input) {
+    private PlanComposer.Placement placement(Long studentId, PlanRequests.LevelCheckInput input) {
         if (input.skipped()) {
             // "Brand new? Skip the check": only someone new to Mandarin may skip it.
             if (input.selfLevel() != PlanSelfLevel.NEW_TO_MANDARIN) {
@@ -570,7 +567,7 @@ public class LearningPlanService {
                     List.of(), 0, false);
         }
         return placementOf(input.selfLevel(),
-                levelCheckService.evaluate(input.selfLevel().checkStart(), input.answers()));
+                levelCheckService.evaluate(studentId, input.selfLevel().checkStart(), input.answers(), input.runToken()));
     }
 
     /** Where a finished (graded) level check placed the student. */

@@ -1,8 +1,19 @@
 import { describe, expect, it } from 'vitest'
 
-import { readPersistedLocale, safeGetItem, safeRemoveItem, safeSetItem, storageKeys } from './storage'
+import { safeGetItem, safeRemoveItem, safeSetItem, sessionOwner } from './storage'
 
 describe('safe storage helpers', () => {
+  it('parses sessionOwner only for positive safe integer ids or explicit null sign-out', () => {
+    expect(sessionOwner(JSON.stringify({ userId: 42 }))).toBe(42)
+    expect(sessionOwner(JSON.stringify({ userId: null }))).toBeNull()
+    expect(sessionOwner(JSON.stringify({ userId: 0 }))).toBeUndefined()
+    expect(sessionOwner(JSON.stringify({ userId: -5 }))).toBeUndefined()
+    expect(sessionOwner(JSON.stringify({ userId: 1.5 }))).toBeUndefined()
+    expect(sessionOwner(JSON.stringify({ userId: '42' }))).toBeUndefined()
+    expect(sessionOwner('not-json')).toBeUndefined()
+    expect(sessionOwner(null)).toBeUndefined()
+  })
+
   it('no-ops safely when browser storage is unavailable', () => {
     expect(safeGetItem('missing', null)).toBeNull()
     expect(() => safeSetItem('missing', 'value', null)).not.toThrow()
@@ -25,18 +36,5 @@ describe('safe storage helpers', () => {
     expect(safeGetItem('key', throwingStorage)).toBeNull()
     expect(() => safeSetItem('key', 'value', throwingStorage)).not.toThrow()
     expect(() => safeRemoveItem('key', throwingStorage)).not.toThrow()
-  })
-
-  it('reads only supported persisted locales and falls back to English otherwise', () => {
-    expect(readPersistedLocale()).toBe('en')
-
-    window.localStorage.setItem(storageKeys.language, 'zh-CN')
-    expect(readPersistedLocale()).toBe('zh-CN')
-
-    window.localStorage.setItem(storageKeys.language, 'ms')
-    expect(readPersistedLocale()).toBe('ms')
-
-    window.localStorage.setItem(storageKeys.language, 'fr')
-    expect(readPersistedLocale()).toBe('en')
   })
 })

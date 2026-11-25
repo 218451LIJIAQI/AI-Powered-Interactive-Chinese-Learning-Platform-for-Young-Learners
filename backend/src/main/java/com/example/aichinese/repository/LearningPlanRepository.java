@@ -11,11 +11,20 @@ import org.springframework.data.repository.query.Param;
 import com.example.aichinese.entity.LearningPlan;
 import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.entity.enums.MandarinLevel;
-import com.example.aichinese.repository.projection.XiaomeiPlanGoal;
+import com.example.aichinese.entity.enums.PlanReason;
+import com.example.aichinese.util.TextUtils;
 
 import jakarta.persistence.LockModeType;
 
 public interface LearningPlanRepository extends JpaRepository<LearningPlan, Long> {
+
+    /** Projection of the learner's active plan goal: SparkBot's goal title (null for a rule-built plan) and its reason. */
+    record XiaomeiPlanGoal(String goalTitle, PlanReason reason) {
+
+        public XiaomeiPlanGoal {
+            goalTitle = TextUtils.trimToNull(goalTitle);
+        }
+    }
 
     Optional<LearningPlan> findFirstByStudentIdAndActiveTrueOrderByVersionDesc(Long studentId);
 

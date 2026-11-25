@@ -15,6 +15,7 @@ import com.example.aichinese.config.EmailProperties;
 import com.example.aichinese.dto.account.EmailChangeResponse;
 import com.example.aichinese.entity.EmailChangeToken;
 import com.example.aichinese.entity.User;
+import com.example.aichinese.repository.AdminInviteRepository;
 import com.example.aichinese.repository.EmailChangeTokenRepository;
 import com.example.aichinese.repository.PasswordResetTokenRepository;
 import com.example.aichinese.repository.UserRepository;
@@ -26,7 +27,6 @@ import com.example.aichinese.service.AuthService;
 import com.example.aichinese.service.RefreshTokenService;
 import com.example.aichinese.service.SecureTokens;
 import com.example.aichinese.service.TransactionalEmailDispatcher;
-import com.example.aichinese.service.admin.AuditLogQueryService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -47,6 +47,7 @@ public class AccountEmailService {
     private final UserRepository userRepository;
     private final EmailChangeTokenRepository tokenRepository;
     private final PasswordResetTokenRepository passwordResetTokenRepository;
+    private final AdminInviteRepository adminInviteRepository;
     private final AuthService authService;
     private final TransactionalEmailDispatcher emailDispatcher;
     private final EmailProperties emailProperties;
@@ -129,7 +130,7 @@ public class AccountEmailService {
 
     private void audit(User user, String action, String description) {
         auditLogService.record(user, action,
-                new AuditTarget(AuditLogQueryService.TARGET_USER, user.getId(), user.getDisplayName()), null, description);
+                new AuditTarget(AuditLogService.TARGET_USER, user.getId(), user.getDisplayName()), null, description);
     }
 
     /** Opens the link: the new address replaces the old one and every session is signed out. */
@@ -145,8 +146,14 @@ public class AccountEmailService {
         EmailChangeToken token = claimed.token();
         User user = claimed.user();
         LocalDateTime now = claimed.claimedAt();
-        AccountGuards.requireUnregisteredEmail(userRepository, token.getNewEmail());
-        user.setEmail(token.getNewEmail());
+        String newEmail = token.getNewEmail();
+        AccountGuards.requireUnregisteredEmail(userRepository, newEmail);
+        // Any open admin invite for the newly claimed address is cancelled before writing users.email
+        // (global lock order: existing users -> admin_invites -> users.idx_users_email).
+        adminInviteRepository.cancelOpenForEmail(newEmail, now);
+        // Re-check under READ_COMMITTED so an admin invite accepted while waiting is rejected cleanly as 400.
+        AccountGuards.requireUnregisteredEmail(userRepository, newEmail);
+        user.setEmail(newEmail);
         // The link went to the new address, so opening it confirms that address too.
         user.setEmailVerifiedAt(now);
         refreshTokenService.invalidateSessions(user);

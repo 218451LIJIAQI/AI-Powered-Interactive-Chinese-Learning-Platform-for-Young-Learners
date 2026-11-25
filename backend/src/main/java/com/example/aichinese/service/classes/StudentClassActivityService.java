@@ -25,9 +25,11 @@ import com.example.aichinese.entity.StudentProfile;
 import com.example.aichinese.entity.TracingExercise;
 import com.example.aichinese.entity.base.LessonActivity;
 import com.example.aichinese.entity.enums.ClassActivityType;
+import com.example.aichinese.entity.enums.EnumLookups;
 import com.example.aichinese.repository.ClassActivityCompletionRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.StudentLearningAccessService;
+import com.example.aichinese.service.learn.HintPolicyService;
 import com.example.aichinese.util.TextUtils;
 
 import lombok.RequiredArgsConstructor;
@@ -48,12 +50,13 @@ public class StudentClassActivityService {
     private final ClassContentSupport content;
     private final ClassProgressService progress;
     private final ClassActivityCompletionRepository completionRepository;
+    private final HintPolicyService hintPolicyService;
 
     private record OpenActivity(StudentProfile student, Long classId, Lesson lesson, LessonActivity activity) {
     }
 
     private OpenActivity open(StudentProfile student, String type, Long activityId) {
-        ClassActivityType activityType = ClassActivityType.tryFrom(type)
+        ClassActivityType activityType = EnumLookups.tryFrom(ClassActivityType.class, type)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, ACTIVITY_NOT_FOUND));
         LessonActivity activity = content.findActivity(activityType, activityId)
                 .filter(found -> found.getLesson() != null)
@@ -121,7 +124,9 @@ public class StudentClassActivityService {
         if (!hasMaterial) {
             throw new ResponseStatusException(BAD_REQUEST, "This activity has no learning material yet.");
         }
-        return new LessonViews.ActivityOutcome(true, List.of(), record(open).status());
+        boolean wasCompleted = progress.lessonState(open.student(), open.lesson()).completed();
+        ClassProgressService.LessonState after = record(open);
+        return new LessonViews.ActivityOutcome(true, List.of(), after.status(), !wasCompleted && after.completed());
     }
 
     /** Checks the student's pairs; the activity completes when every pair is right. */
@@ -151,10 +156,10 @@ public class StudentClassActivityService {
         if (!chosen.isEmpty()) {
             throw new ResponseStatusException(BAD_REQUEST, "Pair the words of this activity only.");
         }
-        ClassProgressService.LessonState state = allRight
-                ? record(open)
-                : progress.lessonState(open.student(), open.lesson());
-        return new LessonViews.ActivityOutcome(allRight, results, state.status());
+        ClassProgressService.LessonState before = progress.lessonState(open.student(), open.lesson());
+        ClassProgressService.LessonState state = allRight ? record(open) : before;
+        return new LessonViews.ActivityOutcome(allRight, results, state.status(),
+                allRight && !before.completed() && state.completed());
     }
 
     /**
@@ -167,6 +172,7 @@ public class StudentClassActivityService {
         if (!hintsAllowed(open.lesson())) {
             throw new ResponseStatusException(BAD_REQUEST, "Hints are not available in this activity.");
         }
+        hintPolicyService.requireHintsOn(open.student());
         return content.matchingItems(activityId).stream()
                 .filter(item -> item.getId().equals(wordId))
                 .findFirst()

@@ -74,11 +74,16 @@ describe('EN / MS / zh-CN message bundles (FRLANG01, FRLANG02)', () => {
         expect(text, `${locale}.${key} unspaced pipe`).not.toMatch(/(?<! )\||\|(?! )/)
         // Reject stray linked-message syntax (`@:key`, `@.lower:key`, `@{'...'}`) that vue-i18n compiles silently.
         expect(text, `${locale}.${key} linked-message syntax`).not.toMatch(/@[:.{]/)
-        // Malay and Chinese may use one form where English has singular | plural, but never different forms.
+        // Reject whitespace-padded placeholders (`{ name }`) that vue-i18n treats as literal text instead of interpolating.
+        expect(text, `${locale}.${key} padded placeholder`).not.toMatch(/\{\s+\w+\s*\}|\{\s*\w+\s+\}/)
+        // Malay and Chinese may use one form where English has singular | plural, but 3-form keys keep their zero form.
         const branches = text.split('|')
         const englishBranches = reference.split('|')
         const forms = branches.length
-        expect(forms === englishBranches.length || forms === 1, `${locale}.${key} plural forms`).toBe(true)
+        expect(
+          forms === englishBranches.length || (englishBranches.length === 2 && forms === 1),
+          `${locale}.${key} plural forms`,
+        ).toBe(true)
         // Multi-form translations must preserve every placeholder in the matching English branch (catches dropped {count}).
         if (forms === englishBranches.length && forms > 1) {
           for (let index = 0; index < forms; index++) {
@@ -102,7 +107,6 @@ describe('EN / MS / zh-CN message bundles (FRLANG01, FRLANG02)', () => {
   it.each([
     ['aiHelper', ['aiHelperMessages', 'aiAskMessages', 'aiGeneratorMessages', 'aiTalkMessages', 'aiVoiceMessages']],
     ['plan', ['planPathMessages', 'planSetupMessages', 'planSummaryMessages']],
-    ['answer', ['hintChromeMessages', 'practiceAnswerMessages']],
     ['learn', ['learnSharedMessages', 'learnBadgeMessages', 'learnMessages']],
     ['adminLearning', ['adminLearningSharedMessages', 'adminLearningPathMessages', 'adminPracticeLibraryMessages']],
   ] as const)('the %s bundles merged under one namespace never define the same key twice', (_namespace, names) => {

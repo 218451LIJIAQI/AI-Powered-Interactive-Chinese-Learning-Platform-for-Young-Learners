@@ -1,6 +1,6 @@
 <template>
   <div class="page-stack ai-helper-page">
-    <PageHeaderBlock :title="t('nav.aiHelper')" hide-title />
+    <h1 class="sr-only">{{ t('nav.aiHelper') }}</h1>
 
     <RouteTabs :tabs="tabs" :label="t('aiHelper.tabsLabel')">
       <span class="route-tabs-note">{{ t('aiHelper.practiceNote') }}</span>
@@ -12,9 +12,9 @@
     </RouteTabs>
 
     <!-- The AI is off or today's requests are used up: one calm line, with the way that still works. -->
-    <div v-if="blocked" class="alert alert-warning ai-helper-notice" role="status" data-testid="ai-blocked">
+    <div v-if="blocked" class="callout is-warning" role="status" data-testid="ai-blocked">
       <IconGlyph name="alert" :size="16" />
-      <p>
+      <div>
         <template v-if="tab === 'talk' && tavusDeploymentId">
           <strong>{{ t(blocked === 'limit' ? 'aiHelper.talkReplyLimit' : 'aiHelper.talkReplyUnavailable') }}</strong>
           {{ t('aiHelper.tryLiveVideo') }}
@@ -29,19 +29,13 @@
           }}</strong>
           {{ t('aiHelper.unavailableMessage') }}
         </template>
-      </p>
+      </div>
       <RouterLink class="btn btn-secondary btn-sm" :to="{ name: 'student-practice' }">
         <IconGlyph name="practice" :size="16" />
         {{ t('aiHelper.goToPractice') }}
       </RouterLink>
     </div>
-    <DataNotice v-else-if="statusResource.error.value" :error="statusResource.error.value">
-      <template #actions>
-        <button class="btn btn-secondary btn-sm" type="button" @click="statusResource.reload">
-          {{ t('common.retry') }}
-        </button>
-      </template>
-    </DataNotice>
+    <DataNotice :error="statusResource.error.value" @retry="statusResource.reload" />
 
     <KeepAlive>
       <component :is="TABS[tab].component" :key="tab" v-bind="tabProps" v-on="tabListeners">
@@ -72,13 +66,13 @@ import AppToast from '@/components/common/AppToast.vue'
 import DataNotice from '@/components/common/DataNotice.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import RouteTabs, { type RouteTab } from '@/components/common/RouteTabs.vue'
-import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { configuredTavusDeploymentId } from '@/composables/usePublicPlatformSettings'
 import { useResource } from '@/composables/useResource'
 import { useToast } from '@/composables/useToast'
 import { aiHelperMessages } from '@/plugins/aiHelperMessages'
 import { shownAiNotice } from '@/plugins/aiSafetyMessages'
+import { firstQueryText } from '@/utils/routeQuery'
 
 /**
  * The AI Helper: optional practice with Xiaomei and SparkBot. Each mode is its own route (/student/ai/talk, ask, quiz,
@@ -127,19 +121,10 @@ const blocked = computed<AiBlockedReason>(() => {
  */
 const tabProps = computed(() => {
   const shared = { blocked: blocked.value, aiNotice: shownAiNotice(status.value?.aiNotice, t) }
-  switch (tab.value) {
-    case 'talk':
-      return { ...shared, tavusDeploymentId }
-    case 'ask':
-      return { ...shared, initialQuestion: typeof route.query.q === 'string' ? route.query.q : null }
-    case 'quiz':
-    case 'story':
-      return { ...shared, kind: tab.value }
-    case 'voice':
-      return { ...shared, status: status.value }
-    default:
-      return shared
-  }
+  if (tab.value === 'talk') return { ...shared, tavusDeploymentId }
+  if (tab.value === 'ask') return { ...shared, initialQuestion: firstQueryText(route.query.q) || null }
+  if (tab.value === 'voice') return { ...shared, status: status.value }
+  return { ...shared, kind: tab.value }
 })
 
 /**

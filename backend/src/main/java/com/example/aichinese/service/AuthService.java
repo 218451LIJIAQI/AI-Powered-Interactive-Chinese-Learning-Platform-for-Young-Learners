@@ -36,6 +36,7 @@ import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.RoleName;
 import com.example.aichinese.exception.FriendlyErrorMessageResolver;
 import com.example.aichinese.exception.RetryLaterException;
+import com.example.aichinese.repository.AdminInviteRepository;
 import com.example.aichinese.repository.EmailChangeTokenRepository;
 import com.example.aichinese.repository.PasswordResetTokenRepository;
 import com.example.aichinese.repository.RoleRepository;
@@ -46,7 +47,6 @@ import com.example.aichinese.security.LoginAttemptLimiter;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.account.AccountGuards;
 import com.example.aichinese.service.account.CurrentAccount;
-import com.example.aichinese.service.admin.AuditLogQueryService;
 import com.example.aichinese.service.account.EmailConfirmationService;
 import com.example.aichinese.util.AfterCommit;
 import com.example.aichinese.util.LanguageCodes;
@@ -60,6 +60,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class AuthService {
 
+    public static final String ACTION_ACCOUNT_CREATED = "ACCOUNT_CREATED";
     private static final Duration RESET_TOKEN_TTL = Duration.ofMinutes(60);
     private static final String GENERIC_RESET_TOKEN_INVALID_MESSAGE =
             "Reset token is invalid or has already been used.";
@@ -69,6 +70,7 @@ public class AuthService {
     private final StudentProfileRepository studentProfileRepository;
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final EmailChangeTokenRepository emailChangeTokenRepository;
+    private final AdminInviteRepository adminInviteRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final RefreshTokenService refreshTokenService;
@@ -83,10 +85,16 @@ public class AuthService {
     /** Lazily encoded once with the active PasswordEncoder so unknown-email logins match real BCrypt timing. */
     private volatile String dummyPasswordHash;
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public LinkTokenResponse registerStudent(RegisterStudentRequest request) {
         validatePasswords(request.password(), request.confirmPassword());
-        User savedUser = createAccount(request.fullName(), normalizeEmail(request.email()), request.password(),
+        String email = normalizeEmail(request.email());
+        AccountGuards.requireUnregisteredEmail(userRepository, email);
+        // Pre-encode before acquiring row locks so BCrypt(12) never holds write locks on admin_invites or users.
+        String encodedPassword = passwordEncoder.encode(request.password());
+        // Cancel any open admin invite before claiming the address in users (global lock order: admin_invites -> users).
+        adminInviteRepository.cancelOpenForEmail(email, LocalDateTime.now());
+        User savedUser = createAccountWithEncodedPassword(request.fullName(), email, encodedPassword,
                 LanguageCodes.normalizeOrDefault(request.preferredLanguage()), RoleName.STUDENT);
 
         StudentProfile profile = new StudentProfile();
@@ -94,7 +102,7 @@ public class AuthService {
         studentProfileRepository.save(profile);
         // The learner can learn at once; Home asks them to confirm the address with the link sent now.
         emailConfirmationService.sendFirstLink(savedUser);
-        auditUser(savedUser, "ACCOUNT_CREATED", "User created a learner account.");
+        auditUser(savedUser, ACTION_ACCOUNT_CREATED, "User created a learner account.");
 
         return new LinkTokenResponse(savedUser.getEmail());
     }
@@ -105,13 +113,20 @@ public class AuthService {
      */
     @Transactional
     public User createAccount(String fullName, String email, String password, String language, RoleName roleName) {
+        return createAccountWithEncodedPassword(fullName, email, passwordEncoder.encode(password), language, roleName);
+    }
+
+    /** Same as {@link #createAccount} when the caller pre-encoded the password before taking row locks. */
+    @Transactional
+    public User createAccountWithEncodedPassword(
+            String fullName, String email, String encodedPassword, String language, RoleName roleName) {
         String normalizedEmail = normalizeEmail(email);
         AccountGuards.requireUnregisteredEmail(userRepository, normalizedEmail);
 
         User user = new User();
         user.setDisplayName(fullName);
         user.setEmail(normalizedEmail);
-        user.setPasswordHash(passwordEncoder.encode(password));
+        user.setPasswordHash(encodedPassword);
         user.setPreferredLanguage(language);
         user.setActive(true);
         user.setRoles(new HashSet<>(Set.of(roleRepository.findByName(roleName)
@@ -120,7 +135,7 @@ public class AuthService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    public AuthSessionResponse login(LoginRequest request, String clientIp, String userAgent) {
+    public AuthSessionResponse login(LoginRequest request, String clientIp) {
         String email = normalizeEmail(request.email());
         requireNotLockedOut(email, clientIp);
 
@@ -151,7 +166,7 @@ public class AuthService {
             throw new ResponseStatusException(FORBIDDEN, AccountGuards.ACCOUNT_UNAVAILABLE_MESSAGE);
         }
 
-        RefreshTokenIssue refreshToken = refreshTokenService.issue(user, clientIp, userAgent, request.keepSignedIn());
+        RefreshTokenIssue refreshToken = refreshTokenService.issue(user, request.keepSignedIn());
         AfterCommit.run(() -> loginAttemptLimiter.recordSuccess(email, clientIp));
         return sessionWithAccessToken(user, refreshToken);
     }
@@ -169,8 +184,8 @@ public class AuthService {
         }
     }
 
-    public AuthSessionResponse refreshSession(String rawRefreshToken, String clientIp, String userAgent) {
-        RefreshTokenService.RefreshSession refreshed = refreshTokenService.rotate(rawRefreshToken, clientIp, userAgent);
+    public AuthSessionResponse refreshSession(String rawRefreshToken) {
+        RefreshTokenService.RefreshSession refreshed = refreshTokenService.rotate(rawRefreshToken);
         return sessionWithAccessToken(refreshed.user(), refreshed.refreshToken());
     }
 
@@ -199,9 +214,15 @@ public class AuthService {
     public void logout(SecurityUserDetails currentUser) {
         User user = currentAccount.findById(currentUser.getUserId());
         entityManager.refresh(user, LockModeType.PESSIMISTIC_WRITE);
+        // Guard against stale tokens: an account deactivated, deleted, or whose session version already moved on
+        // must not have a newer session invalidated or a spurious LOGOUT entry recorded.
+        if (!AccountGuards.isAvailable(user) || user.getSessionVersion() != currentUser.getSessionVersion()) {
+            return;
+        }
         if (currentUser.getSessionId() != null) {
-            refreshTokenService.endSession(user, currentUser.getSessionId());
-            auditUser(user, "LOGOUT", "User signed out of this browser; other sessions stay signed in.");
+            if (refreshTokenService.endSession(user, currentUser.getSessionId()) > 0) {
+                auditUser(user, "LOGOUT", "User signed out of this browser; other sessions stay signed in.");
+            }
             return;
         }
         refreshTokenService.invalidateSessions(user);
@@ -266,6 +287,13 @@ public class AuthService {
 
         PasswordResetToken token = findResetToken(request.token());
         User user = token.getUser();
+        // Check token usability and encode the new password before acquiring row write locks so BCrypt(12) never holds locks.
+        if (!AccountGuards.isAvailable(user)) {
+            throw new ResponseStatusException(BAD_REQUEST, GENERIC_RESET_TOKEN_INVALID_MESSAGE);
+        }
+        requireResetTokenUnusedAndUnexpired(token);
+        String encodedPassword = passwordEncoder.encode(request.password());
+
         entityManager.refresh(user, LockModeType.PESSIMISTIC_WRITE);
         if (!AccountGuards.isAvailable(user)) {
             throw new ResponseStatusException(BAD_REQUEST, GENERIC_RESET_TOKEN_INVALID_MESSAGE);
@@ -278,7 +306,7 @@ public class AuthService {
             throw new ResponseStatusException(BAD_REQUEST, GENERIC_RESET_TOKEN_INVALID_MESSAGE);
         }
 
-        user.setPasswordHash(passwordEncoder.encode(request.password()));
+        user.setPasswordHash(encodedPassword);
         refreshTokenService.invalidateSessions(user);
         // An e-mail change asked for with the old password must not go through after it was replaced.
         emailChangeTokenRepository.retireOpenTokensForUser(user.getId(), now);
@@ -314,8 +342,7 @@ public class AuthService {
     public AuthSessionResponse changePassword(
             SecurityUserDetails currentUser,
             ChangePasswordRequest request,
-            String clientIp,
-            String userAgent) {
+            String clientIp) {
         // Verify session liveness, current password and encode the new one before locking so BCrypt work never holds
         // the account row lock.
         User unlocked = currentAccount.findById(currentUser.getUserId());
@@ -336,13 +363,13 @@ public class AuthService {
         auditUser(user, "PASSWORD_CHANGED", "User changed their password; other sessions were signed out.");
 
         // A session signed in without "Keep me signed in" (a shared computer) must not come back persistent.
-        return sessionWithAccessToken(user,
-                refreshTokenService.issue(user, clientIp, userAgent, currentUser.isPersistentSession()));
+        return sessionWithAccessToken(user, refreshTokenService.issue(user, currentUser.isPersistentSession()));
     }
 
     /**
-     * The signed-in account, write-locked and still available, once its current password is confirmed (password and
-     * e-mail changes). Wrong current passwords are limited and their lockout audited like sign-in.
+     * The signed-in account, write-locked and still available, once its current password is confirmed (e-mail changes;
+     * {@link #changePassword} calls the unlocked-check and lock-recheck helpers directly around encoding the new
+     * password). Wrong current passwords are limited and their lockout audited like sign-in.
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public User requireCurrentPassword(SecurityUserDetails currentUser, String currentPassword, String clientIp) {
@@ -352,8 +379,8 @@ public class AuthService {
     }
 
     /**
-     * Verifies session liveness, lockout and BCrypt before taking the row lock so revoked sessions or wrong passwords
-     * cannot hold write locks or trigger account lockout.
+     * Verifies session liveness, lockout and BCrypt before taking the row lock so neither revoked sessions nor wrong
+     * passwords hold write locks, and revoked sessions cannot trigger account lockout.
      */
     private String verifyCurrentPasswordUnlocked(
             SecurityUserDetails currentUser,
@@ -384,6 +411,8 @@ public class AuthService {
             String checkedHash) {
         entityManager.refresh(user, LockModeType.PESSIMISTIC_WRITE);
         AccountGuards.requireAvailable(user);
+        AccountGuards.requireCurrent(user, currentUser.getSessionVersion());
+        currentAccount.requireActiveSession(user.getId(), currentUser.getSessionId());
         String limiterKey = user.getEmail();
         requireNotLockedOut(limiterKey, clientIp);
         if (!checkedHash.equals(user.getPasswordHash())
@@ -391,8 +420,6 @@ public class AuthService {
             recordLoginFailure(limiterKey, clientIp);
             throw new ResponseStatusException(BAD_REQUEST, "Current password is incorrect.");
         }
-        AccountGuards.requireCurrent(user, currentUser.getSessionVersion());
-        currentAccount.requireActiveSession(user.getId(), currentUser.getSessionId());
         AfterCommit.run(() -> loginAttemptLimiter.recordSuccess(limiterKey, clientIp));
         return user;
     }
@@ -447,13 +474,13 @@ public class AuthService {
     }
 
     private void auditUser(User user, String actionType, String description) {
-        auditLogService.safeRecord(user, actionType, AuditLogQueryService.TARGET_USER, user.getId(), description);
+        auditLogService.safeRecord(user, actionType, AuditLogService.TARGET_USER, user.getId(), description);
     }
 
     private void recordLoginFailure(String email, String clientIp) {
         if (loginAttemptLimiter.recordFailure(email, clientIp)) {
             // Written at once: a wrong current password rolls its request back, and the lockout must stay.
-            auditLogService.safeRecordInNewTransaction("LOGIN_LOCKOUT", AuditLogQueryService.TARGET_USER,
+            auditLogService.safeRecordInNewTransaction("LOGIN_LOCKOUT", AuditLogService.TARGET_USER,
                     "Login lockout engaged after repeated failed attempts.");
         }
     }

@@ -12,6 +12,7 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -20,8 +21,9 @@ import lombok.Setter;
 @Entity
 @Table(name = "lessons", indexes = {
         @Index(name = "idx_lessons_status_updated", columnList = "content_status,updated_at"),
-        @Index(name = "idx_lessons_status_created_at", columnList = "content_status,created_at"),
         @Index(name = "idx_lessons_module_position", columnList = "module_id,unit_position")
+}, uniqueConstraints = {
+        @UniqueConstraint(name = "uk_lessons_revision_of", columnNames = "revision_of_lesson_id")
 })
 public class Lesson extends PublishableContent {
 

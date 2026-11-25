@@ -1,7 +1,6 @@
 /** Admin Practice library route: set list, details drawer, and set authoring editor (namespace `adminLearning`). */
 export const adminPracticeLibraryMessages = {
   en: {
-    libraryPageTitle: 'Practice library',
     newActivity: 'New activity',
     openActivity: 'Open {title}',
     restoreActivity: 'Restore {title}',
@@ -48,8 +47,8 @@ export const adminPracticeLibraryMessages = {
     newActivitySubtitle: 'Practice library · saved as a draft first',
     liveEditSubtitle: 'Published · changes go live when you save',
     draftEditSubtitle: 'Draft · learners can’t see it until you publish',
-    archivedEditSubtitle: 'Archived · restore the draft and publish it for learners',
     editActivity: 'Edit activity',
+    createdBy: 'Created by {author}',
     createdByPlayed: 'Created by {author} · played by 1 learner | Created by {author} · played by {count} learners',
     titlePlaceholder: 'e.g. Campus Words',
     titleRequired: 'Give the activity a title.',
@@ -99,7 +98,6 @@ export const adminPracticeLibraryMessages = {
     saveDraft: 'Save draft',
   },
   ms: {
-    libraryPageTitle: 'Pustaka latihan',
     newActivity: 'Aktiviti baharu',
     openActivity: 'Buka {title}',
     restoreActivity: 'Pulihkan {title}',
@@ -146,8 +144,8 @@ export const adminPracticeLibraryMessages = {
     newActivitySubtitle: 'Pustaka latihan · disimpan sebagai draf dahulu',
     liveEditSubtitle: 'Diterbitkan · perubahan berkuat kuasa apabila anda menyimpan',
     draftEditSubtitle: 'Draf · pelajar tidak dapat melihatnya sehingga anda menerbitkannya',
-    archivedEditSubtitle: 'Diarkibkan · pulihkan draf dan terbitkannya untuk pelajar',
     editActivity: 'Sunting aktiviti',
+    createdBy: 'Dicipta oleh {author}',
     createdByPlayed: 'Dicipta oleh {author} · dimainkan oleh {count} pelajar',
     titlePlaceholder: 'cth. Perkataan Kampus',
     titleRequired: 'Berikan tajuk kepada aktiviti.',
@@ -197,7 +195,6 @@ export const adminPracticeLibraryMessages = {
     saveDraft: 'Simpan draf',
   },
   'zh-CN': {
-    libraryPageTitle: '练习库',
     newActivity: '新建活动',
     openActivity: '打开{title}',
     restoreActivity: '恢复 {title}',
@@ -244,8 +241,8 @@ export const adminPracticeLibraryMessages = {
     newActivitySubtitle: '练习库 · 先保存为草稿',
     liveEditSubtitle: '已发布 · 保存后立即生效',
     draftEditSubtitle: '草稿 · 发布前学习者看不到',
-    archivedEditSubtitle: '已归档 · 恢复为草稿并发布后，学习者即可查看',
     editActivity: '编辑活动',
+    createdBy: '由 {author} 创建',
     createdByPlayed: '由 {author} 创建 · {count} 名学习者练习过',
     titlePlaceholder: '例如：校园词汇',
     titleRequired: '请为活动填写标题。',

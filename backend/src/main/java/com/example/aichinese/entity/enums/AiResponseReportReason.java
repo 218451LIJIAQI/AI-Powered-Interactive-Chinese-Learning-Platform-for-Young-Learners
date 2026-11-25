@@ -1,7 +1,5 @@
 package com.example.aichinese.entity.enums;
 
-import java.util.Optional;
-
 public enum AiResponseReportReason {
 
     INCORRECT_CONTENT,
@@ -17,9 +15,5 @@ public enum AiResponseReportReason {
     /** An AI-written plan text that does not match what the learner wrote in the setup (X2.23). */
     DOES_NOT_MATCH_INPUT,
 
-    OTHER;
-
-    public static Optional<AiResponseReportReason> tryFrom(String value) {
-        return EnumLookups.tryFrom(AiResponseReportReason.class, value);
-    }
+    OTHER
 }

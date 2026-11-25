@@ -49,7 +49,6 @@ app:
       refresh-token-same-site: Strict
   upload:
     directory: ./target/test-uploads
-    max-file-size: 1KB
     support-screenshot-max-file-size: 1KB
     ai-audio-max-file-size: 1KB
     ai-image-max-file-size: 2KB

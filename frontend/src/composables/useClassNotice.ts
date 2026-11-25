@@ -6,8 +6,8 @@ import { useToast } from '@/composables/useToast'
 /** A confirmation a classes page leaves for the page it opens next. */
 interface ClassNotice {
   readonly message: string
-  /** Optional route name this notice belongs to so it cannot leak onto an unrelated classes page. */
-  readonly targetRoute?: string
+  /** Route name this notice belongs to so it cannot leak onto an unrelated classes page. */
+  readonly targetRoute: string
   /** The class just joined: the next page offers Undo, which leaves it again. */
   readonly joinedClassId?: number
   /** Title of the joined class so Undo errors can still name it before the list finishes loading. */
@@ -35,34 +35,26 @@ export function reconcileClassNoticeNavigation(
   failed: boolean,
 ): void {
   if (!pending) return
-  if (failed || (pending.targetRoute && pending.targetRoute !== String(destinationName ?? ''))) {
+  if (failed || pending.targetRoute !== String(destinationName ?? '')) {
     pending = null
   }
 }
 
 /**
  * A page's toast that first shows what the previous page left for it, if anything; `showToast` is for its own actions.
- * A page that can undo a join passes `undoJoin` (its Undo label and what Undo does); elsewhere the notice shows alone.
- * Pass `routeName` so notices scoped to another destination are not shown on the wrong page.
+ * `routeName` scopes notices to their intended destination; a page that can undo a join also passes `undoJoin`.
  */
 export function useClassNotice(
+  routeName: string,
   undoJoin?: { label: string; run: (classId: number, title?: string) => void },
-  routeName?: string,
 ) {
   const { toast, toastAction, showToast } = useToast()
 
   onMounted(() => {
     const notice = pending
     if (!notice) return
-    if (notice.sessionVersion !== getAuthSessionVersion()) {
-      pending = null
-      return
-    }
-    if (notice.targetRoute && notice.targetRoute !== routeName) {
-      pending = null
-      return
-    }
     pending = null
+    if (notice.sessionVersion !== getAuthSessionVersion() || notice.targetRoute !== routeName) return
     const classId = notice.joinedClassId
     if (classId === undefined || !undoJoin) {
       showToast(notice.message)

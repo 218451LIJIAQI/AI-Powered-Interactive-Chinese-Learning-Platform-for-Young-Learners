@@ -4,7 +4,7 @@
  * review step. Dates are ISO strings. The lesson shapes learners share (key phrases, tracing characters, activity
  * types) stay in types/classes.ts.
  */
-import type { ClassTopic, ContentStatus } from './api'
+import type { ClassTopic, ContentStatus, QuizQuestionType } from './api'
 import type { ClassActivityType, KeyPhrase, PhraseCard, TraceCharacter } from './classes'
 
 /** What a row of Content › Classes is: a class, or a lesson of a class. */
@@ -149,8 +149,6 @@ export interface LessonEditor {
   /** False while the class or the lesson is archived. */
   editable: boolean
   title: string
-  minutes: number | null
-  summary: string | null
   keyPhrases: KeyPhrase[]
   video: EditorVideo | null
   videoUploadMaxBytes?: number
@@ -162,8 +160,6 @@ export interface LessonEditor {
 export interface LessonContentPayload {
   title: string
   unitId: number | null
-  minutes: number | null
-  summary: string | null
   keyPhrases: KeyPhrase[]
 }
 
@@ -194,7 +190,7 @@ export interface QuizSettingsPayload {
 }
 
 export interface QuestionPayload {
-  questionType: string
+  questionType: QuizQuestionType
   questionText: string
   points: number
   /** 1-based place in the quiz (Undo of a delete puts the question back there); a new question goes last without it. */

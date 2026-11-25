@@ -23,7 +23,7 @@ import com.example.aichinese.support.MySqlSchema;
  * Upgrades a database that already holds data, as a deployed installation would be upgraded: V2 must keep the data of a
  * V1 database, fill in its new columns from it, convert rows to what the code now writes, and drop an unused column only
  * where it is empty; V3 must remove the teachers from a V2 database and keep everything else; V4 must map the plans'
- * paces, remove the Practice quizzes and recompute the Practice XP of a V3 database; each later migration (V7 to V11)
+ * paces, remove the Practice quizzes and recompute the Practice XP of a V3 database; each later migration (V7 to V14)
  * must likewise keep and convert the rows its test puts in the version before it. Runs against the MySQL
  * server of the tests, in a database of its own (created and dropped here, named after TEST_DB_NAME so that concurrent
  * runs do not drop each other's).
@@ -400,12 +400,202 @@ class MySqlMigrationUpgradeTests {
         assertThat(indexExists(jdbc, "package_items", "uk_package_items_package_item")).isTrue();
     }
 
+    @Test
+    void v12NormalizesAiEnumValuesEnforcesCaseSensitiveChecksAndTunesIndexes() {
+        LocalDateTime at = LAST_CHANGE;
+        JdbcTemplate jdbc = upgrade("11", legacy -> {
+            legacy.update("""
+                    insert into users (id, active, created_at, updated_at, display_name, email, password_hash)
+                    values (1, b'1', ?, ?, 'Learner', 'v12-learner@example.com', 'x')
+                    """, at, at);
+            legacy.update("""
+                    insert into ai_chat_sessions (id, user_id, feature_key, created_at, updated_at)
+                    values (1, 1, 'CHAT_TUTOR', ?, ?)
+                    """, at, at);
+            // V1/V4 checks used utf8mb4_0900_ai_ci, so mixed-case enum values were accepted in V11.
+            legacy.update("""
+                    insert into ai_chat_messages (id, session_id, sender_role, message_text, created_at, updated_at)
+                    values (1, 1, 'user', 'hello', ?, ?),
+                           (2, 1, 'Assistant', 'hi', ?, ?)
+                    """, at, at, at, at);
+            legacy.update("""
+                    insert into ai_usage_logs (id, user_id, feature_key, status, created_at, updated_at)
+                    values (1, 1, 'CHAT_TUTOR', 'success', ?, ?),
+                           (2, 1, 'CHAT_TUTOR', 'Failed', ?, ?)
+                    """, at, at, at, at);
+            legacy.update("""
+                    insert into ai_response_reports
+                        (id, student_user_id, feature_key, status, reason_category, ai_response_snapshot, reviewed_at, created_at, updated_at)
+                    values (1, 1, 'CHAT_TUTOR', 'pending_review', 'incorrect_content', 'resp-1', null, ?, ?),
+                           (2, 1, 'LEARNING_PLAN', 'Resolved', 'does_not_match_input', 'resp-2', ?, ?, ?)
+                    """, at, at, at, at, at);
+        }, "12");
+
+        assertThat(jdbc.queryForList("select sender_role from ai_chat_messages order by id", String.class))
+                .containsExactly("USER", "ASSISTANT");
+        assertThat(jdbc.queryForList("select status from ai_usage_logs order by id", String.class))
+                .containsExactly("SUCCESS", "FAILED");
+        assertThat(jdbc.queryForList("select concat(status, ':', reason_category) from ai_response_reports order by id", String.class))
+                .containsExactly("PENDING_REVIEW:INCORRECT_CONTENT", "RESOLVED:DOES_NOT_MATCH_INPUT");
+
+        assertThatThrownBy(() -> jdbc.update("""
+                insert into ai_chat_messages (id, session_id, sender_role, message_text, created_at, updated_at)
+                values (3, 1, 'user', 'bad', now(), now())
+                """))
+                .isInstanceOf(DataAccessException.class)
+                .hasMessageContaining("chk_ai_chat_messages_sender_role");
+        assertThatThrownBy(() -> jdbc.update("""
+                insert into ai_usage_logs (id, user_id, feature_key, status, created_at, updated_at)
+                values (3, 1, 'CHAT_TUTOR', 'success', now(), now())
+                """))
+                .isInstanceOf(DataAccessException.class)
+                .hasMessageContaining("chk_ai_usage_logs_status");
+        assertThatThrownBy(() -> jdbc.update("""
+                insert into ai_response_reports
+                    (id, student_user_id, feature_key, status, reason_category, ai_response_snapshot, reviewed_at, created_at, updated_at)
+                values (3, 1, 'CHAT_TUTOR', 'pending_review', 'OTHER', 'resp', null, now(), now())
+                """))
+                .isInstanceOf(DataAccessException.class)
+                .hasMessageMatching("(?s).*chk_ai_response_reports_(status|review_consistency).*");
+        assertThatThrownBy(() -> jdbc.update("""
+                insert into ai_response_reports
+                    (id, student_user_id, feature_key, status, reason_category, ai_response_snapshot, reviewed_at, created_at, updated_at)
+                values (4, 1, 'CHAT_TUTOR', 'PENDING_REVIEW', 'other', 'resp', null, now(), now())
+                """))
+                .isInstanceOf(DataAccessException.class)
+                .hasMessageContaining("chk_ai_response_reports_reason_category");
+
+        assertThat(indexExists(jdbc, "support_requests", "idx_support_requests_status_updated")).isTrue();
+        assertThat(indexExists(jdbc, "support_requests", "idx_support_requests_status_solved")).isTrue();
+        assertThat(indexExists(jdbc, "support_requests", "idx_support_requests_requester_email")).isTrue();
+        assertThat(indexExists(jdbc, "support_requests", "idx_support_requests_status_created")).isFalse();
+        assertThat(indexExists(jdbc, "ai_usage_logs", "idx_ai_usage_logs_feature_status")).isTrue();
+        assertThat(indexExists(jdbc, "ai_usage_logs", "idx_ai_usage_logs_feature_key")).isFalse();
+        assertThat(indexExists(jdbc, "refresh_tokens", "idx_refresh_tokens_family_active")).isTrue();
+        assertThat(indexExists(jdbc, "refresh_tokens", "idx_refresh_tokens_user_revoked")).isTrue();
+        assertThat(indexExists(jdbc, "refresh_tokens", "idx_refresh_tokens_user_id")).isFalse();
+    }
+
+    @Test
+    void v13DropsUnusedColumnsIndexesAndLegacyToneChecks() {
+        LocalDateTime at = LAST_CHANGE;
+        JdbcTemplate jdbc = upgrade("12", legacy -> {
+            legacy.update("""
+                    insert into users (id, active, created_at, updated_at, display_name, email, password_hash)
+                    values (1, b'1', ?, ?, 'Mei', 'mei.v13@example.com', 'x')
+                    """, at, at);
+            legacy.update("""
+                    insert into ai_practice_checks
+                        (id, created_at, updated_at, student_user_id, check_type, target_text, score, headline)
+                    values (1, ?, ?, 1, 'TONES', '你好', 75, 'Legacy tone score'),
+                           (2, ?, ?, 1, 'RECORDING', '谢谢', 88, 'Clear pronunciation')
+                    """, at, at, at, at);
+            legacy.update("""
+                    insert into ai_chat_sessions (id, created_at, updated_at, user_id, feature_key)
+                    values (1, ?, ?, 1, 'CHAT_TUTOR')
+                    """, at, at);
+            legacy.update("""
+                    insert into video_progress
+                        (id, created_at, updated_at, student_id, lesson_id, recorded_video_id, version, completed, last_watched_at)
+                    values (1, ?, ?, 1, 2, 3, 0, b'1', ?)
+                    """, at, at, at);
+        }, "13");
+
+        assertThat(jdbc.queryForList("select check_type from ai_practice_checks order by id", String.class))
+                .containsExactly("RECORDING");
+        assertThatThrownBy(() -> jdbc.update("""
+                insert into ai_practice_checks
+                    (id, created_at, updated_at, student_user_id, check_type, target_text, score, headline)
+                values (3, ?, ?, 1, 'TONES', '再见', 80, 'Rejected')
+                """, at, at))
+                .isInstanceOf(DataAccessException.class)
+                .hasMessageContaining("check_type");
+        assertThat(jdbc.update("""
+                insert into ai_practice_checks
+                    (id, created_at, updated_at, student_user_id, check_type, target_text, score, headline)
+                values (4, ?, ?, 1, 'RECORDING', '再见', 84, 'Accepted')
+                """, at, at)).isOne();
+
+        assertThat(columns(jdbc, "learning_modules")).doesNotContain("content_status");
+        assertThat(columns(jdbc, "ai_chat_sessions")).doesNotContain("feature_key");
+        assertThat(columns(jdbc, "uploaded_files")).doesNotContain("active");
+        assertThat(columns(jdbc, "video_progress")).doesNotContain("last_watched_at", "lesson_id");
+        assertThat(columns(jdbc, "refresh_tokens")).doesNotContain("created_by_ip", "user_agent");
+
+        assertThat(jdbc.queryForObject("select count(*) from ai_chat_sessions where id = 1", Long.class)).isOne();
+        assertThat(jdbc.queryForObject("select count(*) from video_progress where id = 1", Long.class)).isOne();
+        assertThat(indexExists(jdbc, "ai_chat_sessions", "idx_ai_chat_sessions_user_id")).isTrue();
+        assertThat(indexExists(jdbc, "ai_chat_sessions", "idx_ai_chat_sessions_feature_key")).isFalse();
+        assertThat(indexExists(jdbc, "ai_chat_sessions", "idx_ai_chat_sessions_user_feature_created")).isFalse();
+        assertThat(indexExists(jdbc, "refresh_tokens", "idx_refresh_tokens_family_id")).isFalse();
+        assertThat(indexExists(jdbc, "refresh_tokens", "idx_refresh_tokens_expires_at")).isFalse();
+        assertThat(indexExists(jdbc, "video_progress", "idx_video_progress_lesson_last_watched")).isFalse();
+        assertThat(indexExists(jdbc, "learning_modules", "idx_learning_modules_status_updated")).isFalse();
+        assertThat(indexExists(jdbc, "quizzes", "idx_quizzes_status_updated")).isFalse();
+        assertThat(indexExists(jdbc, "lessons", "idx_lessons_status_created_at")).isFalse();
+        assertThat(indexExists(jdbc, "audit_logs", "idx_audit_logs_request_id")).isFalse();
+        assertThat(indexExists(jdbc, "audit_logs", "idx_audit_logs_actor_email_created")).isFalse();
+    }
+
+    @Test
+    void v14EnforcesUniqueLessonRevisionAndCleansIndexes() {
+        LocalDateTime at = LAST_CHANGE;
+        JdbcTemplate jdbc = upgrade("13", legacy -> {
+            legacy.update("""
+                    insert into lessons (id, created_at, updated_at, title, content_status, unit_position, revision_of_lesson_id)
+                    values (10, ?, ?, 'Published Lesson', 'PUBLISHED', 1, null),
+                           (11, ?, ?, 'Second Published Lesson', 'PUBLISHED', 2, null),
+                           (12, ?, ?, 'Working Copy', 'DRAFT', 1, 10)
+                    """, at, at, at, at, at, at);
+        }, "14");
+
+        // Multiple NULL revision_of_lesson_id rows stay allowed, while a second revision for lesson 10 is rejected.
+        assertThat(jdbc.update("""
+                insert into lessons (id, created_at, updated_at, title, content_status, unit_position, revision_of_lesson_id)
+                values (13, ?, ?, 'Third Published Lesson', 'PUBLISHED', 3, null)
+                """, at, at)).isOne();
+        assertThatThrownBy(() -> jdbc.update("""
+                insert into lessons (id, created_at, updated_at, title, content_status, unit_position, revision_of_lesson_id)
+                values (14, ?, ?, 'Duplicate Revision', 'DRAFT', 1, 10)
+                """, at, at))
+                .isInstanceOf(DataAccessException.class)
+                .hasMessageContaining("uk_lessons_revision_of");
+
+        assertThat(indexExists(jdbc, "lessons", "uk_lessons_revision_of")).isTrue();
+        assertThat(indexExists(jdbc, "lessons", "idx_lessons_revision_of")).isFalse();
+        assertThat(indexColumns(jdbc, "drag_drop_items", "idx_drag_drop_items_activity_order"))
+                .containsExactly("drag_drop_activity_id", "sort_order", "created_at");
+        assertThat(indexExists(jdbc, "drag_drop_items", "idx_drag_drop_items_activity_id")).isFalse();
+        assertThat(indexColumns(jdbc, "matching_game_items", "idx_matching_game_items_game_order"))
+                .containsExactly("matching_game_id", "sort_order", "created_at");
+        assertThat(indexExists(jdbc, "matching_game_items", "idx_matching_game_items_game_id")).isFalse();
+        assertThat(indexColumns(jdbc, "quiz_questions", "idx_quiz_questions_quiz_order"))
+                .containsExactly("quiz_id", "sort_order", "created_at");
+        assertThat(indexExists(jdbc, "quiz_questions", "idx_quiz_questions_quiz_id")).isFalse();
+        assertThat(indexColumns(jdbc, "quiz_options", "idx_quiz_options_question_order"))
+                .containsExactly("question_id", "sort_order", "created_at");
+        assertThat(indexExists(jdbc, "quiz_options", "idx_quiz_options_question_id")).isFalse();
+        assertThat(indexColumns(jdbc, "email_change_tokens", "idx_email_change_tokens_user_open"))
+                .containsExactly("user_id", "used_at", "expires_at");
+        assertThat(indexExists(jdbc, "email_change_tokens", "idx_email_change_tokens_user_id")).isFalse();
+        assertThat(indexExists(jdbc, "flashcards", "idx_flashcards_hsk_level")).isFalse();
+        assertThat(indexExists(jdbc, "matching_games", "idx_matching_games_hsk_level")).isFalse();
+        assertThat(indexExists(jdbc, "listening_exercises", "idx_listening_exercises_hsk_level")).isFalse();
+        assertThat(indexExists(jdbc, "tracing_exercises", "idx_tracing_exercises_hsk_level")).isFalse();
+        assertThat(indexExists(jdbc, "drag_drop_activities", "idx_drag_drop_activities_hsk_level")).isFalse();
+        assertThat(indexExists(jdbc, "typing_exercises", "idx_typing_exercises_hsk_level")).isFalse();
+    }
+
     private static boolean indexExists(JdbcTemplate jdbc, String table, String index) {
-        Long count = jdbc.queryForObject("""
-                select count(*) from information_schema.statistics
+        return !indexColumns(jdbc, table, index).isEmpty();
+    }
+
+    private static List<String> indexColumns(JdbcTemplate jdbc, String table, String index) {
+        return jdbc.queryForList("""
+                select column_name from information_schema.statistics
                 where table_schema = database() and table_name = ? and index_name = ?
-                """, Long.class, table, index);
-        return count != null && count > 0;
+                order by seq_in_index asc
+                """, String.class, table, index);
     }
 
     /** A database V1 built, holding the given rows, then migrated to V2. */

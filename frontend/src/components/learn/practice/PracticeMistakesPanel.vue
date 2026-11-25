@@ -1,8 +1,5 @@
 <template>
-  <section
-    class="practice-stage"
-    :aria-labelledby="!mistakes.loading.value && Boolean(mistakes.data.value) && counts.all > 0 ? titleId : undefined"
-  >
+  <section class="practice-stage" :aria-labelledby="counts.all > 0 ? titleId : undefined">
     <StatePanel
       v-if="mistakes.loading.value && !mistakes.data.value"
       class="practice-stage-state"
@@ -16,7 +13,6 @@
       class="practice-stage-state"
       heading-tag="h2"
       tone="error"
-      icon="alert"
       :title="t('practice.mistakesError')"
       :message="mistakes.error.value"
       @retry="mistakes.reload"
@@ -54,7 +50,6 @@
         v-if="mistakes.error.value"
         class="practice-stage-state"
         tone="error"
-        icon="alert"
         :title="t('practice.mistakesError')"
         :message="mistakes.error.value"
         @retry="mistakes.reload"
@@ -114,10 +109,9 @@ import StatePanel from '@/components/common/StatePanel.vue'
 import CjkText from '@/components/learning/CjkText.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { useResource } from '@/composables/useResource'
+import { MISTAKES_REVIEW_SIZE, mistakesReview } from '@/config/practiceActivities'
 import { practiceMessages } from '@/plugins/practiceMessages'
 import type { MistakeRow, MistakeSource } from '@/types/learn'
-
-import { MISTAKES_REVIEW_SIZE, mistakesReview } from './practiceTypes'
 
 /**
  * The Mistakes tab: the waiting mistakes filtered by where they came from (All · Learn · Practice, each with its

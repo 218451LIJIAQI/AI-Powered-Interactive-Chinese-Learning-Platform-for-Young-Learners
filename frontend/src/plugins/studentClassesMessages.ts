@@ -43,6 +43,7 @@ export const studentClassesMessages = {
       leaveError: 'You could not leave this class. Try again.',
       left: 'You left {title}.',
       backToClasses: 'Go to my classes',
+      loading: 'Getting the class ready.',
       preview: {
         joinToOpen: 'join to open the lessons',
         join: 'Join class',
@@ -89,6 +90,7 @@ export const studentClassesMessages = {
       topic: 'Topic',
       message: 'Message',
       messageRequired: 'Tell us what went wrong.',
+      messageTooLong: 'Message is too long. Shorten it by a few lines and try again.',
       videoProblem: 'The video “{video}” in the {lesson} lesson doesn’t load.',
       attached: 'The lesson, page and your browser are attached to the message.',
       subject: 'Lesson video won’t play',
@@ -142,6 +144,7 @@ export const studentClassesMessages = {
       leaveError: 'Anda tidak dapat keluar dari kelas ini. Cuba lagi.',
       left: 'Anda telah keluar dari {title}.',
       backToClasses: 'Pergi ke kelas saya',
+      loading: 'Menyediakan kelas.',
       preview: {
         joinToOpen: 'sertai untuk membuka pelajaran',
         join: 'Sertai kelas',
@@ -188,6 +191,7 @@ export const studentClassesMessages = {
       topic: 'Topik',
       message: 'Mesej',
       messageRequired: 'Beritahu kami apa yang tidak kena.',
+      messageTooLong: 'Mesej terlalu panjang. Pendekkan beberapa baris dan cuba lagi.',
       videoProblem: 'Video “{video}” dalam pelajaran {lesson} tidak dapat dimuatkan.',
       attached: 'Nama pelajaran, halaman dan pelayar anda dilampirkan pada mesej ini.',
       subject: 'Video pelajaran tidak dapat dimainkan',
@@ -240,6 +244,7 @@ export const studentClassesMessages = {
       leaveError: '无法退出这个课堂，请再试一次。',
       left: '你已退出“{title}”。',
       backToClasses: '前往我的课堂',
+      loading: '正在准备课堂。',
       preview: {
         joinToOpen: '加入后即可打开课时',
         join: '加入课堂',
@@ -286,6 +291,7 @@ export const studentClassesMessages = {
       topic: '主题',
       message: '内容',
       messageRequired: '请告诉我们遇到了什么问题。',
+      messageTooLong: '内容太长，请删减几行后再试。',
       videoProblem: '“{lesson}”课时里的视频“{video}”加载不出来。',
       attached: '课时名称、当前页面和你使用的浏览器会附在消息里。',
       subject: '课时视频无法播放',
@@ -297,4 +303,4 @@ export const studentClassesMessages = {
       sendError: '发送失败。请检查网络连接后重试，你写的内容已保留。',
     },
   },
-}
+} as const

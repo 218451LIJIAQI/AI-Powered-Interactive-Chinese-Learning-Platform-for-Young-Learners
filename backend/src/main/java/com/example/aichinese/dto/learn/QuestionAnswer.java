@@ -1,5 +1,8 @@
 package com.example.aichinese.dto.learn;
 
+import static com.example.aichinese.dto.DtoNormalization.redactLength;
+import static com.example.aichinese.dto.DtoNormalization.stripToNull;
+
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
@@ -15,4 +18,13 @@ public record QuestionAnswer(
 
         @Size(max = 300, message = "Answer must not exceed 300 characters.")
         String answer) {
+
+    public QuestionAnswer {
+        answer = stripToNull(answer);
+    }
+
+    @Override
+    public String toString() {
+        return "QuestionAnswer[questionId=" + questionId + ", answer=" + redactLength(answer) + "]";
+    }
 }

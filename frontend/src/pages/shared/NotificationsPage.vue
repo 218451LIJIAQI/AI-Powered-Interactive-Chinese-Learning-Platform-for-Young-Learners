@@ -1,6 +1,6 @@
 <template>
   <div class="page-stack">
-    <PageHeaderBlock :title="t('notifications.pageTitle')" hide-title />
+    <h1 class="sr-only">{{ t('notifications.pageTitle') }}</h1>
     <AppToast :message="toast" :action="toastAction" />
 
     <DataNotice :error="actionError" />
@@ -35,6 +35,7 @@
         />
         <button
           v-if="unreadTotal > 0 && filter !== 'READ'"
+          ref="markAllButton"
           class="btn btn-secondary"
           type="button"
           data-testid="notifications-mark-all"
@@ -56,72 +57,80 @@
       <StatePanel
         v-else-if="resource.error.value"
         tone="error"
-        icon="alert"
         :title="t('notifications.loadErrorTitle')"
         :message="resource.error.value"
         @retry="refresh"
       />
       <!-- By the day they arrived; a coloured mark says what each is about while it is unread. -->
-      <div v-else-if="rows.length" class="notifications-days">
-        <section
-          v-for="day in days"
-          :key="day.key"
-          class="notifications-day"
-          :aria-labelledby="`notifications-day-${day.key}`"
-          :data-testid="`notifications-day-${day.key}`"
-        >
-          <h3 :id="`notifications-day-${day.key}`" class="notifications-day-title">{{ day.label }}</h3>
-          <ul class="row-list notifications-list">
-            <li
-              v-for="item in day.rows"
-              :key="item.id"
-              :class="{ 'is-unread': item.status === 'UNREAD' }"
-              :aria-busy="markingIds.has(item.id)"
-              tabindex="-1"
-              data-testid="notification-item"
-            >
-              <span class="notifications-type" :class="`tint-${item.kind.tone}`" aria-hidden="true">
-                <IconGlyph :name="item.kind.icon" :size="18" />
-              </span>
-              <div class="row-list-copy notifications-item-copy">
-                <div class="notifications-item-head">
-                  <p class="row-list-title">{{ item.title }}</p>
-                  <StatusPill v-if="item.status === 'UNREAD'" :label="t('notifications.unread')" tone="strong" />
+      <template v-else-if="rows.length">
+        <div class="notifications-days">
+          <section
+            v-for="day in days"
+            :key="day.key"
+            class="notifications-day"
+            :aria-labelledby="`notifications-day-${day.key}`"
+            :data-testid="`notifications-day-${day.key}`"
+          >
+            <h3 :id="`notifications-day-${day.key}`" class="notifications-day-title">{{ day.label }}</h3>
+            <ul class="row-list is-flush notifications-list">
+              <li
+                v-for="item in day.rows"
+                :key="item.id"
+                :class="{ 'is-unread': item.status === 'UNREAD' }"
+                :aria-busy="markingIds.has(item.id)"
+                tabindex="-1"
+                data-testid="notification-item"
+              >
+                <span class="notifications-type" :class="`tint-${item.kind.tone}`" aria-hidden="true">
+                  <IconGlyph :name="item.kind.icon" :size="18" />
+                </span>
+                <div class="row-list-copy notifications-item-copy">
+                  <div class="notifications-item-head">
+                    <p class="row-list-title">{{ item.title }}</p>
+                    <StatusPill v-if="item.status === 'UNREAD'" :label="t('notifications.unread')" tone="strong" />
+                  </div>
+                  <p class="notifications-item-message">{{ item.message }}</p>
+                  <p class="row-list-meta">
+                    <time :datetime="item.createdAt">{{ formatDateTime(item.createdAt, appLocale) }}</time>
+                  </p>
                 </div>
-                <p class="notifications-item-message">{{ item.message }}</p>
-                <p class="row-list-meta">
-                  <time :datetime="item.createdAt">{{ formatDateTime(item.createdAt, locale) }}</time>
-                </p>
-              </div>
-              <div class="row-list-actions">
-                <button
-                  v-if="item.status === 'UNREAD'"
-                  class="btn btn-ghost btn-sm"
-                  type="button"
-                  :disabled="markReadBusy(item.id)"
-                  :aria-label="t('notifications.markReadLabel', { title: item.title })"
-                  data-testid="notification-mark-read"
-                  @click="markReadInRow(item, $event)"
-                >
-                  {{ t('notifications.markRead') }}
-                </button>
-                <button
-                  v-if="item.target"
-                  class="btn btn-secondary btn-sm"
-                  type="button"
-                  :disabled="item.status === 'UNREAD' && markReadBusy(item.id)"
-                  :aria-label="t('notifications.openLabel', { title: item.title })"
-                  data-testid="notification-open"
-                  @click="openNotification(item, item.target)"
-                >
-                  {{ t('common.open') }}
-                  <IconGlyph name="chevronRight" :size="16" />
-                </button>
-              </div>
-            </li>
-          </ul>
-        </section>
-      </div>
+                <div class="row-list-actions">
+                  <button
+                    v-if="item.status === 'UNREAD'"
+                    class="btn btn-ghost btn-sm"
+                    type="button"
+                    :disabled="markReadBusy(item.id)"
+                    :aria-label="t('notifications.markReadLabel', { title: item.title })"
+                    data-testid="notification-mark-read"
+                    @click="markReadInRow(item, $event)"
+                  >
+                    {{ t('notifications.markRead') }}
+                  </button>
+                  <button
+                    v-if="item.target"
+                    class="btn btn-secondary btn-sm"
+                    type="button"
+                    :disabled="item.status === 'UNREAD' && markReadBusy(item.id)"
+                    :aria-label="t('notifications.openLabel', { title: item.title })"
+                    data-testid="notification-open"
+                    @click="openNotification(item, item.target)"
+                  >
+                    {{ t('common.open') }}
+                    <IconGlyph name="chevronRight" :size="16" />
+                  </button>
+                </div>
+              </li>
+            </ul>
+          </section>
+        </div>
+
+        <PaginationBar
+          :page="displayedPage"
+          :total-pages="totalPages"
+          :label="t('notifications.pagination')"
+          @update:page="goToPage"
+        />
+      </template>
       <!-- An empty filter says why and offers the way out. -->
       <StatePanel
         v-else
@@ -137,19 +146,12 @@
           </RouterLink>
         </template>
       </StatePanel>
-
-      <PaginationBar
-        :page="displayedPage"
-        :total-pages="totalPages"
-        :label="t('notifications.pagination')"
-        @update:page="goToPage"
-      />
     </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, inject, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { computed, inject, nextTick, onBeforeUnmount, reactive, ref, shallowRef, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 
 import { getAuthSessionVersion } from '@/api/http'
@@ -161,19 +163,19 @@ import IconGlyph, { type IconName } from '@/components/common/IconGlyph.vue'
 import PaginationBar from '@/components/common/PaginationBar.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
 import StatusPill from '@/components/common/StatusPill.vue'
-import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { unreadNotificationsKey } from '@/composables/navigationCounts'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { usePageActive } from '@/composables/usePageNavigation'
 import { useResource, useServerPage } from '@/composables/useResource'
 import { useToast } from '@/composables/useToast'
 import { useWorkspaceRole } from '@/composables/useWorkspaceRole'
+import { appLocale } from '@/plugins/i18n'
 import { notificationsMessages } from '@/plugins/notificationsMessages'
 import type { NotificationResponse, NotificationStatus } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
 import { normalizeAppRoute } from '@/utils/appRoute'
+import { restoreFocusIfDropped } from '@/utils/focus'
 import { formatDateTime } from '@/utils/format'
-import { normalizeAppLanguage } from '@/utils/locale'
 import { defaultRouteForRole } from '@/utils/role'
 import { localizeNotificationMessage } from '@/utils/notificationMessages'
 import '@/styles/ops-account.css'
@@ -209,7 +211,7 @@ const NOTIFICATION_KINDS: Readonly<Record<string, NotificationKind>> = {
 }
 const OTHER_KIND: NotificationKind = { icon: 'bell', tone: 'neutral' }
 
-const { t, locale } = useLocalMessages({ notifications: notificationsMessages })
+const { t } = useLocalMessages({ notifications: notificationsMessages })
 const role = useWorkspaceRole()
 const router = useRouter()
 const pageActive = usePageActive()
@@ -227,8 +229,12 @@ const markAllBusy = computed(() => batchBusy.value || markingIds.size > 0)
 function markReadBusy(id: number): boolean {
   return batchBusy.value || markingIds.has(id)
 }
-const actionError = ref<string | null>(null)
+const actionFailure = shallowRef<{ reason: unknown; fallbackKey: string } | null>(null)
+const actionError = computed(() =>
+  actionFailure.value ? resolveApiError(actionFailure.value.reason, t(actionFailure.value.fallbackKey)) : null,
+)
 const toolbar = ref<HTMLElement | null>(null)
+const markAllButton = ref<HTMLButtonElement | null>(null)
 
 const resource = useResource(() =>
   notificationsApi.page({
@@ -242,16 +248,15 @@ const { data: unread, reload: reloadUnread } = inject(unreadNotificationsKey)!
 // Reading the last item of a later Unread page leaves that page empty: it steps back a page.
 const { items, displayedPage, totalPages, goToPage } = useServerPage(resource, page, { stepBackFromEmpty: true })
 const unreadTotal = computed(() => unread.value?.unreadCount ?? 0)
-const rows = computed(() => {
-  const language = normalizeAppLanguage(locale.value) ?? 'en'
-  return items.value.map((item) => ({
+const rows = computed(() =>
+  items.value.map((item) => ({
     ...item,
-    title: localizeNotificationMessage(item.title, language),
-    message: localizeNotificationMessage(item.message, language),
+    title: localizeNotificationMessage(item.title, appLocale.value),
+    message: localizeNotificationMessage(item.message, appLocale.value),
     target: normalizeAppRoute(item.targetPath),
     kind: NOTIFICATION_KINDS[item.type] ?? OTHER_KIND,
-  }))
-})
+  })),
+)
 
 /**
  * The rows by the day they arrived (Today, Yesterday, Earlier), newest first as the server sends them. A day is the
@@ -280,11 +285,25 @@ const allTotal = ref<number>()
 watch(resource.data, (data) => {
   if (data && filter.value === 'ALL') allTotal.value = data.totalItems
 })
-const hasNoNotifications = computed(() => allTotal.value === 0)
+const hasNoNotifications = computed(() => allTotal.value === 0 && unreadTotal.value === 0)
 
 const filterOptions = computed(() => {
-  const all = allTotal.value
   const unreadCount = unread.value?.unreadCount
+  const readTotal = filter.value === 'READ' ? resource.data.value?.totalItems : undefined
+  const all =
+    readTotal !== undefined
+      ? unreadCount !== undefined
+        ? readTotal + unreadCount
+        : Math.max(allTotal.value ?? 0, readTotal)
+      : allTotal.value !== undefined && unreadCount !== undefined
+        ? Math.max(allTotal.value, unreadCount)
+        : allTotal.value
+  const readCount =
+    readTotal !== undefined
+      ? readTotal
+      : all !== undefined && unreadCount !== undefined
+        ? Math.max(0, all - unreadCount)
+        : undefined
   return [
     { value: 'ALL' as const, label: t('notifications.filterAll'), count: all, testId: 'notifications-filter-all' },
     {
@@ -296,7 +315,7 @@ const filterOptions = computed(() => {
     {
       value: 'READ' as const,
       label: t('notifications.filterRead'),
-      count: all !== undefined && unreadCount !== undefined ? Math.max(0, all - unreadCount) : undefined,
+      count: readCount,
       testId: 'notifications-filter-read',
     },
   ]
@@ -346,7 +365,7 @@ function selectFilter(value: NotificationFilter): void {
   if (filter.value === value) return
   filter.value = value
   page.value = 0
-  actionError.value = null
+  actionFailure.value = null
   resource.data.value = null
   void resource.reload()
 }
@@ -360,7 +379,11 @@ function showStatus(ids: readonly number[], status: NotificationStatus): void {
   const data = resource.data.value
   if (data) {
     const selected = new Set(ids)
-    resource.replace({ ...data, items: data.items.map((row) => (selected.has(row.id) ? { ...row, status } : row)) })
+    // Patch visible rows in place without calling resource.replace(), which would cancel an in-flight page load.
+    resource.data.value = {
+      ...data,
+      items: data.items.map((row) => (selected.has(row.id) ? { ...row, status } : row)),
+    }
   }
   if (unread.value) {
     const delta = status === 'READ' ? -ids.length : ids.length
@@ -380,7 +403,7 @@ async function refresh(): Promise<void> {
 async function markUnread(ids: readonly number[], version: number): Promise<void> {
   if (version !== getAuthSessionVersion()) return
   pendingUndos.value += 1
-  actionError.value = null
+  actionFailure.value = null
   try {
     let missing = false
     for (let start = 0; start < ids.length; start += UNREAD_BATCH_SIZE) {
@@ -393,7 +416,7 @@ async function markUnread(ids: readonly number[], version: number): Promise<void
     await (missing ? refresh() : reloadUnread())
   } catch (reason) {
     if (version !== getAuthSessionVersion()) return
-    actionError.value = resolveApiError(reason, t('notifications.undoError'))
+    actionFailure.value = { reason, fallbackKey: 'notifications.undoError' }
     await refresh()
   } finally {
     pendingUndos.value -= 1
@@ -404,7 +427,7 @@ async function markRead(item: NotificationResponse, quiet = false): Promise<bool
   if (markReadBusy(item.id)) return false
   const version = getAuthSessionVersion()
   markingIds.add(item.id)
-  actionError.value = null
+  actionFailure.value = null
   try {
     await notificationsApi.markAsRead(item.id)
     if (version !== getAuthSessionVersion()) return false
@@ -419,7 +442,7 @@ async function markRead(item: NotificationResponse, quiet = false): Promise<bool
     return true
   } catch (reason) {
     if (version === getAuthSessionVersion())
-      actionError.value = resolveApiError(reason, t('notifications.markReadError'))
+      actionFailure.value = { reason, fallbackKey: 'notifications.markReadError' }
     return false
   } finally {
     markingIds.delete(item.id)
@@ -430,7 +453,11 @@ async function markRead(item: NotificationResponse, quiet = false): Promise<bool
 async function markReadInRow(item: NotificationResponse, event: Event): Promise<void> {
   const button = event.currentTarget as HTMLButtonElement
   const row = button.closest('li')
-  if (!(await markRead(item))) return
+  const succeeded = await markRead(item)
+  if (!succeeded) {
+    await restoreFocusIfDropped(() => (button.isConnected ? button : row))
+    return
+  }
   await nextTick()
   if (row?.isConnected && (document.activeElement === document.body || document.activeElement === button)) {
     const next = row.querySelector<HTMLElement>('button') ?? row
@@ -443,11 +470,12 @@ async function markAllRead(): Promise<void> {
   const version = getAuthSessionVersion()
   markingAll.value = true
   hideToast()
-  actionError.value = null
+  actionFailure.value = null
   try {
     const ids = await notificationsApi.markAllRead()
     if (version !== getAuthSessionVersion()) return
     showStatus(ids, 'READ')
+    if (filter.value === 'UNREAD') page.value = 0
     await refresh()
     if (version !== getAuthSessionVersion()) return
     showToast(
@@ -455,15 +483,13 @@ async function markAllRead(): Promise<void> {
       ids.length ? { label: t('common.undo'), run: () => void markUnread(ids, version) } : undefined,
     )
   } catch (reason) {
-    if (version === getAuthSessionVersion())
-      actionError.value = resolveApiError(reason, t('notifications.markAllError'))
+    if (version === getAuthSessionVersion()) actionFailure.value = { reason, fallbackKey: 'notifications.markAllError' }
   } finally {
     markingAll.value = false
   }
-  await nextTick()
-  if (unreadTotal.value === 0 && document.activeElement === document.body) {
-    toolbar.value?.querySelector<HTMLElement>('[aria-pressed="true"]')?.focus()
-  }
+  await restoreFocusIfDropped(() =>
+    unreadTotal.value === 0 ? toolbar.value?.querySelector<HTMLElement>('[aria-pressed="true"]') : markAllButton.value,
+  )
 }
 
 /** Counts the Opens: one still reading its notification goes nowhere once another follows or the page is left. */
@@ -473,12 +499,17 @@ onBeforeUnmount(() => {
 })
 
 /** Opening a notification also reads it. An unknown or unsafe path gets no Open button. */
-async function openNotification(item: NotificationResponse, target: string | null): Promise<void> {
-  if (!target) return
+async function openNotification(item: NotificationResponse, target: string): Promise<void> {
   const sequence = ++navigationSequence
   const version = getAuthSessionVersion()
   if (item.status === 'UNREAD') await markRead(item, true)
   if (!pageActive.value || sequence !== navigationSequence || version !== getAuthSessionVersion()) return
-  await router.push(target)
+  try {
+    await router.push(target)
+  } catch (reason) {
+    if (pageActive.value && sequence === navigationSequence && version === getAuthSessionVersion()) {
+      actionFailure.value = { reason, fallbackKey: 'common.errorTitle' }
+    }
+  }
 }
 </script>

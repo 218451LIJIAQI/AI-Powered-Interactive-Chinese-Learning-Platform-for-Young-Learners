@@ -69,11 +69,10 @@ describe('PracticeSetDetails', () => {
   it('lists the history with who made each change, the platform team for a seeded one', () => {
     const wrapper = mountDetails()
 
-    expect(wrapper.findAll('.admin-library-history .row-list-title').map((title) => title.text())).toEqual([
-      'Created as a draft',
-      'Archived',
-    ])
-    expect(wrapper.findAll('.admin-library-history .row-list-meta').map((meta) => meta.text())).toEqual([
+    expect(wrapper.findAll('[data-testid="set-details-history"] .row-list-title').map((title) => title.text())).toEqual(
+      ['Created as a draft', 'Archived'],
+    )
+    expect(wrapper.findAll('[data-testid="set-details-history"] .row-list-meta').map((meta) => meta.text())).toEqual([
       'Content team · 1 Apr, 10:15 AM',
       'MandarinSpark team · 1 May, 2:20 PM',
     ])

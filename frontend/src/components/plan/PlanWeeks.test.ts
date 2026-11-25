@@ -122,4 +122,20 @@ describe('PlanWeeks', () => {
 
     expect(weekSchedule(plan).rows[1]).toEqual(['Wk 2–5', 'Food and drink'])
   })
+
+  it('keeps review weeks and normal heading when an ambitious milestone still fits within total weeks', () => {
+    const plan = learningPlan({
+      weeks: { current: 1, total: 10, content: 8 },
+      milestone: { date: '2026-07-18', text: 'First milestone', stepPositions: [1, 3] },
+    })
+
+    const { heading, rows } = weekSchedule(plan)
+    expect(heading).toBe('Your 10 weeks')
+    expect(rows).toEqual([
+      ['Wk 1', 'Review Unit 1 · Say hello + Mandarin for Campus Life'],
+      ['Wk 2–5', 'Unit 2 · Food and drink'],
+      ['Wk 9–10', 'Review and practise for your goal'],
+      ['Later', 'your first class'],
+    ])
+  })
 })

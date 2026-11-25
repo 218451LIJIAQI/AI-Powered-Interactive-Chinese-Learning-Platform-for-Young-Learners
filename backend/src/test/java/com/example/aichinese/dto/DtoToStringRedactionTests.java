@@ -27,13 +27,20 @@ import com.example.aichinese.dto.auth.LinkTokenResponse;
 import com.example.aichinese.dto.auth.LoginRequest;
 import com.example.aichinese.dto.auth.RegisterStudentRequest;
 import com.example.aichinese.dto.auth.ResetPasswordRequest;
+import com.example.aichinese.dto.classes.ClassRequests;
+import com.example.aichinese.dto.classes.LessonViews;
 import com.example.aichinese.dto.communication.NotificationResponse;
 import com.example.aichinese.dto.learn.AdminPracticeSetDetail;
+import com.example.aichinese.dto.learn.LessonPlayResponse;
+import com.example.aichinese.dto.learn.LevelCheckNextResponse;
+import com.example.aichinese.dto.learn.MistakeReviewResponse;
+import com.example.aichinese.dto.learn.PracticeSetResponse;
 import com.example.aichinese.dto.plan.PlanViews;
 import com.example.aichinese.dto.support.SupportRequestDetailResponse;
 import com.example.aichinese.dto.support.SupportRequestSummaryResponse;
 import com.example.aichinese.entity.enums.AiRequestStatus;
 import com.example.aichinese.entity.enums.ContentStatus;
+import com.example.aichinese.entity.enums.LearnLessonKind;
 import com.example.aichinese.entity.enums.LearningStage;
 import com.example.aichinese.entity.enums.PlanGoal;
 import com.example.aichinese.entity.enums.PlanReason;
@@ -93,14 +100,16 @@ class DtoToStringRedactionTests {
                 List.of(new AiQuizGeneratorResponse.Question(
                         "What did Jane order?", QuizQuestionType.MULTIPLE_CHOICE, List.of("茶", "饭"),
                         "茶", "Jane ordered tea.", "chá", "tea")),
-                AiRequestStatus.SUCCESS);
+                AiRequestStatus.SUCCESS,
+                null);
         var storyRes = new AiStoryGeneratorResponse(
                 "Jane's trip to Penang",
                 "Jane's Penang Story",
                 List.of(line),
                 List.of(new AiStoryGeneratorResponse.VocabularyItem("小红", "Xiǎohóng", "Xiaohong", "Xiaohong")),
                 List.of(new AiStoryGeneratorResponse.ComprehensionQuestion("Who is Jane?", List.of("A"), "A")),
-                AiRequestStatus.SUCCESS);
+                AiRequestStatus.SUCCESS,
+                null);
 
         assertThat(line.toString()).doesNotContain("小红", "Xiǎohóng", "Xiaohong");
         assertThat(note.toString()).doesNotContain("Beijing", "Jane").contains("id=9", "planReason=TRAVEL");
@@ -164,7 +173,7 @@ class DtoToStringRedactionTests {
         ObjectMapper mapper = new ObjectMapper().registerModule(new JavaTimeModule());
         List<PlanViews.WeekTask> tasks = List.of(
                 new PlanViews.WeekTask.LearnDone("Greetings", LocalDate.of(2026, 5, 18)),
-                new PlanViews.WeekTask.LearnNext("Numbers", 4, 22L),
+                new PlanViews.WeekTask.LearnNext("Numbers", 4, 22L, LearnLessonKind.LESSON),
                 new PlanViews.WeekTask.Practice("At the Café", PracticeType.LISTENING, 9L),
                 new PlanViews.WeekTask.Xiaomei(true));
         JsonNode json = mapper.readTree(mapper.writeValueAsString(tasks));
@@ -173,9 +182,43 @@ class DtoToStringRedactionTests {
         assertThat(json.get(0).has("lessonId")).isFalse();
         assertThat(json.get(1).path("kind").asText()).isEqualTo("LEARN_NEXT");
         assertThat(json.get(1).path("lessonId").asLong()).isEqualTo(22L);
+        assertThat(json.get(1).path("lessonKind").asText()).isEqualTo("LESSON");
         assertThat(json.get(2).path("kind").asText()).isEqualTo("PRACTICE");
         assertThat(json.get(2).path("practiceSetId").asLong()).isEqualTo(9L);
         assertThat(json.get(3).path("kind").asText()).isEqualTo("XIAOMEI");
         assertThat(json.get(3).path("done").asBoolean()).isTrue();
+    }
+
+    @Test
+    void learnRunResponseDtosRedactSignedRunTokens() {
+        var levelCheck = new LevelCheckNextResponse(null, null, false, null, 1, 8, "signed-level-check-token-123");
+        var lessonPlay = new LessonPlayResponse(
+                "Greetings", LearnLessonKind.LESSON, null, List.of(), AT, "signed-lesson-hmac-456");
+        var mistakeReview = new MistakeReviewResponse(List.of(), List.of(), AT, "signed-mistake-hmac-789");
+        var practiceSet = new PracticeSetResponse(
+                3L, PracticeType.LISTENING, LearningStage.GUIDED, 15, false, List.of(), List.of(),
+                null, null, AT, "signed-practice-hmac-012");
+
+        for (Object dto : List.of(levelCheck, lessonPlay, mistakeReview, practiceSet)) {
+            assertThat(dto.toString())
+                    .doesNotContain(
+                            "signed-level-check-token-123",
+                            "signed-lesson-hmac-456",
+                            "signed-mistake-hmac-789",
+                            "signed-practice-hmac-012")
+                    .contains("<redacted>");
+        }
+    }
+
+    @Test
+    void classAnswerDtosRedactLearnerSubmittedText() {
+        var saved = new LessonViews.SavedAnswer(1L, null, "Jane's personal free-text answer");
+        var reviewed = new LessonViews.ReviewedQuestion(
+                1L, 1, "Prompt", "Jane's submitted answer", "你好", false, "Explanation", null);
+        var chosen = new ClassRequests.ChosenPair(2L, "Jane's chosen meaning");
+
+        assertThat(saved.toString()).doesNotContain("Jane", "personal").contains("questionId=1");
+        assertThat(reviewed.toString()).doesNotContain("Jane", "submitted").contains("questionId=1");
+        assertThat(chosen.toString()).doesNotContain("Jane", "chosen").contains("wordId=2");
     }
 }

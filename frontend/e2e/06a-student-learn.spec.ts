@@ -1,7 +1,7 @@
-import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test'
+import type { APIRequestContext, Locator, Page } from '@playwright/test'
 
 import { AMIRA, GOAL_BONUS_XP, numberIn, passRankUp, sidebarStatus, signInAmira, toast } from './studentSupport'
-import { API_BASE_URL, apiAuthHeaders, expectFocusMode, expectLeaveStep, sidebar } from './support'
+import { API_BASE_URL, apiAuthHeaders, expect, expectFocusMode, expectLeaveStep, sidebar, test } from './support'
 
 const NEXT_LESSON = 'Initials 1 · b p m f and more'
 const LOCKED_LESSON = 'Initials 2 · zh ch sh and more'
@@ -71,7 +71,7 @@ test.describe('Home and Learn', () => {
     // The goal strip: each number once, the week in words and the plan's progress as a bar, no percent in text.
     const goal = page.getByRole('region', { name: 'Your goal' })
     await expect(goal).toContainText(/Travel to Shanghai · by \w{3} \d{1,2} \w{3,4}/)
-    await expect(goal.getByRole('progressbar', { name: /^Plan progress: \d+%$/ })).toBeVisible()
+    await expect(goal.getByRole('progressbar', { name: 'Plan progress' })).toHaveAttribute('aria-valuenow', /^\d+$/)
     await expect(goal.getByText(/^Week \d+ of \d+ · /)).toHaveText('Week 2 of 10 · on track')
     await expect(goal).not.toContainText('%')
     await expect(goal.getByRole('link', { name: 'View my plan' })).toBeVisible()
@@ -82,15 +82,15 @@ test.describe('Home and Learn', () => {
     // Unit 1 has 7 lessons; its optional bonus chest is not one of them.
     const stops = next.getByRole('list', { name: 'Lessons of Unit 1' })
     await expect(stops.getByRole('listitem')).toHaveCount(7)
-    await expect(stops.getByRole('listitem', { name: 'Lesson 2: done' })).toBeVisible()
-    await expect(stops.getByRole('listitem', { name: 'Lesson 3: next' })).toBeVisible()
-    await expect(stops.getByRole('listitem', { name: 'Lesson 4: not open yet' })).toBeVisible()
+    await expect(stops.getByRole('listitem').filter({ hasText: 'Lesson 2: done' })).toBeVisible()
+    await expect(stops.getByRole('listitem').filter({ hasText: 'Lesson 3: next' })).toBeVisible()
+    await expect(stops.getByRole('listitem').filter({ hasText: 'Lesson 4: not open yet' })).toBeVisible()
     await expect(next.getByRole('figure')).toContainText('You’ll learn: “dad”')
     await expect(next.getByRole('link', { name: 'Start lesson' })).toBeVisible()
 
     const today = todaysPlan(page)
     await expect(today).toContainText('20 / 30 XP')
-    await expect(today.getByRole('progressbar', { name: 'Today’s XP: 67%' })).toBeVisible()
+    await expect(today.getByRole('progressbar', { name: 'Today’s XP' })).toHaveAttribute('aria-valuenow', '67')
     const items = today.getByRole('list', { name: 'Today’s plan' }).getByRole('listitem')
     await expect(items.filter({ hasText: 'Fix 6 mistakes' }).getByRole('link', { name: 'Start review' })).toBeVisible()
     await expect(
@@ -156,7 +156,7 @@ test.describe('Home and Learn', () => {
     await expect(rail).toContainText('Unlock Unit 2')
     await expect(rail).toContainText('5 lessons to go.')
     await expect(rail).toContainText('20 / 30 XP')
-    await expect(rail.getByRole('progressbar', { name: 'Daily goal: 67%' })).toBeVisible()
+    await expect(rail.getByRole('progressbar', { name: 'Daily goal' })).toHaveAttribute('aria-valuenow', '67')
     await expect(rail).toContainText('One more lesson reaches today’s goal.')
     await expect(rail).toContainText('6 mistakes waiting.')
     await expect(rail.getByRole('link', { name: 'See mistakes' })).toHaveAttribute('href', '/student/practice/mistakes')
@@ -172,6 +172,7 @@ test.describe('Home and Learn', () => {
     await page.keyboard.press('Escape')
     await expect(lockedLevel).toBeFocused()
     await page.keyboard.press('Enter')
+    await expect(card).toBeFocused()
     await page.keyboard.press('Tab')
     await expect(card).toBeHidden()
 
@@ -255,7 +256,10 @@ test.describe('Home and Learn', () => {
 
     await sidebar(page).getByRole('link', { name: 'Home' }).click()
     await expect(todaysPlan(page)).toContainText(`${todayBefore + earned} / 30 XP`)
-    await expect(todaysPlan(page).getByRole('progressbar', { name: 'Today’s XP: 100%' })).toBeVisible()
+    await expect(todaysPlan(page).getByRole('progressbar', { name: 'Today’s XP' })).toHaveAttribute(
+      'aria-valuenow',
+      '100',
+    )
     await expect(
       page.getByRole('region', { name: LOCKED_LESSON }).getByRole('link', { name: 'Start lesson' }),
     ).toBeVisible()

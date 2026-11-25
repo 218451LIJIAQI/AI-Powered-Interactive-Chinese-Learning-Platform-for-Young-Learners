@@ -1,8 +1,8 @@
 import type { Translate } from '@/plugins/i18n'
-
 /** Study time, levels and titles of the learning plan, written in the interface language. */
 import type { MandarinLevel, PracticeType } from '@/types/learn'
 import type { PlanPace, PlanPaceBand, PlanReason, PlanStatus } from '@/types/plan'
+import { formatList } from '@/utils/format'
 
 import { LEVEL_CODE_KEYS, PACES } from './planLabels'
 
@@ -69,9 +69,17 @@ export function levelSpan(t: Translate, placed: MandarinLevel, target: MandarinL
   return t('plan.level.fromTo', { from: t(LEVEL_CODE_KEYS[placed]), to: t(LEVEL_CODE_KEYS[target]) })
 }
 
-/** A group of Learn units, by the first and last unit in plan order. */
-export function unitsWord(t: Translate, units: readonly number[]): string {
-  return units.length === 1
-    ? t('plan.path.unitOne', { unit: units[0] })
-    : t('plan.path.unitRange', { from: units[0], to: units.at(-1) })
+/** A group of Learn units: contiguous runs become ranges ("Units 2–4"), gaps stay distinct ("Unit 1 and Unit 3"). */
+export function unitsWord(t: Translate, units: readonly number[], locale: string): string {
+  if (!units.length) return ''
+  const runs: [number, number][] = []
+  for (const unit of units) {
+    const last = runs[runs.length - 1]
+    if (last && unit === last[1] + 1) last[1] = unit
+    else runs.push([unit, unit])
+  }
+  const labels = runs.map(([from, to]) =>
+    from === to ? t('plan.path.unitOne', { unit: from }) : t('plan.path.unitRange', { from, to }),
+  )
+  return labels.length === 1 ? labels[0]! : formatList(labels, locale)
 }

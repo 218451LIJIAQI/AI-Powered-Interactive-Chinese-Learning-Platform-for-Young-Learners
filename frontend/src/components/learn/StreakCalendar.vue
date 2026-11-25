@@ -4,22 +4,25 @@
       <slot />
       <div class="progress-calendar-month">
         <h3 class="card-title">{{ monthLabel }}</h3>
+        <span class="sr-only" role="status" aria-live="polite" aria-atomic="true">{{ announcedMonth }}</span>
         <div class="btn-group is-sm">
           <button
             class="btn btn-ghost btn-icon btn-sm"
             type="button"
-            :disabled="!calendar.previousMonth"
+            :aria-disabled="!calendar.previousMonth || undefined"
             :aria-label="t('progress.previousMonth')"
-            @click="emit('month', calendar.previousMonth!)"
+            :title="t('progress.previousMonth')"
+            @click="switchMonth(calendar.previousMonth)"
           >
             <IconGlyph name="chevronLeft" :size="16" />
           </button>
           <button
             class="btn btn-ghost btn-icon btn-sm"
             type="button"
-            :disabled="!calendar.nextMonth"
+            :aria-disabled="!calendar.nextMonth || undefined"
             :aria-label="t('progress.nextMonth')"
-            @click="emit('month', calendar.nextMonth!)"
+            :title="t('progress.nextMonth')"
+            @click="switchMonth(calendar.nextMonth)"
           >
             <IconGlyph name="chevronRight" :size="16" />
           </button>
@@ -51,7 +54,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
@@ -81,6 +84,19 @@ const LABEL_KEYS: Partial<Record<DayState, string>> = {
 const monthStart = computed(() => parseDate(`${props.calendar.month}-01`)!)
 
 const monthLabel = computed(() => formatDate(monthStart.value, { month: 'long', year: 'numeric' }, locale.value))
+const announcedMonth = ref('')
+
+watch(
+  () => props.calendar.month,
+  (month, previous) => {
+    if (previous && month !== previous) announcedMonth.value = monthLabel.value
+  },
+)
+
+function switchMonth(month: string | null): void {
+  if (!month) return
+  emit('month', month)
+}
 
 const weekdays = computed(() => calendarWeekdays(locale.value))
 

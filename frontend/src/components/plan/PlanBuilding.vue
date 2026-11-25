@@ -1,8 +1,9 @@
 <template>
   <section class="plan-center" aria-labelledby="plan-building-title">
     <span class="plan-building-icon" aria-hidden="true"><IconGlyph name="magic" :size="40" /></span>
-    <h2 id="plan-building-title" class="focus-headline">{{ t('plan.setup.buildingTitle') }}</h2>
-    <ol class="plan-building-steps" aria-live="polite">
+    <h2 id="plan-building-title" class="focus-headline" tabindex="-1">{{ t('plan.setup.buildingTitle') }}</h2>
+    <p class="sr-only" role="status" aria-live="polite" aria-atomic="true">{{ t(steps[reached]!) }}</p>
+    <ol class="plan-building-steps">
       <li
         v-for="(step, index) in steps"
         :key="step"
@@ -33,7 +34,7 @@ import { planSetupMessages } from '@/plugins/planSetupMessages'
  */
 const props = withDefaults(defineProps<{ skippedCheck?: boolean }>(), { skippedCheck: false })
 
-const STEP_MS = 900
+const STEP_MS = 700
 
 const steps = computed(() => [
   'plan.setup.buildStepGoal',

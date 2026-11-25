@@ -8,6 +8,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.LongFunction;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -170,19 +171,19 @@ public class HintPolicyService {
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public HintDto.Step hintInRun(StudentProfile student, String scope, String itemRef, Run run,
             List<HintDto.Step> ladder) {
-        return hintInRun(student, scope, itemRef, run, ladder, null);
+        return serveInRun(student, scope, itemRef, run, ladder, null, null,
+                () -> new ResponseStatusException(BAD_REQUEST, "There are no hints left in this set."));
     }
 
     /**
      * Variant used by Practice runs where an answered item can be retried within the same signed run ("Once more, to
-     * make sure"): deduplicates only hints already recorded after {@code dedupeAfter} so a hint opened on a retry still
-     * records a post-answer row for {@code PracticeService#check} while keeping per-set allowance single-counted per
-     * distinct {@code itemRef}.
+     * make sure"): invokes {@code dedupeAfterLookup} after locking the student row so duplicate-row suppression only
+     * considers hints recorded after the last checked answer while keeping per-set allowance single-counted per item.
      */
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public HintDto.Step hintInRun(StudentProfile student, String scope, String itemRef, Run run,
-            List<HintDto.Step> ladder, LocalDateTime dedupeAfter) {
-        return serveInRun(student, scope, itemRef, run, ladder, null, dedupeAfter,
+            List<HintDto.Step> ladder, LongFunction<LocalDateTime> dedupeAfterLookup) {
+        return serveInRun(student, scope, itemRef, run, ladder, null, dedupeAfterLookup,
                 () -> new ResponseStatusException(BAD_REQUEST, "There are no hints left in this set."));
     }
 
@@ -204,7 +205,7 @@ public class HintPolicyService {
             Run run,
             List<HintDto.Step> ladder,
             Integer fixedLimitAndDepth,
-            LocalDateTime dedupeAfter,
+            LongFunction<LocalDateTime> dedupeAfterLookup,
             Supplier<ResponseStatusException> onLimitExceeded) {
         String runId = runSigner.requireId(student.getId(), scope, run.startedAt(), run.signature());
         StudentProfile locked = accessService.lockProfile(student);
@@ -226,6 +227,7 @@ public class HintPolicyService {
         if (given == null) {
             throw noFurtherHint();
         }
+        LocalDateTime dedupeAfter = dedupeAfterLookup == null ? null : dedupeAfterLookup.apply(locked.getId());
         record(locked, itemRef, runId, dedupeAfter);
         return given;
     }

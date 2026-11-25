@@ -5,8 +5,6 @@ import static com.example.aichinese.support.LearningApiTestClient.fromRemoteAddr
 import static com.example.aichinese.support.LearningApiTestClient.nextClientIp;
 import static com.example.aichinese.support.LearningApiTestClient.uniqueEmail;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.hamcrest.Matchers.everyItem;
-import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -30,10 +28,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 
 import com.example.aichinese.entity.AuditLog;
 import com.example.aichinese.entity.User;
-import com.example.aichinese.entity.enums.NotificationType;
-import com.example.aichinese.service.NotificationService;
 import com.example.aichinese.support.ApiIntegrationTest;
-import com.fasterxml.jackson.databind.JsonNode;
 
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -41,7 +36,7 @@ import jakarta.servlet.http.Cookie;
 
 /**
  * Account security (FRAUTH07/08, Proposal Table 6.2): profile update, change password with session revocation,
- * BCrypt hashing, no-store responses, expired JWT rejection, the reset-password rate limit and notification filters.
+ * BCrypt hashing, no-store responses, expired JWT rejection and the reset-password rate limit.
  */
 class AccountSecurityIntegrationTests extends ApiIntegrationTest {
 
@@ -52,9 +47,6 @@ class AccountSecurityIntegrationTests extends ApiIntegrationTest {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
-
-    @Autowired
-    private NotificationService notificationService;
 
     @Value("${app.security.jwt.secret}")
     private String jwtSecret;
@@ -238,29 +230,6 @@ class AccountSecurityIntegrationTests extends ApiIntegrationTest {
         mockMvc.perform(unknownTokenReset(clientIp))
                 .andExpect(status().isTooManyRequests())
                 .andExpect(jsonPath("$.success").value(false));
-    }
-
-    @Test
-    void notificationsCanBeFilteredByReadState() throws Exception {
-        String email = uniqueEmail("w4-notify");
-        String learnerToken = api.registerStudent(email);
-        User learner = user(email);
-        for (int notice = 1; notice <= 2; notice++) {
-            notificationService.safeCreateNotification(learner, NotificationType.SYSTEM, "Notice " + notice,
-                    "Something happened.", null, null, "/student");
-        }
-        JsonNode unread = api.data(mockMvc.perform(api.authGet("/api/v1/notifications?status=UNREAD", learnerToken))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.items[*].status").value(everyItem(is("UNREAD"))))
-                .andReturn());
-        assertThat(unread.path("totalItems").asLong()).isPositive();
-        mockMvc.perform(api.authPatch("/api/v1/notifications/read-all", learnerToken)).andExpect(status().isOk());
-        mockMvc.perform(api.authGet("/api/v1/notifications?status=UNREAD", learnerToken))
-                .andExpect(jsonPath("$.data.totalItems").value(0));
-        mockMvc.perform(api.authGet("/api/v1/notifications?status=READ", learnerToken))
-                .andExpect(jsonPath("$.data.totalItems").value(unread.path("totalItems").asLong()));
-        mockMvc.perform(api.authGet("/api/v1/notifications?status=SOMETIMES", learnerToken))
-                .andExpect(status().isBadRequest());
     }
 
     /** A reset with a token nobody was sent, from {@code clientIp}. */

@@ -56,24 +56,31 @@ export function syncContentCount(key: keyof ContentCounts, value: number): void 
 }
 
 /** The counts on the admin Content tabs: classes and lessons, Learn path units, practice activities. */
-export async function reloadContentCounts(options: { keepUnits?: boolean; skipUnits?: boolean } = {}): Promise<void> {
-  const sessionVersion = getAuthSessionVersion()
-  const sameSession = sessionVersion === countsSessionVersion
-  if (!sameSession) resetCounts(sessionVersion)
-  const shouldLoadUnits = !options.skipUnits && !(options.keepUnits && sameSession && counts.value.units !== null)
+export async function reloadContentCounts(
+  options: { skipClasses?: boolean; skipUnits?: boolean; skipPractice?: boolean } = {},
+): Promise<void> {
+  ensureCurrentCountSession()
+  const sessionVersion = countsSessionVersion
+  const shouldLoadClasses = !options.skipClasses
+  const shouldLoadUnits = !options.skipUnits && counts.value.units === null
+  const shouldLoadPractice = !options.skipPractice
   const version = ++requestVersion
   const startSynced = { ...syncedVersion }
   const [classes, units, practice] = await Promise.all([
-    count(async () => (await adminClassesApi.list({ page: 0, size: 1 })).totalItems),
+    shouldLoadClasses
+      ? count(async () => (await adminClassesApi.list({ page: 0, size: 1 })).totalItems)
+      : Promise.resolve(null),
     shouldLoadUnits ? count(async () => (await adminLearningApi.path()).unitCount) : Promise.resolve(null),
-    count(async () => (await adminLearningApi.practiceSets({ page: 0, size: 1 })).totalItems),
+    shouldLoadPractice
+      ? count(async () => (await adminLearningApi.practiceSets({ page: 0, size: 1 })).totalItems)
+      : Promise.resolve(null),
   ])
   if (version === requestVersion && sessionVersion === getAuthSessionVersion()) {
-    countsSessionVersion = sessionVersion
     counts.value = {
-      classes: syncedVersion.classes === startSynced.classes ? classes : counts.value.classes,
+      classes: shouldLoadClasses && syncedVersion.classes === startSynced.classes ? classes : counts.value.classes,
       units: shouldLoadUnits && syncedVersion.units === startSynced.units ? units : counts.value.units,
-      practice: syncedVersion.practice === startSynced.practice ? practice : counts.value.practice,
+      practice:
+        shouldLoadPractice && syncedVersion.practice === startSynced.practice ? practice : counts.value.practice,
     }
   }
 }

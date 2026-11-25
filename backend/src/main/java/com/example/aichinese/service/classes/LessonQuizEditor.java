@@ -9,7 +9,6 @@ import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 
 import org.springframework.stereotype.Component;
@@ -24,6 +23,7 @@ import com.example.aichinese.entity.Quiz;
 import com.example.aichinese.entity.QuizOption;
 import com.example.aichinese.entity.QuizQuestion;
 import com.example.aichinese.entity.enums.ContentStatus;
+import com.example.aichinese.entity.enums.EnumLookups;
 import com.example.aichinese.entity.enums.QuizQuestionType;
 import com.example.aichinese.repository.QuizOptionRepository;
 import com.example.aichinese.repository.QuizQuestionRepository;
@@ -45,7 +45,7 @@ class LessonQuizEditor {
     private static final String QUESTIONS_LOCKED = "Quiz questions cannot be changed after learners have submitted attempts.";
 
     private final ClassContentSupport content;
-    private final LessonRevisionService revisions;
+    private final LessonRevisionDiff diff;
     private final QuizRepository quizRepository;
     private final QuizQuestionRepository quizQuestionRepository;
     private final QuizOptionRepository quizOptionRepository;
@@ -92,37 +92,24 @@ class LessonQuizEditor {
     }
 
     boolean isUnchanged(QuizQuestion existing, ValidatedQuestion validated) {
-        if (existing.isAiDraft()
-                || existing.getQuestionType() != validated.type()
-                || !Objects.equals(existing.getQuestionText(), validated.questionText())
-                || !Objects.equals(existing.getPoints(), validated.points())
-                || !Objects.equals(existing.getExplanation(), validated.explanation())
-                || !Objects.equals(existing.getHint(), validated.hint())
-                || !Objects.equals(existing.getAudioUrl(), validated.audioUrl())
-                || !Objects.equals(existing.getImageUrl(), validated.imageUrl())
-                || !Objects.equals(existing.getCorrectAnswerText(), validated.correctAnswerText())) {
+        if (existing.isAiDraft()) {
             return false;
         }
-        List<QuizOption> existingOptions = quizOptionRepository.findForQuestions(List.of(existing))
-                .getOrDefault(existing.getId(), List.of());
-        if (existingOptions.size() != validated.options().size()) {
-            return false;
-        }
-        for (int index = 0; index < existingOptions.size(); index++) {
-            QuizOption actual = existingOptions.get(index);
-            ValidatedOption incoming = validated.options().get(index);
-            if (!Objects.equals(actual.getOptionText(), incoming.optionText())
-                    || actual.isCorrectOption() != incoming.correctOption()
-                    || !Objects.equals(actual.getFeedback(), incoming.feedback())) {
-                return false;
-            }
-        }
-        return true;
+        List<QuizOption> existingOptions = quizOptionRepository.findInDisplayOrder(List.of(existing.getId()));
+        LessonRevisionDiff.QuestionContent incoming = new LessonRevisionDiff.QuestionContent(
+                validated.type(), validated.questionText(), validated.correctAnswerText(),
+                validated.explanation(), validated.hint(), validated.points(),
+                validated.audioUrl(), validated.imageUrl(), false,
+                validated.options().stream()
+                        .map(option -> new LessonRevisionDiff.OptionContent(
+                                option.optionText(), option.correctOption(), option.feedback()))
+                        .toList());
+        return LessonRevisionDiff.questionContent(existing, existingOptions).equals(incoming);
     }
 
     void addQuestion(Quiz quiz, QuizQuestionRequest request, ValidatedQuestion validated) {
         List<QuizQuestion> existing = content.questions(quiz.getId());
-        int index = request.position() == null ? existing.size() : Math.min(request.position() - 1, existing.size());
+        int index = request.position() == null ? existing.size() : Math.clamp(request.position() - 1L, 0, existing.size());
         // Number the questions 1, 2, ... leaving the new question's place free.
         for (int i = 0; i < existing.size(); i++) {
             existing.get(i).setSortOrder(i < index ? i + 1 : i + 2);
@@ -144,7 +131,8 @@ class LessonQuizEditor {
     }
 
     void deleteQuestion(QuizQuestion question) {
-        revisions.deleteQuestion(question);
+        deleteOptions(question);
+        quizQuestionRepository.delete(question);
         quizQuestionRepository.flush();
     }
 
@@ -190,7 +178,7 @@ class LessonQuizEditor {
         Quiz copy = requireQuiz(working, quiz.getId());
         List<QuizQuestion> publishedQuestions = content.questions(quiz.getId());
         List<QuizQuestion> revisedQuestions = content.questions(copy.getId());
-        if (!revisions.sameQuestions(publishedQuestions, revisedQuestions)) {
+        if (!diff.sameQuestions(publishedQuestions, revisedQuestions)) {
             throw new ResponseStatusException(CONFLICT, "This quiz has changed. Reload the lesson before editing its questions.");
         }
         // The same questions in the same order: the copy at the question's position.
@@ -198,13 +186,13 @@ class LessonQuizEditor {
     }
 
     private void requireQuestionsEditable(Quiz quiz) {
-        if (revisions.questionsLocked(quiz)) {
+        if (diff.questionsLocked(quiz)) {
             throw new ResponseStatusException(BAD_REQUEST, QUESTIONS_LOCKED);
         }
     }
 
     ValidatedQuestion validateQuestion(QuizQuestionRequest request) {
-        QuizQuestionType type = QuizQuestionType.tryFrom(request.questionType())
+        QuizQuestionType type = EnumLookups.tryFrom(QuizQuestionType.class, request.questionType())
                 .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, QuizQuestionType.INVALID_TYPE_MESSAGE));
         String questionText = safety.requireSafeText(request.questionText(), 2000, "Question text is required.");
         String explanation = safety.optionalSafeText(request.explanation(), 2000);
@@ -227,7 +215,7 @@ class LessonQuizEditor {
                 }
                 options.add(new ValidatedOption(label, input.correctOption(), safety.optionalSafeText(input.feedback(), 300)));
             }
-            correctAnswerText = correctOptionText(options);
+            correctAnswerText = correctOptionText(type, options);
         } else {
             correctAnswerText = safety.requireSafeText(
                     request.correctAnswerText(), 1000, "Correct answer text is required for this question type.");
@@ -257,16 +245,25 @@ class LessonQuizEditor {
         }
         QuizQuestion saved = quizQuestionRepository.save(question);
         if (!isNew) {
-            revisions.deleteOptions(List.of(saved));
+            deleteOptions(saved);
         }
         if (!options.isEmpty()) {
             quizOptionRepository.saveAll(options);
         }
     }
 
-    private static String correctOptionText(List<ValidatedOption> options) {
-        if (options.isEmpty()) {
-            throw new ResponseStatusException(BAD_REQUEST, "At least one answer option is required.");
+    private void deleteOptions(QuizQuestion question) {
+        quizOptionRepository.deleteAll(quizOptionRepository.findInDisplayOrder(List.of(question.getId())));
+        // Delete the options before the question or before inserting its replacement options.
+        quizOptionRepository.flush();
+    }
+
+    private static String correctOptionText(QuizQuestionType type, List<ValidatedOption> options) {
+        if (type == QuizQuestionType.TRUE_FALSE && options.size() != 2) {
+            throw new ResponseStatusException(BAD_REQUEST, "A true-or-false question needs exactly 2 answer options.");
+        }
+        if (options.size() < 2) {
+            throw new ResponseStatusException(BAD_REQUEST, "At least 2 answer options are required.");
         }
         List<ValidatedOption> correct = options.stream().filter(ValidatedOption::correctOption).toList();
         if (correct.size() != 1) {

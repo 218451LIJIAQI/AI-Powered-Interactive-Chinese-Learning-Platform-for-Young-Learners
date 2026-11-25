@@ -12,7 +12,6 @@
       <StatePanel
         v-else-if="checksResource.error.value"
         tone="error"
-        icon="alert"
         :title="t('aiHelper.checksError')"
         :message="checksResource.error.value"
       >
@@ -22,7 +21,7 @@
           </button>
         </template>
       </StatePanel>
-      <ul v-else-if="checks.length" class="row-list">
+      <ul v-else-if="checks.length" class="row-list is-flush">
         <li v-for="check in checks" :key="check.id" class="ai-check-item">
           <div class="row-list-copy">
             <span class="row-list-title">
@@ -32,7 +31,7 @@
           </div>
           <div class="row-list-actions">
             <span class="tag is-outline">{{ t('aiHelper.outOf100', { score: check.score }) }}</span>
-            <span v-if="viewingCheckId === check.id" class="tag" data-testid="ai-check-viewing">
+            <span v-if="viewingCheckId === check.id" class="tag">
               {{ t('aiHelper.viewing') }}
             </span>
             <button
@@ -65,11 +64,13 @@
   </div>
 
   <AppOverlay
-    v-if="openCheck && !drawerSuppressed"
+    v-if="openCheck"
     variant="drawer"
     :busy="deleting"
     :title="t('aiHelper.checkDetailTitle', { kind: kindLabel(openCheck.type), target: openCheck.targetText })"
-    :subtitle="checkMeta(openCheck, t('aiHelper.checkedOn', { time: formatDateTime(openCheck.checkedAt) }))"
+    :subtitle="
+      formatPracticeCheckMeta(openCheck, t('aiHelper.checkedOn', { time: formatDateTime(openCheck.checkedAt) }))
+    "
     @close="openCheck = null"
   >
     <dl class="kv-list">
@@ -109,16 +110,15 @@
         {{ t('aiHelper.reportScore') }}
       </button>
       <span v-else class="ai-reported"><IconGlyph name="status" :size="14" />{{ t('aiSafety.reported') }}</span>
-      <p v-if="detailError" class="callout is-compact is-danger" role="alert">{{ detailError }}</p>
     </section>
     <!-- Delete takes the check away at once: the toast's Undo brings it back, so nothing asks first. -->
     <template #footer>
+      <p v-if="detailError" class="field-error" role="alert">{{ detailError }}</p>
       <button
         class="btn btn-danger-soft is-far-left"
         type="button"
         :disabled="deleting"
         :aria-busy="deleting"
-        data-testid="ai-check-delete"
         @click="deleteCheck(openCheck)"
       >
         <IconGlyph name="trash" :size="16" />
@@ -158,8 +158,6 @@ defineProps<{
   viewingCheckId: number | null
   reportedIds: ReadonlySet<number>
   aiNotice: string
-  /** Hide the detail drawer while the parent displays the AI report modal. */
-  drawerSuppressed: boolean
 }>()
 const emit = defineEmits<{
   report: [check: PracticeCheck]
@@ -192,10 +190,6 @@ const {
 
 function kindLabel(kind: PracticeCheck['type']): string {
   return t(practiceCheckKindKey(kind))
-}
-
-function checkMeta(check: PracticeCheck, when: string): string {
-  return formatPracticeCheckMeta(check, when)
 }
 
 function whenLabel(check: PracticeCheck): string {

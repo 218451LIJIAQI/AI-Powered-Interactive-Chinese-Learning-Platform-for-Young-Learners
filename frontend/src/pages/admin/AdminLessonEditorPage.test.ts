@@ -11,16 +11,13 @@ const api = vi.hoisted(() => ({
   saveContent: vi.fn(),
   saveVideo: vi.fn(),
   removeVideo: vi.fn(),
-  addActivity: vi.fn(),
-  updateActivity: vi.fn(),
-  addQuiz: vi.fn(),
-  updateQuiz: vi.fn(),
   addQuestion: vi.fn(),
-  updateQuestion: vi.fn(),
   deleteQuestion: vi.fn(),
   keepQuestion: vi.fn(),
   publish: vi.fn(),
   discardChanges: vi.fn(),
+  archive: vi.fn(),
+  restore: vi.fn(),
 }))
 
 vi.mock('@/api/adminClasses', () => ({ lessonEditorApi: api, adminQuizDraftApi: {} }))
@@ -71,8 +68,6 @@ function lesson(id = 13, overrides: Partial<LessonEditor> = {}): LessonEditor {
     ],
     status: 'PUBLISHED',
     title: id === 13 ? 'University Life' : `Lesson ${id}`,
-    minutes: 15,
-    summary: 'Campus words.',
     keyPhrases: [{ chinese: '我是大学生。', pinyin: 'wǒ shì dàxuéshēng.', meaning: 'I’m a university student.' }],
     video: { title: 'Around the campus', durationSeconds: 340 },
     activities: [
@@ -102,8 +97,6 @@ function newLesson(): LessonEditor {
       { id: 70, title: 'First Conversations' },
       { id: 71, title: 'Campus Life' },
     ],
-    minutes: 15,
-    summary: 'Campus words.',
   })
 }
 
@@ -201,8 +194,6 @@ describe('AdminLessonEditorPage', () => {
     expect(api.saveContent).toHaveBeenCalledExactlyOnceWith(13, {
       title: 'University Life 2',
       unitId: 70,
-      minutes: 15,
-      summary: 'Campus words.',
       // The blank row added last is left out.
       keyPhrases: [{ chinese: '我是大学生。', pinyin: 'wǒ shì dàxuéshēng.', meaning: 'I’m a university student.' }],
     })
@@ -711,5 +702,92 @@ describe('AdminLessonEditorPage', () => {
 
     pendingDiscard.resolve(lesson(13, { status: 'PUBLISHED', hasUnpublishedChanges: false }))
     await flushPromises()
+  })
+
+  it('keeps the discard dialog open with the server error when discarding changes fails', async () => {
+    api.get.mockResolvedValue(lesson(13, { status: 'PUBLISHED', hasUnpublishedChanges: true }))
+    api.discardChanges.mockRejectedValueOnce({
+      response: { status: 500, data: { message: 'Temporary database error.' } },
+    })
+    const { wrapper } = await mountEditor()
+
+    await wrapper.get('[data-testid="discard-changes"]').trigger('click')
+    await wrapper.get('[data-testid="confirm-dialog-confirm"]').trigger('click')
+    await flushPromises()
+
+    const dialog = wrapper.get('[data-testid="confirm-dialog"]')
+    expect(dialog.get('[role="alert"]').text()).toBe('Temporary database error.')
+    expect(wrapper.find('.data-notice').exists()).toBe(false)
+  })
+
+  it('blocks publishing when a dirty key phrase is missing Chinese or meaning', async () => {
+    api.get.mockResolvedValue(
+      lesson(13, {
+        status: 'DRAFT',
+        keyPhrases: [{ chinese: '你好', pinyin: 'nǐ hǎo', meaning: 'hello' }],
+      }),
+    )
+    const { wrapper } = await mountEditor()
+
+    await wrapper.get('input[aria-label="Phrase 1: Meaning"]').setValue('')
+    expect(publishHint(wrapper).text()).toContain('key phrases')
+    expect(publishButton(wrapper).element.disabled).toBe(true)
+  })
+
+  it('archives an editable lesson after confirming and restores an archived lesson', async () => {
+    api.archive.mockResolvedValueOnce(lesson(13, { status: 'ARCHIVED', editable: false }))
+    api.restore.mockResolvedValueOnce(lesson(13, { status: 'PUBLISHED', editable: true }))
+    const { wrapper } = await mountEditor()
+
+    await wrapper.get('[data-testid="archive-lesson"]').trigger('click')
+    const dialog = wrapper.get('[data-testid="confirm-dialog"]')
+    expect(dialog.get('h2').text()).toBe('Archive “University Life”?')
+    await wrapper.get('[data-testid="confirm-dialog-confirm"]').trigger('click')
+    await flushPromises()
+
+    expect(api.archive).toHaveBeenCalledExactlyOnceWith(13)
+    expect(wrapper.get('[data-testid="toast"]').text()).toBe('Lesson archived.')
+    expect(wrapper.find('[data-testid="archive-lesson"]').exists()).toBe(false)
+
+    await wrapper.get('[data-testid="restore-lesson"]').trigger('click')
+    await flushPromises()
+
+    expect(api.restore).toHaveBeenCalledExactlyOnceWith(13)
+    expect(wrapper.get('[data-testid="toast"]').text()).toBe('“University Life” is restored and published.')
+    expect(wrapper.find('[data-testid="archive-lesson"]').exists()).toBe(true)
+  })
+
+  it('warns in the archive dialog when unsaved edits exist and explains live unit moves on published lessons', async () => {
+    api.get.mockResolvedValue(
+      lesson(13, {
+        status: 'PUBLISHED',
+        units: [
+          { id: 70, title: 'Unit 1' },
+          { id: 71, title: 'Unit 2' },
+        ],
+      }),
+    )
+    api.saveContent.mockResolvedValueOnce(
+      lesson(13, {
+        status: 'PUBLISHED',
+        unitId: 71,
+        unitTitle: 'Unit 2',
+        units: [
+          { id: 70, title: 'Unit 1' },
+          { id: 71, title: 'Unit 2' },
+        ],
+      }),
+    )
+    const { wrapper } = await mountEditor()
+
+    expect(wrapper.get('#lesson-unit-hint').text()).toContain('updates live as soon as you save')
+    await wrapper.get('#lesson-unit').setValue('71')
+    await wrapper.get('[data-testid="archive-lesson"]').trigger('click')
+    expect(wrapper.get('[data-testid="confirm-dialog"]').text()).toContain('unsaved edits')
+    await wrapper.get('[data-testid="confirm-dialog-cancel"]').trigger('click')
+
+    await saveDraftButton(wrapper).trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="toast"]').text()).toBe('Lesson moved to the new unit.')
   })
 })

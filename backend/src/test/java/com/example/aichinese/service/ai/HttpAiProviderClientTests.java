@@ -40,16 +40,14 @@ class HttpAiProviderClientTests {
 
     @Test
     void aCallIsAbandonedAtItsDeadline() throws Exception {
-        try (StubHttpServer server = delayedResponses(null)) {
-            long started = System.nanoTime();
-
-            assertThatThrownBy(() -> HttpAiProviderClient.post(calls, unboundedClient, Duration.ofSeconds(1),
+        CountDownLatch releaseServer = new CountDownLatch(1);
+        try (StubHttpServer server = blockedResponses(null, releaseServer)) {
+            assertThatThrownBy(() -> HttpAiProviderClient.post(calls, unboundedClient, Duration.ofMillis(250),
                     server.baseUrl() + "/responses", "key", Map.of("model", "m")))
                     .isInstanceOf(ResourceAccessException.class)
                     .hasMessageContaining("deadline");
-
-            long elapsedMillis = (System.nanoTime() - started) / 1_000_000L;
-            assertThat(elapsedMillis).as("ends at the 1 s deadline, not the 3 s reply").isBetween(900L, 2_000L);
+        } finally {
+            releaseServer.countDown();
         }
     }
 
@@ -57,7 +55,8 @@ class HttpAiProviderClientTests {
     @Test
     void anInterruptedCallerStopsWaitingAtOnce() throws Exception {
         CountDownLatch requestReceived = new CountDownLatch(1);
-        try (StubHttpServer server = delayedResponses(requestReceived)) {
+        CountDownLatch releaseServer = new CountDownLatch(1);
+        try (StubHttpServer server = blockedResponses(requestReceived, releaseServer)) {
             Thread caller = Thread.currentThread();
             Thread interrupter = Thread.ofVirtual().start(() -> {
                 try {
@@ -68,7 +67,6 @@ class HttpAiProviderClientTests {
                     // Interrupted during cleanup if the call ended early.
                 }
             });
-            long started = System.nanoTime();
             try {
                 assertThatThrownBy(() -> HttpAiProviderClient.post(calls, unboundedClient, Duration.ofSeconds(10),
                         server.baseUrl() + "/responses", "key", Map.of("model", "m")))
@@ -76,6 +74,7 @@ class HttpAiProviderClientTests {
                         .hasMessageContaining("interrupted");
                 assertThat(Thread.currentThread().isInterrupted()).as("the interrupt is kept for the caller").isTrue();
             } finally {
+                releaseServer.countDown();
                 interrupter.interrupt();
                 Thread.interrupted();
                 try {
@@ -84,7 +83,6 @@ class HttpAiProviderClientTests {
                     Thread.interrupted();
                 }
             }
-            assertThat((System.nanoTime() - started) / 1_000_000L).isLessThan(2_000L);
         }
     }
 
@@ -129,13 +127,14 @@ class HttpAiProviderClientTests {
         }
     }
 
-    private static StubHttpServer delayedResponses(CountDownLatch requestReceived) throws IOException {
+    private static StubHttpServer blockedResponses(CountDownLatch requestReceived, CountDownLatch releaseServer)
+            throws IOException {
         return StubHttpServer.start("/responses", exchange -> {
             if (requestReceived != null) {
                 requestReceived.countDown();
             }
             try {
-                Thread.sleep(3_000L);
+                releaseServer.await(10, TimeUnit.SECONDS);
                 respondJson(exchange, "{\"late\":true}");
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();

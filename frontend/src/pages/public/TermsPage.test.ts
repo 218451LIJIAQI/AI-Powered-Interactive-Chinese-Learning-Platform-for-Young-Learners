@@ -1,17 +1,16 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 
-vi.mock('vue-router', async () => ({ RouterLink: (await import('@/test/helpers')).routerLinkStub }))
+vi.mock('vue-router', async () => ({
+  RouterLink: (await import('@/test/helpers')).routerLinkStub,
+  useRoute: () => ({ hash: '' }),
+}))
 
 import TermsPage from './TermsPage.vue'
 
-function mountPage() {
-  return mount(TermsPage, { global: { stubs: { IconGlyph: true } } })
-}
-
 describe('TermsPage', () => {
   it('has its five sections and says when the terms last changed', () => {
-    const wrapper = mountPage()
+    const wrapper = mount(TermsPage)
 
     expect(wrapper.findAll('.public-rail-link').map((link) => link.text())).toEqual([
       '1.Accounts and roles',
@@ -24,7 +23,7 @@ describe('TermsPage', () => {
   })
 
   it('asks for respect towards support and in AI chats, with nothing about classes, teachers or live sessions', () => {
-    const wrapper = mountPage()
+    const wrapper = mount(TermsPage)
 
     const safeUse = wrapper.get('#terms-safety').text()
     expect(safeUse).toContain('Be respectful in messages to support and in AI chats.')

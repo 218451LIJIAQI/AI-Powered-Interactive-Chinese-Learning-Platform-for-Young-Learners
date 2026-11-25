@@ -14,7 +14,14 @@
         </button>
       </header>
 
-      <div ref="thread" class="ai-thread" tabindex="0" aria-live="polite">
+      <div
+        ref="thread"
+        class="ai-thread"
+        role="log"
+        :aria-labelledby="`${baseId}-title`"
+        :tabindex="exchanges.length ? 0 : undefined"
+        aria-live="polite"
+      >
         <StatePanel
           v-if="!exchanges.length"
           class="ai-thread-empty"
@@ -41,21 +48,26 @@
             <p class="ai-message-who">{{ t('aiHelper.you') }}</p>
             <p class="ai-bubble">{{ exchange.question }}</p>
           </div>
-          <div class="ai-message is-bot" :aria-busy="exchange.pending">
+          <div class="ai-message is-bot" :aria-busy="exchange.status === 'pending'">
             <p class="ai-message-who">
               SparkBot
-              <AiResultLabel v-if="exchange.answered" />
+              <AiResultLabel v-if="exchange.status === 'answered'" />
             </p>
-            <p v-if="exchange.pending && !exchange.answer" class="ai-answer is-thinking">
+            <p v-if="exchange.status === 'pending' && !exchange.answer" class="ai-answer is-thinking">
               <IconGlyph name="clock" :size="16" />
               {{ t('aiHelper.sparkbotThinking') }}
               <span class="ai-dots" aria-hidden="true"><span /><span /><span /></span>
             </p>
-            <p v-else class="ai-answer" :class="{ 'is-problem': !exchange.answered && !exchange.pending }">
+            <p v-else class="ai-answer" :class="{ 'is-problem': exchange.status === 'problem' }">
               {{ exchange.answer }}
             </p>
-            <div v-if="exchange.answered && exchange.messageId" class="ai-message-actions">
-              <button v-if="!exchange.reported" class="btn btn-ghost btn-sm" type="button" @click="report(exchange)">
+            <div v-if="exchange.status === 'answered' && exchange.messageId" class="ai-message-actions">
+              <button
+                v-if="!exchange.reported"
+                class="btn btn-ghost btn-sm"
+                type="button"
+                @click="reportingExchange = exchange"
+              >
                 <IconGlyph name="flag" :size="16" />
                 {{ t('aiSafety.report') }}
               </button>
@@ -65,7 +77,7 @@
         </template>
       </div>
 
-      <div class="ai-ask-composer">
+      <div ref="composer" class="ai-ask-composer">
         <p v-if="error" class="callout is-compact is-danger" role="alert">{{ error }}</p>
         <div class="ai-topics">
           <span class="ai-topics-label">{{ t('aiHelper.quickStart') }}</span>
@@ -96,14 +108,13 @@
             :placeholder="placeholder"
             @keydown.enter.exact="sendOnEnter"
           />
-          <button
-            class="btn btn-primary"
-            type="submit"
-            :disabled="Boolean(blocked) || asking || !question.trim()"
-            :aria-busy="asking"
-          >
-            {{ asking ? t('aiHelper.thinking') : t('aiHelper.send') }}
-            <IconGlyph v-if="!asking" name="send" :size="16" />
+          <button v-if="asking" class="btn btn-secondary" type="button" data-testid="ai-ask-stop" @click="stopAsking">
+            <IconGlyph name="stop" :size="16" />
+            {{ t('aiHelper.stop') }}
+          </button>
+          <button v-else class="btn btn-primary" type="submit" :disabled="Boolean(blocked) || !question.trim()">
+            {{ t('aiHelper.send') }}
+            <IconGlyph name="send" :size="16" />
           </button>
         </form>
       </div>
@@ -115,19 +126,31 @@
     </div>
 
     <AiReportDialog
-      v-if="reportTarget"
-      :payload="reportTarget.payload"
-      :title="t(reportTarget.titleKey)"
-      :subtitle="reportTarget.leadKey ? t(reportTarget.leadKey) : undefined"
-      :attached="t(reportTarget.attachedKey)"
-      @close="reportTarget = null"
+      v-if="reportingExchange?.messageId"
+      :payload="{ featureKey: 'CHAT_TUTOR', chatMessageId: reportingExchange.messageId }"
+      :title="t('aiHelper.reportAnswerTitle')"
+      :subtitle="t('aiHelper.reportLeadHere')"
+      :attached="t('aiHelper.reportAnswerAttached')"
+      @close="reportingExchange = null"
       @sent="onReported"
     />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, useId, watch } from 'vue'
+import {
+  computed,
+  nextTick,
+  onActivated,
+  onBeforeUnmount,
+  onDeactivated,
+  onMounted,
+  reactive,
+  ref,
+  shallowRef,
+  useId,
+  watch,
+} from 'vue'
 
 import { aiHelperApi } from '@/api/ai'
 import { getAuthSessionVersion } from '@/api/http'
@@ -144,7 +167,7 @@ import { truncateText } from '@/utils/truncateText'
 import AiNotice from './AiNotice.vue'
 import AiReportDialog from './AiReportDialog.vue'
 import AiResultLabel from './AiResultLabel.vue'
-import type { AiBlockedReason, AiReportTarget } from './aiHelper'
+import type { AiBlockedReason } from './aiHelper'
 import '@/styles/ai-ask.css'
 
 /**
@@ -160,12 +183,13 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ used: []; reported: [] }>()
 
+type ExchangeStatus = 'pending' | 'answered' | 'stopped' | 'problem'
+
 interface Exchange {
   id: number
   question: string
   answer: string
-  pending: boolean
-  answered: boolean
+  status: ExchangeStatus
   messageId: number | null
   reported: boolean
 }
@@ -184,13 +208,15 @@ const baseId = useId()
 
 const question = ref(truncateText(props.initialQuestion ?? '', MAX_QUESTION))
 const input = ref<HTMLTextAreaElement | null>(null)
+const composer = ref<HTMLDivElement | null>(null)
 const thread = ref<HTMLDivElement | null>(null)
 const exchanges = ref<Exchange[]>([])
 const sessionId = ref<number | null>(null)
-const asking = computed(() => exchanges.value.at(-1)?.pending ?? false)
+const asking = computed(() => exchanges.value.at(-1)?.status === 'pending')
 const error = ref<string | null>(null)
-const reportTarget = ref<AiReportTarget | null>(null)
+const reportingExchange = shallowRef<Exchange | null>(null)
 let stream: AbortController | null = null
+let activeOnScreen = true
 let nextId = 1
 
 const placeholder = computed(() => {
@@ -200,6 +226,15 @@ const placeholder = computed(() => {
 
 onMounted(() => {
   if (question.value) input.value?.focus()
+})
+
+onActivated(() => {
+  activeOnScreen = true
+  if (exchanges.value.length) void nextTick(scrollToEnd)
+})
+
+onDeactivated(() => {
+  activeOnScreen = false
 })
 
 watch(
@@ -218,11 +253,15 @@ async function startWith(prefix: string): Promise<void> {
   input.value?.setSelectionRange(prefix.length, prefix.length)
 }
 
-/** Enter sends, unless it belongs to an input method turning pinyin into characters. */
+/** Enter sends, unless it belongs to an input method turning pinyin into characters (incl. Safari/WebKit keyCode 229). */
 function sendOnEnter(event: KeyboardEvent): void {
-  if (event.isComposing) return
+  if (event.isComposing || event.key === 'Process' || event.keyCode === 229) return
   event.preventDefault()
   void ask(question.value)
+}
+
+function stopAsking(): void {
+  stream?.abort()
 }
 
 let scrollQueued = false
@@ -245,6 +284,9 @@ function scheduleScrollToEnd(): void {
 async function ask(text: string): Promise<void> {
   const message = text.trim()
   if (!message || asking.value || props.blocked) return
+  const hadPromptFocus = Boolean(
+    composer.value?.contains(document.activeElement) || thread.value?.contains(document.activeElement),
+  )
   const sessionVersion = getAuthSessionVersion()
   error.value = null
   question.value = ''
@@ -252,19 +294,19 @@ async function ask(text: string): Promise<void> {
     id: nextId++,
     question: message,
     answer: '',
-    pending: true,
-    answered: false,
+    status: 'pending',
     messageId: null,
     reported: false,
   })
   exchanges.value.push(current)
   const controller = new AbortController()
   stream = controller
-  const isCurrentRequest = () => !controller.signal.aborted && sessionVersion === getAuthSessionVersion()
-  await nextTick()
-  if (!isCurrentRequest()) return
-  scrollToEnd()
+  const sameSession = () => sessionVersion === getAuthSessionVersion()
+  const isCurrentRequest = () => !controller.signal.aborted && sameSession()
   try {
+    await nextTick()
+    if (!isCurrentRequest()) return
+    scrollToEnd()
     const reply = await aiHelperApi.chatStream(
       { message, languagePreference: appLocale.value, sessionId: sessionId.value ?? undefined },
       {
@@ -277,22 +319,41 @@ async function ask(text: string): Promise<void> {
       },
     )
     if (!isCurrentRequest()) return
-    current.answered = reply.status === 'SUCCESS'
+    const answered = reply.status === 'SUCCESS'
+    current.status = answered ? 'answered' : 'problem'
     // Without an answer the reply is a fixed server message (unavailable, blocked): shown in the student's language.
-    current.answer = current.answered ? reply.aiResponse : serverMessageOr(reply.aiResponse, t('aiHelper.askError'))
+    current.answer = answered ? reply.aiResponse : serverMessageOr(reply.aiResponse, t('aiHelper.askError'))
     current.messageId = reply.chatMessageId ?? null
     if (reply.sessionId) sessionId.value = reply.sessionId
   } catch (reason) {
     if (!isCurrentRequest()) return
+    current.status = 'problem'
     exchanges.value = exchanges.value.filter((item) => item.id !== current.id)
     question.value = message
     error.value = resolveApiError(reason, t('aiHelper.askError'))
   } finally {
-    current.pending = false
     if (stream === controller) stream = null
     if (isCurrentRequest()) {
       emit('used')
-      void nextTick(scrollToEnd)
+    } else if (sameSession() && current.answer.trim()) {
+      current.status = 'stopped'
+    } else {
+      current.status = 'stopped'
+      exchanges.value = exchanges.value.filter((item) => item.id !== current.id)
+      if (sameSession() && !question.value) question.value = message
+    }
+    if (sameSession()) {
+      void nextTick(() => {
+        scrollToEnd()
+        if (
+          hadPromptFocus &&
+          activeOnScreen &&
+          !props.blocked &&
+          (!document.activeElement || document.activeElement === document.body)
+        ) {
+          input.value?.focus({ preventScroll: true })
+        }
+      })
     }
   }
 }
@@ -303,21 +364,9 @@ function newChat(): void {
   error.value = null
 }
 
-function report(exchange: Exchange): void {
-  if (!exchange.messageId) return
-  reportTarget.value = {
-    payload: { featureKey: 'CHAT_TUTOR', chatMessageId: exchange.messageId },
-    titleKey: 'aiHelper.reportAnswerTitle',
-    attachedKey: 'aiHelper.reportAnswerAttached',
-    leadKey: 'aiHelper.reportLeadHere',
-  }
-}
-
 function onReported(): void {
-  const id = reportTarget.value?.payload.chatMessageId
-  const reported = exchanges.value.find((item) => item.messageId === id)
-  if (reported) reported.reported = true
-  reportTarget.value = null
+  if (reportingExchange.value) reportingExchange.value.reported = true
+  reportingExchange.value = null
   emit('reported')
 }
 

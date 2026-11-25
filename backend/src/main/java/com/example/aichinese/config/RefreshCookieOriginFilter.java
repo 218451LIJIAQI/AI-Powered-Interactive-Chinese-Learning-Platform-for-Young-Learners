@@ -45,10 +45,12 @@ public class RefreshCookieOriginFilter extends OncePerRequestFilter {
 
     private final ObjectMapper objectMapper;
     private final Set<String> trustedOrigins;
+    private final boolean production;
 
-    public RefreshCookieOriginFilter(ObjectMapper objectMapper, Set<String> trustedOrigins) {
+    public RefreshCookieOriginFilter(ObjectMapper objectMapper, Set<String> trustedOrigins, boolean production) {
         this.objectMapper = objectMapper;
         this.trustedOrigins = Set.copyOf(trustedOrigins);
+        this.production = production;
     }
 
     @Override
@@ -97,8 +99,14 @@ public class RefreshCookieOriginFilter extends OncePerRequestFilter {
     }
 
     private boolean isTrustedOrigin(HttpServletRequest request, String origin) {
+        if (trustedOrigins.contains(origin)) {
+            return true;
+        }
         String requestOrigin = HttpUrlValidation.originOf(request.getScheme(), request.getServerName(), request.getServerPort());
-        return origin.equals(requestOrigin) || trustedOrigins.contains(origin);
+        if (production && !requestOrigin.startsWith("https://")) {
+            return false;
+        }
+        return origin.equals(requestOrigin);
     }
 
     /** Normalised like a configured CORS origin, so the two compare equal; {@code null} when it is not an origin. */

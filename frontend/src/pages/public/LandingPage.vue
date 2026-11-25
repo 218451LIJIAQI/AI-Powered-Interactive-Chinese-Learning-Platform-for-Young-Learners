@@ -118,7 +118,7 @@ import { useMandarinReadAloud } from '@/composables/useMandarinSpeech'
 import { useToast } from '@/composables/useToast'
 import { landingMessages } from '@/plugins/landingMessages'
 import { useAuthStore } from '@/stores/auth'
-import { withoutQueryKeys } from '@/utils/queryText'
+import { withoutQueryKeys } from '@/utils/routeQuery'
 import { defaultRouteForRole } from '@/utils/role'
 
 const FACTS = ['landing.factFree', 'landing.factPlan'] as const

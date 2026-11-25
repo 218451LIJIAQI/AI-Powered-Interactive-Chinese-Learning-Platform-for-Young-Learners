@@ -1,9 +1,9 @@
 <template>
   <div class="page-stack">
-    <PageHeaderBlock :title="t('nav.users')" hide-title />
+    <h1 class="sr-only">{{ t('nav.users') }}</h1>
 
     <RouteTabs :tabs="tabs" :label="t('adminUsers.tabsLabel')">
-      <button class="btn btn-secondary" type="button" data-testid="admin-users-invite" @click="inviteOpen = true">
+      <button class="btn btn-secondary" type="button" data-testid="admin-users-invite" @click="openInvite">
         <IconGlyph name="mail" :size="16" />
         <span>{{ t('adminUsers.inviteAdmin') }}</span>
       </button>
@@ -33,7 +33,7 @@
             <label class="field-label" for="admin-users-role">{{ t('adminUsers.roleLabel') }}</label>
             <select id="admin-users-role" v-model="role" class="select" data-testid="admin-users-role">
               <option value="">{{ t('adminUsers.roleAll') }}</option>
-              <option v-for="option in USER_ROLES" :key="option" :value="option">{{ t(ROLE_KEYS[option]) }}</option>
+              <option v-for="option in USER_ROLES" :key="option" :value="option">{{ t(`roles.${option}`) }}</option>
             </select>
           </div>
           <div class="field">
@@ -62,7 +62,6 @@
         <StatePanel
           v-else-if="users.error.value"
           tone="error"
-          icon="alert"
           :title="t('adminUsers.loadErrorTitle')"
           :message="users.error.value"
           @retry="retryUsers"
@@ -92,7 +91,7 @@
                   :key="user.id"
                   :class="{ 'is-selected': user.id === selectedId }"
                   data-testid="admin-users-row"
-                  @click="selectUser(user.id)"
+                  @click="onUserRowClick(user.id)"
                 >
                   <td>
                     <span class="admin-cell-person">
@@ -104,9 +103,14 @@
                     </span>
                   </td>
                   <td>
-                    <span class="tag is-outline">{{ t(ROLE_KEYS[user.role]) }}</span>
+                    <span class="tag is-outline">{{ t(`roles.${user.role}`) }}</span>
                   </td>
-                  <td><StatusPill v-bind="accountPill(user.active)" /></td>
+                  <td>
+                    <StatusPill
+                      :label="user.active ? t('adminUsers.accountActive') : t('adminUsers.accountDeactivated')"
+                      :tone="accountTone(user.active)"
+                    />
+                  </td>
                   <td class="admin-cell-date admin-users-col-joined">{{ formatShortDate(user.joinedAt) }}</td>
                   <td class="col-actions">
                     <button
@@ -168,6 +172,7 @@
       :busy="saving"
       :error="dialogError"
       @cancel="deactivateOpen = false"
+      @clear-error="dialogError = null"
       @confirm="confirmDeactivate"
     />
 
@@ -178,7 +183,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
 
 import { adminUsersApi } from '@/api/ops'
@@ -195,8 +200,8 @@ import PortraitAvatar from '@/components/common/PortraitAvatar.vue'
 import RouteTabs, { type RouteTab } from '@/components/common/RouteTabs.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
 import StatusPill from '@/components/common/StatusPill.vue'
-import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
+import { useIsUnmounted } from '@/composables/useIsUnmounted'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { usePageFilters, useResource, useServerPage } from '@/composables/useResource'
 import { useToast } from '@/composables/useToast'
@@ -205,9 +210,7 @@ import { USER_ROLES, type UserRole } from '@/types/api'
 import type { AdminUserDetail } from '@/types/ops'
 import { resolveApiError } from '@/utils/apiError'
 import { formatShortDate } from '@/utils/format'
-import { ROLE_KEYS } from '@/utils/opsLabels'
-import { pageFromQuery, pageQuery } from '@/utils/pageQuery'
-import { firstQueryText, queryOption } from '@/utils/queryText'
+import { firstQueryText, pageFromQuery, pageQuery, queryOption } from '@/utils/routeQuery'
 import '@/styles/admin-shared.css'
 import '@/styles/ops-admin.css'
 
@@ -268,10 +271,7 @@ const users = useResource(() =>
 )
 
 watch(users.data, (loaded) => {
-  if (loaded && !hasFilters.value) {
-    accounts.clear()
-    accounts.data.value = loaded
-  }
+  if (loaded && !hasFilters.value) accounts.replace(loaded)
 })
 watch(hasFilters, (filtered) => {
   if (filtered && accounts.data.value === null && !accounts.loading.value) void accounts.reload()
@@ -311,13 +311,6 @@ function clearFilters(): void {
 /** Only the search box narrows the list: the empty state then offers "Clear search", not "Clear filters". */
 const searchOnly = computed(() => Boolean(keyword.value) && !role.value && !account.value)
 
-function accountPill(accountActive: boolean) {
-  return {
-    label: accountActive ? t('adminUsers.accountActive') : t('adminUsers.accountDeactivated'),
-    tone: accountTone(accountActive),
-  }
-}
-
 // The selected user (`?user=<id>`), shown in the side column.
 
 const { selectedId, detail, select } = useSelectedRecord('user', adminUsersApi.get, listQuery, () =>
@@ -325,6 +318,11 @@ const { selectedId, detail, select } = useSelectedRecord('user', adminUsersApi.g
 )
 const selectedUser = detail.data
 const showDetail = computed(() => selectedId.value !== null || items.value.length > 0 || users.loading.value)
+
+function onUserRowClick(id: number): void {
+  if (window.getSelection()?.toString()) return
+  void selectUser(id)
+}
 
 async function selectUser(id: number): Promise<void> {
   await select(id)
@@ -339,21 +337,23 @@ const dialogError = ref<string | null>(null)
 const accessError = ref<string | null>(null)
 const pendingAccess = reactive(new Set<number>())
 const saving = computed(() => selectedId.value !== null && pendingAccess.has(selectedId.value))
+const isUnmounted = useIsUnmounted()
 let selectionVersion = 0
-let disposed = false
 
 watch(selectedId, () => {
   selectionVersion++
   deactivateOpen.value = false
   accessError.value = null
 })
-onBeforeUnmount(() => {
-  disposed = true
-  selectionVersion++
-})
+
+function openInvite(): void {
+  if (toastAction.value) hideToast()
+  inviteOpen.value = true
+}
 
 function openDeactivate(): void {
   if (saving.value) return
+  if (toastAction.value) hideToast()
   dialogError.value = null
   accessError.value = null
   deactivateOpen.value = true
@@ -366,12 +366,11 @@ async function changeAccess(
   failed: string,
   showError: (message: string, sameSelection: boolean) => void,
 ): Promise<boolean> {
-  if (pendingAccess.has(targetId)) return false
   pendingAccess.add(targetId)
   const version = selectionVersion
   try {
     const updatedUser = await change()
-    if (disposed) return false
+    if (isUnmounted()) return false
     void users.reload()
     if (selectedId.value === updatedUser.id) {
       detail.replace(updatedUser)
@@ -379,7 +378,7 @@ async function changeAccess(
     }
     return version === selectionVersion
   } catch (failure) {
-    if (!disposed && selectedId.value === targetId) {
+    if (!isUnmounted() && selectedId.value === targetId) {
       showError(resolveApiError(failure, failed), version === selectionVersion)
     }
     return false
@@ -402,7 +401,13 @@ async function confirmDeactivate(reason: string): Promise<void> {
       else accessError.value = message
     },
   )
-  if (done) deactivateOpen.value = false
+  if (done) {
+    deactivateOpen.value = false
+    await nextTick()
+    if (!document.activeElement || document.activeElement === document.body) {
+      detailPanelRef.value?.focus()
+    }
+  }
 }
 
 async function reactivate(): Promise<void> {

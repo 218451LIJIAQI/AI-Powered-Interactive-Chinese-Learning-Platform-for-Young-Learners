@@ -58,4 +58,4 @@ export const safetyMessages = {
     reportFormLink: '“联系我们”表单',
     reportEmergency: '如果有人正处于危险之中，请立即拨打 999。',
   },
-}
+} as const

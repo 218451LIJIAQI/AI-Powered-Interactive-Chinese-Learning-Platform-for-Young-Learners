@@ -1,7 +1,8 @@
-/** Shared SparkBot hint chrome and report-dialog wording reused by both Practice/Learn and Class players. */
+/** Shared SparkBot hint chrome and report-dialog wording reused across Practice/Learn, Class players, and AI Quick quiz. */
 export const hintChromeMessages = {
   en: {
     hintOffer: 'Stuck? SparkBot can give you a hint.',
+    hintOfferAsk: 'Want a hint? Ask SparkBot whenever you like.',
     showHint: 'Show hint',
     hintTitle: 'SparkBot hint',
     hintReportTitle: 'Report this hint',
@@ -11,6 +12,7 @@ export const hintChromeMessages = {
   },
   ms: {
     hintOffer: 'Tersekat? SparkBot boleh memberi anda petunjuk.',
+    hintOfferAsk: 'Mahu petunjuk? Minta daripada SparkBot bila-bila masa.',
     showHint: 'Tunjuk petunjuk',
     hintTitle: 'Petunjuk SparkBot',
     hintReportTitle: 'Laporkan petunjuk ini',
@@ -20,6 +22,7 @@ export const hintChromeMessages = {
   },
   'zh-CN': {
     hintOffer: '卡住了？SparkBot 可以给你一个提示。',
+    hintOfferAsk: '需要提示？随时可以问 SparkBot。',
     showHint: '看提示',
     hintTitle: 'SparkBot 提示',
     hintReportTitle: '举报这条提示',

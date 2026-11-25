@@ -6,7 +6,7 @@ import { adminLearningSharedMessages } from '@/plugins/adminLearningSharedMessag
 import { i18n } from '@/plugins/i18n'
 import type { AdminUnitRow } from '@/types/learn'
 
-import { unitDrawerMeta, unitLessonsLabel, unitMetaParts } from './unitLessons'
+import { unitDrawerMeta, unitLessonsLabel, unitRowMeta } from './unitLessons'
 
 function translatorFor(locale: 'en' | 'ms' | 'zh-CN') {
   const translator = createI18n({
@@ -57,7 +57,7 @@ describe('unitLessonsLabel', () => {
 })
 
 /** A unit row's line (A4.01): its lessons, then the learners who started it; nobody can start a draft. */
-describe('unitMetaParts', () => {
+describe('unitRowMeta', () => {
   it.each([
     ['en', greetings, '7 lessons + bonus chest · 8 learners started'],
     ['en', { ...greetings, studentsStarted: 1 }, '7 lessons + bonus chest · 1 learner started'],
@@ -66,7 +66,7 @@ describe('unitMetaParts', () => {
     ['ms', greetings, '7 pelajaran + peti bonus · 8 pelajar telah bermula'],
     ['zh-CN', greetings, '7 个课时 + 奖励宝箱 · 8 名学习者已开始'],
   ] as const)('%s: %o reads "%s"', (locale, unit, meta) => {
-    expect(unitMetaParts(translatorFor(locale), unit).join(' · ')).toBe(meta)
+    expect(unitRowMeta(translatorFor(locale), unit)).toBe(meta)
   })
 })
 

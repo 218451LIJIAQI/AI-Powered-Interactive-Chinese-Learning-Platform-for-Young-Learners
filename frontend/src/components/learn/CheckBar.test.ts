@@ -24,4 +24,27 @@ describe('CheckBar', () => {
     expect(answer.text()).toBe(correctAnswer)
     expect(answer.attributes('lang')).toBe(lang)
   })
+
+  it('links the Continue button to the feedback region and marks Chinese runs inside mixed explanations', () => {
+    const wrapper = mount(CheckBar, {
+      props: {
+        check: answerCheck({
+          correct: false,
+          correctAnswer: '你好',
+          pinyin: 'nǐ hǎo',
+          meaning: 'hello',
+          explanation: 'Use 你好 for a polite greeting.',
+        }),
+        canCheck: false,
+        checking: false,
+        answerLine: true,
+      },
+    })
+
+    const feedback = wrapper.get('.learn-checkbar-feedback')
+    const continueBtn = wrapper.get('[data-testid="continue"]')
+    expect(continueBtn.attributes('aria-describedby')).toBe(feedback.attributes('id'))
+    expect(wrapper.get('.learn-checkbar-answer span[lang="zh-Latn"]').text()).toContain('nǐ hǎo')
+    expect(wrapper.get('.learn-checkbar-explanation span[lang="zh-CN"]').text()).toBe('你好')
+  })
 })

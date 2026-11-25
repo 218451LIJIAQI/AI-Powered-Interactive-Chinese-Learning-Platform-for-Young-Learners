@@ -1,4 +1,4 @@
-import { nextTick, onBeforeUnmount, onMounted, watch, type Ref } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, readonly, ref, watch, type Ref } from 'vue'
 
 const FOCUSABLE_SELECTOR =
   'a[href],button,input,select,textarea,audio[controls],video[controls],details>summary:first-of-type,[contenteditable]:not([contenteditable="false"]),[tabindex]'
@@ -7,6 +7,9 @@ const SCROLL_LOCK_CLASS = 'has-overlay-open'
 
 /** Open overlays, innermost last: only the innermost one answers Escape and Tab. */
 const openOverlays: OverlayFocusOptions[] = []
+const overlayOpenState = ref(false)
+/** True whenever at least one modal overlay is open, so teleported siblings (e.g. toasts) become inert. */
+export const hasOpenOverlay = readonly(overlayOpenState)
 let lockedApp: HTMLElement | null = null
 
 interface OverlayFocusOptions {
@@ -19,6 +22,7 @@ interface OverlayFocusOptions {
 /** The app and any underlying teleported dialog leave the tab order and accessibility tree together. */
 function updateModalLayers(): void {
   const top = openOverlays.at(-1)
+  overlayOpenState.value = Boolean(top)
   for (const overlay of openOverlays) overlay.container.value?.toggleAttribute('inert', overlay !== top)
   document.documentElement.classList.toggle(SCROLL_LOCK_CLASS, Boolean(top))
   if (!top) {

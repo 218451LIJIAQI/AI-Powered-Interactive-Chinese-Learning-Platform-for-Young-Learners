@@ -13,9 +13,9 @@ public final class FriendlyErrorMessageResolver {
     private static final int MAX_VERBATIM_LENGTH = 400;
 
     /**
-     * Specific, user-actionable messages that must reach the user verbatim, whatever their status: account state, the
-     * learner's own hints-off setting, the daily AI quota and the two limits of "Send the link again" (wait a minute,
-     * or until tomorrow).
+     * Specific, user-actionable messages that must reach the user verbatim for any 4xx status (5xx responses always
+     * return the generic server error): account state, the learner's own hints-off setting, the daily AI quota and the
+     * two limits of "Send the link again" (wait a minute, or until tomorrow).
      */
     private static final List<String> EXPLICIT_PASSTHROUGH_HINTS = List.of(
             "account is currently unavailable",

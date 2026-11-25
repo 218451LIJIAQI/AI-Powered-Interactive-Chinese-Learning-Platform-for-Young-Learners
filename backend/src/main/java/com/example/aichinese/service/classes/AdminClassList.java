@@ -16,6 +16,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.example.aichinese.dto.PageResponse;
 import com.example.aichinese.dto.classes.AdminClassViews.ContentRow;
 import com.example.aichinese.entity.enums.ContentStatus;
+import com.example.aichinese.entity.enums.EnumLookups;
 import com.example.aichinese.util.PaginationUtils;
 import com.example.aichinese.util.TextUtils;
 
@@ -33,7 +34,7 @@ public class AdminClassList {
             from course_packages c
             """;
     private static final String LESSON_SELECT = """
-            select distinct 'LESSON' as type, l.id, l.title, c.id as class_id, c.title as class_title,
+            select 'LESSON' as type, l.id, l.title, c.id as class_id, c.title as class_title,
                    l.content_status as status,
                    greatest(l.updated_at, coalesce(rev.max_updated_at, l.updated_at)) as updated_at
             from course_packages c
@@ -63,7 +64,7 @@ public class AdminClassList {
             throw new ResponseStatusException(BAD_REQUEST, "Type must be CLASS or LESSON.");
         }
         String statusFilter = filterValue(status);
-        if (statusFilter != null && ContentStatus.tryFrom(statusFilter).isEmpty()) {
+        if (statusFilter != null && EnumLookups.tryFrom(ContentStatus.class, statusFilter).isEmpty()) {
             throw new ResponseStatusException(BAD_REQUEST, "Status filter is not supported.");
         }
         String source = switch (typeFilter == null ? "" : typeFilter) {

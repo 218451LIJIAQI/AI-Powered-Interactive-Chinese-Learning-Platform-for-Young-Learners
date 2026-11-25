@@ -35,7 +35,4 @@ public class UploadedFile extends BaseEntity {
 
     @Column(name = "file_size", nullable = false, updatable = false)
     private Long fileSize;
-
-    @Column(name = "active", nullable = false)
-    private boolean active = true;
 }

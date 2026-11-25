@@ -24,6 +24,7 @@ import com.example.aichinese.repository.AuditLogRepository;
 import com.example.aichinese.repository.PracticeCompletionRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.AuditLogService;
+import com.example.aichinese.service.AuditLogService.AuditTarget;
 import com.example.aichinese.service.account.CurrentAccount;
 import com.example.aichinese.service.learn.PracticeCatalog.SetContent;
 
@@ -76,7 +77,7 @@ public class PracticeLibraryService {
     }
 
     public AdminPracticeSetDetail create(SecurityUserDetails admin, PracticeType type, PracticeSetRequest request) {
-        User author = currentAccount.findById(admin.getUserId());
+        User author = currentAccount.require(admin);
         PracticeActivityContent set = catalog.create(type, request, author);
         audit(admin, CREATE_ACTION, type, set, "Admin created the practice set \"" + set.getTitle() + "\" as a draft.");
         return toDetail(type, set);
@@ -151,7 +152,11 @@ public class PracticeLibraryService {
      */
     public AdminPracticeSetDetail unarchive(SecurityUserDetails admin, PracticeType type, Long id) {
         PracticeActivityContent set = requireArchived(type, id);
-        return recentStatusChanges(type, id, 2).equals(List.of(ARCHIVE_ACTION, RESTORE_ACTION))
+        List<String> recent = recentStatusChanges(type, id, 2);
+        if (recent.isEmpty() || !ARCHIVE_ACTION.equals(recent.getFirst())) {
+            throw new ResponseStatusException(BAD_REQUEST, "Restore this set instead of publishing it.");
+        }
+        return recent.equals(List.of(ARCHIVE_ACTION, RESTORE_ACTION))
                 ? changeStatus(admin, type, set, ContentStatus.DRAFT, RESTORE_ACTION, "undid the archiving of")
                 : changeStatus(admin, type, set, ContentStatus.PUBLISHED, PUBLISH_ACTION, "undid the archiving of");
     }
@@ -179,8 +184,8 @@ public class PracticeLibraryService {
             String action,
             String verb) {
         SetContent content = catalog.content(type, set);
-        // Publishing a draft checks its material. Undoing an archive restores the previous published state.
-        if (target == ContentStatus.PUBLISHED && set.getContentStatus() != ContentStatus.ARCHIVED) {
+        // Any transition into PUBLISHED validates the set's stored material so unplayable content can never go live.
+        if (target == ContentStatus.PUBLISHED) {
             catalog.validateForPublication(type, set, content);
         }
         set.setContentStatus(target);
@@ -190,7 +195,7 @@ public class PracticeLibraryService {
 
     private void audit(SecurityUserDetails admin, String action, PracticeType type, PracticeActivityContent set,
             String description) {
-        auditLogService.record(admin, action, type.referenceType(), set.getId(), description);
+        auditLogService.record(admin, action, new AuditTarget(type.referenceType(), set.getId(), set.getTitle()), description);
     }
 
     private AdminPracticeSetDetail toDetail(PracticeType type, PracticeActivityContent set) {

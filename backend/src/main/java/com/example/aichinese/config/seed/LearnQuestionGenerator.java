@@ -52,16 +52,15 @@ final class LearnQuestionGenerator {
     }
 
     static List<Question> questionsFor(UnitSpec unit, LessonSpec lesson, List<UnitSpec> path) {
-        if (lesson.kind() == LearnLessonKind.CHECKPOINT) {
-            return checkpoint(path, unit.level());
-        }
-        Pool unitPool = Pool.taughtUpTo(unit, lesson);
-        Pool earlier = Pool.earlierUnits(path, unit);
         return switch (lesson.kind()) {
-            case LESSON -> lesson.isPronunciation() ? pronunciation(lesson, unitPool, earlier) : lesson(lesson, unitPool, earlier);
-            case BONUS -> lesson.isPronunciation() ? soundBonus(lesson, unitPool, earlier) : bonus(lesson, unitPool, earlier);
-            case REVIEW -> review(unit, lesson, unitPool, earlier);
-            case CHECKPOINT -> throw new AssertionError("Handled above");
+            case CHECKPOINT -> checkpoint(path, unit.level());
+            case LESSON -> lesson.isPronunciation()
+                    ? pronunciation(lesson, Pool.taughtUpTo(unit, lesson), Pool.earlierUnits(path, unit))
+                    : lesson(lesson, Pool.taughtUpTo(unit, lesson), Pool.earlierUnits(path, unit));
+            case BONUS -> lesson.isPronunciation()
+                    ? soundBonus(lesson, Pool.taughtUpTo(unit, lesson), Pool.earlierUnits(path, unit))
+                    : bonus(lesson, Pool.taughtUpTo(unit, lesson), Pool.earlierUnits(path, unit));
+            case REVIEW -> review(unit, lesson, Pool.taughtUpTo(unit, lesson), Pool.earlierUnits(path, unit));
         };
     }
 
@@ -162,37 +161,26 @@ final class LearnQuestionGenerator {
         }
         review.words().stream().limit(REVIEW_QUESTIONS).forEach(word -> questions.add(g.pinyin(word)));
         int remaining = REVIEW_QUESTIONS - questions.size();
-        if (remaining <= 0) {
-            return questions;
-        }
         List<Sentence> reviewSentences = new ArrayList<>(review.sentences());
         if (reviewSentences.size() < 3 && !unitSentences.isEmpty()) {
             reviewSentences.addAll(spread(unitSentences, 3 - reviewSentences.size()));
         }
         if (reviewSentences.isEmpty()) {
-            List<Word> picks = spread(words, remaining);
-            for (int index = 0; index < picks.size(); index++) {
-                Word word = picks.get(index);
-                questions.add(switch (index % 4) {
-                    case 0 -> g.meaning(word);
-                    case 1 -> g.hanzi(word);
-                    case 2 -> g.listenChoose(word);
-                    default -> g.pinyin(word);
-                });
-            }
-            return questions;
+            throw new IllegalStateException("Non-pronunciation review requires at least one sentence: " + unit.title());
         }
         int step = Math.max(1, words.size() / 5);
-        List<Question> mixed = List.of(
-                g.meaning(words.get(0)),
-                g.hanzi(words.get(step % words.size())),
-                g.sentenceMeaning(reviewSentences.get(1 % reviewSentences.size())),
-                g.listenBuild(reviewSentences.get(2 % reviewSentences.size())),
-                g.translateBuild(reviewSentences.get(0)),
-                g.listenChoose(words.get((3 * step) % words.size())),
-                g.pinyin(words.get((2 * step) % words.size())),
-                g.meaning(words.get((4 * step) % words.size())));
-        questions.addAll(mixed.subList(0, Math.min(remaining, mixed.size())));
+        for (int index = 0; index < remaining; index++) {
+            questions.add(switch (index) {
+                case 0 -> g.meaning(words.get(0));
+                case 1 -> g.hanzi(words.get(step % words.size()));
+                case 2 -> g.sentenceMeaning(reviewSentences.get(1 % reviewSentences.size()));
+                case 3 -> g.listenBuild(reviewSentences.get(2 % reviewSentences.size()));
+                case 4 -> g.translateBuild(reviewSentences.get(0));
+                case 5 -> g.listenChoose(words.get((3 * step) % words.size()));
+                case 6 -> g.pinyin(words.get((2 * step) % words.size()));
+                default -> g.meaning(words.get((4 * step) % words.size()));
+            });
+        }
         return questions;
     }
 

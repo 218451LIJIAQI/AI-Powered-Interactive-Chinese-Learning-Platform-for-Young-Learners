@@ -84,7 +84,7 @@ class UploadStorageSupportTests {
     void rollingBackDeletionKeepsTheStoredFile() throws IOException {
         Path existing = Files.writeString(tempDir.resolve(STORED_FILE_NAME), CONTENT);
         assertThatThrownBy(() -> transaction.executeWithoutResult(status -> {
-            UploadStorageSupport.deleteManagedFile(tempDir.toString(), uploadedFile(STORED_FILE_NAME));
+            deleteSingleManagedFile(STORED_FILE_NAME);
             throw new IllegalStateException("Later database operation failed");
         })).isInstanceOf(IllegalStateException.class);
         assertThat(existing).hasContent(CONTENT);
@@ -94,7 +94,7 @@ class UploadStorageSupportTests {
     void deletionWaitsForTheTransactionToCommit() throws IOException {
         Path existing = Files.writeString(tempDir.resolve(STORED_FILE_NAME), CONTENT);
         transaction.executeWithoutResult(status -> {
-            UploadStorageSupport.deleteManagedFile(tempDir.toString(), uploadedFile(STORED_FILE_NAME));
+            deleteSingleManagedFile(STORED_FILE_NAME);
             assertThat(existing).hasContent(CONTENT);
         });
         assertThat(existing).doesNotExist();
@@ -103,8 +103,14 @@ class UploadStorageSupportTests {
     @Test
     void deletionWithoutATransactionStillRemovesTheFile() throws IOException {
         Path existing = Files.writeString(tempDir.resolve(STORED_FILE_NAME), CONTENT);
-        UploadStorageSupport.deleteManagedFile(tempDir.toString(), uploadedFile(STORED_FILE_NAME));
+        deleteSingleManagedFile(STORED_FILE_NAME);
         assertThat(existing).doesNotExist();
+    }
+
+    private void deleteSingleManagedFile(String storedFileName) {
+        UploadStorageSupport.deleteManagedFileRefs(
+                tempDir.toString(),
+                List.of(UploadStorageSupport.ManagedFileRef.of(uploadedFile(storedFileName))));
     }
 
     @Test
@@ -195,6 +201,40 @@ class UploadStorageSupportTests {
                     assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
                     assertThat(exception.getReason()).isEqualTo(UploadStorageSupport.INVALID_FILE_NAME_MESSAGE);
                 });
+    }
+
+    @Test
+    void mp4SignatureAcceptsCompatibleBrandsAndRejectsAudioOnlyM4aOrInvalidBoxSize() {
+        // Major brand unknown ("xxxx"), compatible brand "iso6" -> valid ISO 14496-12 MP4 box.
+        byte[] compatibleIso6 = new byte[] {
+                0x00, 0x00, 0x00, 0x18,
+                'f', 't', 'y', 'p',
+                'x', 'x', 'x', 'x',
+                0x00, 0x00, 0x00, 0x00,
+                'i', 's', 'o', '6',
+                'h', 'v', 'c', '1'
+        };
+        assertThat(UploadStorageSupport.FileSignature.MP4.matches(compatibleIso6)).isTrue();
+
+        // Audio-only M4A brand without a video brand must not match MP4 video.
+        byte[] m4aOnly = new byte[] {
+                0x00, 0x00, 0x00, 0x14,
+                'f', 't', 'y', 'p',
+                'M', '4', 'A', ' ',
+                0x00, 0x00, 0x00, 0x00,
+                'M', '4', 'A', ' '
+        };
+        assertThat(UploadStorageSupport.FileSignature.MP4.matches(m4aOnly)).isFalse();
+
+        // Malformed ftyp box size (not >= 16 and 4-byte aligned) is rejected.
+        byte[] badBoxSize = new byte[] {
+                0x00, 0x00, 0x00, 0x13,
+                'f', 't', 'y', 'p',
+                'i', 's', 'o', 'm',
+                0x00, 0x00, 0x00, 0x00,
+                'i', 's', 'o', 'm'
+        };
+        assertThat(UploadStorageSupport.FileSignature.MP4.matches(badBoxSize)).isFalse();
     }
 
     private void assertNotFoundWhenLoading(UploadedFile uploadedFile) {

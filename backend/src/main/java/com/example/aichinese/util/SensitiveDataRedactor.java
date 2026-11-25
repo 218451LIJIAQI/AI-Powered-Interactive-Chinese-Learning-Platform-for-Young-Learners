@@ -21,20 +21,25 @@ public final class SensitiveDataRedactor {
     private static final Pattern UNSAFE_LOG_CHARACTERS =
             Pattern.compile("[\\p{Cntrl}&&[^\r\n\t]]|[\\u202A-\\u202E\\u2066-\\u2069]");
     private static final String SENSITIVE_KEYS =
-            "(?:(?:access|refresh|id|reset|csrf|session)[-_ ]?)?(?:token|jwt)"
+            "(?:(?:access|refresh|id|reset|csrf|session|invite|confirm(?:ation)?)[-_ ]?)?(?:token|jwt)"
+                    + "|(?:session[-_ ]?id|jsessionid|sid)"
+                    + "|(?:password|token)[-_ ]?hash"
+                    + "|(?:invite|confirm(?:ation)?)[-_ ]?code|invite"
                     + "|(?:(?:current|new|confirm|old)[-_ ]?)?password|passcode|credential"
                     + "|(?:(?:client|app|jwt|signing)[-_ ]?)?secret(?:[-_ ]?(?:key|id))?"
                     + "|(?:x[-_ ]?)?api[-_ ]?key|email";
+    private static final String SENSITIVE_LINK_KEYS = "(?:reset|invite|confirm(?:ation)?)[-_ ]?link";
     private static final String JSON_SENSITIVE_KEYS =
-            SENSITIVE_KEYS + "|reset[-_ ]?link|authorization|(?:set[-_ ]?)?cookie";
+            SENSITIVE_KEYS + "|" + SENSITIVE_LINK_KEYS + "|authorization|(?:set[-_ ]?)?cookie";
     private static final Pattern AUTHORIZATION_HEADER_PATTERN = Pattern.compile(
             "(?i)(\\bauthorization\\s*(?:[:=])\\s*)(?:" + quotedValue(2)
+                    + "|\\[[^\\r\\n\\]]*\\]"
                     + "|(?:digest|aws4-hmac-sha256|tc3-hmac-sha256)\\s+[^\\r\\n]+"
                     + "|(?:(?:bearer|basic|token|apikey|api[-_]?key|negotiate)\\s+)?\\S+)");
     private static final Pattern COOKIE_HEADER_PATTERN = Pattern.compile(
             "(?i)(\\b(?:set[-_ ]?)?cookie\\s*(?:[:=])\\s*)(?:" + quotedValue(2) + "[^\\r\\n]*|[^\\r\\n]+)");
     /** "Bearer &lt;token&gt;"; the words "bearer token(s)" in a sentence are not a credential. */
-    private static final Pattern BEARER_TOKEN_PATTERN = Pattern.compile("(?i)\\bbearer\\s+(?!tokens?\\b)[^\\s,;]+");
+    private static final Pattern BEARER_TOKEN_PATTERN = Pattern.compile("(?i)\\bbearer\\s+(?!tokens?\\b)[^\\s,;\\]]+");
     /**
      * Quoted JSON properties whose key names a secret or credential; backreferences the opening quote so apostrophes
      * inside double-quoted values (e.g. {@code "don't-leak"}) cannot terminate redaction early.
@@ -52,7 +57,7 @@ public final class SensitiveDataRedactor {
             "(?i)(\\\\\"(?:" + JSON_SENSITIVE_KEYS + ")\\\\\"\\s*:\\s*\\\\\")"
                     + "(?:\\\\\\\\\\\\\\\\|\\\\\\\\\\\\\"|\\\\(?!\")|[^\\\\])*+(?:\\\\\"|\\\\?\\z)");
     private static final Pattern RESET_LINK_ASSIGNMENT_PATTERN = Pattern.compile(
-            "(?i)\\b(reset[-_ ]?link)\\b\\s*(?:[:=])\\s*(?:" + quotedValue(2) + "|\\S+)");
+            "(?i)\\b(" + SENSITIVE_LINK_KEYS + ")\\b\\s*(?:[:=])\\s*(?:" + quotedValue(2) + "|\\S+)");
     private static final Pattern SENSITIVE_ASSIGNMENT_PATTERN = Pattern.compile(
             "(?i)\\b(" + SENSITIVE_KEYS + ")\\b\\s*(?:[:=])\\s*(?:" + quotedValue(2) + "|[^\\s\"',;&}]+)");
 

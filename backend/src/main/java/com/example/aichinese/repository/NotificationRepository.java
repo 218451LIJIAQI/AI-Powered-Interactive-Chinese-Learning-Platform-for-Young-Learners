@@ -40,43 +40,61 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<Notification> findLockedByIdAndUserId(Long id, Long userId);
 
-    /** Only these locked rows belong to this mark-all operation and its Undo. */
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("""
-            select n.id from Notification n
-            where n.user.id = :userId and n.notificationStatus = UNREAD
-            order by n.id asc
-            """)
-    List<Long> lockUnreadIds(@Param("userId") Long userId);
+    /** Bounded ascending slice of the user's notification ids for deterministic primary-key locking. */
+    @Query("select n.id from Notification n where n.user.id = :userId and n.id > :afterId order by n.id asc")
+    List<Long> findIdsByUserIdAfter(
+            @Param("userId") Long userId,
+            @Param("afterId") Long afterId,
+            Pageable pageable);
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    /** Everyone's notifications about these records (they name the account that made them). */
+    @Query("select n.id from Notification n where n.targetType = :targetType and n.targetId in :targetIds order by n.id asc")
+    List<Long> findIdsByTarget(@Param("targetType") String targetType, @Param("targetIds") Collection<Long> targetIds);
+
+    /** Bounded ascending slice of the user's unread notification ids for batched mark-all-read. */
     @Query("""
             select n.id from Notification n
-            where n.user.id = :userId and n.notificationStatus = READ and n.id in :ids
+            where n.user.id = :userId and n.notificationStatus = UNREAD and n.id > :afterId
             order by n.id asc
             """)
-    List<Long> lockReadIds(@Param("userId") Long userId, @Param("ids") Collection<Long> ids);
+    List<Long> findUnreadIdsAfter(
+            @Param("userId") Long userId,
+            @Param("afterId") Long afterId,
+            Pageable pageable);
+
+    @Query("""
+            select n.id from Notification n
+            where n.user.id = :userId and n.notificationStatus = :status and n.id in :ids
+            order by n.id asc
+            """)
+    List<Long> findIdsByUserIdAndStatusIn(
+            @Param("userId") Long userId,
+            @Param("status") NotificationStatus status,
+            @Param("ids") Collection<Long> ids);
+
+    /**
+     * Acquires primary-key write locks in strictly ascending id order so concurrent bulk marks and account deletions
+     * cannot form AB-BA deadlocks or depend on secondary-index scan order.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select n.id from Notification n where n.id in :ids order by n.id asc")
+    List<Long> lockIdsInOrder(@Param("ids") Collection<Long> ids);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
             update Notification n set n.notificationStatus = READ, n.readAt = :now, n.updatedAt = :now
-            where n.user.id = :userId and n.id in :ids
+            where n.id in :ids
             """)
-    int markLockedRead(@Param("userId") Long userId, @Param("ids") Collection<Long> ids, @Param("now") LocalDateTime now);
+    int markLockedRead(@Param("ids") Collection<Long> ids, @Param("now") LocalDateTime now);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
             update Notification n set n.notificationStatus = UNREAD, n.readAt = null, n.updatedAt = :now
-            where n.user.id = :userId and n.id in :ids
+            where n.id in :ids
             """)
-    int markLockedUnread(@Param("userId") Long userId, @Param("ids") Collection<Long> ids, @Param("now") LocalDateTime now);
+    int markLockedUnread(@Param("ids") Collection<Long> ids, @Param("now") LocalDateTime now);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("delete from Notification n where n.user.id = :userId")
-    int deleteByUserId(@Param("userId") Long userId);
-
-    /** Everyone's notifications about these records (they name the account that made them). */
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("delete from Notification n where n.targetType = :targetType and n.targetId in :targetIds")
-    int deleteByTarget(@Param("targetType") String targetType, @Param("targetIds") Collection<Long> targetIds);
+    @Query("delete from Notification n where n.id in :ids")
+    int deleteByIdIn(@Param("ids") Collection<Long> ids);
 }

@@ -129,10 +129,20 @@ public class ClassProgressService {
                 .stream().collect(Collectors.groupingBy(completion -> completion.getLesson().getId(),
                         Collectors.mapping(completion -> new ActivityKey(completion.getActivityType(), completion.getActivityId()),
                                 Collectors.toSet())));
-        Map<Long, Map<Long, List<QuizAttempt>>> attempts = quizAttemptRepository
-                .findByStudentIdAndQuizLessonIdInAndSubmittedTrueOrderByCompletedAtDescIdDesc(studentId, lessonIds)
-                .stream().collect(Collectors.groupingBy(attempt -> attempt.getQuiz().getLesson().getId(),
-                        Collectors.groupingBy(attempt -> attempt.getQuiz().getId())));
+        Map<Long, Long> lessonIdByQuizId = new HashMap<>();
+        quizzes.forEach((lessonId, lessonQuizzes) -> {
+            for (Quiz quiz : lessonQuizzes) {
+                lessonIdByQuizId.put(quiz.getId(), lessonId);
+            }
+        });
+        Map<Long, Map<Long, List<QuizAttempt>>> attempts = lessonIdByQuizId.isEmpty() ? Map.of()
+                : quizAttemptRepository
+                        .findByStudentIdAndQuizIdInAndSubmittedTrueOrderByCompletedAtDescIdDesc(
+                                studentId, lessonIdByQuizId.keySet())
+                        .stream()
+                        .collect(Collectors.groupingBy(
+                                attempt -> lessonIdByQuizId.get(attempt.getQuiz().getId()),
+                                Collectors.groupingBy(attempt -> attempt.getQuiz().getId())));
         List<Long> videoIds = videos.values().stream().map(RecordedLessonVideo::getId).toList();
         Map<Long, VideoProgress> videoProgress = videoIds.isEmpty() ? Map.of()
                 : videoProgressRepository.findByStudentIdAndRecordedVideoIdIn(studentId, videoIds).stream()

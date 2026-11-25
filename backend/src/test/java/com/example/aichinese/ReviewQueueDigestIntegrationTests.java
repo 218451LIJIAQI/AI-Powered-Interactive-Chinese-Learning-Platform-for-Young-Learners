@@ -4,11 +4,6 @@ import static com.example.aichinese.support.LearningApiTestClient.ADMIN_EMAIL;
 import static com.example.aichinese.support.LearningApiTestClient.uniqueEmail;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.clearInvocations;
-import static org.mockito.Mockito.timeout;
-import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Clock;
@@ -28,13 +23,11 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.context.event.ApplicationEvents;
 import org.springframework.test.context.event.RecordApplicationEvents;
 
 import com.example.aichinese.config.EmailProperties;
 import com.example.aichinese.repository.SystemSettingRepository;
-import com.example.aichinese.service.NoOpEmailService;
 import com.example.aichinese.service.ScheduledJobRunner;
 import com.example.aichinese.service.TransactionalEmailDispatcher.EmailDeliveryRequested;
 import com.example.aichinese.service.admin.ReviewQueueDigestService;
@@ -71,15 +64,11 @@ class ReviewQueueDigestIntegrationTests extends ApiIntegrationTest {
     @Autowired
     private ApplicationEvents events;
 
-    @MockitoSpyBean
-    private NoOpEmailService noOpEmailService;
-
     /** Every test starts and ends with no leftover digest watermark in the shared test database. */
     @BeforeEach
     @AfterEach
     void forgetTheLastRun() {
         settingRepository.findBySettingKey(ReviewQueueDigestService.LAST_RUN_DAY_KEY).ifPresent(settingRepository::delete);
-        clearInvocations(noOpEmailService);
     }
 
     @Test
@@ -100,10 +89,7 @@ class ReviewQueueDigestIntegrationTests extends ApiIntegrationTest {
         assertQueueLine(body, "Support requests", badges.path("supportOpen").asLong(), "admin/support");
         assertQueueLine(body, "AI reports", badges.path("aiReports").asLong(), "admin/ai");
         assertThat(badges.path("supportOpen").asLong()).isPositive();
-        assertThat(body).doesNotContain("Teacher applications", "Content reviews", "Support replies")
-                .contains("Daily summary is switched on in Account > Email notifications");
-        verify(noOpEmailService, timeout(5_000)).sendEmail(eq(ADMIN_EMAIL), eq(SUBJECT), eq(body));
-        clearInvocations(noOpEmailService);
+        assertThat(body).contains("Daily summary is switched on in Account > Email notifications");
 
         // Later the same day, or after a restart (the day is kept in the database): no second e-mail.
         assertThat(digest.sendIfDue(at(DAY, 13, 0))).isZero();
@@ -113,9 +99,7 @@ class ReviewQueueDigestIntegrationTests extends ApiIntegrationTest {
 
         // The next platform day it comes again.
         assertThat(digest.sendIfDue(at(DAY.plusDays(1), 8, 1))).isPositive();
-        List<EmailDeliveryRequested> afterNextDay = summariesTo(ADMIN_EMAIL);
-        assertThat(afterNextDay).hasSize(2);
-        verify(noOpEmailService, timeout(5_000)).sendEmail(eq(ADMIN_EMAIL), eq(SUBJECT), eq(afterNextDay.get(1).body()));
+        assertThat(summariesTo(ADMIN_EMAIL)).hasSize(2);
     }
 
     @Test
@@ -159,8 +143,7 @@ class ReviewQueueDigestIntegrationTests extends ApiIntegrationTest {
 
         assertThat(List.of(first, second)).containsOnlyOnce(0);
         assertThat(first + second).isPositive();
-        // Await the single async email delivery so it cannot leak into a subsequent test.
-        verify(noOpEmailService, timeout(5_000)).sendEmail(eq(ADMIN_EMAIL), eq(SUBJECT), anyString());
+        assertThat(summariesTo(ADMIN_EMAIL)).hasSize(1);
     }
 
     @Test

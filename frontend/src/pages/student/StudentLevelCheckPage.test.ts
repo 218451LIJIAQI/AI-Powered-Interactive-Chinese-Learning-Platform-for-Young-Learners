@@ -57,7 +57,7 @@ describe('StudentLevelCheckPage', () => {
     expect(wrapper.get('.focus-topbar-label').text()).toBe('Level check')
     await answerOnce(wrapper)
 
-    expect(api.retake).toHaveBeenCalledWith([{ questionId: 1, optionId: null }], 'en')
+    expect(api.retake).toHaveBeenCalledWith([{ questionId: 1, optionId: null }], 'en', null)
     const done = wrapper.get('[data-testid="level-check-done"]')
     expect(done.get('h2').text()).toBe('You’re still at HSK 1 (Basic)')
     expect(done.get('[data-testid="level-check-lead"]').text()).toBe('Your plan stays the same.')
@@ -114,7 +114,7 @@ describe('StudentLevelCheckPage', () => {
 
     const { wrapper } = await mountPage()
 
-    expect(api.retake).toHaveBeenCalledWith([], 'en')
+    expect(api.retake).toHaveBeenCalledWith([], 'en', null)
     expect(wrapper.find('[data-testid="level-check-done"]').exists()).toBe(true)
   })
 
@@ -178,7 +178,7 @@ describe('StudentLevelCheckPage', () => {
     await wrapper.get('[data-testid="option-1"]').trigger('click')
     await wrapper.get('[data-testid="check"]').trigger('click')
     await wrapper.get('[data-testid="option-0"]').trigger('click')
-    expect(api.next).toHaveBeenLastCalledWith('BEGINNER_1', [{ questionId: 1, optionId: 12 }])
+    expect(api.next).toHaveBeenLastCalledWith('BEGINNER_1', [{ questionId: 1, optionId: 12 }], null)
     expect(wrapper.get('[data-testid="option-1"]').attributes('aria-pressed')).toBe('true')
 
     if (outcome === 'success') {
@@ -204,7 +204,7 @@ describe('StudentLevelCheckPage', () => {
     await flushPromises()
 
     expect(api.retake).toHaveBeenCalledTimes(2)
-    expect(api.retake).toHaveBeenLastCalledWith([{ questionId: 1, optionId: null }], 'en')
+    expect(api.retake).toHaveBeenLastCalledWith([{ questionId: 1, optionId: null }], 'en', null)
     expect(invalidateHintSettings).toHaveBeenCalledOnce()
     expect(wrapper.get('[data-testid="level-check-done"] h2').text()).toBe('You reached HSK 2 (Survival)')
   })
@@ -233,5 +233,20 @@ describe('StudentLevelCheckPage', () => {
     await flushPromises()
 
     expect(invalidateHintSettings).not.toHaveBeenCalled()
+  })
+
+  it('offers Start level check again instead of resending expired answers on 400/409 retake failure', async () => {
+    api.retake.mockRejectedValueOnce({
+      response: { status: 400, data: { message: 'Start the level check again.' } },
+    })
+    const { wrapper } = await mountPage()
+    await answerOnce(wrapper)
+
+    expect(wrapper.get('[data-testid="retake-restart"]').text()).toBe('Start level check again')
+    api.next.mockResolvedValueOnce(checkStep())
+    await wrapper.get('[data-testid="retake-restart"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="question-stage"]').exists()).toBe(true)
   })
 })

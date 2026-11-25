@@ -107,7 +107,8 @@ describe('StudentProgressPage', () => {
     expect(level.get('.progress-level-next').text()).toBe('60 XP to Rank 4 · Committed')
     // One line under the bar: no "240 of 300 XP" caption and no row of rank steps.
     expect(level.text()).not.toContain('240 of 300')
-    expect(level.find('.progress-level-steps').exists()).toBe(false)
+    expect(level.findAll('p').map((line) => line.text())).toEqual(['Rank 3 · Regular', '60 XP to Rank 4 · Committed'])
+    expect(level.findAll('ol, ul')).toHaveLength(0)
 
     const streak = wrapper.get('[data-testid="streak"]')
     expect(streak.text()).toContain('7')
@@ -150,6 +151,45 @@ describe('StudentProgressPage', () => {
     expect(api.progress).toHaveBeenLastCalledWith('2026-04')
   })
 
+  it('keeps rank and calendar mounted while another month loads and shows an inline error on failure', async () => {
+    const april = deferred<ReturnType<typeof progressOverview>>()
+    api.progress
+      .mockResolvedValueOnce(
+        progressOverview({ calendar: { ...progressOverview().calendar, previousMonth: '2026-04' } }),
+      )
+      .mockReturnValueOnce(april.promise)
+    const wrapper = await mountPage()
+
+    await wrapper.get('button[aria-label="Previous month"]').trigger('click')
+    expect(wrapper.find('[data-testid="xp-level"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="streak"]').exists()).toBe(true)
+
+    april.reject(new Error('offline'))
+    await flushPromises()
+    expect(wrapper.find('[data-testid="xp-level"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="streak"] [role="alert"]').text()).toBeTruthy()
+  })
+
+  it('marks the streak card busy while another month loads and ignores duplicate clicks for the same month', async () => {
+    const april = deferred<ReturnType<typeof progressOverview>>()
+    api.progress
+      .mockResolvedValueOnce(
+        progressOverview({ calendar: { ...progressOverview().calendar, previousMonth: '2026-04' } }),
+      )
+      .mockReturnValueOnce(april.promise)
+    const wrapper = await mountPage()
+
+    const prev = wrapper.get('button[aria-label="Previous month"]')
+    await prev.trigger('click')
+    await prev.trigger('click')
+    expect(api.progress).toHaveBeenCalledTimes(2)
+    expect(wrapper.get('[data-testid="streak"]').attributes('aria-busy')).toBe('true')
+
+    april.resolve(progressOverview({ calendar: { ...progressOverview().calendar, month: '2026-04' } }))
+    await flushPromises()
+    expect(wrapper.get('[data-testid="streak"]').attributes('aria-busy')).toBeUndefined()
+  })
+
   it('fills earned badges and leaves the rest dashed, and opens a badge to show how it is earned', async () => {
     const wrapper = await mountPage()
     expect(wrapper.get('[data-testid="badge-FIRST_STEPS"]').classes()).toContain('is-earned')
@@ -168,6 +208,13 @@ describe('StudentProgressPage', () => {
   })
 
   it('says when an earned badge was earned', async () => {
+    const base = progressOverview()
+    api.progress.mockResolvedValue({
+      ...base,
+      badges: base.badges.map((badge) =>
+        badge.key === 'FIRST_STEPS' ? { ...badge, earnedAt: '2026-05-11T12:00:00' } : badge,
+      ),
+    })
     const wrapper = await mountPage()
 
     await wrapper.get('[data-testid="badge-FIRST_STEPS"]').trigger('click')

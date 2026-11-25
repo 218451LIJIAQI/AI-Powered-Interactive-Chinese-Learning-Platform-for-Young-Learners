@@ -1,5 +1,5 @@
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import DataNotice from './DataNotice.vue'
 
@@ -16,10 +16,14 @@ describe('DataNotice', () => {
     expect(notice.text()).not.toMatch(/connection/i)
   })
 
-  it('takes the page’s own title, and shows nothing without an error', () => {
-    const titled = mountNotice({ error: 'Not saved.', errorTitle: 'Your message was not sent.' })
+  it('takes the page’s own title, renders an optional retry button, and shows nothing without an error', async () => {
+    const onRetry = vi.fn()
+    const titled = mountNotice({ error: 'Not saved.', errorTitle: 'Your message was not sent.', onRetry })
     expect(titled.get('strong').text()).toBe('Your message was not sent.')
     expect(titled.text()).toContain('Not saved.')
+
+    await titled.get('button').trigger('click')
+    expect(onRetry).toHaveBeenCalledTimes(1)
 
     expect(mountNotice({}).html()).toBe('<!--v-if-->')
   })

@@ -3,56 +3,61 @@ import type { ComputedRef, Ref } from 'vue'
 
 import { pauseDuringNavigation } from '@/composables/usePageNavigation'
 import type { PageResponse } from '@/types/api'
-import { resolveApiError } from '@/utils/apiError'
+import { apiErrorStatus, resolveApiError } from '@/utils/apiError'
 
 interface ResourceState<T> {
   readonly data: Ref<T | null>
   readonly error: Ref<string | null>
+  readonly errorStatus: Ref<number | null>
+  readonly errorReason: Ref<unknown>
   readonly loading: Ref<boolean>
   readonly reload: () => Promise<void>
-  readonly clear: () => void
   readonly replace: (value: T | null) => void
 }
 
 /**
  * Data a page reads from the API: `loading` until the first answer (a reload keeps showing the last data), the
- * translated `error` of a failed request, and `reload`. Out-of-order answers are dropped: only the latest request
- * updates the state. With `immediate` false the first load waits for an explicit `reload()`.
+ * translated `error` (and HTTP `errorStatus` / raw `errorReason`) of a failed request, and `reload`. Out-of-order
+ * answers are dropped: only the latest request updates the state. With `immediate` false the first load waits for an
+ * explicit `reload()`.
  */
 export function useResource<T>(loader: () => Promise<T>, immediate = true): ResourceState<T> {
   const data = shallowRef<T | null>(null)
   const error = ref<string | null>(null)
+  const errorStatus = ref<number | null>(null)
+  const errorReason = shallowRef<unknown>(null)
   const loading = ref(immediate)
   let executionSequence: number | null = 0
 
   async function execute(): Promise<void> {
     if (executionSequence === null) return
     const sequence = ++executionSequence
-    loading.value = data.value === null
+    loading.value = data.value === null || error.value !== null
     error.value = null
+    errorStatus.value = null
+    errorReason.value = null
 
     try {
       const result = await loader()
       if (sequence === executionSequence) data.value = result
     } catch (reason) {
-      if (sequence === executionSequence) error.value = resolveApiError(reason)
+      if (sequence === executionSequence) {
+        error.value = resolveApiError(reason)
+        errorStatus.value = apiErrorStatus(reason)
+        errorReason.value = reason
+      }
     }
     if (sequence === executionSequence) loading.value = false
   }
 
-  function clear(): void {
-    if (executionSequence !== null) executionSequence += 1
-    data.value = null
-    error.value = null
-    loading.value = false
-  }
-
-  /** Commits authoritative data (e.g. a mutation response), dropping any older in-flight load. */
+  /** Commits authoritative data (or null to clear), dropping any older in-flight load. */
   function replace(value: T | null): void {
     if (executionSequence === null) return
     executionSequence += 1
     data.value = value
     error.value = null
+    errorStatus.value = null
+    errorReason.value = null
     loading.value = false
   }
 
@@ -62,21 +67,21 @@ export function useResource<T>(loader: () => Promise<T>, immediate = true): Reso
     loading.value = false
   })
 
-  return { data, error, loading, reload: execute, clear, replace }
+  return { data, error, errorStatus, errorReason, loading, reload: execute, replace }
 }
 
 /**
- * The record an id names, emptied and loaded again whenever the id changes. No id clears synchronously and
- * invalidates any in-flight request for the previous id so stale responses or errors never land.
+ * The record a key/id names, emptied and loaded again whenever the key changes. A null key clears synchronously and
+ * invalidates any in-flight request for the previous key so stale responses or errors never land.
  */
-export function useRecordById<T>(id: Readonly<Ref<number | null>>, load: (id: number) => Promise<T>) {
+export function useRecordById<T, K = number>(id: Readonly<Ref<K | null>>, load: (id: K) => Promise<T>) {
   const record = useResource(() => (id.value === null ? Promise.resolve(null) : load(id.value)), false)
 
   watch(
     id,
     (nextId) => {
       if (nextId === null) {
-        record.clear()
+        record.replace(null)
         return
       }
       record.data.value = null

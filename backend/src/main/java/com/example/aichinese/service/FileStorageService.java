@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -82,9 +83,14 @@ public class FileStorageService {
     /** Removes the bytes after commit only when the last reference to this upload went with the draft. */
     @Transactional
     public void deleteUnusedRecordedVideo(UploadedFile file) {
-        if (uploadedFileRepository.deleteIfUnreferenced(file.getId()) == 1) {
+        if (file == null) {
+            return;
+        }
+        // Snapshot the stored filename while the row is still present and managed, so lazy proxies stay safe after delete+detach.
+        UploadStorageSupport.ManagedFileRef ref = UploadStorageSupport.ManagedFileRef.of(file);
+        if (uploadedFileRepository.deleteIfUnreferenced(ref.id()) == 1) {
             entityManager.detach(file);
-            UploadStorageSupport.deleteManagedFile(uploadProperties.getRecordedVideoDirectory(), file);
+            UploadStorageSupport.deleteManagedFileRefs(uploadProperties.getRecordedVideoDirectory(), List.of(ref));
         }
     }
 
@@ -139,15 +145,28 @@ public class FileStorageService {
         return UploadStorageSupport.loadManagedFile(supportDirectory(), uploadedFile, "Requested file could not be found.");
     }
 
-    /** Removes a batch of support screenshots in one DB batch delete while scheduling file deletion after commit. */
+    private static final int DELETE_BATCH_SIZE = 500;
+
+    /** Removes a batch of support screenshots in bounded DB deletes, detaches them, and schedules disk cleanup after commit. */
     @Transactional
     public void deleteSupportScreenshots(Collection<UploadedFile> uploadedFiles) {
-        if (uploadedFiles.isEmpty()) {
+        if (uploadedFiles == null || uploadedFiles.isEmpty()) {
             return;
         }
-        UploadStorageSupport.deleteManagedFiles(supportDirectory(), uploadedFiles);
-        List<Long> ids = uploadedFiles.stream().map(UploadedFile::getId).toList();
-        uploadedFileRepository.deleteAllByIdInBatch(ids);
+        List<UploadedFile> files = uploadedFiles.stream().filter(Objects::nonNull).toList();
+        if (files.isEmpty()) {
+            return;
+        }
+        List<UploadStorageSupport.ManagedFileRef> refs = files.stream()
+                .map(UploadStorageSupport.ManagedFileRef::of)
+                .toList();
+        List<Long> ids = refs.stream().map(UploadStorageSupport.ManagedFileRef::id).filter(Objects::nonNull).toList();
+        for (int from = 0; from < ids.size(); from += DELETE_BATCH_SIZE) {
+            uploadedFileRepository.deleteAllByIdInBatch(
+                    ids.subList(from, Math.min(from + DELETE_BATCH_SIZE, ids.size())));
+        }
+        files.forEach(entityManager::detach);
+        UploadStorageSupport.deleteManagedFileRefs(supportDirectory(), refs);
     }
 
     /** A pronunciation recording (WEBM, WAV or MP3 within the AI audio size limit), read into memory. */

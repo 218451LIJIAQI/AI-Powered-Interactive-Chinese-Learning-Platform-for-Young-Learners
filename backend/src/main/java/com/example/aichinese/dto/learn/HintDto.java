@@ -1,5 +1,6 @@
 package com.example.aichinese.dto.learn;
 
+import static com.example.aichinese.dto.DtoNormalization.redactValue;
 import static com.example.aichinese.dto.DtoNormalization.strip;
 import static com.example.aichinese.dto.DtoNormalization.stripToNull;
 
@@ -57,6 +58,13 @@ public final class HintDto {
             itemKey = strip(itemKey);
             runSignature = stripToNull(runSignature);
         }
+
+        @Override
+        public String toString() {
+            return "Request[itemKey=" + itemKey
+                    + ", runStartedAt=" + runStartedAt
+                    + ", runSignature=" + redactValue(runSignature) + "]";
+        }
     }
 
     /**
@@ -75,15 +83,22 @@ public final class HintDto {
         public QuestionRequest {
             runSignature = stripToNull(runSignature);
         }
+
+        @Override
+        public String toString() {
+            return "QuestionRequest[questionId=" + questionId
+                    + ", runStartedAt=" + runStartedAt
+                    + ", runSignature=" + redactValue(runSignature) + "]";
+        }
     }
 
     /**
      * A hint. The interface writes the sentence for {@code kind} in the student's language from the fields;
      * {@code ruledOut} are answers to grey out.
      *
-     * @param kind {@code RULE_OUT}, {@code CLUE}, {@code FIRST_SOUND}, {@code FIRST_LETTER}, {@code TWO_LEFT},
-     *             {@code FIRST_TILE}, {@code LEAVE_OUT}, {@code ORDER_START}, {@code INITIALS}, {@code TYPE_THIS},
-     *             {@code PAIR}, {@code STROKE_COUNT} or {@code STROKE_ORDER}
+     * @param kind {@code RULE_OUT}, {@code CLUE}, {@code FIRST_SOUND}, {@code LISTEN_SLOW}, {@code FIRST_LETTER},
+     *             {@code TWO_LEFT}, {@code FIRST_TILE}, {@code LEAVE_OUT}, {@code ORDER_START}, {@code INITIALS},
+     *             {@code TYPE_THIS}, {@code PAIR}, {@code STROKE_COUNT} or {@code STROKE_ORDER}
      * @param words the answers or tiles the sentence names, in order
      * @param text a clue in words (an explanation with the answer left out) or a sound ("x", "xiexie")
      * @param count a number the sentence names (syllables, strokes)
@@ -96,23 +111,5 @@ public final class HintDto {
             String text,
             Integer count,
             List<String> ruledOut) {
-    }
-
-    /** The words the typed pinyin spells, in the order a keyboard would offer them; empty when it spells none. */
-    public record Candidates(List<String> words) {
-    }
-
-    public record CandidatesRequest(
-            @NotBlank(message = "Item is required.")
-            @Size(max = 40, message = "Item is required.")
-            String itemKey,
-            @NotBlank(message = "Type the pinyin first.")
-            @Size(max = 200, message = "Pinyin must not exceed 200 characters.")
-            String pinyin) {
-
-        public CandidatesRequest {
-            itemKey = strip(itemKey);
-            pinyin = strip(pinyin);
-        }
     }
 }

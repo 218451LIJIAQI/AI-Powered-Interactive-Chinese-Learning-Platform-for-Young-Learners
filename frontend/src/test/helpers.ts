@@ -24,7 +24,7 @@ export const toastMessageStub = { props: ['message'], template: '<p data-testid=
 
 /** One page of a paged API response, like the backend's PageResponse. */
 export function pageOf<T>(items: T[], page = 0, totalItems = items.length, size = 10): PageResponse<T> {
-  return { items, page, size, totalItems, totalPages: Math.ceil(totalItems / size) }
+  return { items, page, totalItems, totalPages: Math.ceil(totalItems / size) }
 }
 
 /** A promise the test settles itself, for a request that is still pending while something else happens. */

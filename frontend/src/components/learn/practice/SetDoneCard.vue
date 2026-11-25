@@ -1,12 +1,12 @@
 <template>
   <div class="practice-player" data-testid="set-done">
-    <PracticeProgress :label="counterLabel" />
+    <p class="practice-counter" aria-live="polite" data-testid="practice-counter">{{ counterLabel }}</p>
 
     <section class="practice-done" aria-live="polite" :aria-labelledby="titleId">
       <span class="practice-done-stamp" :class="{ 'is-open': !complete }" aria-hidden="true">
         <IconGlyph :name="complete ? 'check' : 'retry'" :size="28" />
       </span>
-      <h2 :id="titleId" class="practice-done-title"><CjkText :text="title" /></h2>
+      <h2 :id="titleId" ref="heading" class="practice-done-title" tabindex="-1"><CjkText :text="title" /></h2>
       <p v-if="subtitle" class="practice-done-sub"><CjkText :text="subtitle" /></p>
       <strong v-if="earned > 0" class="tag is-strong">{{ t('practice.xpTag', { xp: earned }) }}</strong>
       <p v-else class="practice-done-sub">{{ xpNote }}</p>
@@ -32,7 +32,7 @@
           :to="practiceSetRoute(result.type, result.nextSet.id)"
           data-testid="next-set"
         >
-          {{ t('practice.nextSet', { title: result.nextSet.title }) }}
+          <CjkText :text="t('practice.nextSet', { title: result.nextSet.title })" />
         </RouterLink>
         <RouterLink
           v-else
@@ -48,19 +48,18 @@
 </template>
 
 <script setup lang="ts">
-import { computed, useId } from 'vue'
+import { computed, onMounted, ref, useId } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import CjkText from '@/components/learning/CjkText.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
-import { PRACTICE_ACTIVITIES } from '@/config/practiceActivities'
+import { nextPracticeType, PRACTICE_ACTIVITIES, practiceSetRoute } from '@/config/practiceActivities'
 import { practiceMessages } from '@/plugins/practiceMessages'
-import type { PracticeResult, PracticeSet, PracticeType } from '@/types/learn'
+import type { PracticeResult, PracticeSet } from '@/types/learn'
 import { tracingGlyphs } from '@/utils/tracing'
 
-import PracticeProgress from './PracticeProgress.vue'
-import { nextPracticeType, practiceSetRoute, type RunTally } from './practiceTypes'
+import type { RunTally } from './practiceTypes'
 
 /**
  * A finished set, in the place of its player: the stage's counter complete, the Complete card (a check stamp when every
@@ -77,7 +76,7 @@ const props = defineProps<{
    */
   set: PracticeSet
   /** What the set covered ("三 three · 五 five"), from the player. */
-  recap: string
+  recap?: string
   /** What the player of answered items counted of its run; null for the other activities. */
   tally?: RunTally | null
   /** Practise again is reading the set again. */
@@ -85,13 +84,16 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ again: [] }>()
 
-/** The activities whose items are answered one by one, with a verdict each. */
-const ANSWERED_TYPES: ReadonlySet<PracticeType> = new Set(['LISTENING', 'DRAG_DROP', 'TYPING'])
-
 const { t } = useLocalMessages({ practice: practiceMessages })
 const titleId = useId()
+const heading = ref<HTMLHeadingElement | null>(null)
 
-const isAnswered = computed(() => ANSWERED_TYPES.has(props.result.type))
+onMounted(() => {
+  if (!document.activeElement || document.activeElement === document.body) {
+    heading.value?.focus({ preventScroll: true })
+  }
+})
+
 /** Every item right; a reviewed flashcard set is complete whatever the ratings (cards still learned go to Mistakes). */
 const complete = computed(() => props.result.allCorrect || props.result.type === 'FLASHCARDS')
 const earned = computed(() => props.result.xp.xpEarned + props.result.xp.bonusXp)
@@ -101,7 +103,8 @@ const mistakesAdded = computed(() => props.tally?.mistakes ?? props.result.itemC
 
 /** "6 of 6 cards", "8 of 8 strokes", "4 of 4 paired", "5 of 5 answered": the counter of the stage, now complete. */
 const counterLabel = computed(() => {
-  const total = props.set.strokeCount ?? props.result.itemCount
+  const total =
+    props.result.type === 'TRACING' ? (props.set.strokeCount ?? props.result.itemCount) : props.result.itemCount
   if (props.result.type === 'TRACING') return t('practice.strokesOf', { count: total, total })
   if (props.result.type === 'MATCHING') return t('practice.pairedOf', { paired: total, total })
   if (props.result.type === 'FLASHCARDS') return t('practice.cardsOf', { count: total, total })
@@ -125,12 +128,15 @@ const title = computed(() => {
     const characters = tracingGlyphs(raw).join('') || raw
     return result.allCorrect ? t('practice.doneTracing', { characters }) : t('practice.notFinished')
   }
-  // Nothing went to Mistakes: an item skipped because its audio did not play is the only one that can be not right.
-  if (isAnswered.value && mistakesAdded.value === 0) return correctLine(result)
-  if (!result.allCorrect) return t('practice.rightOf', { right: result.correctCount, total: result.itemCount })
-  return result.type === 'MATCHING'
-    ? t('practice.doneMatching', { total: result.itemCount })
-    : t('practice.doneAllRight')
+  if (result.type === 'MATCHING') {
+    return result.allCorrect
+      ? t('practice.doneMatching', { total: result.itemCount })
+      : t('practice.rightOf', { right: result.correctCount, total: result.itemCount })
+  }
+  // Answered sets show how many first answers were right (never "All correct" when a retry added a mistake).
+  return mistakesAdded.value === 0 || result.allCorrect
+    ? correctLine(result)
+    : t('practice.rightOf', { right: result.correctCount, total: result.itemCount })
 })
 
 const subtitle = computed(() => {
@@ -141,10 +147,15 @@ const subtitle = computed(() => {
     const known = t('practice.cardsKnown', { count: result.correctCount })
     return again > 0 ? `${known} · ${t('practice.cardsAddedToMistakes', { count: again })}` : known
   }
-  if (result.type === 'TRACING') return result.allCorrect ? props.recap : ''
-  if (isAnswered.value && mistakesAdded.value === 0) return t('practice.noNewMistakes')
-  if (!isAnswered.value && result.allCorrect) return props.recap
-  return t('practice.mistakesSaved', { count: mistakesAdded.value }, mistakesAdded.value)
+  if (result.type === 'TRACING') return result.allCorrect ? (props.recap ?? '') : ''
+  if (result.type === 'MATCHING') {
+    return result.allCorrect
+      ? (props.recap ?? '')
+      : t('practice.mistakesSaved', { count: mistakesAdded.value }, mistakesAdded.value)
+  }
+  return mistakesAdded.value === 0
+    ? t('practice.noNewMistakes')
+    : t('practice.mistakesSaved', { count: mistakesAdded.value }, mistakesAdded.value)
 })
 
 /** Why the run earned nothing: the set's XP was earned before, or comes with every item right (once only). */

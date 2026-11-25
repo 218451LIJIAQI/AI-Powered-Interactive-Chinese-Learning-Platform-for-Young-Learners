@@ -44,13 +44,12 @@ export async function mountAtRoute(
   options: {
     attachTo?: HTMLElement
     stubs?: Record<string, Component | boolean>
-    provide?: Record<symbol, unknown>
   } = {},
 ) {
   const router = await testRouter(path)
   const wrapper = mount(page, {
     attachTo: options.attachTo,
-    global: { plugins: [router], stubs: { teleport: true, ...options.stubs }, provide: options.provide },
+    global: { plugins: [router], stubs: { teleport: true, ...options.stubs } },
   })
   await flushPromises()
   return { wrapper, router }

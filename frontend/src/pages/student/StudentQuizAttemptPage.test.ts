@@ -107,8 +107,9 @@ describe('StudentQuizAttemptPage', () => {
   })
 
   it('does not fetch or offer retry when the attemptId param is malformed', async () => {
-    const { wrapper } = await mountAtRoute(StudentQuizAttemptPage, '/student/quiz/9/attempts/not-a-number')
+    const { wrapper, router } = await mountAtRoute(StudentQuizAttemptPage, '/student/quiz/9/attempts/0')
 
+    expect(router.currentRoute.value.name).toBe('student-quiz-attempt')
     expect(api.quizResult).not.toHaveBeenCalled()
     expect(wrapper.text()).toContain('This quiz could not be loaded')
     expect(wrapper.find('button').exists()).toBe(false)

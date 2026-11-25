@@ -80,8 +80,8 @@ class NotificationServiceTests {
         when(userRepository.findWithReadLockById(recipient.getId())).thenReturn(Optional.of(recipient));
 
         assertThatCode(() -> service.safeCreateNotification(
-                recipient, NotificationType.SYSTEM, "Test notification", "This notification should fail safely.",
-                null, null, "/admin"))
+                recipient, NotificationService.draft(NotificationType.SYSTEM, "Test notification",
+                        "This notification should fail safely.", null, null, "/admin")))
                 .doesNotThrowAnyException();
 
         ArgumentCaptor<TransactionDefinition> definition = ArgumentCaptor.forClass(TransactionDefinition.class);
@@ -107,8 +107,10 @@ class NotificationServiceTests {
         when(userRepository.findWithReadLockByIdInOrderByIdAsc(List.of(2L, 4L)))
                 .thenReturn(List.of(active, deactivated));
 
-        service.notifyActiveAdmins(NotificationType.SUPPORT_REQUEST, "New support request", "#1042",
-                "SupportRequest", 9L, "/admin/support?request=9", () -> targetVisible);
+        service.notifyActiveAdmins(
+                () -> NotificationService.draft(NotificationType.SUPPORT_REQUEST, "New support request", "#1042",
+                        "SupportRequest", 9L, "/admin/support?request=9"),
+                "SupportRequest:9", () -> targetVisible);
 
         if (targetVisible) {
             verify(notificationRepository).saveAll(savedBatch.capture());
@@ -123,8 +125,10 @@ class NotificationServiceTests {
         when(userRepository.findActiveIdsByRoleName(RoleName.ADMIN))
                 .thenThrow(new IllegalStateException("Recipient lookup unavailable"));
 
-        assertThatCode(() -> service.notifyActiveAdmins(NotificationType.SUPPORT_REQUEST,
-                "New support request", "#1042", "SupportRequest", 9L, "/admin/support?request=9", () -> true))
+        assertThatCode(() -> service.notifyActiveAdmins(
+                () -> NotificationService.draft(NotificationType.SUPPORT_REQUEST, "New support request", "#1042",
+                        "SupportRequest", 9L, "/admin/support?request=9"),
+                "SupportRequest:9", () -> true))
                 .doesNotThrowAnyException();
 
         verify(transactionManager).rollback(transactionStatus);
@@ -141,8 +145,10 @@ class NotificationServiceTests {
         when(userRepository.findWithReadLockByIdInOrderByIdAsc(List.of(1L, 3L, 10L)))
                 .thenReturn(List.of(adminLow, targetStudent, adminHigh));
 
-        service.notifyActiveAdminsForUserTarget(NotificationType.ADMIN_TASK, "AI report needs review", "Report",
-                "AI_RESPONSE_REPORT", 55L, "/admin/ai?report=55", 3L);
+        service.notifyActiveAdminsForUserTarget(
+                () -> NotificationService.draft(NotificationType.ADMIN_TASK, "AI report needs review", "Report",
+                        "AI_RESPONSE_REPORT", 55L, "/admin/ai?report=55"),
+                "AI_RESPONSE_REPORT:55", 3L);
 
         verify(userRepository).findWithReadLockByIdInOrderByIdAsc(List.of(1L, 3L, 10L));
         verify(notificationRepository).saveAll(savedBatch.capture());
@@ -158,8 +164,10 @@ class NotificationServiceTests {
         when(userRepository.findWithReadLockByIdInOrderByIdAsc(List.of(1L, 3L)))
                 .thenReturn(List.of(admin, deletedStudent));
 
-        service.notifyActiveAdminsForUserTarget(NotificationType.ADMIN_TASK, "AI report needs review", "Report",
-                "AI_RESPONSE_REPORT", 55L, "/admin/ai?report=55", 3L);
+        service.notifyActiveAdminsForUserTarget(
+                () -> NotificationService.draft(NotificationType.ADMIN_TASK, "AI report needs review", "Report",
+                        "AI_RESPONSE_REPORT", 55L, "/admin/ai?report=55"),
+                "AI_RESPONSE_REPORT:55", 3L);
 
         verify(notificationRepository, never()).saveAll(any());
     }
@@ -193,35 +201,51 @@ class NotificationServiceTests {
     @Test
     void markAllAsReadMarksEveryBatchAndReturnsTheIds() {
         List<Long> ids = LongStream.rangeClosed(1, BATCH + 3).boxed().toList();
-        when(notificationRepository.lockUnreadIds(USER_ID)).thenReturn(ids);
+        List<Long> firstBatch = ids.subList(0, BATCH);
+        List<Long> secondBatch = ids.subList(BATCH, ids.size());
+        when(notificationRepository.findUnreadIdsAfter(eq(USER_ID), eq(0L), any())).thenReturn(firstBatch);
+        when(notificationRepository.findUnreadIdsAfter(eq(USER_ID), eq((long) BATCH), any())).thenReturn(secondBatch);
+        when(notificationRepository.lockIdsInOrder(firstBatch)).thenReturn(firstBatch);
+        when(notificationRepository.lockIdsInOrder(secondBatch)).thenReturn(secondBatch);
+        when(notificationRepository.findIdsByUserIdAndStatusIn(USER_ID, NotificationStatus.UNREAD, firstBatch))
+                .thenReturn(firstBatch);
+        when(notificationRepository.findIdsByUserIdAndStatusIn(USER_ID, NotificationStatus.UNREAD, secondBatch))
+                .thenReturn(secondBatch);
 
         List<Long> marked = service.markAllAsRead(learner);
 
         assertThat(marked).containsExactlyElementsOf(ids);
         ArgumentCaptor<LocalDateTime> readAt = ArgumentCaptor.forClass(LocalDateTime.class);
-        verify(notificationRepository).markLockedRead(eq(USER_ID), eq(ids.subList(0, BATCH)), readAt.capture());
-        verify(notificationRepository).markLockedRead(eq(USER_ID), eq(ids.subList(BATCH, ids.size())), readAt.capture());
+        verify(notificationRepository).markLockedRead(eq(firstBatch), readAt.capture());
+        verify(notificationRepository).markLockedRead(eq(secondBatch), readAt.capture());
         assertThat(readAt.getAllValues()).doesNotContainNull().containsOnly(readAt.getValue());
     }
 
     @Test
     void markAllAsReadWithNothingUnreadReturnsNoIds() {
-        when(notificationRepository.lockUnreadIds(USER_ID)).thenReturn(List.of());
+        when(notificationRepository.findUnreadIdsAfter(eq(USER_ID), eq(0L), any())).thenReturn(List.of());
 
         assertThat(service.markAllAsRead(learner)).isEmpty();
-        verify(notificationRepository, never()).markLockedRead(any(), any(), any());
+        verify(notificationRepository, never()).lockIdsInOrder(any());
+        verify(notificationRepository, never()).markLockedRead(any(), any());
     }
 
     /** The Undo marks the user's own read notifications unread again; it never reaches another user's. */
     @Test
     void markUnreadOnlyTouchesTheCallersReadNotifications() {
         List<Long> requested = List.of(5L, 6L, 999L);
-        when(notificationRepository.lockReadIds(USER_ID, requested)).thenReturn(List.of(5L));
+        List<Long> ownedRead = List.of(5L);
+        when(notificationRepository.findIdsByUserIdAndStatusIn(USER_ID, NotificationStatus.READ, requested))
+                .thenReturn(ownedRead);
+        when(notificationRepository.lockIdsInOrder(ownedRead)).thenReturn(ownedRead);
+        when(notificationRepository.findIdsByUserIdAndStatusIn(USER_ID, NotificationStatus.READ, ownedRead))
+                .thenReturn(ownedRead);
 
         List<Long> restored = service.markUnread(learner, requested);
 
         assertThat(restored).containsExactly(5L);
-        verify(notificationRepository).markLockedUnread(eq(USER_ID), eq(List.of(5L)), any(LocalDateTime.class));
+        verify(notificationRepository).lockIdsInOrder(ownedRead);
+        verify(notificationRepository).markLockedUnread(eq(ownedRead), any(LocalDateTime.class));
     }
 
     @Test

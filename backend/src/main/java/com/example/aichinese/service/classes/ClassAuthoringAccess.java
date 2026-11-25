@@ -32,6 +32,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class ClassAuthoringAccess {
 
+    public static final String TARGET_CLASS = "CoursePackage";
     static final String CLASS_ARCHIVED = "Restore the class before you edit it.";
     private static final String UNIT_NOT_FOUND = "Unit was not found.";
 
@@ -51,7 +52,7 @@ public class ClassAuthoringAccess {
     }
 
     User requireAdmin(SecurityUserDetails currentUser) {
-        return currentAccount.findById(currentUser.getUserId());
+        return currentAccount.require(currentUser);
     }
 
     /** A lesson itself, never a working copy. */
@@ -75,8 +76,8 @@ public class ClassAuthoringAccess {
         return new LockedUnit(locked, unit);
     }
 
-    CoursePackage requireUnitOwner(Long unitId) {
-        return ClassContentSupport.requireOnly(packageItemRepository.findClassesOfUnit(unitId), UNIT_NOT_FOUND);
+    void requireUnitOwner(Long unitId) {
+        ClassContentSupport.requireOnly(packageItemRepository.findClassIdsOfUnit(unitId), UNIT_NOT_FOUND);
     }
 
     LockedLesson lockLesson(Long lessonId) {
@@ -96,7 +97,7 @@ public class ClassAuthoringAccess {
     /** An audit entry about a class, named by its title. */
     void audit(User admin, String action, CoursePackage coursePackage, String description) {
         auditLogService.record(admin, action,
-                new AuditLogService.AuditTarget("CoursePackage", coursePackage.getId(), coursePackage.getTitle()), null,
+                new AuditLogService.AuditTarget(TARGET_CLASS, coursePackage.getId(), coursePackage.getTitle()), null,
                 description);
     }
 

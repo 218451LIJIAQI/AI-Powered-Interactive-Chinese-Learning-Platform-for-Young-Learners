@@ -35,6 +35,7 @@ async function mountPage() {
 
 describe('StudentLearnPage (Learn level map)', () => {
   beforeEach(() => {
+    Object.values(api).forEach((fn) => fn.mockReset())
     api.path.mockResolvedValue(learnPath())
     api.today.mockResolvedValue(today())
     window.history.replaceState({}, '')
@@ -372,5 +373,17 @@ describe('StudentLearnPage (Learn level map)', () => {
     const wrapper = await mountPage()
 
     expect(wrapper.get('[data-testid="toast"]').text()).toBe('Checkpoint passed: +10 XP.')
+  })
+
+  it('shows a retryable error in the rail when today summary fails to load', async () => {
+    api.today.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(today())
+    const wrapper = await mountPage()
+
+    const err = wrapper.get('[data-testid="today-error"]')
+    await err.get('button').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="today-error"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="daily-goal"]').text()).toContain('20 / 30 XP')
   })
 })

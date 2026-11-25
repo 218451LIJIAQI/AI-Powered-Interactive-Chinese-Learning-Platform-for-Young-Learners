@@ -24,10 +24,6 @@ export const responsibleAiMessages = {
     voiceCopy:
       'Pronunciation and handwriting checks give you a practice score and feedback. XP and rank come from your learning progress.',
     dataTitle: 'What is sent to the AI provider',
-    providerDeepseek: aiDisclosureMessages.en.providerDeepseek,
-    providerCompatible: aiDisclosureMessages.en.providerCompatible,
-    dataPronunciation: aiDisclosureMessages.en.pronunciation,
-    dataLiveVideo: aiDisclosureMessages.en.liveVideo,
     // The data section names the provider the server reports (useResponsibleAiGuidance): what is sent, the target, then
     // what that provider does with it.
     // The second sentence: what Talk with Xiaomei adds (S7.14), the same for every provider.
@@ -42,17 +38,14 @@ export const responsibleAiMessages = {
     targetModel: '{target} (model {model})',
     targetOther: 'the Chat Completions API of {provider}',
     dataMinimise: aiDisclosureMessages.en.piiFilter + ' Avoid including personal information in what you send.',
-    dataOpenAi: aiDisclosureMessages.en.openAi,
-    dataOther: aiDisclosureMessages.en.other,
     dataUnknown:
       'When the AI Helper is connected to an AI provider, requests go from our server to that provider; your browser never contacts it directly.',
-    dataOff: aiDisclosureMessages.en.off,
     safetyTitle: 'Safety checks',
     safetyCopy:
       'The safety checks are on unless an admin turns them off. Your AI requests and the AI answers are screened against a list of unsafe words: a request that fails is not sent and an answer that fails is not shown.',
     reportTitle: 'Report an answer',
     reportCopy:
-      'Use Report on any AI reply, quiz, story or score: choose a reason and add a note if you like. An admin reads every report and replies in Ask SparkBot › My reports.',
+      'Use Report on any AI reply, quiz, story or score: choose a reason and add a note if you like. An admin reads every report and replies in AI Helper › Ask SparkBot › My reports.',
     disclaimerLabel: 'Shown with every AI answer:',
   },
   ms: {
@@ -70,10 +63,6 @@ export const responsibleAiMessages = {
     voiceCopy:
       'Semakan sebutan dan tulisan tangan memberi anda skor latihan dan maklum balas. XP dan pangkat datang daripada kemajuan pembelajaran anda.',
     dataTitle: 'Apa yang dihantar kepada penyedia AI',
-    providerDeepseek: aiDisclosureMessages.ms.providerDeepseek,
-    providerCompatible: aiDisclosureMessages.ms.providerCompatible,
-    dataPronunciation: aiDisclosureMessages.ms.pronunciation,
-    dataLiveVideo: aiDisclosureMessages.ms.liveVideo,
     dataWhat:
       'Permintaan menggunakan teks atau foto tulisan tangan yang anda hantar, serta maklumat pembelajaran yang berkaitan seperti tahap anda dan topik pelajaran.' +
       xiaomeiContext.ms,
@@ -87,17 +76,14 @@ export const responsibleAiMessages = {
     targetOther: 'API Chat Completions {provider}',
     dataMinimise:
       aiDisclosureMessages.ms.piiFilter + ' Elakkan memasukkan maklumat peribadi dalam apa yang anda hantar.',
-    dataOpenAi: aiDisclosureMessages.ms.openAi,
-    dataOther: aiDisclosureMessages.ms.other,
     dataUnknown:
       'Apabila Pembantu AI disambungkan kepada penyedia AI, permintaan dihantar daripada pelayan kami kepada penyedia itu; pelayar anda tidak menghubunginya secara terus.',
-    dataOff: aiDisclosureMessages.ms.off,
     safetyTitle: 'Semakan keselamatan',
     safetyCopy:
       'Semakan keselamatan dihidupkan melainkan pentadbir mematikannya. Permintaan AI anda dan jawapan AI disemak berdasarkan senarai perkataan tidak selamat: permintaan yang gagal tidak dihantar dan jawapan yang gagal tidak dipaparkan.',
     reportTitle: 'Laporkan jawapan',
     reportCopy:
-      'Gunakan Laporkan pada mana-mana balasan, kuiz, cerita atau skor AI: pilih sebab dan tambah nota jika mahu. Pentadbir membaca setiap laporan dan membalas dalam Tanya SparkBot › Laporan saya.',
+      'Gunakan Laporkan pada mana-mana balasan, kuiz, cerita atau skor AI: pilih sebab dan tambah nota jika mahu. Pentadbir membaca setiap laporan dan membalas dalam Pembantu AI › Tanya SparkBot › Laporan saya.',
     disclaimerLabel: 'Dipaparkan bersama setiap jawapan AI:',
   },
   'zh-CN': {
@@ -113,10 +99,6 @@ export const responsibleAiMessages = {
     voiceTitle: '语音、口语和书写',
     voiceCopy: '发音和书写都会提供练习评分和反馈。你的 XP 和段位根据学习进度计算。',
     dataTitle: '哪些内容会发送给 AI 提供方',
-    providerDeepseek: aiDisclosureMessages['zh-CN'].providerDeepseek,
-    providerCompatible: aiDisclosureMessages['zh-CN'].providerCompatible,
-    dataPronunciation: aiDisclosureMessages['zh-CN'].pronunciation,
-    dataLiveVideo: aiDisclosureMessages['zh-CN'].liveVideo,
     dataWhat: '请求会使用你提交的文字或手写照片，以及相关学习信息，例如你的水平和课时主题。' + xiaomeiContext['zh-CN'],
     dataWhatText: '请求会使用你提交的文字及相关学习信息，例如你的水平和课时主题。' + xiaomeiContext['zh-CN'],
     dataTarget: '请求由我们的服务器发送到 {target}；你的浏览器不会直接联系提供方。',
@@ -124,16 +106,13 @@ export const responsibleAiMessages = {
     targetModel: '{target}（模型 {model}）',
     targetOther: '{provider}的 Chat Completions API',
     dataMinimise: aiDisclosureMessages['zh-CN'].piiFilter + '请避免在你发送的内容中提供个人信息。',
-    dataOpenAi: aiDisclosureMessages['zh-CN'].openAi,
-    dataOther: aiDisclosureMessages['zh-CN'].other,
     dataUnknown: '当 AI 助手连接到 AI 提供方时，请求会由我们的服务器发送给该提供方；你的浏览器不会直接联系它。',
-    dataOff: aiDisclosureMessages['zh-CN'].off,
     safetyTitle: '安全检查',
     safetyCopy:
       '安全检查默认开启，除非管理员将其关闭。你的 AI 请求和 AI 回答都会对照不安全词语列表进行筛查：未通过的请求不会发送，未通过的回答不会显示。',
     reportTitle: '举报回答',
     reportCopy:
-      '任何 AI 回复、测验、故事或评分都可以使用“举报”：选择原因，并可添加备注。管理员会阅读每条举报，并在“问 SparkBot › 我的举报”中回复。',
+      '任何 AI 回复、测验、故事或评分都可以使用“举报”：选择原因，并可添加备注。管理员会阅读每条举报，并在“AI 助手 › 问 SparkBot › 我的举报”中回复。',
     disclaimerLabel: '每个 AI 回答都会显示：',
   },
-}
+} as const

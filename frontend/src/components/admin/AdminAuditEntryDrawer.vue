@@ -16,19 +16,8 @@
     test-id="admin-audit-drawer"
     @close="emit('close')"
   >
-    <DataNotice v-if="error" :error="error">
-      <template #actions>
-        <button type="button" class="btn btn-secondary btn-sm" @click="emit('retry')">
-          {{ t('common.retry') }}
-        </button>
-      </template>
-    </DataNotice>
-    <StatePanel
-      v-else-if="!entry"
-      tone="loading"
-      :title="t('adminAudit.entryLoading')"
-      :message="t('adminAudit.loadingHint')"
-    />
+    <DataNotice v-if="error" :error="error" @retry="emit('retry')" />
+    <StatePanel v-else-if="!entry" tone="loading" :title="t('adminAudit.entryLoadingHint')" />
     <template v-else>
       <section class="admin-section" aria-labelledby="admin-audit-what-title">
         <h3 id="admin-audit-what-title" class="admin-section-title">{{ t('adminAudit.whatHappened') }}</h3>

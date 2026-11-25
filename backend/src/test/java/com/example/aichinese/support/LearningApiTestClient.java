@@ -187,19 +187,17 @@ public final class LearningApiTestClient {
      * matching two greetings) and a 5-question quiz (each question 5 marks: "hello", a fill-in, "goodbye", "thank you"
      * and "sorry") with "Allow SparkBot hints" on. Returns the editor.
      */
-    public JsonNode readyLesson(String adminToken, Long lessonId, String summary) throws Exception {
+    public JsonNode readyLesson(String adminToken, Long lessonId) throws Exception {
         String title = data(mockMvc.perform(authGet("/api/v1/admin/lessons/" + lessonId, adminToken))
                 .andExpect(status().isOk()).andReturn()).path("title").asText();
-        return fillLesson(adminToken, lessonId, title, summary, true, null);
+        return fillLesson(adminToken, lessonId, title, true, null);
     }
 
-    private JsonNode fillLesson(String adminToken, Long lessonId, String title, String summary, boolean hintsAllowed,
+    private JsonNode fillLesson(String adminToken, Long lessonId, String title, boolean hintsAllowed,
             String hint) throws Exception {
         String base = "/api/v1/admin/lessons/" + lessonId;
         mockMvc.perform(jsonPut(base + "/content", adminToken, Map.of(
                         "title", title,
-                        "minutes", 12,
-                        "summary", summary,
                         "keyPhrases", List.of(Map.of("chinese", "你好", "pinyin", "nǐ hǎo", "meaning", "hello")))))
                 .andExpect(status().isOk());
         uploadLessonVideo(adminToken, lessonId, "Saying hello");
@@ -230,7 +228,11 @@ public final class LearningApiTestClient {
     }
 
     /** The five questions of {@link #readyLesson}'s quiz, in order; the wrong answer of the first has feedback. */
-    public static List<Map<String, ?>> quizQuestions(String hint) {
+    public static List<Map<String, ?>> quizQuestions() {
+        return quizQuestions(null);
+    }
+
+    private static List<Map<String, ?>> quizQuestions(String hint) {
         return List.of(
                 optionQuestion("Which word means hello?", "你好", "再见", hint, "That's goodbye."),
                 fillBlankQuestion(),
@@ -257,23 +259,27 @@ public final class LearningApiTestClient {
                 .andReturn());
     }
 
-    /** A complete lesson in the unit, published; returns the editor. */
-    public JsonNode publishedLesson(String adminToken, Long unitId, String title, String summary, boolean hintsAllowed,
+    /** A complete lesson in the unit, published with hints allowed; returns the editor. */
+    public JsonNode publishedLesson(String adminToken, Long unitId, String title) throws Exception {
+        return publishedLesson(adminToken, unitId, title, true, null);
+    }
+
+    private JsonNode publishedLesson(String adminToken, Long unitId, String title, boolean hintsAllowed,
             String hint) throws Exception {
         JsonNode draft = createLesson(adminToken, unitId, title);
         long lessonId = draft.path("lessonId").asLong();
-        fillLesson(adminToken, lessonId, draft.path("title").asText(), summary, hintsAllowed, hint);
+        fillLesson(adminToken, lessonId, draft.path("title").asText(), hintsAllowed, hint);
         return publishLesson(adminToken, lessonId);
     }
 
     /** A published class: 2 units of 2 published lessons (the shape a class needs to go live). */
     public PublishedClass publishedClass(String adminToken, String title) throws Exception {
-        return publishedClass(adminToken, title, title + " lesson", "Lesson summary");
+        return publishedClass(adminToken, title, title + " lesson");
     }
 
-    public PublishedClass publishedClass(String adminToken, String classTitle, String lessonTitle, String summary)
+    public PublishedClass publishedClass(String adminToken, String classTitle, String lessonTitle)
             throws Exception {
-        return publishedClass(adminToken, classTitle, lessonTitle, summary, true, null);
+        return publishedClass(adminToken, classTitle, lessonTitle, true, null);
     }
 
     /**
@@ -282,19 +288,19 @@ public final class LearningApiTestClient {
      */
     public PublishedClass publishedClassWithQuiz(String adminToken, String title, boolean hintsAllowed, String hint)
             throws Exception {
-        return publishedClass(adminToken, title, title + " lesson", "Lesson summary", hintsAllowed, hint);
+        return publishedClass(adminToken, title, title + " lesson", hintsAllowed, hint);
     }
 
     private PublishedClass publishedClass(
-            String adminToken, String classTitle, String lessonTitle, String summary, boolean hintsAllowed, String hint)
+            String adminToken, String classTitle, String lessonTitle, boolean hintsAllowed, String hint)
             throws Exception {
         Long classId = draftClass(adminToken, classTitle);
         Long unitId = unit(adminToken, classId, "Unit 1");
         Long secondUnitId = unit(adminToken, classId, "Unit 2");
-        JsonNode first = publishedLesson(adminToken, unitId, lessonTitle, summary, hintsAllowed, hint);
-        publishedLesson(adminToken, unitId, lessonTitle + " 2", summary, true, null);
-        publishedLesson(adminToken, secondUnitId, lessonTitle + " 3", summary, true, null);
-        publishedLesson(adminToken, secondUnitId, lessonTitle + " 4", summary, true, null);
+        JsonNode first = publishedLesson(adminToken, unitId, lessonTitle, hintsAllowed, hint);
+        publishedLesson(adminToken, unitId, lessonTitle + " 2");
+        publishedLesson(adminToken, secondUnitId, lessonTitle + " 3");
+        publishedLesson(adminToken, secondUnitId, lessonTitle + " 4");
         publishClass(adminToken, classId);
         Long quizId = first.path("quizzes").get(0).path("id").asLong();
         classOfQuiz.put(quizId, classId);
@@ -302,7 +308,7 @@ public final class LearningApiTestClient {
     }
 
     /** Publishes the class (it must have its shape: 2 units holding 4 to 6 published lessons). */
-    public void publishClass(String adminToken, Long classId) throws Exception {
+    private void publishClass(String adminToken, Long classId) throws Exception {
         mockMvc.perform(authPost("/api/v1/admin/classes/" + classId + "/publish", adminToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("PUBLISHED"));

@@ -32,17 +32,24 @@ describe('PaginationBar', () => {
     expect(wrapper.findAll('button')).toHaveLength(0)
   })
 
-  it('disables the buttons on the first and last page', async () => {
+  it('marks buttons aria-disabled on the first and last page without ejecting focus or emitting invalid pages', async () => {
     const wrapper = mount(PaginationBar, {
       props: { label: 'Result pages', page: 0, totalPages: 2 },
     })
     const [previous, next] = wrapper.findAll('button')
-    expect(previous.attributes('disabled')).toBeDefined()
-    expect(next.attributes('disabled')).toBeUndefined()
+    expect(previous.attributes('aria-disabled')).toBe('true')
+    expect(previous.attributes('disabled')).toBeUndefined()
+    expect(next.attributes('aria-disabled')).toBeUndefined()
+
+    await previous.trigger('click')
+    expect(wrapper.emitted('update:page')).toBeUndefined()
 
     await wrapper.setProps({ page: 1 })
-    expect(previous.attributes('disabled')).toBeUndefined()
-    expect(next.attributes('disabled')).toBeDefined()
+    expect(previous.attributes('aria-disabled')).toBeUndefined()
+    expect(next.attributes('aria-disabled')).toBe('true')
+
+    await next.trigger('click')
+    expect(wrapper.emitted('update:page')).toBeUndefined()
   })
 
   it('shows a caller-provided summary alongside the page position', async () => {
@@ -71,6 +78,7 @@ describe('PaginationBar', () => {
 
     const next = wrapper.findAll('button')[1]
     expect(next.attributes('aria-label')).toBe('Next')
+    expect(next.attributes('title')).toBe('Next')
     expect(next.classes()).toContain('btn-icon')
     expect(next.text()).toBe('')
 

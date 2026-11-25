@@ -3,7 +3,7 @@
  * Progress page, the level check and the admin Learning path and Practice library.
  */
 import { PRACTICE_ACTIVITIES } from '@/config/practiceActivities'
-import type { ContentStatus, PageResponse } from '@/types/api'
+import type { ContentStatus, PageResponse, RewardSummaryResponse } from '@/types/api'
 import type {
   AdminLearningPath,
   AdminPracticeSetDetail,
@@ -14,7 +14,6 @@ import type {
   DailyGoal,
   Guidebook,
   HintMode,
-  HintReport,
   HintRun,
   HintSettings,
   HintStep,
@@ -44,7 +43,6 @@ import type {
   TodaySummary,
 } from '@/types/learn'
 
-import { aiHelperApi } from './ai'
 import { apiGet, apiPost, apiPut } from './request'
 
 const practicePath = (type: PracticeType, id?: number) =>
@@ -120,10 +118,6 @@ export const hintApi = {
   setMode(mode: HintMode) {
     return apiPut<HintSettings>('/students/hint-settings', { mode })
   },
-  /** Reports a hint as an AI answer (feature `HINT`): an admin replies in Ask SparkBot › My reports. */
-  report(report: HintReport) {
-    return aiHelperApi.report({ featureKey: 'HINT', ...report })
-  },
 }
 
 export const mistakesApi = {
@@ -147,13 +141,16 @@ export const mistakesApi = {
 }
 
 export const xpApi = {
+  rewards() {
+    return apiGet<RewardSummaryResponse>('/students/rewards')
+  },
   today() {
     return apiGet<TodaySummary>('/students/today')
   },
   dailyGoal() {
     return apiGet<DailyGoal>('/students/daily-goal')
   },
-  /** 10, 20 or 30 XP a day (Home and the Account page change it). */
+  /** 10, 20 or 30 XP a day (Home, the Plan page and the Account page change it). */
   setDailyGoal(dailyGoalXp: number) {
     return apiPut<DailyGoal>('/students/daily-goal', { dailyGoalXp })
   },
@@ -172,9 +169,10 @@ export const xpApi = {
 }
 
 export const levelCheckApi = {
-  /** Stateless: send every answer so far (`optionId` null for "I don't know yet"). */
-  next(startLevel: MandarinLevel | null, answers: readonly LevelCheckAnswer[]) {
-    return apiPost<LevelCheckStep>('/students/level-check/next', { startLevel, answers })
+  /** Stateless: send every answer so far (`optionId` null for "I don't know yet") with the server-signed run token. */
+  next(startLevel: MandarinLevel | null, answers: readonly LevelCheckAnswer[], runToken?: string | null) {
+    const body = runToken ? { startLevel, answers, runToken } : { startLevel, answers }
+    return apiPost<LevelCheckStep>('/students/level-check/next', body)
   },
 }
 

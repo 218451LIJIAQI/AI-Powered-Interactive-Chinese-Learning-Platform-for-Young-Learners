@@ -1,6 +1,6 @@
 <template>
   <div class="page-stack">
-    <PageHeaderBlock :title="t('account.pageTitle')" hide-title />
+    <h1 class="sr-only">{{ t('account.pageTitle') }}</h1>
     <AppToast :message="toast" :action="toastAction" />
 
     <StatePanel
@@ -15,10 +15,9 @@
       v-else-if="!settings"
       heading-tag="h2"
       tone="error"
-      icon="alert"
       spacious
       :title="t('account.loadErrorTitle')"
-      :message="error ?? ''"
+      :message="error"
       @retry="reloadAll"
     />
 
@@ -78,6 +77,7 @@
                   <span id="account-email-pending">{{ t('account.emailPending', { email: pendingEmail }) }}</span>
                   <span aria-hidden="true"> · </span>
                   <button
+                    ref="resendEmailButton"
                     class="btn btn-link"
                     type="button"
                     :disabled="pendingBusy"
@@ -88,6 +88,7 @@
                   </button>
                   <span aria-hidden="true"> · </span>
                   <button
+                    ref="cancelEmailButton"
                     class="btn btn-link"
                     type="button"
                     :disabled="pendingBusy"
@@ -115,20 +116,32 @@
                 />
                 <p v-if="dailyGoalResource.error.value" id="account-goal-hint" class="field-hint">
                   {{ t('account.dailyGoalUnavailable') }}
+                  <span aria-hidden="true"> · </span>
+                  <button
+                    class="btn btn-link"
+                    type="button"
+                    :disabled="dailyGoalResource.loading.value"
+                    data-testid="account-goal-retry"
+                    @click="dailyGoalResource.reload"
+                  >
+                    {{ t('common.retry') }}
+                  </button>
                 </p>
               </fieldset>
 
-              <div v-if="profileError" class="alert alert-danger" role="alert" data-testid="account-save-error">
+              <div v-if="profileError" class="callout is-danger" role="alert" data-testid="account-save-error">
                 <IconGlyph name="alert" :size="18" />
                 <span>{{ profileError }}</span>
               </div>
               <div class="form-actions">
                 <button
+                  ref="saveProfileButton"
                   class="btn btn-primary"
                   type="submit"
                   :disabled="savingProfile || Boolean(nameError)"
                   :aria-busy="savingProfile"
                   data-testid="account-save"
+                  @mousedown.prevent
                 >
                   {{ savingProfile ? t('account.saving') : t('account.save') }}
                 </button>
@@ -140,7 +153,7 @@
 
           <section class="panel account-card" aria-labelledby="account-notifications-title">
             <h2 id="account-notifications-title" class="card-title">{{ t('account.notificationsTitle') }}</h2>
-            <ul class="row-list account-preferences">
+            <ul class="row-list is-flush account-preferences">
               <li v-if="isAdmin">
                 <label class="row-list-copy account-preference-label" for="account-pref-daily-summary">
                   <span class="row-list-title">{{ t('account.dailySummaryTitle') }}</span>
@@ -152,6 +165,7 @@
                   </span>
                   <input
                     id="account-pref-daily-summary"
+                    ref="dailySummarySwitch"
                     class="switch"
                     type="checkbox"
                     role="switch"
@@ -206,7 +220,7 @@
           <h2 id="account-danger-title" class="row-list-title">{{ t('account.dangerZone') }}</h2>
           <p class="row-list-meta">{{ t('account.dangerHint') }}</p>
         </div>
-        <button class="btn btn-danger-soft" type="button" data-testid="account-delete" @click="openDeleteDialog">
+        <button class="btn btn-danger-soft" type="button" data-testid="account-delete" @click="deleteDialogOpen = true">
           <IconGlyph name="trash" :size="16" />
           {{ t('account.deleteAccount') }}
         </button>
@@ -219,29 +233,27 @@
     </template>
 
     <AccountEmailChangeDialog
-      :open="emailDialogOpen"
-      :current-email="settings?.email ?? null"
-      :disabled="pendingBusy"
+      v-if="emailDialogOpen && settings"
+      :current-email="settings.email"
       @close="emailDialogOpen = false"
       @requested="onEmailChangeRequested"
     />
 
     <AccountDeleteDialog
-      :open="deleteDialogOpen"
-      :current-email="settings?.email ?? null"
+      v-if="deleteDialogOpen && settings"
+      :current-email="settings.email"
       @close="deleteDialogOpen = false"
     />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, reactive, ref, toRef, watch } from 'vue'
+import { computed, nextTick, reactive, ref, shallowRef, toRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { getAuthSessionVersion } from '@/api/http'
 import { xpApi } from '@/api/learn'
 import { accountOpsApi } from '@/api/ops'
-import { authApi } from '@/api/services'
 import AccountDeleteDialog from '@/components/account/AccountDeleteDialog.vue'
 import AccountEmailChangeDialog from '@/components/account/AccountEmailChangeDialog.vue'
 import AccountPasswordCard from '@/components/account/AccountPasswordCard.vue'
@@ -250,24 +262,23 @@ import FilterChips, { type FilterChipOption } from '@/components/common/FilterCh
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
 import HintSettingsCard from '@/components/learn/HintSettingsCard.vue'
-import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useIsUnmounted } from '@/composables/useIsUnmounted'
 import { useFieldCheck } from '@/composables/useFieldCheck'
 import { useLocalMessages } from '@/composables/useLocalMessages'
+import { finishSessionEndNavigation } from '@/composables/usePageNavigation'
 import { notifyProgressChanged } from '@/composables/useProgressRefresh'
 import { useResource } from '@/composables/useResource'
 import { useToast } from '@/composables/useToast'
 import { accountMessages } from '@/plugins/accountMessages'
 import { appLocale } from '@/plugins/i18n'
 import { useAuthStore } from '@/stores/auth'
+import type { UserRole } from '@/types/api'
 import { hasServerMessage, resolveApiError } from '@/utils/apiError'
+import { restoreFocusIfDropped } from '@/utils/focus'
 import { formatShortDate } from '@/utils/format'
 import { SERVER_MESSAGE } from '@/utils/serverMessages'
 import { DAILY_GOALS } from '@/utils/xpLevel'
 import '@/styles/ops-account.css'
-
-/** The server's answer when a pending email change was already retired or expired (AccountEmailService). */
-const NO_PENDING_EMAIL_CHANGE = SERVER_MESSAGE.NO_PENDING_EMAIL_CHANGE
 
 const BROWSERS = [
   [/Edg\//, 'Edge'],
@@ -305,14 +316,21 @@ function canUpdatePage(version: number): boolean {
   return !isUnmounted() && version === getAuthSessionVersion()
 }
 
-const isLearner = computed(() => auth.roles.includes('STUDENT'))
-const isAdmin = computed(() => auth.roles.includes('ADMIN'))
+const grantedRoles = ref<readonly UserRole[]>(auth.roles)
+watch(
+  () => auth.roles,
+  (next) => {
+    if (next.length) grantedRoles.value = next
+  },
+)
+const isLearner = computed(() => grantedRoles.value.includes('STUDENT'))
+const isAdmin = computed(() => grantedRoles.value.includes('ADMIN'))
 
 const { data: settings, loading, error, reload } = useResource(accountOpsApi.settings)
 // The learn module serves the daily goal (learners only). Its control waits, disabled, for the goal; when the goal
 // cannot be loaded it says so and the rest of the page works.
 const dailyGoalResource = useResource(xpApi.dailyGoal, isLearner.value)
-const sessionResource = useResource(authApi.session)
+const sessionResource = useResource(accountOpsApi.session)
 
 const pendingEmail = ref<string | null>(null)
 const profile = reactive<{ name: string; dailyGoal: number | null }>({ name: '', dailyGoal: null })
@@ -336,13 +354,9 @@ watch(
   },
   { once: true },
 )
-watch(
-  dailyGoalResource.data,
-  (value) => {
-    if (value) profile.dailyGoal = value.dailyGoalXp
-  },
-  { once: true },
-)
+watch(dailyGoalResource.data, (value) => {
+  if (value && profile.dailyGoal === null) profile.dailyGoal = value.dailyGoalXp
+})
 
 function reloadAll(): void {
   void reload()
@@ -361,7 +375,14 @@ const deviceLine = computed(() => {
 // Profile
 
 const savingProfile = ref(false)
-const profileError = ref<string | null>(null)
+const saveProfileButton = ref<HTMLButtonElement | null>(null)
+const profileFailure = shallowRef<{ reason: unknown } | null>(null)
+const profileError = computed(() =>
+  profileFailure.value ? resolveApiError(profileFailure.value.reason, t('account.saveError')) : null,
+)
+watch([() => profile.name, () => profile.dailyGoal], () => {
+  profileFailure.value = null
+})
 const { error: nameError, validate: checkName } = useFieldCheck(toRef(profile, 'name'), (name) =>
   name.trim() ? null : 'account.nameRequired',
 )
@@ -392,7 +413,7 @@ async function saveDailyGoal(version: number): Promise<void> {
 
 async function saveProfile(): Promise<void> {
   if (savingProfile.value) return
-  profileError.value = null
+  profileFailure.value = null
   if (!checkName()) {
     await nextTick()
     document.getElementById('account-name')?.focus()
@@ -406,14 +427,22 @@ async function saveProfile(): Promise<void> {
   if (!isUnmounted()) savingProfile.value = false
   if (!canUpdatePage(version)) return
   const failed = results.find((result) => result.status === 'rejected')
-  if (failed) profileError.value = resolveApiError(failed.reason, t('account.saveError'))
+  if (failed) profileFailure.value = { reason: failed.reason }
   else showToast(t('account.changesSaved'))
+  await restoreFocusIfDropped(
+    () => saveProfileButton.value,
+    () => canUpdatePage(version),
+  )
 }
 
 // The admin's daily summary
 
 const savingSummary = ref(false)
-const preferencesError = ref<string | null>(null)
+const dailySummarySwitch = ref<HTMLInputElement | null>(null)
+const preferencesFailure = shallowRef<{ reason: unknown } | null>(null)
+const preferencesError = computed(() =>
+  preferencesFailure.value ? resolveApiError(preferencesFailure.value.reason, t('account.preferencesError')) : null,
+)
 
 async function toggleDailySummary(enabled: boolean): Promise<void> {
   if (savingSummary.value) return
@@ -421,7 +450,7 @@ async function toggleDailySummary(enabled: boolean): Promise<void> {
   const previous = dailySummary.value
   dailySummary.value = enabled
   savingSummary.value = true
-  preferencesError.value = null
+  preferencesFailure.value = null
   try {
     const saved = await accountOpsApi.updatePreferences({ reviewQueues: enabled })
     if (!canUpdatePage(version)) return
@@ -431,22 +460,34 @@ async function toggleDailySummary(enabled: boolean): Promise<void> {
     // Always restore the optimistic switch while still mounted, even if a concurrent password change rotated the token.
     if (!isUnmounted()) dailySummary.value = previous
     if (!canUpdatePage(version)) return
-    preferencesError.value = resolveApiError(reason, t('account.preferencesError'))
+    preferencesFailure.value = { reason }
   } finally {
     if (!isUnmounted()) savingSummary.value = false
   }
+  await restoreFocusIfDropped(
+    () => dailySummarySwitch.value,
+    () => !isUnmounted(),
+  )
 }
 
 // Pending e-mail change & password update hooks
 
 const emailDialogOpen = ref(false)
 const changeEmailButton = ref<HTMLButtonElement | null>(null)
+const resendEmailButton = ref<HTMLButtonElement | null>(null)
+const cancelEmailButton = ref<HTMLButtonElement | null>(null)
 const pendingBusy = ref(false)
-const pendingError = ref<string | null>(null)
+const pendingFailure = shallowRef<{
+  reason: unknown
+  fallbackKey: 'account.emailResendError' | 'account.emailCancelError'
+} | null>(null)
+const pendingError = computed(() =>
+  pendingFailure.value ? resolveApiError(pendingFailure.value.reason, t(pendingFailure.value.fallbackKey)) : null,
+)
 
 function onEmailChangeRequested(nextPendingEmail: string): void {
   pendingEmail.value = nextPendingEmail
-  pendingError.value = null
+  pendingFailure.value = null
   emailDialogOpen.value = false
   showToast(t('account.emailLinkSent', { email: nextPendingEmail }))
 }
@@ -454,16 +495,16 @@ function onEmailChangeRequested(nextPendingEmail: string): void {
 function onPasswordChanged(): void {
   // Changing the password retires any open email-change confirmation on the server (AuthService.changePassword).
   pendingEmail.value = null
-  pendingError.value = null
+  pendingFailure.value = null
   showToast(t('account.passwordChanged'))
 }
 
-/** A pending change can get a new link or be cancelled; restoring focus when the pending row unmounts. */
+/** A pending change can get a new link or be cancelled; restoring focus when the pending row unmounts or re-enables. */
 async function changePendingEmail(action: 'resend' | 'cancel'): Promise<void> {
   if (pendingBusy.value) return
   const version = getAuthSessionVersion()
   pendingBusy.value = true
-  pendingError.value = null
+  pendingFailure.value = null
   let rowRemoved = false
   try {
     if (action === 'resend') {
@@ -471,30 +512,32 @@ async function changePendingEmail(action: 'resend' | 'cancel'): Promise<void> {
       if (!canUpdatePage(version)) return
       pendingEmail.value = result.pendingEmail
       showToast(t('account.emailLinkSentAgain'))
-      return
+    } else {
+      await accountOpsApi.cancelEmailChange()
+      if (!canUpdatePage(version)) return
+      pendingEmail.value = null
+      rowRemoved = true
+      showToast(t('account.emailChangeCancelled'))
     }
-    await accountOpsApi.cancelEmailChange()
-    if (!canUpdatePage(version)) return
-    pendingEmail.value = null
-    rowRemoved = true
-    showToast(t('account.emailChangeCancelled'))
   } catch (reason) {
     if (canUpdatePage(version)) {
-      if (action === 'resend' && hasServerMessage(reason, NO_PENDING_EMAIL_CHANGE)) {
+      if (action === 'resend' && hasServerMessage(reason, SERVER_MESSAGE.NO_PENDING_EMAIL_CHANGE)) {
         pendingEmail.value = null
         rowRemoved = true
       }
-      pendingError.value = resolveApiError(
+      pendingFailure.value = {
         reason,
-        t(action === 'resend' ? 'account.emailResendError' : 'account.emailCancelError'),
-      )
+        fallbackKey: action === 'resend' ? 'account.emailResendError' : 'account.emailCancelError',
+      }
     }
   } finally {
     if (!isUnmounted()) pendingBusy.value = false
   }
-  if (!rowRemoved) return
-  await nextTick()
-  if (canUpdatePage(version) && document.activeElement === document.body) changeEmailButton.value?.focus()
+  await restoreFocusIfDropped(
+    () =>
+      rowRemoved ? changeEmailButton.value : action === 'resend' ? resendEmailButton.value : cancelEmailButton.value,
+    () => canUpdatePage(version),
+  )
 }
 
 // Sign out and deletion
@@ -505,17 +548,11 @@ async function signOut(): Promise<void> {
   signingOut.value = true
   try {
     const signedOut = await auth.logout()
-    if (signedOut && (!isUnmounted() || Boolean(router.currentRoute.value.meta.roles?.length))) {
-      await router.push('/')
-    }
+    if (signedOut) await finishSessionEndNavigation(router, '/', !isUnmounted())
   } finally {
     if (!isUnmounted()) signingOut.value = false
   }
 }
 
 const deleteDialogOpen = ref(false)
-
-function openDeleteDialog(): void {
-  deleteDialogOpen.value = true
-}
 </script>

@@ -33,8 +33,17 @@ public class LearnClock {
         this.clock = clock;
     }
 
+    public Instant now() {
+        return clock.instant();
+    }
+
     public LocalDate today() {
         return LocalDate.ofInstant(clock.instant(), platformZone);
+    }
+
+    /** The server-local date and time at {@code instant} (for database timestamp columns matching {@link #startOf}). */
+    public LocalDateTime serverTimeAt(Instant instant) {
+        return LocalDateTime.ofInstant(instant, ZoneId.systemDefault());
     }
 
     /** The platform day at {@code instant}. */

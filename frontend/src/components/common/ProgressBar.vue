@@ -6,7 +6,7 @@
     :aria-valuenow="safeProgress"
     aria-valuemin="0"
     aria-valuemax="100"
-    :aria-label="`${label}: ${safeProgress}%`"
+    :aria-label="label"
   >
     <span :style="{ width: `${safeProgress}%` }" />
   </div>

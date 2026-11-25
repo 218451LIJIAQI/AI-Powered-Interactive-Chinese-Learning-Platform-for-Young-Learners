@@ -1,5 +1,7 @@
 package com.example.aichinese.dto.learn;
 
+import static com.example.aichinese.dto.DtoNormalization.redactValue;
+
 import java.util.List;
 
 import com.example.aichinese.entity.enums.LevelCheckSkill;
@@ -17,7 +19,16 @@ public record LevelCheckNextResponse(
         boolean done,
         Result result,
         int answeredCount,
-        int maxQuestions) {
+        int maxQuestions,
+        String runToken) {
+
+    @Override
+    public String toString() {
+        return "LevelCheckNextResponse[done=" + done
+                + ", answeredCount=" + answeredCount
+                + ", maxQuestions=" + maxQuestions
+                + ", runToken=" + redactValue(runToken) + "]";
+    }
 
     /** {@code correctAnswer}/{@code explanation}: the right option's text and why it is right (or why yours is not). */
     public record Feedback(boolean correct, boolean skipped, String correctAnswer, String explanation) {
@@ -38,10 +49,9 @@ public record LevelCheckNextResponse(
     public record Option(Long id, String text) {
     }
 
-    /** {@code knownSkills} were answered right every time; {@code newSkills} had a wrong or unknown answer. */
+    /** {@code level} is where the check placed the learner; {@code newSkills} had a wrong or unknown answer. */
     public record Result(
             MandarinLevel level,
-            List<LevelCheckSkill> knownSkills,
             List<LevelCheckSkill> newSkills) {
     }
 }

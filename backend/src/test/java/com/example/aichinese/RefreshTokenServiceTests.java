@@ -45,10 +45,7 @@ class RefreshTokenServiceTests {
     private static final long USER_ID = 10L;
     private static final long ACTIVE_SESSION_VERSION = 2L;
     private static final long COMPROMISED_SESSION_VERSION = 4L;
-    private static final int SURROGATE_SAFE_PREFIX_LENGTH = 254;
     private static final String REPLAYED_REFRESH_TOKEN = "replayed-refresh-token";
-    private static final String CLIENT_IP = "203.0.113.5";
-    private static final String USER_AGENT = "JUnit";
     private static final String INVALID_REFRESH_MESSAGE = "Refresh session is invalid or expired.";
 
     private final RefreshTokenRepository refreshTokenRepository = mock(RefreshTokenRepository.class);
@@ -64,7 +61,7 @@ class RefreshTokenServiceTests {
 
         stubToken(current);
 
-        RefreshTokenService.RefreshSession session = service.rotate("raw-refresh-token", CLIENT_IP, USER_AGENT);
+        RefreshTokenService.RefreshSession session = service.rotate("raw-refresh-token");
 
         assertThat(session.user()).isSameAs(user);
         assertThat(session.refreshToken().rawToken()).isNotBlank();
@@ -97,7 +94,7 @@ class RefreshTokenServiceTests {
             return null;
         }).when(entityManager).refresh(user);
 
-        assertThatThrownBy(() -> service.rotate(REPLAYED_REFRESH_TOKEN, CLIENT_IP, USER_AGENT))
+        assertThatThrownBy(() -> service.rotate(REPLAYED_REFRESH_TOKEN))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining(INVALID_REFRESH_MESSAGE);
 
@@ -121,7 +118,7 @@ class RefreshTokenServiceTests {
         when(refreshTokenRepository.revokeActiveTokenFamilyOfUser(eq(USER_ID), anyString(), any(LocalDateTime.class)))
                 .thenReturn(0);
 
-        assertThatThrownBy(() -> service.rotate(REPLAYED_REFRESH_TOKEN, CLIENT_IP, USER_AGENT))
+        assertThatThrownBy(() -> service.rotate(REPLAYED_REFRESH_TOKEN))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining(INVALID_REFRESH_MESSAGE);
 
@@ -162,22 +159,9 @@ class RefreshTokenServiceTests {
     }
 
     @Test
-    void issueTruncatesUserAgentWithoutSplittingUnicodeSurrogatePair() {
-        ArgumentCaptor<RefreshToken> savedToken = ArgumentCaptor.forClass(RefreshToken.class);
-
-        service.issue(activeUser(ACTIVE_SESSION_VERSION), CLIENT_IP,
-                "a".repeat(SURROGATE_SAFE_PREFIX_LENGTH) + "😀tail", true);
-
-        verify(refreshTokenRepository).save(savedToken.capture());
-        assertThat(savedToken.getValue().getUserAgent())
-                .hasSize(SURROGATE_SAFE_PREFIX_LENGTH)
-                .doesNotEndWith("\uD83D");
-    }
-
-    @Test
     void rotateRejectsOversizedRawTokenBeforeHashLookup() {
         // Raw tokens are at most 512 characters.
-        assertThatThrownBy(() -> service.rotate("x".repeat(513), CLIENT_IP, USER_AGENT))
+        assertThatThrownBy(() -> service.rotate("x".repeat(513)))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining(INVALID_REFRESH_MESSAGE);
 
@@ -209,7 +193,7 @@ class RefreshTokenServiceTests {
     private void assertRotationRefusedWithoutSigningOut(User user, RefreshToken presented) {
         stubToken(presented);
 
-        assertThatThrownBy(() -> service.rotate(REPLAYED_REFRESH_TOKEN, CLIENT_IP, USER_AGENT))
+        assertThatThrownBy(() -> service.rotate(REPLAYED_REFRESH_TOKEN))
                 .isInstanceOf(ResponseStatusException.class)
                 .hasMessageContaining(INVALID_REFRESH_MESSAGE);
 

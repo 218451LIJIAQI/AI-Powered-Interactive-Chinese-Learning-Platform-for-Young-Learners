@@ -1,6 +1,77 @@
 /** Types of the AI Helper (student) and the admin AI area. Shapes shared with other modules stay in types/api.ts. */
-import type { AiFeatureKey, AiResponseReportReason, AiResultStatus, AiStoryLine, UserRole } from './api'
+import type {
+  AiFeatureKey,
+  AiResponseReportReason,
+  AiResponseReportStatus,
+  AiResultStatus,
+  AiUsageFeatureKey,
+  UserRole,
+} from './api'
 import type { PlanReason } from './plan'
+
+export interface AiChatResponse {
+  sessionId?: number | null
+  /** The stored answer, named when the student reports it; null when SparkBot did not answer. */
+  chatMessageId?: number | null
+  aiResponse: string
+  status: AiResultStatus
+}
+
+interface AiStoryVocabularyItemResponse {
+  chineseWord: string
+  pinyin?: string | null
+  englishMeaning?: string | null
+  bahasaMelayuMeaning?: string | null
+}
+
+interface AiStoryComprehensionQuestionResponse {
+  question: string
+  options: string[]
+  answer: string
+}
+
+/**
+ * Chinese with its pinyin and its translation into the student's language: a sentence of a story, or a line (or, for
+ * a word, the meaning) in a talk with Xiaomei.
+ */
+export interface AiStoryLine {
+  chinese: string
+  pinyin?: string | null
+  translation?: string | null
+}
+
+export interface AiStoryGeneratorResponse {
+  title: string | null
+  titleTranslation?: string | null
+  lines: AiStoryLine[]
+  vocabularyList: AiStoryVocabularyItemResponse[]
+  comprehensionQuestions: AiStoryComprehensionQuestionResponse[]
+  status: AiResultStatus
+  /** Why there is no story (a fixed server message), when status is not SUCCESS. */
+  message?: string | null
+}
+
+export interface StudentAiResponseReportResponse {
+  id: number
+  featureKey: AiFeatureKey
+  reasonCategory: AiResponseReportReason
+  promptSnapshot?: string | null
+  aiResponseSnapshot?: string | null
+  status: AiResponseReportStatus
+  createdAt: string
+  reviewedAt?: string | null
+  /** The admin's note to the student, once the report is resolved or dismissed. */
+  reviewerNote?: string | null
+}
+
+export interface AdminAiResponseReportResponse extends StudentAiResponseReportResponse {
+  studentName: string
+  studentEmail: string
+  /** The student's own note about the report. */
+  description?: string | null
+  /** Who decided, once the report is resolved or dismissed. */
+  reviewerName?: string | null
+}
 
 /** The AI Helper toolbar: what SparkBot can do now and today's request count. */
 export interface AiHelperStatus {
@@ -27,8 +98,9 @@ export interface XiaomeiReply {
   /** Why there is no reply (a fixed server message), when status is not SUCCESS. */
   message?: string | null
   reply?: AiStoryLine | null
-  /** A more natural version of the student's last line, with the reason; null when it was fine. */
+  /** A more natural Mandarin version of the student's last line; null when it was fine. */
   naturalVersion?: string | null
+  /** A short note explaining why `naturalVersion` sounds more natural; null when none is needed. */
   tip?: string | null
 }
 
@@ -156,7 +228,7 @@ export type AdminAiSettingsUpdate = Pick<AdminAiSettings, 'aiNoticeText' | 'sens
 
 /** The admin request-log filters; an empty value means "all". */
 export interface AdminAiUsageFilters {
-  featureType?: AiFeatureKey | ''
+  featureType?: AiUsageFeatureKey | ''
   status?: AiResultStatus | ''
   userRole?: UserRole | ''
 }

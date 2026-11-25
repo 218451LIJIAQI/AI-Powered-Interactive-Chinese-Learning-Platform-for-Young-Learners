@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -14,6 +15,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
+import org.springframework.security.web.util.matcher.AnyRequestMatcher;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.filter.CorsFilter;
 
@@ -73,9 +75,11 @@ public class SecurityConfig {
             RefreshTokenService refreshTokenService,
             JwtSecurityErrorHandler jwtSecurityErrorHandler,
             ObjectMapper objectMapper,
+            Environment environment,
             CorsConfig.CorsAllowedOrigins corsAllowedOrigins,
             // Keep this parameter name: it picks CorsConfig's bean over the MVC HandlerMappingIntrospector.
             CorsConfigurationSource corsConfigurationSource) throws Exception {
+        boolean production = ProductionProfiles.isActive(environment);
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .csrf(AbstractHttpConfigurer::disable)
@@ -85,10 +89,15 @@ public class SecurityConfig {
                         .contentSecurityPolicy(csp -> csp.policyDirectives(CONTENT_SECURITY_POLICY))
                         .referrerPolicy(ref -> ref.policy(
                                 ReferrerPolicyHeaderWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
-                        .httpStrictTransportSecurity(hsts -> hsts
-                                .includeSubDomains(true)
-                                .preload(true)
-                                .maxAgeInSeconds(31_536_000L))
+                        .httpStrictTransportSecurity(hsts -> {
+                            hsts.includeSubDomains(true)
+                                    .preload(true)
+                                    .maxAgeInSeconds(31_536_000L);
+                            // In production behind TLS-terminating reverse proxies, always emit HSTS even on proxied HTTP hops.
+                            if (production) {
+                                hsts.requestMatcher(AnyRequestMatcher.INSTANCE);
+                            }
+                        })
                         .permissionsPolicyHeader(perms -> perms.policy(PERMISSIONS_POLICY)))
                 .exceptionHandling(exception -> exception
                         .authenticationEntryPoint(jwtSecurityErrorHandler)
@@ -102,12 +111,14 @@ public class SecurityConfig {
                         // Learner AI tools stay learner-only; the admins' AI quiz draft is under /api/v1/admin/ai/**.
                         .requestMatchers("/api/v1/ai/**").hasRole("STUDENT")
                         .requestMatchers("/api/v1/students/**").hasRole("STUDENT")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/users/me/support").hasRole("STUDENT")
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         // Everything else is open to every signed-in role: the session (/auth/me, /auth/logout),
                         // notifications and account management under /users/me (FRAUTH07-08).
                         .anyRequest().authenticated())
                 .addFilterBefore(
-                        new RefreshCookieOriginFilter(objectMapper, corsAllowedOrigins.exact()),
+                        new RefreshCookieOriginFilter(
+                                objectMapper, corsAllowedOrigins.exact(), production),
                         CorsFilter.class)
                 .addFilterBefore(
                         new JwtAuthenticationFilter(jwtService, userDetailsService, refreshTokenService),

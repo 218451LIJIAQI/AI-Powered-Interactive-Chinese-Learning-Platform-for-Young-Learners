@@ -2,6 +2,7 @@ package com.example.aichinese.service.learn;
 
 import static org.springframework.http.HttpStatus.NOT_FOUND;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -50,13 +51,18 @@ public class PracticeSetDirectory {
             return " from " + table + " a";
         }
 
-        String scope() {
-            String ownership = """
-                     where (a.created_by_user_id is null or exists (
-                         select 1 from user_roles ur join roles r on r.id = ur.role_id
-                         where ur.user_id = a.created_by_user_id and r.name = 'ADMIN'))
-                    """;
-            return LessonActivity.class.isAssignableFrom(entity) ? ownership + " and a.lesson_id is null" : ownership;
+        /** Composes the platform Practice library scope ({@code lesson_id is null} for shared class-activity tables) with extra predicates. */
+        String where(String... extra) {
+            List<String> clauses = new ArrayList<>(extra.length + 1);
+            if (LessonActivity.class.isAssignableFrom(entity)) {
+                clauses.add("a.lesson_id is null");
+            }
+            for (String clause : extra) {
+                if (clause != null && !clause.isEmpty()) {
+                    clauses.add(clause);
+                }
+            }
+            return clauses.isEmpty() ? "" : " where " + String.join(" and ", clauses);
         }
     }
 
@@ -91,7 +97,7 @@ public class PracticeSetDirectory {
     Optional<PracticeActivityContent> find(PracticeType type, Long id) {
         Source source = source(type);
         return entityManager.unwrap(Session.class)
-                .createNativeQuery("select a.*" + source.from() + source.scope() + " and a.id = :id", source.entity)
+                .createNativeQuery("select a.*" + source.from() + source.where("a.id = :id"), source.entity)
                 .addSynchronizedEntityClass(source.entity)
                 .setParameter("id", id).uniqueResultOptional().map(PracticeActivityContent.class::cast);
     }
@@ -104,8 +110,8 @@ public class PracticeSetDirectory {
     public List<PracticeActivityContent> sets(PracticeType type, ContentStatus status) {
         Source source = source(type);
         var query = entityManager.unwrap(Session.class).createNativeQuery(
-                "select a.*" + source.from() + source.scope()
-                        + (status == null ? "" : " and a.content_status = :status") + " order by a.id", source.entity)
+                "select a.*" + source.from() + source.where(status == null ? null : "a.content_status = :status")
+                        + " order by a.id", source.entity)
                 .addSynchronizedEntityClass(source.entity);
         if (status != null) {
             query.setParameter("status", status.name());
@@ -158,13 +164,13 @@ public class PracticeSetDirectory {
                      from practice_completions where student_id = :student and practice_type = '%s'
                      group by activity_id
                  ) p on p.activity_id = a.id
-                """.formatted(type.name()) + source.scope() + " and a.content_status = 'PUBLISHED'";
+                """.formatted(type.name()) + source.where("a.content_status = 'PUBLISHED'");
     }
 
     /** How many platform Practice library sets currently exist for {@code type}. */
     public long countPlatformSets(PracticeType type) {
         Source source = source(type);
-        return jdbc.sql("select count(*)" + source.from() + source.scope()).query(Long.class).single();
+        return jdbc.sql("select count(*)" + source.from() + source.where()).query(Long.class).single();
     }
 
     public PageResponse<AdminPracticeSetRow> adminSets(
@@ -212,13 +218,8 @@ public class PracticeSetDirectory {
     }
 
     private static String adminFilterFrom(Source source, boolean filterStatus, boolean filterKeyword) {
-        StringBuilder sql = new StringBuilder(source.from()).append(source.scope());
-        if (filterStatus) {
-            sql.append(" and a.content_status = :status");
-        }
-        if (filterKeyword) {
-            sql.append(" and locate(:keyword, lower(a.title)) > 0");
-        }
-        return sql.toString();
+        return source.from() + source.where(
+                filterStatus ? "a.content_status = :status" : null,
+                filterKeyword ? "locate(:keyword, lower(a.title)) > 0" : null);
     }
 }

@@ -11,8 +11,8 @@ import com.example.aichinese.entity.LevelCheckOption;
 
 public interface LevelCheckOptionRepository extends JpaRepository<LevelCheckOption, Long> {
 
-    List<LevelCheckOption> findByQuestionIdOrderByPositionAsc(Long questionId);
+    List<LevelCheckOption> findByQuestionIdOrderByPositionAscIdAsc(Long questionId);
 
-    @Query("select o from LevelCheckOption o where o.question.id in :questionIds order by o.question.id asc, o.position asc")
+    @Query("select o from LevelCheckOption o where o.question.id in :questionIds order by o.question.id asc, o.position asc, o.id asc")
     List<LevelCheckOption> findByQuestionIds(@Param("questionIds") Collection<Long> questionIds);
 }

@@ -2,7 +2,7 @@ package com.example.aichinese.dto.account;
 
 import static com.example.aichinese.dto.DtoNormalization.redactValue;
 
-/** Everything the Account page shows besides the profile: a pending e-mail change and the e-mail preferences. */
+/** Account settings payload: current profile name and e-mail, pending e-mail change, and e-mail preferences. */
 public record AccountSettingsResponse(
         String fullName,
         String email,

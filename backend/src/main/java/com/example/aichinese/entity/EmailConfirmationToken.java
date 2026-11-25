@@ -8,7 +8,7 @@ import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.Setter;
 
-import com.example.aichinese.entity.base.EmailVerificationToken;
+import com.example.aichinese.entity.base.OneTimeUserToken;
 
 /**
  * A link that confirms a new account's e-mail address (only its SHA-256 hash is kept). It works once, for the
@@ -22,7 +22,7 @@ import com.example.aichinese.entity.base.EmailVerificationToken;
 }, uniqueConstraints = {
         @UniqueConstraint(name = "uk_email_confirmation_tokens_hash", columnNames = "token_hash")
 })
-public class EmailConfirmationToken extends EmailVerificationToken {
+public class EmailConfirmationToken extends OneTimeUserToken {
 
     @Column(name = "email", nullable = false, updatable = false, length = 150)
     private String email;

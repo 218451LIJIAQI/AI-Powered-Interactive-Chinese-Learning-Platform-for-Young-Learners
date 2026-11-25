@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { testRouter } from '@/test/routes'
 import type { AdminClassPage, AdminUnit } from '@/types/adminClasses'
 
-const api = vi.hoisted(() => ({ addUnit: vi.fn(), renameUnit: vi.fn() }))
+const api = vi.hoisted(() => ({ addUnit: vi.fn(), renameUnit: vi.fn(), addLesson: vi.fn() }))
 
 vi.mock('@/api/adminClasses', () => ({ adminClassesApi: api }))
 
@@ -148,6 +148,36 @@ describe('AdminClassUnits', () => {
 
     expect(wrapper.get('[data-testid="unit-dialog"] [role="alert"]').text()).toBe('A class has 2 units.')
     expect(wrapper.emitted('updated')).toBeUndefined()
+  })
+
+  it('adds a lesson inside a unit and emits lessonCreated with its id', async () => {
+    api.addLesson.mockResolvedValue({ lessonId: 99 })
+    const wrapper = await mountUnits()
+
+    await wrapper.get('button[aria-label="Add lesson to Campus Life"]').trigger('click')
+    const dialog = wrapper.get('[data-testid="unit-dialog"]')
+    expect(dialog.get('h2').text()).toBe('Add a lesson')
+    await dialog.get('input').setValue('  At the Hawker Stall ')
+    await dialog.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(api.addLesson).toHaveBeenCalledWith(71, 'At the Hawker Stall')
+    expect(wrapper.emitted('lessonCreated')).toEqual([[99]])
+    expect(wrapper.find('[data-testid="unit-dialog"]').exists()).toBe(false)
+  })
+
+  it('shows Open instead of Edit for an archived lesson inside an editable class', async () => {
+    const unitsWithArchived: AdminUnit[] = [
+      {
+        id: 70,
+        title: 'First Conversations',
+        lessons: [{ id: 13, title: 'Archived Lesson', status: 'ARCHIVED', hasUnpublishedChanges: false }],
+      },
+    ]
+    const wrapper = await mountUnits(unitsWithArchived, true)
+    const link = wrapper.get('[data-testid="class-lesson"] a')
+    expect(link.text()).toBe('Open')
+    expect(link.attributes('aria-label')).toBe('Open Archived Lesson')
   })
 
   it('shows an archived class read-only: no Add, Rename or Edit', async () => {

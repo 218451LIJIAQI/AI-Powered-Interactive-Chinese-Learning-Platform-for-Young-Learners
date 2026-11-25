@@ -6,7 +6,6 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.ForeignKey;
-import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -17,9 +16,7 @@ import lombok.Setter;
 @Getter
 @Setter
 @Entity
-@Table(name = "quizzes", indexes = {
-        @Index(name = "idx_quizzes_status_updated", columnList = "content_status,updated_at")
-})
+@Table(name = "quizzes")
 public class Quiz extends PublishableContent {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

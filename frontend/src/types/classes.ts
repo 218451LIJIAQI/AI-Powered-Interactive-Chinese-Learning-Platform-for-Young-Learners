@@ -4,7 +4,9 @@
  */
 import type { LessonProgressStatus } from './api'
 
-export type ClassActivityType = 'FLASHCARDS' | 'TRACING' | 'MATCHING'
+/** Every class lesson has exactly these three activities, in this order. */
+export const CLASS_ACTIVITY_TYPES = ['FLASHCARDS', 'TRACING', 'MATCHING'] as const
+export type ClassActivityType = (typeof CLASS_ACTIVITY_TYPES)[number]
 
 // The catalogue and the learner's classes
 
@@ -14,7 +16,7 @@ export interface ClassCard {
   description: string | null
   topicName: string | null
   /** "Best after Unit N": a soft label, never a lock. */
-  bestAfterUnit?: number | null
+  bestAfterUnit: number | null
   lessonCount: number
 }
 
@@ -85,7 +87,7 @@ export interface MyClasses {
   moreClassCount: number
 }
 
-/** A class page: before joining only `summary` and `preview` are filled; after joining the progress and units too. */
+/** A class page: before joining only `summary` and `preview` are filled; after joining `preview` is empty and progress and `units` are filled. */
 export interface StudentClass {
   joined: boolean
   archived: boolean
@@ -198,7 +200,8 @@ interface PairResult {
 export interface ActivityOutcome {
   done: boolean
   pairs: PairResult[]
-  lessonStatus: LessonProgressStatus
+  /** True only when this completion transitioned the lesson to COMPLETED. */
+  lessonCompletedNow: boolean
 }
 
 export interface MatchHint {

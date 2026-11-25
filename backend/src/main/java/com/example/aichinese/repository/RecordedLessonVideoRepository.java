@@ -11,8 +11,6 @@ import com.example.aichinese.entity.RecordedLessonVideo;
 
 public interface RecordedLessonVideoRepository extends JpaRepository<RecordedLessonVideo, Long> {
 
-    List<RecordedLessonVideo> findByLessonIdAndActiveTrueOrderBySortOrderAscIdAsc(Long lessonId);
-
     Optional<RecordedLessonVideo> findFirstByLessonIdAndActiveTrueOrderBySortOrderAscIdAsc(Long lessonId);
 
     List<RecordedLessonVideo> findByLessonIdInAndActiveTrueOrderBySortOrderAscIdAsc(Collection<Long> lessonIds);

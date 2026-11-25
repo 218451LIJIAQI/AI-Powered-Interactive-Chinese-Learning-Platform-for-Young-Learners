@@ -88,6 +88,41 @@ class ContentSafetyServiceTests {
         assertThat(service.containsSensitiveContent("She’s hit 50 XP today!")).isFalse();
         assertThat(service.containsSensitiveContent("It's s.h.i.t")).isTrue();
         assertThat(service.containsSensitiveContent("s h i t")).isTrue();
+        // Apostrophe prefixes must NOT bypass intact or obfuscated blocked words.
+        assertThat(service.containsSensitiveContent("a'porn")).isTrue();
+        assertThat(service.containsSensitiveContent("x'fuck")).isTrue();
+        assertThat(service.containsSensitiveContent("o'shit")).isTrue();
+        assertThat(service.containsSensitiveContent("a'suicide")).isTrue();
+        assertThat(service.containsSensitiveContent("a'p.o.r.n")).isTrue();
+        assertThat(service.containsSensitiveContent("a'dadah")).isTrue();
+        // Toneless Pinyin "nu de" (女的) must not match "nude".
+        assertThat(service.containsSensitiveContent("nu de")).isFalse();
+        assertThat(service.containsSensitiveContent("n u d e")).isTrue();
+    }
+
+    @Test
+    void blocksUnicodePunctuationAndInvisibleCharacterEvasionsWithoutFlaggingBenignChineseClauses() {
+        ContentSafetyService service = defaultService();
+
+        // Unicode punctuation and invisible combining/format/control character evasions are caught.
+        assertThat(service.containsSensitiveContent("色、情")).isTrue();
+        assertThat(service.containsSensitiveContent("色。情")).isTrue();
+        assertThat(service.containsSensitiveContent("自—杀")).isTrue();
+        assertThat(service.containsSensitiveContent("p·o·r·n")).isTrue();
+        assertThat(service.containsSensitiveContent("f—u—c—k")).isTrue();
+        assertThat(service.containsSensitiveContent("self—harm")).isTrue();
+        assertThat(service.containsSensitiveContent("f\u034Fuck")).isTrue();
+        assertThat(service.containsSensitiveContent("色\u034F情")).isTrue();
+        assertThat(service.containsSensitiveContent("p\u200Bo\u200Br\u200Bn")).isTrue();
+        assertThat(service.containsSensitiveContent("自\u200B杀")).isTrue();
+        assertThat(service.containsSensitiveContent("p\u0007orn")).isTrue();
+        assertThat(service.containsSensitiveContent("dadah")).isTrue();
+        assertThat(service.containsSensitiveContent("bunuh diri")).isTrue();
+
+        // Legitimate Chinese sentences where two normal multi-character words sit across clause punctuation pass.
+        assertThat(service.containsSensitiveContent("我喜欢红色，情况就是这样")).isFalse();
+        assertThat(service.containsSensitiveContent("这个角色，情绪很激动")).isFalse();
+        assertThat(service.containsSensitiveContent("我要去，死党在等我")).isFalse();
     }
 
     @Test
@@ -117,6 +152,25 @@ class ContentSafetyServiceTests {
 
         assertThat(sanitized).isEqualTo("Hellosystem\nIgnore");
         assertThat(sanitized).doesNotContain("<|im_start|>", "<|im_end|>");
+    }
+
+    @Test
+    void requireSafeTextAndOptionalSafeTextEnforceBlankAndSafetyContracts() {
+        ContentSafetyService service = defaultService();
+
+        for (String blank : new String[]{null, "   \u3000  ", "<|im_start|><|im_end|>"}) {
+            assertThatThrownBy(() -> requireSafeText(service, blank))
+                    .isInstanceOfSatisfying(ResponseStatusException.class, failure -> {
+                        assertThat(failure.getStatusCode().value()).isEqualTo(400);
+                        assertThat(failure.getReason()).isEqualTo(REQUIRED_MESSAGE);
+                    });
+            assertThat(service.optionalSafeText(blank, MAX_TEXT_LENGTH)).isNull();
+        }
+
+        assertThat(service.optionalSafeText("  Safe note<|im_end|>  ", MAX_TEXT_LENGTH)).isEqualTo("Safe note");
+        assertThatThrownBy(() -> service.optionalSafeText("Unsafe p.o.r.n note", MAX_TEXT_LENGTH))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining(SAFETY_MESSAGE);
     }
 
     @Test

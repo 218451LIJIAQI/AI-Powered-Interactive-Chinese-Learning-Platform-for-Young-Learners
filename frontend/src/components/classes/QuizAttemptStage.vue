@@ -1,7 +1,7 @@
 <template>
   <div class="focus-stage">
     <h1 class="sr-only">{{ t('classPlayer.quiz.title', { lesson: session.quiz.lessonTitle }) }}</h1>
-    <DataNotice :error="externalError ?? actionError" />
+    <DataNotice :error="error" />
 
     <template v-if="question">
       <div class="class-quiz-question">
@@ -31,16 +31,26 @@
         <label class="field-label" :for="`answer-${question.id}`">{{ t('classPlayer.quiz.answerLabel') }}</label>
         <input
           :id="`answer-${question.id}`"
+          :key="question.id"
           class="input cjk-text"
           :value="typed[question.id] ?? ''"
           maxlength="1000"
           autocomplete="off"
-          :disabled="submitting || navigating || leaving"
-          @input="typeAnswer(question.id, ($event.target as HTMLInputElement).value)"
+          :disabled="locked"
+          @compositionstart="composing = true"
+          @compositionend="onCompositionEnd(question.id, $event)"
+          @input="onTypedInput(question.id, $event)"
           @blur="saveTyped(question.id)"
+          @keydown.enter="onTypedEnter"
         />
       </div>
-      <div v-else class="class-quiz-options" role="radiogroup" :aria-label="question.text">
+      <div
+        v-else
+        class="class-quiz-options"
+        role="radiogroup"
+        :aria-label="question.text"
+        @keydown="onOptionGroupKeydown"
+      >
         <button
           v-for="(option, optionIndex) in optionDisplay"
           :key="option.id"
@@ -48,8 +58,10 @@
           role="radio"
           class="option-row"
           :aria-checked="chosen[question.id] === option.id"
+          :aria-disabled="savingOption || undefined"
+          :tabindex="optionTabIndex(option.id, optionIndex)"
           :data-testid="`quiz-option-${option.id}`"
-          :disabled="savingOption || navigating || submitting || leaving"
+          :disabled="locked"
           @click="choose(question.id, option.id)"
         >
           <span class="option-keycap" aria-hidden="true">{{ optionIndex + 1 }}</span>
@@ -65,7 +77,7 @@
           <button
             type="button"
             class="btn btn-secondary btn-lg"
-            :disabled="index === 0 || savingOption || navigating || submitting || leaving"
+            :disabled="index === 0 || busy"
             @click="goTo(index - 1)"
           >
             {{ t('classPlayer.quiz.previous') }}
@@ -76,16 +88,19 @@
           <span class="focus-footer-error" role="alert" data-testid="quiz-submit-error">{{ submitError }}</span>
         </template>
         <template v-else-if="question.hasHint && (offer.offered.value || hints[question.id])" #middle>
-          <ClassHint
-            :hint-id="question.id"
+          <HintPanel
+            variant="class"
+            :hint-key="question.id"
             :offered="offer.offered.value"
             :text="hints[question.id] ?? null"
             :loading="hintLoadingIds.has(question.id)"
             :error="hintError"
-            :context="hintContext"
-            :reported-ids="reportedHintIds"
+            :footnote="t('classPlayer.hint.changeInAccount')"
+            :report-context="hintContext"
+            :reported="reportedHintIds.has(question.id)"
+            :own-toast="false"
             @show="showHint(question.id)"
-            @reported="onHintReported"
+            @reported="onHintReported(question.id)"
           />
         </template>
         <template v-else-if="isLast && remaining === 0" #default>
@@ -107,7 +122,7 @@
             v-else
             type="button"
             class="btn btn-primary btn-lg"
-            :disabled="remaining > 0 || submitting || savingOption || navigating || leaving"
+            :disabled="remaining > 0 || busy"
             :aria-busy="submitting"
             data-testid="quiz-submit"
             @click="submit"
@@ -121,16 +136,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 
 import { studentClassesApi } from '@/api/classes'
 import { getAuthSessionVersion } from '@/api/http'
-import ClassHint from '@/components/classes/ClassHint.vue'
 import { useQuizAttempt } from '@/components/classes/useQuizAttempt'
 import DataNotice from '@/components/common/DataNotice.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import FocusFooter from '@/components/layout/FocusFooter.vue'
 import CjkText from '@/components/learning/CjkText.vue'
+import HintPanel from '@/components/learning/HintPanel.vue'
 import { useHintOffer } from '@/composables/useHintOffer'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { classPlayerMessages } from '@/plugins/classPlayerMessages'
@@ -145,35 +160,35 @@ const SAYS_WHAT_TO_DO = /\b(choose|pick|select|type|write)\b/i
 
 const props = defineProps<{
   session: QuizSession
-  account: number
   leaveOpen: boolean
   leaving: boolean
-  externalError: string | null
 }>()
+
+const error = defineModel<string | null>('error', { required: true })
 
 const emit = defineEmits<{
   progress: [percent: number]
   submitting: [busy: boolean]
   submitted: [result: QuizResult]
   toast: [message: string]
-  clearExternalError: []
 }>()
 
 const { t } = useLocalMessages({ classPlayer: classPlayerMessages })
 
 const index = ref(0)
+const composing = ref(false)
 const hints = ref<Record<number, string>>({})
 const navigating = ref(false)
 const submitting = ref(false)
 const hintLoadingIds = reactive(new Set<number>())
 const reportedHintIds = reactive(new Set<number>())
 const hintError = ref<string | null>(null)
-const actionError = ref<string | null>(null)
 const submitError = ref<string | null>(null)
+const account = getAuthSessionVersion()
 let active = true
 let audio: HTMLAudioElement | null = null
 
-const ownsAttempt = (): boolean => active && props.account === getAuthSessionVersion()
+const ownsAttempt = (): boolean => active && account === getAuthSessionVersion()
 
 const question = computed(() => props.session.questions[index.value] ?? null)
 const isLast = computed(() => index.value >= props.session.questions.length - 1)
@@ -190,10 +205,11 @@ watch(
   { flush: 'post' },
 )
 
+const locked = computed(() => navigating.value || submitting.value || props.leaving)
+
 const {
   chosen,
   typed,
-  savedTyped,
   savingOption,
   isAnswered,
   answeredCount,
@@ -205,7 +221,7 @@ const {
   flushTypedAnswers,
 } = useQuizAttempt({
   session: props.session,
-  locked: computed(() => navigating.value || submitting.value || props.leaving),
+  locked,
   leaving: computed(() => props.leaving),
   ownsAttempt,
   onPoke: () => offer.poke(),
@@ -213,11 +229,12 @@ const {
     submitError.value = null
   },
   onActionError: (message) => {
-    actionError.value = message
-    if (message === null) emit('clearExternalError')
+    error.value = message
   },
   saveErrorMessage: () => t('classPlayer.quiz.saveError'),
 })
+
+const busy = computed(() => locked.value || savingOption.value)
 
 watch(
   answeredCount,
@@ -229,7 +246,7 @@ watch(
 
 const canGoOn = computed(() => {
   const current = question.value
-  if (!current || savingOption.value || navigating.value || submitting.value || props.leaving) return false
+  if (!current || busy.value) return false
   return isAnswered(current.id)
 })
 
@@ -279,35 +296,52 @@ watch(
   (busy) => {
     if (busy) {
       stopTimersAndAudio()
-      actionError.value = null
+      error.value = null
     }
   },
   { flush: 'sync' },
 )
 
+watch(
+  () => {
+    const current = question.value
+    return current ? isAnswered(current.id) : false
+  },
+  (answered) => {
+    if (answered) hintError.value = null
+  },
+)
+
+function onTypedInput(questionId: number, event: Event): void {
+  if (composing.value) return
+  typeAnswer(questionId, (event.target as HTMLInputElement).value)
+}
+
+function onCompositionEnd(questionId: number, event: CompositionEvent): void {
+  composing.value = false
+  typeAnswer(questionId, (event.target as HTMLInputElement).value)
+}
+
 async function goTo(next: number): Promise<void> {
-  if (
-    submitting.value ||
-    savingOption.value ||
-    navigating.value ||
-    props.leaving ||
-    (next > index.value && !canGoOn.value)
-  ) {
-    return
-  }
+  if (busy.value || (next > index.value && !canGoOn.value)) return
   const current = question.value
+  const hadFocus = Boolean(document.activeElement && document.activeElement !== document.body)
   navigating.value = true
   try {
-    if (current && isTypedQuestion(current.type)) {
-      if (!(await saveTyped(current.id)) || !ownsAttempt() || question.value !== current) return
-      const draft = typed.value[current.id]?.trim() ?? ''
-      if (draft !== savedTyped.value[current.id] || (next > index.value && !draft)) return
+    if (current && isTypedQuestion(current.type) && !(await saveTyped(current.id))) {
+      if (hadFocus) {
+        navigating.value = false
+        void nextTick(() => {
+          if (ownsAttempt()) document.getElementById(`answer-${current.id}`)?.focus()
+        })
+      }
+      return
     }
     if (!ownsAttempt()) return
     stopAudio()
+    composing.value = false
     index.value = Math.min(Math.max(0, next), props.session.questions.length - 1)
-    actionError.value = null
-    emit('clearExternalError')
+    error.value = null
     hintError.value = null
     submitError.value = null
   } finally {
@@ -324,7 +358,7 @@ async function showHint(questionId: number): Promise<void> {
     if (!ownsAttempt() || props.leaving) return
     hints.value = { ...hints.value, [questionId]: hint.hint }
   } catch (reason) {
-    if (ownsAttempt() && !props.leaving && question.value?.id === questionId) {
+    if (ownsAttempt() && !props.leaving && question.value?.id === questionId && !isAnswered(questionId)) {
       hintError.value = resolveApiError(reason, t('classPlayer.hint.error'))
     }
   } finally {
@@ -340,34 +374,23 @@ function onHintReported(hintId: number): void {
 function playAudio(): void {
   const url = question.value?.audioUrl
   if (!url) return
-  if (actionError.value === t('classPlayer.quiz.audioError')) actionError.value = null
-  emit('clearExternalError')
+  error.value = null
   stopAudio()
   const clip = new Audio(url)
   audio = clip
   void clip.play().catch(() => {
-    if (audio === clip) actionError.value = t('classPlayer.quiz.audioError')
+    if (audio === clip) error.value = t('classPlayer.quiz.audioError')
   })
 }
 
 async function submit(): Promise<void> {
-  if (
-    submitting.value ||
-    props.leaving ||
-    savingOption.value ||
-    navigating.value ||
-    remaining.value > 0 ||
-    !ownsAttempt()
-  ) {
-    return
-  }
+  if (busy.value || remaining.value > 0 || !ownsAttempt()) return
   submitting.value = true
   emit('submitting', true)
   submitError.value = null
   try {
     if (!(await flushTypedAnswers()) || !ownsAttempt()) return
-    actionError.value = null
-    emit('clearExternalError')
+    error.value = null
     const next = await studentClassesApi.submitQuiz(props.session.attemptId)
     if (!ownsAttempt()) return
     stopTimersAndAudio()
@@ -382,7 +405,62 @@ async function submit(): Promise<void> {
   }
 }
 
-// Keyboard: 1–9 picks an answer, Enter goes on (Next, or Submit once every answer is in).
+// Keyboard: 1–9 picks an answer, Arrow keys roam radio options, Enter goes on (Next, or Submit once every answer is in).
+
+function optionTabIndex(optionId: number, optionIndex: number): number {
+  const current = question.value
+  if (!current) return -1
+  const selected = chosen.value[current.id]
+  if (selected !== undefined) return selected === optionId ? 0 : -1
+  return optionIndex === 0 ? 0 : -1
+}
+
+function onTypedEnter(event: KeyboardEvent): void {
+  if (
+    event.isComposing ||
+    event.key === 'Process' ||
+    event.keyCode === 229 ||
+    event.repeat ||
+    props.leaveOpen ||
+    event.altKey ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.shiftKey
+  )
+    return
+  event.preventDefault()
+  if (isLast.value) void submit()
+  else void goTo(index.value + 1)
+}
+
+function onOptionGroupKeydown(event: KeyboardEvent): void {
+  const current = question.value
+  if (!current || props.leaveOpen || locked.value || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey)
+    return
+  const step =
+    event.key === 'ArrowDown' || event.key === 'ArrowRight'
+      ? 1
+      : event.key === 'ArrowUp' || event.key === 'ArrowLeft'
+        ? -1
+        : 0
+  if (!step || !current.options.length) return
+  event.preventDefault()
+  const buttons = Array.from(
+    (event.currentTarget as HTMLElement).querySelectorAll<HTMLButtonElement>('button[role="radio"]'),
+  )
+  const activeIndex = buttons.indexOf(document.activeElement as HTMLButtonElement)
+  const baseIndex =
+    activeIndex >= 0
+      ? activeIndex
+      : Math.max(
+          0,
+          current.options.findIndex((opt) => opt.id === chosen.value[current.id]),
+        )
+  const nextIndex = (baseIndex + step + current.options.length) % current.options.length
+  const nextOption = current.options[nextIndex]
+  buttons[nextIndex]?.focus()
+  if (nextOption && !busy.value) void choose(current.id, nextOption.id)
+}
 
 function onKeydown(event: KeyboardEvent): void {
   const current = question.value

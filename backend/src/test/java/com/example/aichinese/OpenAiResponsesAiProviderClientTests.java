@@ -105,12 +105,13 @@ class OpenAiResponsesAiProviderClientTests {
     }
 
     @Test
+    @org.junit.jupiter.api.Timeout(value = 10, unit = java.util.concurrent.TimeUnit.SECONDS)
     void slowProviderTimesOutWithAControlledFailureWithinTheConfiguredTimeout() throws Exception {
         // Proposal Table 6.2 "AI - timeouts": the stub never answers so the client must give up at its 1 s timeout.
         CountDownLatch hang = new CountDownLatch(1);
         try (StubHttpServer server = StubHttpServer.start(RESPONSES_PATH, exchange -> {
             try {
-                hang.await();
+                hang.await(10, java.util.concurrent.TimeUnit.SECONDS);
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
             }
@@ -126,7 +127,7 @@ class OpenAiResponsesAiProviderClientTests {
             assertThat(result.text()).isNull();
             assertThat(result.errorSummary()).isEqualTo("Provider request failed or timed out.");
             // A connection failure has the same summary, so the lower bound shows the call waited for the timeout.
-            assertThat(elapsedMillis).as("the call waits for the timeout").isGreaterThanOrEqualTo(900L);
+            assertThat(elapsedMillis).as("the call waits for the configured 1 s timeout").isBetween(900L, 5_000L);
         } finally {
             hang.countDown();
         }
@@ -137,6 +138,7 @@ class OpenAiResponsesAiProviderClientTests {
      * chat stream and the browser stop waiting soon after it. {@code HttpAiProviderClientTests} covers the deadline itself.
      */
     @Test
+    @org.junit.jupiter.api.Timeout(value = 10, unit = java.util.concurrent.TimeUnit.SECONDS)
     void aReplyThatTricklesInIsCutOffAtTheTotalDeadline() throws Exception {
         AtomicInteger chunksSent = new AtomicInteger();
         try (StubHttpServer server = StubHttpServer.start(RESPONSES_PATH, exchange -> {
@@ -147,7 +149,7 @@ class OpenAiResponsesAiProviderClientTests {
                 exchange.getResponseBody().write('{');
                 exchange.getResponseBody().flush();
                 chunksSent.incrementAndGet();
-                while (!Thread.currentThread().isInterrupted()) {
+                for (int i = 0; i < 50 && !Thread.currentThread().isInterrupted(); i++) {
                     Thread.sleep(200L);
                     exchange.getResponseBody().write(filler);
                     exchange.getResponseBody().flush();
@@ -169,8 +171,8 @@ class OpenAiResponsesAiProviderClientTests {
             assertThat(result.success()).isFalse();
             assertThat(result.errorSummary()).isEqualTo("Provider request failed or timed out.");
             assertThat(chunksSent.get()).as("server actually started trickling chunks").isGreaterThanOrEqualTo(2);
-            assertThat(elapsedMillis).as("waits until the 1 s deadline rather than failing immediately")
-                    .isGreaterThanOrEqualTo(900L);
+            assertThat(elapsedMillis).as("waits until the 1 s deadline rather than failing immediately or hanging")
+                    .isBetween(900L, 5_000L);
         }
     }
 

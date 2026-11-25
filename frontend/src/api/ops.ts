@@ -1,6 +1,6 @@
 /**
- * API of the ops module: the public Help form and account links, the Account page, support requests, and the admin
- * users, support queue, dashboard, analytics and audit log.
+ * API of the ops module: the Account page, support requests, and the admin users, support queue, dashboard, analytics
+ * and audit log.
  */
 import { apiDelete, apiDownload, apiGet, apiPost, apiPut } from './request'
 import type {
@@ -14,48 +14,32 @@ import type {
   AuditEntry,
   AuditQuery,
   EmailChangeResponse,
-  LinkTokenResponse,
   NewSupportRequest,
   NotificationPreferences,
   SupportQueueResponse,
   SupportRequestCreated,
   SupportRequestDetail,
   SupportStatus,
-  VisitorSupportMessage,
 } from '@/types/ops'
 import type { AppLanguage, AuthResponse, CurrentUserResponse, PageResponse } from '@/types/api'
+import type { EmailConfirmation } from '@/types/plan'
 import type { PasswordChangeForm } from '@/utils/password'
 
-/** Links sent by e-mail (reset password, confirm a new e-mail address, admin invite) and the public Help form. */
-export const publicOpsApi = {
-  sendHelpMessage(payload: VisitorSupportMessage) {
-    return apiPost<SupportRequestCreated>('/public/support', payload)
-  },
-  checkResetLink(token: string) {
-    return apiPost<LinkTokenResponse>('/auth/reset-password/check', { token })
-  },
-  confirmEmail(token: string) {
-    return apiPost<LinkTokenResponse>('/auth/confirm-email', { token })
-  },
-  checkAdminInvite(token: string) {
-    return apiPost<LinkTokenResponse>('/auth/admin-invite/check', { token })
-  },
-  /** Creates the admin account; `preferredLanguage` (the page's language) becomes its language, as at sign-up. */
-  acceptAdminInvite(payload: {
-    token: string
-    fullName: string
-    password: string
-    confirmPassword: string
-    preferredLanguage: AppLanguage
-  }) {
-    return apiPost<LinkTokenResponse>('/auth/admin-invite/accept', payload)
-  },
-}
-
-/** The Account page (every signed-in role). */
+/** The Account page and signed-in account lifecycle endpoints (every signed-in role). */
 export const accountOpsApi = {
   settings() {
     return apiGet<AccountSettingsResponse>('/users/me/account')
+  },
+  /**
+   * This browser's session (Account › This device): `signedInAt`, the local date-time it signed in, or null when the
+   * request's token names no session.
+   */
+  session() {
+    return apiGet<{ signedInAt: string | null }>('/users/me/session')
+  },
+  /** "Send the link again" for sign-up e-mail confirmation (once a minute). */
+  resendEmailConfirmation() {
+    return apiPost<EmailConfirmation>('/users/me/email-confirmation')
   },
   /** Only the submitted fields change, including when another device edits the same profile. */
   updateProfile(
@@ -87,8 +71,8 @@ export const accountOpsApi = {
 }
 
 /**
- * A signed-in learner's "Contact support" (S11.03, X2.21): support answers by e-mail, so the answer is the request's
- * number and the address the reply goes to.
+ * A signed-in learner's "Contact support" (S11.03, X2.21): support answers by e-mail, so the answer is the address the
+ * reply goes to.
  */
 export const supportApi = {
   create(request: NewSupportRequest) {

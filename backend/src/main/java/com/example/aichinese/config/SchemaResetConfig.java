@@ -28,7 +28,7 @@ import org.springframework.core.env.Environment;
 @ConditionalOnExpression("'${app.schema-reset.database:}' != '' and !${spring.flyway.enabled:true}")
 public class SchemaResetConfig {
 
-    static final String BEAN_NAME = "schemaReset";
+    private static final String BEAN_NAME = "schemaReset";
 
     /** Hibernate's schema is built after the reset. */
     @Bean
@@ -52,10 +52,6 @@ public class SchemaResetConfig {
         private final DataSource dataSource;
         private final String database;
         private final boolean productionProfileActive;
-
-        SchemaReset(DataSource dataSource, String database) {
-            this(dataSource, database, false);
-        }
 
         SchemaReset(DataSource dataSource, String database, boolean productionProfileActive) {
             this.dataSource = dataSource;

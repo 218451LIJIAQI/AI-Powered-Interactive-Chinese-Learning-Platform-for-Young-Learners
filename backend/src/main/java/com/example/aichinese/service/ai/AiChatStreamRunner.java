@@ -1,13 +1,17 @@
 package com.example.aichinese.service.ai;
 
 import java.io.IOException;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.FutureTask;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
@@ -40,10 +44,14 @@ public class AiChatStreamRunner {
      */
     public static final long CHAT_STREAM_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(45);
     private static final int STREAM_CHUNK_SIZE = 24;
+    private static final int MAX_CONCURRENT_STREAMS = 32;
+    private static final int MAX_STREAMS_PER_USER = 3;
 
     private final AiService aiService;
     private final ExecutorService streamExecutor =
             Executors.newThreadPerTaskExecutor(Thread.ofVirtual().name("ai-chat-stream-", 0).factory());
+    private final Semaphore activeStreams = new Semaphore(MAX_CONCURRENT_STREAMS);
+    private final ConcurrentHashMap<Long, Integer> activeStreamsByUser = new ConcurrentHashMap<>();
 
     @PreDestroy
     public void shutdown() {
@@ -51,21 +59,75 @@ public class AiChatStreamRunner {
     }
 
     public SseEmitter stream(SecurityUserDetails currentUser, AiService.PreparedChat prepared) {
-        SseEmitter emitter = new SseEmitter(CHAT_STREAM_TIMEOUT_MS);
-        String requestId = RequestIdHolder.get();
-        FutureTask<Void> task = new FutureTask<>(() -> sendTurn(emitter, currentUser, prepared, requestId), null);
-        emitter.onCompletion(() -> task.cancel(true));
-        emitter.onError(ignored -> task.cancel(true));
-        emitter.onTimeout(() -> {
-            task.cancel(true);
-            completeQuietly(emitter);
+        Long userId = currentUser == null ? null : currentUser.getUserId();
+        if (!tryAcquireStreamSlot(userId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.TOO_MANY_REQUESTS,
+                    "AI request limit reached. Please wait a minute before trying again.");
+        }
+        AtomicBoolean released = new AtomicBoolean(false);
+        Runnable releaseSlot = () -> {
+            if (released.compareAndSet(false, true)) {
+                releaseStreamSlot(userId);
+            }
+        };
+        try {
+            SseEmitter emitter = new SseEmitter(CHAT_STREAM_TIMEOUT_MS);
+            String requestId = RequestIdHolder.get();
+            FutureTask<Void> task = new FutureTask<>(
+                    () -> sendTurn(emitter, currentUser, prepared, requestId, releaseSlot), null);
+            emitter.onCompletion(() -> {
+                task.cancel(true);
+                releaseSlot.run();
+            });
+            emitter.onError(ignored -> {
+                task.cancel(true);
+                releaseSlot.run();
+            });
+            emitter.onTimeout(() -> {
+                task.cancel(true);
+                completeQuietly(emitter);
+                releaseSlot.run();
+            });
+            streamExecutor.execute(task);
+            return emitter;
+        } catch (RuntimeException | Error startupFailure) {
+            releaseSlot.run();
+            throw startupFailure;
+        }
+    }
+
+    private boolean tryAcquireStreamSlot(Long userId) {
+        if (!activeStreams.tryAcquire()) {
+            return false;
+        }
+        if (userId == null) {
+            return true;
+        }
+        boolean[] allowed = { false };
+        activeStreamsByUser.compute(userId, (key, current) -> {
+            int count = current == null ? 0 : current;
+            if (count >= MAX_STREAMS_PER_USER) {
+                return current;
+            }
+            allowed[0] = true;
+            return count + 1;
         });
-        streamExecutor.execute(task);
-        return emitter;
+        if (!allowed[0]) {
+            activeStreams.release();
+        }
+        return allowed[0];
+    }
+
+    private void releaseStreamSlot(Long userId) {
+        if (userId != null) {
+            activeStreamsByUser.computeIfPresent(userId, (key, current) -> current <= 1 ? null : current - 1);
+        }
+        activeStreams.release();
     }
 
     private void sendTurn(SseEmitter emitter, SecurityUserDetails currentUser, AiService.PreparedChat prepared,
-            String requestId) {
+            String requestId, Runnable releaseSlot) {
         Long userId = currentUser == null ? null : currentUser.getUserId();
         RequestIdHolder.bind(requestId);
         try {
@@ -95,6 +157,7 @@ public class AiChatStreamRunner {
             throw error;
         } finally {
             RequestIdHolder.unbind();
+            releaseSlot.run();
         }
     }
 

@@ -1,5 +1,5 @@
 import { flushPromises } from '@vue/test-utils'
-import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 
 import { setAccessToken } from '@/api/http'
 import { mountAtRoute } from '@/test/routes'
@@ -26,14 +26,10 @@ async function mountPage(path = '/student/progress/plan') {
 describe('StudentPlanPage', () => {
   beforeEach(() => {
     Object.values(api).forEach((fn) => fn.mockReset())
-    // The fixtures' day: before the plan's goal date (18 Jul 2026), so "Update my goal" starts with it picked.
+    // Pin the browser clock before 18 Jul 2026 so clock-skew tests verify the page follows the platform's day.
     vi.useFakeTimers({ toFake: ['Date'], now: new Date(2026, 4, 18) })
     api.plan.mockResolvedValue(learningPlan())
     api.options.mockResolvedValue(planOptions())
-  })
-
-  afterEach(() => {
-    vi.useRealTimers()
   })
 
   it('shows the goal, the stats, this week and the road from You to the goal', async () => {
@@ -152,7 +148,9 @@ describe('StudentPlanPage', () => {
     api.plan.mockResolvedValue(
       learningPlan({
         steps: [done, base.steps[1]!, behind, base.steps[3]!],
-        thisWeek: [{ kind: 'LEARN_NEXT', title: 'Level 1 checkpoint', minutes: 10, lessonId: 400 }],
+        thisWeek: [
+          { kind: 'LEARN_NEXT', title: 'Level 1 checkpoint', minutes: 10, lessonId: 400, lessonKind: 'CHECKPOINT' },
+        ],
       }),
     )
     const { wrapper } = await mountPage()
@@ -163,7 +161,10 @@ describe('StudentPlanPage', () => {
     expect(unit.text()).not.toContain('Next lesson')
     expect(unit.get('a').text()).toBe('Start')
     expect(unit.get('a').attributes('href')).toBe('/student/learn/lessons/400')
-    expect(wrapper.get('[data-testid="plan-tasks"]').get('a').attributes('href')).toBe('/student/learn/lessons/400')
+    const tasks = wrapper.get('[data-testid="plan-tasks"]')
+    expect(tasks.get('a').attributes('href')).toBe('/student/learn/lessons/400')
+    expect(tasks.text()).toContain('Learn · level checkpoint · 10 min')
+    expect(tasks.text()).not.toContain('next lesson')
   })
 
   it('draws a fork for two optional classes and keeps the class the learner picks first with the plan', async () => {
@@ -328,6 +329,8 @@ describe('StudentPlanPage', () => {
     const { wrapper } = await mountPage()
 
     expect(wrapper.text()).toContain('Travel to Shanghai · was due Sat 18 Jul 2026 · plan ended')
+    expect(wrapper.get('[data-testid="plan-stats"]').text()).toContain('Plan ended')
+    expect(wrapper.get('[data-testid="plan-stats"]').text()).not.toContain('On track')
     await wrapper.get('[data-testid="update-goal"]').trigger('click')
     await flushPromises()
     const drawer = wrapper.get('[data-testid="update-goal-drawer"]')
@@ -498,5 +501,64 @@ describe('StudentPlanPage', () => {
 
     expect(wrapper.text()).toContain('You don’t have a learning plan yet')
     expect(wrapper.find('[data-testid="update-goal"]').exists()).toBe(false)
+  })
+
+  it('reloads goal options and clears a newly expired draft deadline after a 400 rebuild failure', async () => {
+    api.options
+      .mockResolvedValueOnce({ ...planOptions(), today: '2026-05-18' })
+      .mockResolvedValueOnce({ ...planOptions(), today: '2026-05-19' })
+    api.updateGoal.mockRejectedValueOnce({
+      response: { status: 400, data: { message: 'Pick a date in the future, within 2 years.' } },
+    })
+    const { wrapper } = await mountPage()
+
+    await wrapper.get('[data-testid="update-goal"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="date-field"]').trigger('click')
+    await wrapper.get('[data-testid="goal-date-picker"] [data-day="2026-05-19"]').trigger('click')
+    await wrapper.get('[data-testid="calendar-use"]').trigger('click')
+    await wrapper.get('[data-testid="rebuild"]').trigger('click')
+    await flushPromises()
+
+    expect(api.options).toHaveBeenCalledTimes(2)
+    expect(wrapper.get('[data-testid="rebuild-error"]').text()).toBe('Pick a date in the future, within 2 years.')
+    expect(wrapper.get('[data-testid="date-field"]').text()).toBe('Pick a day on the calendar')
+    expect(wrapper.get('[data-testid="rebuild"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('uses unique h2 section headings and shows an inline hint when Other reason has no text', async () => {
+    const { wrapper } = await mountPage()
+    const h2Texts = wrapper.findAll('h2').map((heading) => heading.text())
+    expect(h2Texts).toEqual(['Your path', 'This week', 'By the end, you should be able to'])
+
+    await wrapper.get('[data-testid="update-goal"]').trigger('click')
+    await flushPromises()
+    const drawer = () => wrapper.get('[data-testid="update-goal-drawer"]')
+    await drawer().get('[data-testid="reason-choices"] [data-value="OTHER"]').trigger('click')
+    await drawer().get('textarea').setValue('')
+    expect(drawer().find('[data-testid="other-goal-hint"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="rebuild"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('keeps Rebuild disabled while background options refresh is in flight and updates ended on day rollover', async () => {
+    const refreshedOptions = deferred<ReturnType<typeof planOptions>>()
+    api.options
+      .mockResolvedValueOnce({ ...planOptions(), today: '2026-07-17' })
+      .mockReturnValueOnce(refreshedOptions.promise)
+    api.updateGoal.mockRejectedValueOnce({
+      response: { status: 400, data: { message: 'Pick a date in the future, within 2 years.' } },
+    })
+    const { wrapper } = await mountPage()
+
+    await wrapper.get('[data-testid="update-goal"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="pace-choices"] [data-value="HOURS_2_PLUS"]').trigger('click')
+    await wrapper.get('[data-testid="rebuild"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="rebuild"]').attributes('disabled')).toBeDefined()
+    refreshedOptions.resolve({ ...planOptions(), today: '2026-07-19' })
+    await flushPromises()
+    expect(wrapper.get('[data-testid="plan-stats"]').text()).toContain('Plan ended')
   })
 })

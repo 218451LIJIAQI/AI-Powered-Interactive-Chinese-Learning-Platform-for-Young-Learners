@@ -16,10 +16,10 @@
 import { useI18n } from 'vue-i18n'
 
 import { aiHelperApi } from '@/api/ai'
+import { reportReasonKey } from '@/plugins/aiSafetyMessages'
 import type { AiReportPayload } from '@/types/ai'
 import type { AiResponseReportReason } from '@/types/api'
 
-import { reportReasonKey } from './aiHelper'
 import AiReportForm from './AiReportForm.vue'
 
 /**

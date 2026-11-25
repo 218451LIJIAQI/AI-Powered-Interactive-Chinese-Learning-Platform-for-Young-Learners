@@ -1,7 +1,9 @@
 package com.example.aichinese.dto.admin;
 
 import static com.example.aichinese.dto.DtoNormalization.redactLength;
-import static com.example.aichinese.dto.DtoNormalization.stripToNull;
+import static com.example.aichinese.dto.DtoNormalization.stripMultiline;
+
+import com.example.aichinese.util.AiInputSanitizer;
 
 import jakarta.validation.constraints.Size;
 
@@ -14,7 +16,7 @@ public record AdminReactivationRequest(
         String reason) {
 
     public AdminReactivationRequest {
-        reason = stripToNull(reason);
+        reason = AiInputSanitizer.sanitizeUnbounded(stripMultiline(reason));
     }
 
     @Override

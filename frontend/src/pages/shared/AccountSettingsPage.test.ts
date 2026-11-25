@@ -9,6 +9,7 @@ import { hintSettings } from '@/test/learnFixtures'
 
 const accountOpsApi = vi.hoisted(() => ({
   settings: vi.fn(),
+  session: vi.fn(),
   updateProfile: vi.fn(),
   updatePreferences: vi.fn(),
   requestEmailChange: vi.fn(),
@@ -29,19 +30,10 @@ const auth = vi.hoisted(() => ({
   logout: vi.fn(),
 }))
 
-const authApi = vi.hoisted(() => ({ session: vi.fn() }))
-
 vi.mock('@/api/ops', () => ({ accountOpsApi }))
-vi.mock('@/api/services', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/api/services')>()),
-  authApi,
-}))
 vi.mock('@/api/learn', () => ({ xpApi, hintApi }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => auth }))
-vi.mock('vue-router', async () => ({
-  RouterLink: (await import('@/test/helpers')).routerLinkStub,
-  useRouter: () => ({ ...router, currentRoute }),
-}))
+vi.mock('vue-router', () => ({ useRouter: () => ({ ...router, currentRoute }) }))
 
 import type { HintSettings } from '@/types/learn'
 
@@ -75,9 +67,11 @@ async function submitPasswordChange(wrapper: Awaited<ReturnType<typeof mountPage
 
 describe('AccountSettingsPage', () => {
   beforeEach(() => {
-    for (const group of [accountOpsApi, xpApi, hintApi, router, authApi]) {
+    for (const group of [accountOpsApi, xpApi, hintApi, router]) {
       Object.values(group).forEach((fn) => fn.mockReset())
     }
+    router.push.mockResolvedValue(undefined)
+    router.replace.mockResolvedValue(undefined)
     auth.applySavedName.mockReset()
     auth.replaceAccessToken.mockReset()
     auth.clearSessionInAllTabs.mockReset()
@@ -99,7 +93,7 @@ describe('AccountSettingsPage', () => {
     xpApi.setDailyGoal.mockImplementation(async (dailyGoalXp: number) => ({ dailyGoalXp }))
     hintApi.settings.mockResolvedValue(hintSettings())
     hintApi.setMode.mockImplementation(async (mode: HintSettings['mode']) => hintSettings({ mode }))
-    authApi.session.mockResolvedValue({ signedInAt: '2026-05-12T09:30:00' })
+    accountOpsApi.session.mockResolvedValue({ signedInAt: '2026-05-12T09:30:00' })
   })
 
   afterEach(() => {
@@ -184,8 +178,8 @@ describe('AccountSettingsPage', () => {
     expect(wrapper.get('[data-testid="account-save"]').attributes('disabled')).toBeUndefined()
   })
 
-  it('keeps working when the daily goal cannot be loaded', async () => {
-    xpApi.dailyGoal.mockRejectedValue(new Error('not served'))
+  it('keeps working when the daily goal cannot be loaded and lets the learner retry it inline', async () => {
+    xpApi.dailyGoal.mockRejectedValueOnce(new Error('not served')).mockResolvedValueOnce({ dailyGoalXp: 30 })
     const wrapper = await mountPage()
 
     expect(wrapper.find('[data-testid="account-goal-10"]').attributes('disabled')).toBeDefined()
@@ -196,6 +190,12 @@ describe('AccountSettingsPage', () => {
     await flushPromises()
     expect(xpApi.setDailyGoal).not.toHaveBeenCalled()
     expect(accountOpsApi.updateProfile).toHaveBeenCalled()
+
+    await wrapper.get('[data-testid="account-goal-retry"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="account-goal-30"]').attributes('disabled')).toBeUndefined()
+    expect(wrapper.find('[data-testid="account-goal-30"]').attributes('aria-pressed')).toBe('true')
+    expect(wrapper.find('#account-goal-hint').exists()).toBe(false)
   })
 
   it('keeps the daily goal off while it loads, without saying it cannot be loaded', async () => {
@@ -211,8 +211,8 @@ describe('AccountSettingsPage', () => {
     ['the session is not known', { signedInAt: null }],
     ['the session cannot be read', new Error('offline')],
   ])('names the device alone when %s', async (_case, answer) => {
-    if (answer instanceof Error) authApi.session.mockRejectedValue(answer)
-    else authApi.session.mockResolvedValue(answer)
+    if (answer instanceof Error) accountOpsApi.session.mockRejectedValue(answer)
+    else accountOpsApi.session.mockResolvedValue(answer)
     const wrapper = await mountPage()
 
     expect(wrapper.get('[data-testid="account-device"]').text()).toBe('Chrome on Windows')
@@ -232,7 +232,10 @@ describe('AccountSettingsPage', () => {
 
     await wrapper.find('[data-testid="account-change-email"]').trigger('click')
     const dialog = wrapper.get('[data-testid="account-email-dialog"]')
-    expect(dialog.find('#account-current-email').exists()).toBe(false)
+    expect(dialog.findAll('input').map((input) => input.attributes('id'))).toEqual([
+      'account-new-email',
+      'account-email-password',
+    ])
     await wrapper.find('#account-new-email').setValue('Amira.New@example.com')
     await wrapper.find('#account-email-password').setValue('Password123!')
     await wrapper.find('#account-email-form').trigger('submit')
@@ -457,7 +460,7 @@ describe('AccountSettingsPage', () => {
     expect(wrapper.get('#account-currentPassword').attributes('aria-invalid')).toBe('true')
     expect(wrapper.get('#account-currentPassword').attributes('aria-describedby')).toBe('account-currentPassword-error')
     // Said at the field only, not again for the whole form.
-    expect(wrapper.find('#account-password-form .alert-danger').exists()).toBe(false)
+    expect(wrapper.find('#account-password-form .callout.is-danger').exists()).toBe(false)
     expect(button().disabled).toBe(true)
     expect(wrapper.get<HTMLInputElement>('#account-newPassword').element.value).toBe('NewPassword1!')
 
@@ -492,7 +495,7 @@ describe('AccountSettingsPage', () => {
     await submitPasswordChange(wrapper)
     await flushPromises()
 
-    expect(wrapper.get('#account-password-form .alert-danger').text()).toBe(
+    expect(wrapper.get('#account-password-form .callout.is-danger').text()).toBe(
       'New password must be different from the current password.',
     )
     expect(wrapper.find('#account-currentPassword-error').exists()).toBe(false)
@@ -567,7 +570,8 @@ describe('AccountSettingsPage', () => {
     wrapper.unmount()
     signOut.resolve(true)
     await flushPromises()
-    expect(router.push).toHaveBeenCalledExactlyOnceWith('/')
+    expect(router.push).not.toHaveBeenCalled()
+    expect(router.replace).toHaveBeenCalledExactlyOnceWith('/')
 
     // When a learner's roles are empty (mid sign-out/deletion), admin-only copy stays hidden.
     auth.roles = []

@@ -3,9 +3,9 @@ import type { GoalInput, LearningPlan, PlanFocus, PlanGoal, PlanPace, PlanReason
 import { shiftDay } from '@/utils/format'
 
 /** "1–2 hours", the band most learners gave in Shen & Wu (2026): chosen until the learner picks another. */
-export const DEFAULT_PACE: PlanPace = 'HOURS_1_TO_2'
+const DEFAULT_PACE: PlanPace = 'HOURS_1_TO_2'
 
-const MAX_FOCUS = 2
+export const MAX_FOCUS = 2
 
 /** The latest goal date the server accepts, in days after the platform's today (two years). */
 const LATEST_DEADLINE_DAYS = 730
@@ -38,8 +38,8 @@ export function emptyDraft(): GoalDraft {
  * the one the server checks a goal date against: the browser's own day can be a day behind or ahead of it.
  * A goal date that is not after today has passed: the server plans no more towards it.
  */
-export function deadlinePassed(deadline: string | null, today: string): boolean {
-  return deadline !== null && deadline <= today
+export function deadlinePassed(deadline: string | null | undefined, today: string | null | undefined): boolean {
+  return Boolean(deadline && today && deadline <= today)
 }
 
 /**

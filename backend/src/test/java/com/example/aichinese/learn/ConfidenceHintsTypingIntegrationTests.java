@@ -66,24 +66,28 @@ class ConfidenceHintsTypingIntegrationTests extends ApiIntegrationTest {
         String path = LISTENING + set.getId() + "/check";
         JsonNode run = api.data(mockMvc.perform(api.authGet(LISTENING + set.getId(), token)).andReturn());
 
-        mockMvc.perform(api.jsonPost(path, token, answer(items.get(0), wrongOption(items.get(0)), "GUESS", 0)))
+        mockMvc.perform(api.jsonPost(path, token, answer(items.get(0), wrongOption(items.get(0)), "GUESS")))
                 .andExpect(jsonPath("$.data.correct").value(false));
-        mockMvc.perform(api.jsonPost(path, token, answer(items.get(1), wrongOption(items.get(1)), "SURE", 0)))
+        mockMvc.perform(api.jsonPost(path, token, answer(items.get(1), wrongOption(items.get(1)), "SURE")))
                 .andExpect(jsonPath("$.data.correct").value(false));
         mockMvc.perform(api.authGet("/api/v1/students/progress/answers", token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.hintsUsed").value(0))
                 .andExpect(jsonPath("$.data.mostHintsIn").doesNotExist());
-        mockMvc.perform(api.jsonPost(path, token, answer(items.get(2), items.get(2).gradable().answer(), "GUESS", 0)))
+        mockMvc.perform(api.jsonPost(path, token, answer(items.get(2), items.get(2).gradable().answer(), "GUESS")))
                 .andExpect(jsonPath("$.data.correct").value(true));
-        // Hint steps the server never gave make no guess of a sure answer...
-        mockMvc.perform(api.jsonPost(path, token, answer(items.get(3), items.get(3).gradable().answer(), "SURE", 2)))
-                .andExpect(jsonPath("$.data.correct").value(true));
+        // Client-sent hintSteps are ignored: only hints recorded by the server demote a sure answer to a guess...
+        Map<String, Object> spoofed = new HashMap<>(answer(items.get(3), items.get(3).gradable().answer(), "SURE"));
+        spoofed.put("hintSteps", 2);
+        mockMvc.perform(api.jsonPost(path, token, spoofed))
+                .andExpect(jsonPath("$.data.correct").value(true))
+                .andExpect(jsonPath("$.data.effectiveConfidence").value("SURE"));
         // ...and after a hint it gave, the answer counts as a guess, whatever was sent.
         mockMvc.perform(api.jsonPost(LISTENING + set.getId() + "/hint", token, hintRequest(items.get(4), run)))
                 .andExpect(status().isOk());
-        mockMvc.perform(api.jsonPost(path, token, answer(items.get(4), items.get(4).gradable().answer(), "SURE", 0)))
-                .andExpect(jsonPath("$.data.correct").value(true));
+        mockMvc.perform(api.jsonPost(path, token, answer(items.get(4), items.get(4).gradable().answer(), "SURE")))
+                .andExpect(jsonPath("$.data.correct").value(true))
+                .andExpect(jsonPath("$.data.effectiveConfidence").value("GUESS"));
 
         // The sure mistake leads in both lists. In review it takes priority over the older guess.
         mockMvc.perform(api.authGet("/api/v1/students/mistakes", token))
@@ -102,6 +106,19 @@ class ConfidenceHintsTypingIntegrationTests extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.data.wrongGuesses").value(1))
                 .andExpect(jsonPath("$.data.hintsUsed").value(1))
                 .andExpect(jsonPath("$.data.mostHintsIn").value("LISTENING"));
+
+        // Tracing hints (which never call /check) are included in weekly hintsUsed and mostHintsIn.
+        String tracingToken = api.registerStudent(uniqueEmail("tracing-insights"));
+        PracticeActivityContent tracing = practiceSet(PracticeType.TRACING, "Write 中文");
+        PracticeCatalog.Item tracingItem = practiceCatalog.content(PracticeType.TRACING, tracing).items().getFirst();
+        String tracingPath = "/api/v1/students/practice/tracing/sets/" + tracing.getId();
+        JsonNode tracingRun = api.data(mockMvc.perform(api.authGet(tracingPath, tracingToken)).andReturn());
+        mockMvc.perform(api.jsonPost(tracingPath + "/hint", tracingToken, hintRequest(tracingItem, tracingRun)))
+                .andExpect(status().isOk());
+        mockMvc.perform(api.authGet("/api/v1/students/progress/answers", tracingToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.hintsUsed").value(1))
+                .andExpect(jsonPath("$.data.mostHintsIn").value("TRACING"));
     }
 
     @Test
@@ -126,7 +143,7 @@ class ConfidenceHintsTypingIntegrationTests extends ApiIntegrationTest {
         mockMvc.perform(api.jsonPost(path + "/candidates", token, Map.of("itemKey", key, "pinyin", "xie")))
                 .andExpect(jsonPath("$.data.words.length()").value(0));
         mockMvc.perform(api.jsonPost(path + "/check", token,
-                        Map.of("itemKey", key, "answer", "写写", "confidence", "SURE", "hintSteps", 0)))
+                        Map.of("itemKey", key, "answer", "写写", "confidence", "SURE")))
                 .andExpect(jsonPath("$.data.correct").value(false))
                 .andExpect(jsonPath("$.data.correctAnswer").value("谢谢"))
                 .andExpect(jsonPath("$.data.pinyin").value("xièxie"));
@@ -158,7 +175,6 @@ class ConfidenceHintsTypingIntegrationTests extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.data.mode").value("AUTOMATIC"))
                 .andExpect(jsonPath("$.data.tier").value("HSK1"))
                 .andExpect(jsonPath("$.data.delaySeconds").value(15))
-                .andExpect(jsonPath("$.data.maxSteps").doesNotExist())
                 .andExpect(jsonPath("$.data.perSet").value(0));
         JsonNode run = api.data(mockMvc.perform(api.authGet(LISTENING + set.getId(), token)).andReturn());
 
@@ -187,8 +203,7 @@ class ConfidenceHintsTypingIntegrationTests extends ApiIntegrationTest {
         String student = api.registerStudent(uniqueEmail("hint-rules"));
         mockMvc.perform(api.authGet("/api/v1/admin/ai/hints", admin))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.levels.length()").value(3))
-                .andExpect(jsonPath("$.data.levels[0].maxSteps").doesNotExist());
+                .andExpect(jsonPath("$.data.levels.length()").value(3));
         mockMvc.perform(api.authGet("/api/v1/admin/ai/hints", student)).andExpect(status().isForbidden());
 
         List<Map<String, Object>> levels = List.of(
@@ -246,9 +261,9 @@ class ConfidenceHintsTypingIntegrationTests extends ApiIntegrationTest {
             // An item that already had its hint in this run gets it again when it asks again.
             mockMvc.perform(api.jsonPost(path + "/hint", student, hintRequest(items.get(1), run)))
                     .andExpect(status().isOk());
-            // Checks that report no hint change nothing: the run still counts the two items.
+            // Checks change nothing about the run's hint count: the run still counts the two items.
             mockMvc.perform(api.jsonPost(path + "/check", student,
-                            answer(items.get(1), items.get(1).gradable().answer(), "SURE", 0)))
+                            answer(items.get(1), items.get(1).gradable().answer(), "SURE")))
                     .andExpect(status().isOk());
             mockMvc.perform(api.jsonPost(path + "/hint", student, thirdHint))
                     .andExpect(status().isBadRequest())
@@ -362,8 +377,8 @@ class ConfidenceHintsTypingIntegrationTests extends ApiIntegrationTest {
         });
     }
 
-    private static Map<String, Object> answer(PracticeCatalog.Item item, String answer, String confidence, int hintSteps) {
-        return Map.of("itemKey", item.key(), "answer", answer, "confidence", confidence, "hintSteps", hintSteps);
+    private static Map<String, Object> answer(PracticeCatalog.Item item, String answer, String confidence) {
+        return Map.of("itemKey", item.key(), "answer", answer, "confidence", confidence);
     }
 
 }

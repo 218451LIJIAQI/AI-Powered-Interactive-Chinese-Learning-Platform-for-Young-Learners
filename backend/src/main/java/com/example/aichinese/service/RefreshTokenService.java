@@ -29,8 +29,6 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class RefreshTokenService {
 
-    private static final int MAX_USER_AGENT_LENGTH = 255;
-    private static final int MAX_IP_LENGTH = 64;
     private static final int MAX_RAW_TOKEN_LENGTH = 512;
 
     /**
@@ -45,14 +43,14 @@ public class RefreshTokenService {
     private final SecurityProperties securityProperties;
     private final EntityManager entityManager;
 
-    /** A new sign-in; AuthService holds the account lock from password verification through this insert. */
+    /** Issues a new session; callers acquire the account write lock after BCrypt verification and hold it through this insert. */
     @Transactional
-    public RefreshTokenIssue issue(User user, String clientIp, String userAgent, boolean persistent) {
-        return saveToken(user, UUID.randomUUID().toString(), persistent, LocalDateTime.now(), clientIp, userAgent);
+    public RefreshTokenIssue issue(User user, boolean persistent) {
+        return saveToken(user, UUID.randomUUID().toString(), persistent, LocalDateTime.now());
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, noRollbackFor = ResponseStatusException.class)
-    public RefreshSession rotate(String rawToken, String clientIp, String userAgent) {
+    public RefreshSession rotate(String rawToken) {
         String token = TextUtils.trimToNull(rawToken);
         if (token == null || token.length() > MAX_RAW_TOKEN_LENGTH) {
             throw unauthorizedRefresh();
@@ -89,8 +87,7 @@ public class RefreshTokenService {
             throw unauthorizedRefresh();
         }
 
-        RefreshTokenIssue replacement =
-                saveToken(user, current.getFamilyId(), current.isPersistent(), now, clientIp, userAgent);
+        RefreshTokenIssue replacement = saveToken(user, current.getFamilyId(), current.isPersistent(), now);
         current.setRotatedAt(now);
         current.setRevokedAt(now);
         current.setReplacedByTokenHash(SecureTokens.sha256Hex(replacement.rawToken()));
@@ -100,10 +97,12 @@ public class RefreshTokenService {
     /**
      * Signs one browser out (Account › This device): its sign-in's rotation chain is revoked, so its refresh cookie
      * and access tokens stop working; the account's other sessions stay signed in.
+     *
+     * @return the number of active refresh tokens revoked for this browser session
      */
     @Transactional
-    public void endSession(User user, String sessionId) {
-        refreshTokenRepository.revokeActiveTokenFamilyOfUser(user.getId(), sessionId, LocalDateTime.now());
+    public int endSession(User user, String sessionId) {
+        return refreshTokenRepository.revokeActiveTokenFamilyOfUser(user.getId(), sessionId, LocalDateTime.now());
     }
 
     /** Whether the browser session an access token names is still signed in (not signed out, not expired). */
@@ -126,7 +125,7 @@ public class RefreshTokenService {
         refreshTokenRepository.revokeActiveTokensForUser(user.getId(), LocalDateTime.now());
     }
 
-    /** Account deletion: bearer tokens stop working, and the refresh tokens go with their IP addresses and user agents. */
+    /** Account deletion: bearer tokens stop working and all refresh tokens are removed. */
     @Transactional
     public void removeSessions(User user) {
         advanceSessionVersion(user);
@@ -146,8 +145,7 @@ public class RefreshTokenService {
     }
 
     /** Stores a new token of the browser session {@code sessionId} (its hash; the raw value is for the cookie). */
-    private RefreshTokenIssue saveToken(
-            User user, String sessionId, boolean persistent, LocalDateTime now, String clientIp, String userAgent) {
+    private RefreshTokenIssue saveToken(User user, String sessionId, boolean persistent, LocalDateTime now) {
         String rawToken = SecureTokens.newRawToken();
         Duration ttl = Duration.ofMillis(securityProperties.refreshTokenExpiration());
         RefreshToken token = new RefreshToken();
@@ -155,8 +153,6 @@ public class RefreshTokenService {
         token.setTokenHash(SecureTokens.sha256Hex(rawToken));
         token.setFamilyId(sessionId);
         token.setExpiresAt(now.plus(ttl));
-        token.setCreatedByIp(truncate(clientIp, MAX_IP_LENGTH));
-        token.setUserAgent(truncate(userAgent, MAX_USER_AGENT_LENGTH));
         token.setPersistent(persistent);
         refreshTokenRepository.save(token);
         return new RefreshTokenIssue(rawToken, ttl, persistent, sessionId);
@@ -172,10 +168,6 @@ public class RefreshTokenService {
 
     private static ResponseStatusException unauthorizedRefresh() {
         return new ResponseStatusException(UNAUTHORIZED, "Refresh session is invalid or expired.");
-    }
-
-    private static String truncate(String value, int maxLength) {
-        return TextUtils.safeTruncate(TextUtils.trimToNull(value), maxLength);
     }
 
     public record RefreshSession(User user, RefreshTokenIssue refreshToken) {

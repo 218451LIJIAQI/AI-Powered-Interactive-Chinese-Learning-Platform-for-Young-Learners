@@ -1,11 +1,10 @@
 package com.example.aichinese;
 
 import static com.example.aichinese.support.ConcurrentTransactions.withEarlierRead;
-import static com.example.aichinese.support.LearningApiTestClient.USER_PASSWORD;
 import static com.example.aichinese.support.LearningApiTestClient.ADMIN_EMAIL;
+import static com.example.aichinese.support.LearningApiTestClient.USER_PASSWORD;
 import static com.example.aichinese.support.LearningApiTestClient.uniqueEmail;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.sql.Timestamp;
@@ -113,13 +112,11 @@ class UserConcurrentUpdateTests extends ApiIntegrationTest {
         if (preferences) {
             makeAdmin();
         }
-        assertThatThrownBy(() -> withEarlierAccountRead(
+        assertHttpError(() -> withEarlierAccountRead(
                 preferences ? this::updatePreferences : this::updateProfile,
                 () -> authService.changePassword(principal,
                         new ChangePasswordRequest(USER_PASSWORD, NEW_PASSWORD, NEW_PASSWORD),
-                        "203.0.113.121", "Concurrent account test")))
-                .isInstanceOfSatisfying(ResponseStatusException.class,
-                        error -> assertThat(error.getStatusCode().value()).isEqualTo(401));
+                        "203.0.113.121")), 401);
 
         User saved = user(student.getEmail());
         assertThat(passwordEncoder.matches(NEW_PASSWORD, saved.getPasswordHash())).isTrue();
@@ -140,14 +137,8 @@ class UserConcurrentUpdateTests extends ApiIntegrationTest {
             makeAdmin();
         }
         String oldAccessToken = api.login(student.getEmail(), USER_PASSWORD);
-        assertThatThrownBy(() -> withEarlierAccountRead(
-                preferences ? this::updatePreferences : this::updateProfile, () ->
-                        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
-                            User current = userRepository.findById(student.getId()).orElseThrow();
-                            current.setActive(false);
-                        })))
-                .isInstanceOfSatisfying(ResponseStatusException.class,
-                        error -> assertThat(error.getStatusCode().value()).isEqualTo(401));
+        assertHttpError(() -> withEarlierAccountRead(
+                preferences ? this::updatePreferences : this::updateProfile, () -> setStudentActive(false)), 401);
 
         User saved = user(student.getEmail());
         assertThat(saved.isActive()).isFalse();
@@ -171,8 +162,9 @@ class UserConcurrentUpdateTests extends ApiIntegrationTest {
     void lateWritesAfterDeletionKeepTheActorAnonymousAndLeaveNoNotification() {
         accountDeletionService.delete(principal, student.getEmail());
         auditLogService.safeRecord(student, "LATE_EVENT", "User", student.getId(), "Earlier account activity.");
-        notificationService.safeCreateNotification(student, NotificationType.SYSTEM, "Earlier account activity",
-                "A late notice for " + student.getEmail(), null, null, null);
+        notificationService.safeCreateNotification(student,
+                NotificationService.draft(NotificationType.SYSTEM, "Earlier account activity",
+                        "A late notice for " + student.getEmail(), null, null, null));
 
         assertThat(jdbc.queryForObject(
                 "select actor_email from audit_logs where actor_user_id = ? and action_type = 'LATE_EVENT'",
@@ -183,10 +175,8 @@ class UserConcurrentUpdateTests extends ApiIntegrationTest {
 
     @Test
     void aDelayedProfileSavePreservesAccountAnonymisation() {
-        assertThatThrownBy(() -> withEarlierAccountRead(this::updateProfile,
-                () -> accountDeletionService.delete(principal, student.getEmail())))
-                .isInstanceOfSatisfying(ResponseStatusException.class,
-                        error -> assertThat(error.getStatusCode().value()).isEqualTo(401));
+        assertHttpError(() -> withEarlierAccountRead(this::updateProfile,
+                () -> accountDeletionService.delete(principal, student.getEmail())), 401);
 
         User deleted = userRepository.findById(student.getId()).orElseThrow();
         assertThat(deleted.getDisplayName()).isEqualTo("Deleted account");
@@ -194,19 +184,29 @@ class UserConcurrentUpdateTests extends ApiIntegrationTest {
     }
 
     @Test
-    void logoutWithAnEarlierAccountReadStillRevokesTheNewerPasswordSession() throws Exception {
+    void logoutWithAnEarlierAccountReadDoesNotRevokeANewerPasswordSession() throws Exception {
         AtomicReference<String> passwordSession = new AtomicReference<>();
         withEarlierAccountRead(() -> authService.logout(principal), () -> {
             var changed = authService.changePassword(principal,
                     new ChangePasswordRequest(USER_PASSWORD, NEW_PASSWORD, NEW_PASSWORD),
-                    "203.0.113.122", "Concurrent password change");
+                    "203.0.113.122");
             passwordSession.set(changed.authResponse().token());
         });
 
         User saved = user(student.getEmail());
-        mockMvc.perform(api.authGet("/api/v1/auth/me", passwordSession.get())).andExpect(status().isUnauthorized());
-        assertThat(saved.getSessionVersion()).isEqualTo(student.getSessionVersion() + 2);
+        mockMvc.perform(api.authGet("/api/v1/auth/me", passwordSession.get())).andExpect(status().isOk());
+        assertThat(saved.getSessionVersion()).isEqualTo(student.getSessionVersion() + 1);
         assertThat(passwordEncoder.matches(NEW_PASSWORD, saved.getPasswordHash())).isTrue();
+    }
+
+    @Test
+    void logoutWithAnEarlierAccountReadPreservesConcurrentProfileUpdate() throws Exception {
+        withEarlierAccountRead(() -> authService.logout(principal), this::updateProfile);
+
+        User saved = user(student.getEmail());
+        assertThat(saved.getSessionVersion()).isEqualTo(student.getSessionVersion() + 1);
+        assertThat(saved.getDisplayName()).isEqualTo("Updated profile");
+        assertThat(saved.getPreferredLanguage()).isEqualTo("ms");
     }
 
     @ParameterizedTest
@@ -214,7 +214,7 @@ class UserConcurrentUpdateTests extends ApiIntegrationTest {
     void anEarlierLinkReadCannotConsumeAUsedOrRetiredEmailToken(boolean signup, boolean used) throws Exception {
         String raw = createEmailLink(signup, uniqueEmail("first-address"));
         String hash = SecureTokens.sha256Hex(raw);
-        assertThatThrownBy(() -> withEarlierRead(transactionManager, () -> readEmailLink(signup, hash),
+        assertHttpError(() -> withEarlierRead(transactionManager, () -> readEmailLink(signup, hash),
                 () -> confirmEmail(signup, raw), () -> {
             if (used) {
                 confirmEmail(signup, raw);
@@ -231,10 +231,7 @@ class UserConcurrentUpdateTests extends ApiIntegrationTest {
                     }
                 });
             }
-        })).isInstanceOfSatisfying(ResponseStatusException.class, error -> {
-            assertThat(error.getStatusCode().value()).isEqualTo(400);
-            assertThat(error.getReason()).isEqualTo("This confirmation link is invalid or has already been used.");
-        });
+        }), 400, "This confirmation link is invalid or has already been used.");
     }
 
     @ParameterizedTest
@@ -244,15 +241,11 @@ class UserConcurrentUpdateTests extends ApiIntegrationTest {
                 ? () -> accountEmailService.requestChange(principal, uniqueEmail("late-email"), USER_PASSWORD, "203.0.113.123")
                 : () -> authService.changePassword(principal,
                         new ChangePasswordRequest(USER_PASSWORD, "AnotherPassword789!", "AnotherPassword789!"),
-                        "203.0.113.123", "Earlier password read");
+                        "203.0.113.123");
 
-        assertThatThrownBy(() -> withEarlierAccountRead(change, () -> authService.changePassword(principal,
+        assertHttpError(() -> withEarlierAccountRead(change, () -> authService.changePassword(principal,
                 new ChangePasswordRequest(USER_PASSWORD, NEW_PASSWORD, NEW_PASSWORD),
-                "203.0.113.124", "Concurrent password change")))
-                .isInstanceOfSatisfying(ResponseStatusException.class, error -> {
-                    assertThat(error.getStatusCode().value()).isEqualTo(400);
-                    assertThat(error.getReason()).isEqualTo("Current password is incorrect.");
-                });
+                "203.0.113.124")), 401, FriendlyErrorMessageResolver.sessionExpiredMessage());
         assertThat(passwordEncoder.matches(NEW_PASSWORD, user(student.getEmail()).getPasswordHash())).isTrue();
         assertThat(emailChangeTokenRepository.findPendingEmail(student.getId(), LocalDateTime.now()))
                 .isEmpty();
@@ -263,14 +256,9 @@ class UserConcurrentUpdateTests extends ApiIntegrationTest {
     void anEarlierLinkReadCannotConfirmAfterAccountDeactivation(boolean signup) {
         String raw = createEmailLink(signup, uniqueEmail("disabled-address"));
         String hash = SecureTokens.sha256Hex(raw);
-        assertThatThrownBy(() -> withEarlierRead(transactionManager, () -> readEmailLink(signup, hash),
-                () -> confirmEmail(signup, raw), () ->
-                new TransactionTemplate(transactionManager).executeWithoutResult(status ->
-                        userRepository.findById(student.getId()).orElseThrow().setActive(false))))
-                .isInstanceOfSatisfying(ResponseStatusException.class, error -> {
-                    assertThat(error.getStatusCode().value()).isEqualTo(400);
-                    assertThat(error.getReason()).isEqualTo("This confirmation link is invalid or has already been used.");
-                });
+        assertHttpError(() -> withEarlierRead(transactionManager, () -> readEmailLink(signup, hash),
+                () -> confirmEmail(signup, raw), () -> setStudentActive(false)),
+                400, "This confirmation link is invalid or has already been used.");
         User saved = userRepository.findById(student.getId()).orElseThrow();
         assertThat(saved.getEmail()).isEqualTo(student.getEmail());
         assertThat(saved.getEmailVerifiedAt()).isNull();
@@ -278,30 +266,22 @@ class UserConcurrentUpdateTests extends ApiIntegrationTest {
 
     @Test
     void loginWithAnEarlierPasswordReadCannotCreateASessionAfterPasswordChange() {
-        assertThatThrownBy(() -> withEarlierAccountRead(() -> authService.login(
-                new LoginRequest(student.getEmail(), USER_PASSWORD, true), "203.0.113.125", "Delayed login"),
+        assertHttpError(() -> withEarlierAccountRead(() -> authService.login(
+                new LoginRequest(student.getEmail(), USER_PASSWORD, true), "203.0.113.125"),
                 () -> authService.changePassword(principal,
                         new ChangePasswordRequest(USER_PASSWORD, NEW_PASSWORD, NEW_PASSWORD),
-                        "203.0.113.126", "Concurrent password change")))
-                .isInstanceOfSatisfying(ResponseStatusException.class, error -> {
-                    assertThat(error.getStatusCode().value()).isEqualTo(401);
-                    assertThat(error.getReason()).isEqualTo("Invalid email or password.");
-                });
+                        "203.0.113.126")), 401, "Invalid email or password.");
     }
 
     @Test
     void rotationWithAnEarlierTokenReadCannotRestoreASignedOutSession() {
         String raw = authService.login(new LoginRequest(student.getEmail(), USER_PASSWORD, true),
-                "203.0.113.127", "Refresh test").refreshToken().rawToken();
+                "203.0.113.127").refreshToken().rawToken();
         String hash = SecureTokens.sha256Hex(raw);
         Long tokenId = jdbc.queryForObject("select id from refresh_tokens where token_hash = ?", Long.class, hash);
-        assertThatThrownBy(() -> withEarlierRead(transactionManager, () -> refreshTokenRepository.findById(tokenId).orElseThrow(),
-                () -> authService.refreshSession(raw, "203.0.113.127", "Delayed refresh"),
-                () -> authService.logout(principal)))
-                .isInstanceOfSatisfying(ResponseStatusException.class, error -> {
-                    assertThat(error.getStatusCode().value()).isEqualTo(401);
-                    assertThat(error.getReason()).isEqualTo("Refresh session is invalid or expired.");
-                });
+        assertHttpError(() -> withEarlierRead(transactionManager, () -> refreshTokenRepository.findById(tokenId).orElseThrow(),
+                () -> authService.refreshSession(raw),
+                () -> authService.logout(principal)), 401, "Refresh session is invalid or expired.");
     }
 
     @ParameterizedTest
@@ -311,15 +291,12 @@ class UserConcurrentUpdateTests extends ApiIntegrationTest {
             for (int count = 0; count < 3; count++) createEmailLink(true, student.getEmail());
         }
         ageConfirmationLinks();
-        assertThatThrownBy(() -> withEarlierAccountRead(() -> emailConfirmationService.resend(principal), () -> {
+        assertHttpError(() -> withEarlierAccountRead(() -> emailConfirmationService.resend(principal), () -> {
             emailConfirmationService.resend(principal);
             if (dailyLimit) ageConfirmationLinks();
-        })).isInstanceOfSatisfying(ResponseStatusException.class, error -> {
-            assertThat(error.getStatusCode().value()).isEqualTo(429);
-            assertThat(error.getReason()).isEqualTo(dailyLimit
-                    ? "You asked for several links today. Please try again tomorrow."
-                    : "We just sent a link. Please wait a minute before asking for another one.");
-        });
+        }), 429, dailyLimit
+                ? "You asked for several links today. Please try again tomorrow."
+                : "We just sent a link. Please wait a minute before asking for another one.");
         assertThat(jdbc.queryForObject("select count(*) from email_confirmation_tokens where user_id = ?",
                 Long.class, student.getId())).isEqualTo(dailyLimit ? 5L : 2L);
     }
@@ -327,11 +304,9 @@ class UserConcurrentUpdateTests extends ApiIntegrationTest {
     @Test
     void resendingAnEmailChangeRespectsACancellationThatCommittedWhileItWaited() {
         createEmailLink(false, uniqueEmail("cancelled-destination"));
-        assertThatThrownBy(() -> withEarlierAccountRead(
+        assertHttpError(() -> withEarlierAccountRead(
                 () -> accountEmailService.resendLink(principal, "203.0.113.130"),
-                () -> accountEmailService.cancel(principal)))
-                .isInstanceOfSatisfying(ResponseStatusException.class, error ->
-                        assertThat(error.getStatusCode().value()).isEqualTo(400));
+                () -> accountEmailService.cancel(principal)), 400);
         assertThat(accountEmailService.pendingEmail(student.getId())).isEmpty();
     }
 
@@ -339,8 +314,7 @@ class UserConcurrentUpdateTests extends ApiIntegrationTest {
     @ValueSource(booleans = {false, true})
     void adminStatusChangeUsesCurrentStateInsteadOfSkippingAnEarlierMatchingState(boolean active) throws Exception {
         String oldAccessToken = api.login(student.getEmail(), USER_PASSWORD);
-        new TransactionTemplate(transactionManager).executeWithoutResult(status ->
-                userRepository.findById(student.getId()).orElseThrow().setActive(active));
+        setStudentActive(active);
         SecurityUserDetails admin = principalFor(ADMIN_EMAIL);
         withEarlierAccountRead(() -> changeAccountStatus(admin, student.getId(), active),
                 () -> changeAccountStatus(admin, student.getId(), !active));
@@ -356,13 +330,10 @@ class UserConcurrentUpdateTests extends ApiIntegrationTest {
     @Test
     void anAccountDeactivatedWhileItsDeletionWaitedIsNotDeleted() {
         SecurityUserDetails admin = principalFor(ADMIN_EMAIL);
-        assertThatThrownBy(() -> withEarlierAccountRead(
+        assertHttpError(() -> withEarlierAccountRead(
                 () -> accountDeletionService.delete(principal, student.getEmail()),
-                () -> changeAccountStatus(admin, student.getId(), false)))
-                .isInstanceOfSatisfying(ResponseStatusException.class, error -> {
-                    assertThat(error.getStatusCode().value()).isEqualTo(401);
-                    assertThat(error.getReason()).isEqualTo(FriendlyErrorMessageResolver.sessionExpiredMessage());
-                });
+                () -> changeAccountStatus(admin, student.getId(), false)),
+                401, FriendlyErrorMessageResolver.sessionExpiredMessage());
         User kept = userRepository.findById(student.getId()).orElseThrow();
         assertThat(kept.isActive()).isFalse();
         assertThat(kept.getDeletedAt()).isNull();
@@ -372,13 +343,10 @@ class UserConcurrentUpdateTests extends ApiIntegrationTest {
     @Test
     void adminCannotReactivateAnAccountDeletedAfterTheEarlierRead() {
         SecurityUserDetails admin = principalFor(ADMIN_EMAIL);
-        assertThatThrownBy(() -> withEarlierAccountRead(
+        assertHttpError(() -> withEarlierAccountRead(
                 () -> adminUserService.reactivate(admin, student.getId(), "Earlier account read"),
-                () -> accountDeletionService.delete(principal, student.getEmail())))
-                .isInstanceOfSatisfying(ResponseStatusException.class, error -> {
-                    assertThat(error.getStatusCode().value()).isEqualTo(400);
-                    assertThat(error.getReason()).isEqualTo("A deleted account can't be reactivated.");
-                });
+                () -> accountDeletionService.delete(principal, student.getEmail())),
+                400, "A deleted account can't be reactivated.");
         User deleted = userRepository.findById(student.getId()).orElseThrow();
         assertThat(deleted.isActive()).isFalse();
         assertThat(deleted.getDeletedAt()).isNotNull();
@@ -390,16 +358,13 @@ class UserConcurrentUpdateTests extends ApiIntegrationTest {
     void anAdminWhoseSessionEndedCannotChangeAnotherAccountAfterAnEarlierRead(boolean deactivated) {
         SecurityUserDetails admin = newAdmin();
         SecurityUserDetails otherAdmin = newAdmin();
-        assertThatThrownBy(() -> withEarlierRead(transactionManager,
+        assertHttpError(() -> withEarlierRead(transactionManager,
                 () -> userRepository.findWithRolesById(admin.getUserId()).orElseThrow(),
                 () -> adminUserService.deactivate(admin, student.getId(), "Delayed admin action"),
                 () -> {
                     if (deactivated) adminUserService.deactivate(otherAdmin, admin.getUserId(), "Account unavailable");
                     else authService.logout(admin);
-                })).isInstanceOfSatisfying(ResponseStatusException.class, error -> {
-                    assertThat(error.getStatusCode().value()).isEqualTo(401);
-                    assertThat(error.getReason()).isEqualTo("Your session has expired. Please sign in again to continue.");
-                });
+                }), 401, FriendlyErrorMessageResolver.sessionExpiredMessage());
         assertThat(userRepository.findById(student.getId()).orElseThrow().isActive()).isTrue();
     }
 
@@ -441,6 +406,11 @@ class UserConcurrentUpdateTests extends ApiIntegrationTest {
         admin.setPasswordHash(seededAdmin.getPasswordHash());
         admin.setRoles(new HashSet<>(seededAdmin.getRoles()));
         return new SecurityUserDetails(userRepository.save(admin));
+    }
+
+    private void setStudentActive(boolean active) {
+        new TransactionTemplate(transactionManager).executeWithoutResult(status ->
+                userRepository.findById(student.getId()).orElseThrow().setActive(active));
     }
 
     private void changeAccountStatus(SecurityUserDetails admin, Long userId, boolean active) {

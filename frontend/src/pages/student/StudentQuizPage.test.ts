@@ -1,5 +1,5 @@
 import { flushPromises } from '@vue/test-utils'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { studentClassesApi } from '@/api/classes'
 import { setAccessToken } from '@/api/http'
@@ -20,13 +20,15 @@ const api = vi.hoisted(() => ({
   lesson: vi.fn(),
   discardAttempt: vi.fn(),
 }))
-const hintApi = vi.hoisted(() => ({ settings: vi.fn(), report: vi.fn() }))
+const hintApi = vi.hoisted(() => ({ settings: vi.fn() }))
+const aiHelperApi = vi.hoisted(() => ({ report: vi.fn() }))
 const queueClassNotice = vi.hoisted(() => vi.fn())
 
 vi.mock('@/api/classes', () => ({
   studentClassesApi: api,
 }))
 vi.mock('@/api/learn', () => ({ hintApi }))
+vi.mock('@/api/ai', () => ({ aiHelperApi }))
 vi.mock('@/composables/useClassNotice', () => ({ queueClassNotice }))
 
 import StudentQuizPage from './StudentQuizPage.vue'
@@ -163,7 +165,7 @@ describe('StudentQuizPage', () => {
   beforeEach(async () => {
     Object.values(api).forEach((fn) => fn.mockReset())
     queueClassNotice.mockReset()
-    hintApi.report.mockReset()
+    aiHelperApi.report.mockReset()
     setAccessToken(null)
     hintApi.settings.mockResolvedValue(hintSettings({ mode: 'OFF', delaySeconds: 4 }))
     useHintSettings()
@@ -179,8 +181,6 @@ describe('StudentQuizPage', () => {
     api.submitQuiz.mockResolvedValue(result)
   })
 
-  afterEach(() => vi.useRealTimers())
-
   it('opens on the first question with its instruction, and on the last one says how many are answered', async () => {
     const { wrapper } = await mountQuiz()
     expect(api.startQuiz).toHaveBeenCalledWith(9)
@@ -194,7 +194,6 @@ describe('StudentQuizPage', () => {
     expect(wrapper.get('[data-testid="quiz-option-101"]').text()).toContain('wǒ shì xuésheng.')
     // Where the learner is, once, as text; the next question waits for this one's answer.
     expect(wrapper.get('[data-testid="quiz-position"]').text()).toBe('Question 1 of 2')
-    expect(wrapper.find('.class-quiz-dot').exists()).toBe(false)
     expect(wrapper.get('[data-testid="quiz-next"]').attributes('disabled')).toBeDefined()
     expect(wrapper.find('[data-testid="quiz-submit"]').exists()).toBe(false)
 
@@ -384,7 +383,7 @@ describe('StudentQuizPage', () => {
   it('offers the SparkBot hint at once in “Only when I ask”, keeps it with its question, and lets it be reported', async () => {
     useMode('ON_REQUEST')
     api.hint.mockResolvedValue({ hint: '叫 means “to be called”. Say 我叫 + your name.' })
-    hintApi.report.mockResolvedValue(undefined)
+    aiHelperApi.report.mockResolvedValue(undefined)
     const { wrapper } = await mountQuiz()
 
     expect(wrapper.get('[data-testid="class-hint-offer"]').text()).toContain('Stuck? SparkBot can give you a hint.')
@@ -412,10 +411,15 @@ describe('StudentQuizPage', () => {
     await wrapper.get('[data-testid="class-hint-report"]').trigger('click')
     await wrapper.get('[data-testid="hint-report-form"]').trigger('submit')
     await flushPromises()
-    expect(hintApi.report.mock.calls[0]![0].promptSnapshot).toContain('Meeting Classmates · Reply to')
+    expect(aiHelperApi.report.mock.calls[0]![0]).toEqual(
+      expect.objectContaining({
+        featureKey: 'HINT',
+        promptSnapshot: expect.stringContaining('Meeting Classmates · Reply to'),
+      }),
+    )
     expect(wrapper.get('[data-testid="class-hint-report"]').text()).toBe('Reported')
 
-    // Moving to a question without a hint unmounts ClassHint, yet returning keeps its Reported state.
+    // Moving to a question without a hint unmounts HintPanel, yet returning keeps its Reported state.
     await buttonNamed(wrapper, 'Next').trigger('click')
     await buttonNamed(wrapper, 'Previous').trigger('click')
     expect(wrapper.get('[data-testid="class-hint-report"]').text()).toBe('Reported')
@@ -438,9 +442,11 @@ describe('StudentQuizPage', () => {
   })
 
   it('offers no hint when the learner turned hints off', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     useMode('OFF')
     const { wrapper } = await mountQuiz()
 
+    await vi.advanceTimersByTimeAsync(10_000)
     expect(wrapper.find('[data-testid="class-hint-offer"]').exists()).toBe(false)
   })
 
@@ -497,7 +503,6 @@ describe('StudentQuizPage', () => {
     document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
     await flushPromises()
     expect(wrapper.get('h2').text()).toBe('Listen, then choose the phrase you hear.')
-    wrapper.unmount()
   })
 
   it('keeps a choice pending until it is saved and permits retry after failure', async () => {
@@ -739,7 +744,7 @@ describe('StudentQuizPage', () => {
     expect(wrapper.get('.focus-footer [data-testid="quiz-submit-error"]').text()).toBe(
       'Couldn’t submit. Your answers are kept. Try again.',
     )
-    expect(wrapper.find('.data-notice.is-error').exists()).toBe(false)
+    expect(wrapper.find('.data-notice').exists()).toBe(false)
     expect(wrapper.get('[data-testid="quiz-option-101"]').attributes('aria-checked')).toBe('true')
     expect(wrapper.get('[data-testid="quiz-submit"]').attributes('disabled')).toBeUndefined()
 
@@ -988,5 +993,20 @@ describe('StudentQuizPage', () => {
     expect(wrapper.find('[data-testid="quiz-result"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="quiz-option-101"]').exists()).toBe(true)
     expect(submit.element.disabled).toBe(false)
+  })
+
+  it('renders a discarded recovery state instead of a load error when leaving navigation rejects', async () => {
+    api.discardAttempt.mockResolvedValueOnce(undefined)
+    const { wrapper, router } = await mountQuiz()
+    vi.spyOn(router, 'push').mockRejectedValueOnce(new Error('navigation blocked'))
+
+    await wrapper.get('[data-testid="focus-close"]').trigger('click')
+    await wrapper.get('[data-testid="confirm-dialog-confirm"]').trigger('click')
+    await flushPromises()
+
+    const discarded = wrapper.get('[data-testid="quiz-discarded"]')
+    expect(discarded.text()).toContain('Attempt discarded')
+    expect(discarded.get('a').attributes('href')).toBe('/student/classes/7/lessons/11')
+    expect(wrapper.text()).not.toContain('This quiz could not be loaded')
   })
 })

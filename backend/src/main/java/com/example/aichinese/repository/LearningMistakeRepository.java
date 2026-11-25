@@ -29,12 +29,18 @@ public interface LearningMistakeRepository extends JpaRepository<LearningMistake
             @Param("studentId") Long studentId,
             @Param("itemRefs") Collection<String> itemRefs);
 
-    /** Waiting mistakes, the ones answered wrong while "Sure" first, then the newest. */
-    List<LearningMistake> findByStudentIdAndClearedAtIsNullOrderBySureWrongDescLastWrongAtDescIdDesc(
-            Long studentId, Pageable pageable);
-
-    List<LearningMistake> findByStudentIdAndMistakeSourceAndClearedAtIsNullOrderBySureWrongDescLastWrongAtDescIdDesc(
-            Long studentId, MistakeSource mistakeSource, Pageable pageable);
+    /** Waiting mistakes (optionally filtered by source), "Sure" mistakes first, then newest. */
+    @Query("""
+            select m from LearningMistake m
+            where m.student.id = :studentId
+              and m.clearedAt is null
+              and (:source is null or m.mistakeSource = :source)
+            order by m.sureWrong desc, m.lastWrongAt desc, m.id desc
+            """)
+    List<LearningMistake> findWaiting(
+            @Param("studentId") Long studentId,
+            @Param("source") MistakeSource source,
+            Pageable pageable);
 
     long countByStudentIdAndClearedAtIsNull(Long studentId);
 
@@ -69,14 +75,19 @@ public interface LearningMistakeRepository extends JpaRepository<LearningMistake
     record Waiting(Long userId, long waiting) {
     }
 
-    /** Active learners with at least {@code minimum} mistakes waiting (the weekly "Mistakes to review"). */
+    /** Bounded keyset slice of active learners with at least {@code minimum} mistakes waiting. */
     @Query("""
             select new com.example.aichinese.repository.LearningMistakeRepository$Waiting(
                 m.student.user.id, count(m))
             from LearningMistake m
-            where m.clearedAt is null and m.student.user.active = true and m.student.user.deletedAt is null
+            where m.clearedAt is null and m.student.user.id > :afterUserId
+              and m.student.user.active = true and m.student.user.deletedAt is null
             group by m.student.user.id
             having count(m) >= :minimum
+            order by m.student.user.id asc
             """)
-    List<Waiting> findLearnersWithWaitingMistakes(@Param("minimum") long minimum);
+    List<Waiting> findLearnersWithWaitingMistakes(
+            @Param("minimum") long minimum,
+            @Param("afterUserId") Long afterUserId,
+            Pageable pageable);
 }

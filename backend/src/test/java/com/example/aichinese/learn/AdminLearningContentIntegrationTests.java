@@ -1,5 +1,6 @@
 package com.example.aichinese.learn;
 
+import static com.example.aichinese.support.ConcurrentTransactions.readCommitted;
 import static com.example.aichinese.support.ConcurrentTransactions.withRowLock;
 import static com.example.aichinese.support.LearningApiTestClient.ADMIN_EMAIL;
 import static com.example.aichinese.support.LearningApiTestClient.uniqueEmail;
@@ -21,9 +22,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionTemplate;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
@@ -295,7 +294,7 @@ class AdminLearningContentIntegrationTests extends ApiIntegrationTest {
         question.put("audioText", "  你好  ");
         // The answers keep their option rows (and ids) by position: a student part-way through a level check keeps
         // the answers already given when a question is corrected.
-        List<Long> optionIds = levelCheckOptionRepository.findByQuestionIdOrderByPositionAsc(id).stream()
+        List<Long> optionIds = levelCheckOptionRepository.findByQuestionIdOrderByPositionAscIdAsc(id).stream()
                 .map(LevelCheckOption::getId)
                 .toList();
         boolean cleanedUp = false;
@@ -304,7 +303,7 @@ class AdminLearningContentIntegrationTests extends ApiIntegrationTest {
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.data.status").value("PUBLISHED"))
                     .andExpect(jsonPath("$.data.audioText").value("你好"));
-            assertThat(levelCheckOptionRepository.findByQuestionIdOrderByPositionAsc(id))
+            assertThat(levelCheckOptionRepository.findByQuestionIdOrderByPositionAscIdAsc(id))
                     .extracting(LevelCheckOption::getId)
                     .containsExactlyElementsOf(optionIds);
 
@@ -316,12 +315,12 @@ class AdminLearningContentIntegrationTests extends ApiIntegrationTest {
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.data.options[0].text").value("Hello!"))
                     .andExpect(jsonPath("$.data.options.length()").value(3));
-            List<LevelCheckOption> grown = levelCheckOptionRepository.findByQuestionIdOrderByPositionAsc(id);
+            List<LevelCheckOption> grown = levelCheckOptionRepository.findByQuestionIdOrderByPositionAscIdAsc(id);
             assertThat(grown.subList(0, 2)).extracting(LevelCheckOption::getId).containsExactlyElementsOf(optionIds);
             question.put("options", List.of(Map.of("text", "Hello", "correct", true), Map.of("text", "Hi", "correct", false)));
             mockMvc.perform(api.jsonPut(PATH + "/level-check-questions/" + id, admin, question))
                     .andExpect(jsonPath("$.data.options.length()").value(2));
-            assertThat(levelCheckOptionRepository.findByQuestionIdOrderByPositionAsc(id))
+            assertThat(levelCheckOptionRepository.findByQuestionIdOrderByPositionAscIdAsc(id))
                     .extracting(LevelCheckOption::getId)
                     .containsExactlyElementsOf(optionIds);
 
@@ -462,7 +461,7 @@ class AdminLearningContentIntegrationTests extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.data.xpReward").value(3))
                 .andExpect(jsonPath("$.data.createdBy").isNotEmpty())
                 .andReturn());
-        // The library lists the admin's new set (the admin-owned rows of the library query).
+        // The library lists the newly created draft set.
         mockMvc.perform(api.authGet(LIBRARY, admin).param("q", title))
                 .andExpect(jsonPath("$.data.items[0].id").value(id))
                 .andExpect(jsonPath("$.data.items[0].status").value("DRAFT"));
@@ -560,9 +559,7 @@ class AdminLearningContentIntegrationTests extends ApiIntegrationTest {
 
     private void assertSecondPublishRejected(String table, Runnable firstPublish, String endpoint, String token,
             String expectedMessage) throws Exception {
-        var transaction = new TransactionTemplate(transactionManager);
-        transaction.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
-        withRowLock(jdbc, table, transaction, firstPublish, () -> mockMvc.perform(api.authPost(endpoint, token))
+        withRowLock(jdbc, table, readCommitted(transactionManager), firstPublish, () -> mockMvc.perform(api.authPost(endpoint, token))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(expectedMessage)));
     }
@@ -605,6 +602,21 @@ class AdminLearningContentIntegrationTests extends ApiIntegrationTest {
             mockMvc.perform(api.authPost(set + "/unarchive", admin)).andExpect(status().isBadRequest());
         } finally {
             mockMvc.perform(api.authPost(set + "/archive", admin));
+        }
+
+        // An unaudited legacy archived set cannot skip restore/review via /unarchive.
+        String legacyTitle = "Legacy archived " + uniqueSuffix();
+        jdbc.update("""
+                insert into listening_exercises (title, question_payload, xp_reward, content_status, created_at, updated_at)
+                values (?, '{"questions":[]}', 5, 'ARCHIVED', now(), now())
+                """, legacyTitle);
+        Long legacyId = jdbc.queryForObject("select id from listening_exercises where title = ?", Long.class, legacyTitle);
+        try {
+            mockMvc.perform(api.authPost(LIBRARY + "/listening/" + legacyId + "/unarchive", admin))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.message").value("Restore this set instead of publishing it."));
+        } finally {
+            jdbc.update("delete from listening_exercises where id = ?", legacyId);
         }
     }
 

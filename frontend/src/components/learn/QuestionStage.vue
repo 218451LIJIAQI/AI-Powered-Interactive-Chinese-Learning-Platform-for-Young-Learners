@@ -58,6 +58,7 @@
 
     <div v-else class="learn-build">
       <div
+        ref="answerRow"
         class="learn-build-answer"
         :class="{ 'is-correct': check?.correct === true, 'is-wrong': check?.correct === false }"
         role="group"
@@ -77,13 +78,14 @@
           :disabled="locked"
           :aria-label="t('learn.removeTile', { tile: question.tiles[tileIndex] })"
           :draggable="draggableTiles && !locked"
-          @click="remove(position)"
+          @click="remove(position, $event)"
           @dragstart="startDrag($event, tileIndex)"
         >
           {{ question.tiles[tileIndex] }}
         </button>
       </div>
       <div
+        ref="bankRow"
         class="learn-build-bank"
         role="group"
         :aria-label="t('learn.wordTiles')"
@@ -100,7 +102,7 @@
           :disabled="!tile.available"
           :data-testid="`tile-${index}`"
           :draggable="draggableTiles && tile.available"
-          @click="add(index)"
+          @click="add(index, $event)"
           @dragstart="startDrag($event, index)"
         >
           {{ tile.text }}
@@ -111,7 +113,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, useId, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, useId, watch } from 'vue'
 
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
@@ -205,13 +207,13 @@ const caption = computed(() => {
 // The button that went on (Continue, Next) left with the last question, and the focus with it: the new question takes
 // it, so the keyboard and a screen reader go on from its instruction. A focus kept anywhere else stays there.
 const heading = ref<HTMLHeadingElement | null>(null)
-watch(
-  () => props.question,
-  () => {
-    if (!document.activeElement || document.activeElement === document.body) heading.value?.focus()
-  },
-  { flush: 'post' },
-)
+function focusHeadingIfDropped(): void {
+  if (!document.activeElement || document.activeElement === document.body) {
+    heading.value?.focus({ preventScroll: true })
+  }
+}
+onMounted(focusHeadingIfDropped)
+watch(() => props.question, focusHeadingIfDropped, { flush: 'post' })
 
 // Choices
 
@@ -250,6 +252,8 @@ const choiceOptions = computed(() => {
 
 // Tiles
 
+const answerRow = ref<HTMLDivElement | null>(null)
+const bankRow = ref<HTMLDivElement | null>(null)
 const placed = ref<number[]>([])
 const tiles = computed(() => {
   const placedIndexes = new Set(placed.value)
@@ -294,17 +298,43 @@ function sync(): void {
   )
 }
 
-function add(index: number): void {
+function add(index: number, event?: MouseEvent): void {
   // A placed tile can be dragged and dropped on the sentence again.
   if (!tiles.value[index]?.available) return
+  const moveFocus = Boolean(event?.currentTarget && event.currentTarget === document.activeElement)
   placed.value.push(index)
   sync()
+  if (!moveFocus) return
+  void nextTick(() => {
+    const total = tiles.value.length
+    for (let offset = 1; offset <= total; offset++) {
+      const candidate = (index + offset) % total
+      if (tiles.value[candidate]?.available) {
+        bankRow.value?.querySelector<HTMLButtonElement>(`[data-testid="tile-${candidate}"]`)?.focus()
+        return
+      }
+    }
+    const placedButtons = answerRow.value?.querySelectorAll<HTMLButtonElement>('button.learn-tile')
+    placedButtons?.[placedButtons.length - 1]?.focus()
+  })
 }
 
-function remove(position: number): void {
+function remove(position: number, event?: MouseEvent): void {
   if (props.locked) return
-  placed.value.splice(position, 1)
+  const moveFocus = Boolean(event?.currentTarget && event.currentTarget === document.activeElement)
+  const [removedIndex] = placed.value.splice(position, 1)
   sync()
+  if (!moveFocus) return
+  void nextTick(() => {
+    const placedButtons = answerRow.value?.querySelectorAll<HTMLButtonElement>('button.learn-tile')
+    if (placedButtons?.length) {
+      placedButtons[Math.min(position, placedButtons.length - 1)]?.focus()
+      return
+    }
+    if (removedIndex !== undefined) {
+      bankRow.value?.querySelector<HTMLButtonElement>(`[data-testid="tile-${removedIndex}"]`)?.focus()
+    }
+  })
 }
 
 function startDrag(event: DragEvent, tileIndex: number): void {

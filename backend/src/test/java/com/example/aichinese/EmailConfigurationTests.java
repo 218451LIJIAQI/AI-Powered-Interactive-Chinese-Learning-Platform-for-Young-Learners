@@ -69,6 +69,12 @@ class EmailConfigurationTests {
             "app.email.password-reset-base-url=localhost:5174/reset-password";
     private static final String ABSOLUTE_PASSWORD_RESET_URL_REQUIRED_MESSAGE =
             "Password reset base URL must be an absolute HTTP(S) URL.";
+    private static final String PROD_TLS_REQUIRED_MESSAGE =
+            "SMTP TLS with server identity verification must remain enabled when the prod profile is active.";
+    private static final String PROD_SMTP_TRUST_FORBIDDEN_MESSAGE =
+            "spring.mail.properties.mail.smtp.ssl.trust must not be set when the prod profile is active.";
+    private static final String PROD_SOCKET_FACTORY_FORBIDDEN_MESSAGE =
+            "spring.mail.properties.mail.smtp.ssl.socketFactory.class must not be set when the prod profile is active.";
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(MailSenderAutoConfiguration.class))
@@ -196,38 +202,15 @@ class EmailConfigurationTests {
     }
 
     @Test
-    void prodProfileRequiresPublicHttpsPasswordResetBaseUrlWhenEmailIsEnabled() {
-        prodSmtpRunner(LOCAL_PASSWORD_RESET_BASE_URL)
-                .run(context -> assertStartupFailure(context, PROD_PASSWORD_RESET_URL_REQUIRED_MESSAGE));
-    }
-
-    @Test
     void prodProfileAllowsPublicHttpsPasswordResetBaseUrlWhenEmailIsEnabled() {
         prodSmtpRunner().run(EmailConfigurationTests::assertSmtpEmailService);
     }
 
     @Test
-    void prodProfileRejectsMissingTlsAndWildcardSslTrust() {
+    void prodProfileRejectsMissingTlsAndAllowsTrustedHostOutsideProduction() {
         contextRunner.withPropertyValues(authenticatedSmtpProperties())
                 .withPropertyValues(PROD_PROFILE, PUBLIC_PASSWORD_RESET_BASE_URL)
-                .run(context -> assertStartupFailure(context,
-                        "SMTP TLS with server identity verification must remain enabled when the prod profile is active."));
-
-        prodSmtpRunner("spring.mail.properties.mail.smtp.ssl.trust=*")
-                .run(context -> assertStartupFailure(context,
-                        "spring.mail.properties.mail.smtp.ssl.trust must not be set when the prod profile is active."));
-    }
-
-    /** A listed trusted host or a custom socket factory skips certificate-chain validation, so production refuses both. */
-    @Test
-    void prodProfileRejectsTrustedHostListsAndCustomSocketFactories() {
-        prodSmtpRunner("spring.mail.properties.mail.smtp.ssl.trust=smtp.example.com")
-                .run(context -> assertStartupFailure(context,
-                        "spring.mail.properties.mail.smtp.ssl.trust must not be set when the prod profile is active."));
-
-        prodSmtpRunner("spring.mail.properties.mail.smtp.ssl.socketFactory.class=javax.net.ssl.SSLSocketFactory")
-                .run(context -> assertStartupFailure(context, "spring.mail.properties.mail.smtp.ssl.socketFactory.class"
-                        + " must not be set when the prod profile is active."));
+                .run(context -> assertStartupFailure(context, PROD_TLS_REQUIRED_MESSAGE));
 
         // Outside production a local SMTP test server may still be trusted by name.
         contextRunner.withPropertyValues(authenticatedSmtpProperties())
@@ -236,35 +219,46 @@ class EmailConfigurationTests {
     }
 
     /**
-     * Spring Boot's Binder unwraps bracketed map keys and Jakarta Mail only treats exact "true" (case-insensitive,
-     * untrimmed) as true for default-false flags; neither may bypass the production TLS guard.
+     * Spring Boot's Binder unwraps bracketed map keys; neither direct nor bracketed keys, nor weak URLs or
+     * placeholder credentials, may bypass the production SMTP security guards.
      */
+    @ParameterizedTest
+    @CsvSource({
+            LOCAL_PASSWORD_RESET_BASE_URL + ", " + PROD_PASSWORD_RESET_URL_REQUIRED_MESSAGE,
+            "spring.mail.properties.mail.smtp.ssl.trust=*, " + PROD_SMTP_TRUST_FORBIDDEN_MESSAGE,
+            "spring.mail.properties.mail.smtp.ssl.trust=smtp.example.com, " + PROD_SMTP_TRUST_FORBIDDEN_MESSAGE,
+            "spring.mail.properties.[mail.smtp.ssl.trust]=*, " + PROD_SMTP_TRUST_FORBIDDEN_MESSAGE,
+            "spring.mail.properties.mail.smtp.ssl.socketFactory.class=javax.net.ssl.SSLSocketFactory, "
+                    + PROD_SOCKET_FACTORY_FORBIDDEN_MESSAGE,
+            "spring.mail.properties.[mail.smtp.ssl.socketFactory.class]=javax.net.ssl.SSLSocketFactory, "
+                    + PROD_SOCKET_FACTORY_FORBIDDEN_MESSAGE,
+            "spring.mail.properties.mail.smtp.starttls.required=false, " + PROD_TLS_REQUIRED_MESSAGE,
+            "spring.mail.properties.[mail.smtp.starttls.required]=false, " + PROD_TLS_REQUIRED_MESSAGE,
+            "spring.mail.properties.[mail.smtp.ssl.checkserveridentity]=false, " + PROD_TLS_REQUIRED_MESSAGE,
+            "spring.mail.password=replace-with-smtp-pass, "
+                    + "spring.mail.password must not use a placeholder value when the prod profile is active."
+    })
+    void prodProfileRejectsUnsafeSmtpPropertyOverrides(String propertyOverride, String expectedMessage) {
+        assertProdStartupFailure(expectedMessage, propertyOverride);
+    }
+
+    /** Jakarta Mail only treats exact "true" (case-insensitive, untrimmed) as true for default-false flags. */
     @Test
-    void prodProfileRejectsBracketedMapKeyBypassesAndNonJakartaBooleanTlsValues() {
-        prodSmtpRunner("spring.mail.properties.[mail.smtp.ssl.trust]=*")
-                .run(context -> assertStartupFailure(context,
-                        "spring.mail.properties.mail.smtp.ssl.trust must not be set when the prod profile is active."));
-
-        prodSmtpRunner("spring.mail.properties.[mail.smtp.ssl.socketFactory.class]=javax.net.ssl.SSLSocketFactory")
-                .run(context -> assertStartupFailure(context, "spring.mail.properties.mail.smtp.ssl.socketFactory.class"
-                        + " must not be set when the prod profile is active."));
-
-        prodSmtpRunner("spring.mail.properties.[mail.smtp.starttls.required]=false")
-                .run(context -> assertStartupFailure(context,
-                        "SMTP TLS with server identity verification must remain enabled when the prod profile is active."));
-
-        prodSmtpRunner("spring.mail.properties.[mail.smtp.ssl.checkserveridentity]=false")
-                .run(context -> assertStartupFailure(context,
-                        "SMTP TLS with server identity verification must remain enabled when the prod profile is active."));
-
+    void prodProfileRejectsNonJakartaBooleanTlsValuesAndInvalidFromAddress() {
         for (String nonJakartaTrue : List.of("yes", "1", "on", "true ")) {
             prodSmtpRunner()
                     .withInitializer(ctx -> ctx.getEnvironment().getPropertySources().addFirst(
                             new MapPropertySource("raw-tls-flag",
                                     Map.of("spring.mail.properties.mail.smtp.starttls.required", nonJakartaTrue))))
-                    .run(context -> assertStartupFailure(context,
-                            "SMTP TLS with server identity verification must remain enabled when the prod profile is active."));
+                    .run(context -> assertStartupFailure(context, PROD_TLS_REQUIRED_MESSAGE));
         }
+
+        prodSmtpRunner("spring.mail.username=apikey")
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(context.getStartupFailure())
+                            .hasMessageContaining("Resolved email From address must be a valid email address when the prod profile is active.");
+                });
     }
 
     @Test
@@ -278,15 +272,12 @@ class EmailConfigurationTests {
                             .isEqualTo("true");
                 });
 
-        prodSmtpRunner("spring.mail.protocol=smtps",
-                "spring.mail.properties.mail.smtps.ssl.checkserveridentity=false")
-                .run(context -> assertStartupFailure(context,
-                        "SMTP TLS with server identity verification must remain enabled when the prod profile is active."));
+        assertProdStartupFailure(PROD_TLS_REQUIRED_MESSAGE,
+                "spring.mail.protocol=smtps", "spring.mail.properties.mail.smtps.ssl.checkserveridentity=false");
 
-        prodSmtpRunner("spring.mail.protocol=smtps",
-                "spring.mail.properties.mail.smtps.ssl.trust=*")
-                .run(context -> assertStartupFailure(context,
-                        "spring.mail.properties.mail.smtps.ssl.trust must not be set when the prod profile is active."));
+        assertProdStartupFailure(
+                "spring.mail.properties.mail.smtps.ssl.trust must not be set when the prod profile is active.",
+                "spring.mail.protocol=smtps", "spring.mail.properties.mail.smtps.ssl.trust=*");
 
         for (String invalidProtocol : List.of("imap", "SMTPS", " smtps ", "")) {
             prodSmtpRunner()
@@ -297,22 +288,8 @@ class EmailConfigurationTests {
         }
     }
 
-    @Test
-    void prodProfileRejectsPlaceholderCredentialsDisabledTlsAndInvalidFromAddress() {
-        prodSmtpRunner("spring.mail.password=replace-with-smtp-pass")
-                .run(context -> assertStartupFailure(context,
-                        "spring.mail.password must not use a placeholder value when the prod profile is active."));
-
-        prodSmtpRunner("spring.mail.properties.mail.smtp.starttls.required=false")
-                .run(context -> assertStartupFailure(context,
-                        "SMTP TLS with server identity verification must remain enabled when the prod profile is active."));
-
-        prodSmtpRunner("spring.mail.username=apikey")
-                .run(context -> {
-                    assertThat(context).hasFailed();
-                    assertThat(context.getStartupFailure())
-                            .hasMessageContaining("Resolved email From address must be a valid email address when the prod profile is active.");
-                });
+    private void assertProdStartupFailure(String rootCauseMessage, String... extraProperties) {
+        prodSmtpRunner(extraProperties).run(context -> assertStartupFailure(context, rootCauseMessage));
     }
 
     private ApplicationContextRunner prodSmtpRunner(String... extraProperties) {

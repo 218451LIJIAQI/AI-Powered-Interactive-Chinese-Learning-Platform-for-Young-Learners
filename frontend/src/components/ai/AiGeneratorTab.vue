@@ -42,73 +42,63 @@
 
     <p v-if="error" class="callout is-compact is-danger" role="alert">{{ error }}</p>
 
-    <div v-if="making" class="ai-panel" role="status" aria-live="polite">
-      <header class="ai-panel-head">
-        <div class="ai-panel-source">
-          <span class="page-eyebrow">{{ t('aiHelper.madeBySparkbot') }}</span>
-          <AiResultLabel />
-        </div>
-        <AiNotice :text="aiNotice" />
-      </header>
-      <p class="ai-result-title">
-        {{
-          isQuiz
-            ? t('aiHelper.quizMakingHint', { count, topic: topic.trim() }, count)
-            : t('aiHelper.storyMakingHint', { topic: topic.trim() })
-        }}
-      </p>
-    </div>
-
-    <article
-      v-if="generation"
-      v-show="!making"
+    <div
+      v-if="making || generation || !blocked"
       ref="resultEl"
       class="ai-panel"
-      :data-testid="isQuiz ? 'ai-quiz-result' : undefined"
+      :data-testid="generation && !making && isQuiz ? 'ai-quiz-result' : undefined"
     >
-      <header class="ai-panel-head">
+      <header v-if="making || generation" class="ai-panel-head">
         <div class="ai-panel-source">
           <span class="page-eyebrow">{{ t('aiHelper.madeBySparkbot') }}</span>
           <AiResultLabel />
         </div>
         <div class="ai-panel-aside">
           <AiNotice :text="aiNotice" />
-          <button v-if="!reported" class="btn btn-ghost btn-sm ai-result-report" type="button" @click="report">
-            <IconGlyph name="flag" :size="16" />
-            {{ t('aiSafety.report') }}
-          </button>
-          <span v-else class="ai-reported ai-result-report"
-            ><IconGlyph name="status" :size="14" />{{ t('aiSafety.reported') }}</span
-          >
+          <template v-if="generation && !making">
+            <button v-if="!reported" class="btn btn-ghost btn-sm ai-result-report" type="button" @click="report">
+              <IconGlyph name="flag" :size="16" />
+              {{ t('aiSafety.report') }}
+            </button>
+            <span v-else class="ai-reported ai-result-report"
+              ><IconGlyph name="status" :size="14" />{{ t('aiSafety.reported') }}</span
+            >
+          </template>
         </div>
       </header>
-      <AiChoiceQuestions v-if="isQuiz" :questions="questions" hints />
-      <AiStoryResult
-        v-else-if="story"
-        ref="storyResultRef"
-        v-model:show-pinyin="showPinyin"
-        v-model:show-translation="showTranslation"
-        :story="story"
-        :topic="generation.topic"
-        :questions="questions"
-      />
-    </article>
-
-    <div v-if="!making && !generation && !blocked" class="ai-panel">
-      <StatePanel
-        tone="empty"
-        :icon="isQuiz ? 'quiz' : 'story'"
-        :title="t(isQuiz ? 'aiHelper.quizEmptyTitle' : 'aiHelper.storyEmptyTitle')"
-        :message="t(isQuiz ? 'aiHelper.quizEmptyHint' : 'aiHelper.storyEmptyHint')"
-      />
-      <AiNotice :text="aiNotice" />
+      <p v-if="making" class="ai-result-title" role="status" aria-live="polite">
+        {{
+          isQuiz
+            ? t('aiHelper.quizMakingHint', { count, topic: topic.trim() }, count)
+            : t('aiHelper.storyMakingHint', { topic: topic.trim() })
+        }}
+      </p>
+      <div v-if="generation" v-show="!making">
+        <AiChoiceQuestions v-if="isQuiz" :questions="questions" :paused="making" hints />
+        <AiStoryResult
+          v-else-if="story"
+          ref="storyResultRef"
+          :story="story"
+          :topic="generation.topic"
+          :questions="questions"
+        />
+      </div>
+      <template v-if="!making && !generation">
+        <StatePanel
+          tone="empty"
+          :icon="isQuiz ? 'quiz' : 'story'"
+          :title="t(isQuiz ? 'aiHelper.quizEmptyTitle' : 'aiHelper.storyEmptyTitle')"
+          :message="t(isQuiz ? 'aiHelper.quizEmptyHint' : 'aiHelper.storyEmptyHint')"
+        />
+        <AiNotice :text="aiNotice" />
+      </template>
     </div>
+    <AiNotice v-else :text="aiNotice" />
 
     <AiReportDialog
       v-if="reportTarget"
       :payload="reportTarget.payload"
       :title="t(reportTarget.titleKey)"
-      :subtitle="reportTarget.leadKey ? t(reportTarget.leadKey) : undefined"
       :attached="t(reportTarget.attachedKey)"
       @close="reportTarget = null"
       @sent="onReported"
@@ -129,8 +119,11 @@ import { useLocalMessages } from '@/composables/useLocalMessages'
 import { aiGeneratorMessages } from '@/plugins/aiGeneratorMessages'
 import { aiHelperMessages } from '@/plugins/aiHelperMessages'
 import { appLocale } from '@/plugins/i18n'
-import type { AiQuizGeneratorResponse, AiStoryGeneratorResponse } from '@/types/api'
+import type { AiStoryGeneratorResponse } from '@/types/ai'
+import type { AiQuizGeneratorResponse } from '@/types/api'
+import { storyVocabularyRows } from '@/utils/aiPracticeQuiz'
 import { resolveApiError } from '@/utils/apiError'
+import { serverMessageOr } from '@/utils/serverMessages'
 
 import AiChoiceQuestions, { type ChoiceQuestion } from './AiChoiceQuestions.vue'
 import AiNotice from './AiNotice.vue'
@@ -176,8 +169,8 @@ const STORY_TOPICS = [
 
 const { t } = useLocalMessages({ aiHelper: [aiHelperMessages, aiGeneratorMessages] })
 const baseId = useId()
-const isQuiz = props.kind === 'quiz'
-const errorKey = isQuiz ? 'aiHelper.quizError' : 'aiHelper.storyError'
+const isQuiz = computed(() => props.kind === 'quiz')
+const errorKey = computed(() => (isQuiz.value ? 'aiHelper.quizError' : 'aiHelper.storyError'))
 
 const topic = ref('')
 const count = ref(3)
@@ -191,13 +184,10 @@ const reported = ref(false)
 const reportTarget = ref<AiReportTarget | null>(null)
 const resultEl = ref<HTMLElement | null>(null)
 const storyResultRef = ref<InstanceType<typeof AiStoryResult> | null>(null)
-// Kept here so the learner's choice carries across newly generated stories.
-const showPinyin = ref(true)
-const showTranslation = ref(false)
 const isUnmounted = useIsUnmounted()
 
 const topicOptions = computed(() =>
-  (isQuiz ? QUIZ_TOPICS : STORY_TOPICS).map((key) => {
+  (isQuiz.value ? QUIZ_TOPICS : STORY_TOPICS).map((key) => {
     const label = t(key)
     return { value: label, label }
   }),
@@ -234,18 +224,19 @@ async function make(): Promise<void> {
   making.value = true
   try {
     const request = { topic: cleanTopic, languagePreference: appLocale.value }
-    const result = isQuiz
+    const result = isQuiz.value
       ? await aiHelperApi.quiz({ ...request, numberOfQuestions: count.value })
       : await aiHelperApi.story(request)
     if (!stillActive()) return
     if (result.status !== 'SUCCESS' || !('questions' in result ? result.questions.length : result.lines.length)) {
-      error.value = t(result.status === 'UNAVAILABLE' ? 'aiHelper.sparkbotUnavailableShort' : errorKey)
+      const fallback = t(result.status === 'UNAVAILABLE' ? 'aiHelper.sparkbotUnavailableShort' : errorKey.value)
+      error.value = serverMessageOr(result.message, fallback)
       return
     }
     generation.value = { topic: cleanTopic, result }
     reported.value = false
   } catch (reason) {
-    if (stillActive()) error.value = resolveApiError(reason, t(errorKey))
+    if (stillActive()) error.value = resolveApiError(reason, t(errorKey.value))
     return
   } finally {
     if (!isUnmounted()) making.value = false
@@ -258,20 +249,29 @@ async function make(): Promise<void> {
 function report(): void {
   if (!generation.value) return
   const { result, topic: resultTopic } = generation.value
+  const storyResult = story.value
+  const titleLine = storyResult?.titleTranslation
+    ? [result.title, storyResult.titleTranslation].filter(Boolean).join(' · ')
+    : (result.title ?? '')
+  const storyLines =
+    storyResult?.lines.map((line) => [line.chinese, line.pinyin, line.translation].filter(Boolean).join(' | ')) ?? []
+  const vocabularyLines = storyResult
+    ? storyVocabularyRows(storyResult, appLocale.value).map((word) =>
+        [word.chineseWord, word.pinyin, word.meaning].filter(Boolean).join(' — '),
+      )
+    : []
+  const questionLines = questions.value.map((question, index) => {
+    const base = `${index + 1}. ${question.text} [${question.options.join(' / ')}] → ${question.answer}`
+    return question.note ? `${base} (${question.note})` : base
+  })
   reportTarget.value = {
     payload: {
-      featureKey: isQuiz ? 'QUIZ_GENERATOR' : 'STORY_GENERATOR',
+      featureKey: isQuiz.value ? 'QUIZ_GENERATOR' : 'STORY_GENERATOR',
       promptSnapshot: resultTopic,
-      aiResponseSnapshot: [
-        result.title,
-        ...(story.value?.lines.map((line) => line.chinese) ?? []),
-        ...questions.value.map(
-          (question, index) => `${index + 1}. ${question.text} [${question.options.join(' / ')}] → ${question.answer}`,
-        ),
-      ].join('\n'),
+      aiResponseSnapshot: [titleLine, ...storyLines, ...vocabularyLines, ...questionLines].filter(Boolean).join('\n'),
     },
-    titleKey: isQuiz ? 'aiHelper.reportQuizTitle' : 'aiHelper.reportStoryTitle',
-    attachedKey: isQuiz ? 'aiHelper.reportQuizAttached' : 'aiHelper.reportStoryAttached',
+    titleKey: isQuiz.value ? 'aiHelper.reportQuizTitle' : 'aiHelper.reportStoryTitle',
+    attachedKey: isQuiz.value ? 'aiHelper.reportQuizAttached' : 'aiHelper.reportStoryAttached',
   }
 }
 

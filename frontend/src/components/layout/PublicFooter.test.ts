@@ -44,17 +44,13 @@ describe('PublicFooter', () => {
 
   it('says the year, and goodbye in Chinese', async () => {
     vi.useFakeTimers({ toFake: ['Date'], now: new Date('2031-03-04T05:06:07Z') })
-    try {
-      const wrapper = await mountFooter()
+    const wrapper = await mountFooter()
 
-      expect(wrapper.get('.public-footer-note').text()).toContain('© 2031 MandarinSpark')
-      const bye = wrapper.get('.public-footer-bye')
-      expect(bye.get('[lang="zh-CN"]').text()).toBe('再见')
-      expect(bye.get('[lang="zh-Latn-pinyin"]').text()).toBe('zàijiàn')
-      expect(bye.text()).toContain('see you again')
-    } finally {
-      vi.useRealTimers()
-    }
+    expect(wrapper.get('.public-footer-note').text()).toContain('© 2031 MandarinSpark')
+    const bye = wrapper.get('.public-footer-bye')
+    expect(bye.get('[lang="zh-CN"]').text()).toBe('再见')
+    expect(bye.get('[lang="zh-Latn-pinyin"]').text()).toBe('zàijiàn')
+    expect(bye.text()).toContain('see you again')
   })
 
   it('follows the interface language, naming each page as its own title does', async () => {

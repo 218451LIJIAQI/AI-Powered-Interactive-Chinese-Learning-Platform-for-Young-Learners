@@ -5,29 +5,39 @@
     <template v-if="settings">
       <p class="account-hints-intro">{{ intro }}</p>
       <FilterChips
+        ref="chipsRef"
         :model-value="settings.mode"
         :label="t('account.hintsModeLabel')"
         :options="modes"
         :disabled="saving"
+        :aria-busy="saving || undefined"
         @update:model-value="change"
       />
       <p class="field-hint" data-testid="hint-rule">{{ ruleText }}</p>
       <p v-if="saveError" class="field-error" role="alert">{{ saveError }}</p>
     </template>
-    <p v-else-if="loadFailed" class="field-error" role="alert">{{ t('account.hintsLoadFailed') }}</p>
-    <div v-else class="account-hints-loading" aria-hidden="true">
-      <span class="skeleton skeleton-line" />
-      <span class="skeleton skeleton-line is-short" />
+    <template v-else-if="loadFailed">
+      <p class="field-error" role="alert">{{ t('account.hintsLoadFailed') }}</p>
+      <div class="btn-group">
+        <button class="btn btn-secondary btn-sm" type="button" data-testid="hints-retry" @click="reload">
+          {{ t('common.retry') }}
+        </button>
+      </div>
+    </template>
+    <div v-else class="account-hints-loading" role="status" aria-live="polite">
+      <span class="sr-only">{{ t('common.loadingTitle') }}</span>
+      <span class="skeleton skeleton-line" aria-hidden="true" />
+      <span class="skeleton skeleton-line is-short" aria-hidden="true" />
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 
 import { getAuthSessionVersion } from '@/api/http'
 import { hintApi } from '@/api/learn'
-import FilterChips, { type FilterChipOption } from '@/components/common/FilterChips.vue'
+import FilterChips, { type FilterChipOption, type FilterChipsHandle } from '@/components/common/FilterChips.vue'
 import { useIsUnmounted } from '@/composables/useIsUnmounted'
 import { useHintSettings } from '@/composables/useHintSettings'
 import { useLocalMessages } from '@/composables/useLocalMessages'
@@ -45,8 +55,9 @@ const emit = defineEmits<{ saved: [message: string, undo?: { label: string; run:
 const TIER_CODES: Readonly<Record<HintTier, string>> = { HSK1: 'HSK 1', HSK2: 'HSK 2', HSK3: 'HSK 3' }
 
 const { t } = useLocalMessages({ account: accountMessages })
-const { settings, failed: loadFailed, remember } = useHintSettings()
+const { settings, failed: loadFailed, remember, reload } = useHintSettings()
 
+const chipsRef = ref<FilterChipsHandle | null>(null)
 const saving = ref(false)
 const saveError = ref<string | null>(null)
 const isUnmounted = useIsUnmounted()
@@ -89,6 +100,7 @@ const ruleText = computed(() => {
 async function change(mode: HintMode, undoable = true): Promise<void> {
   const before = settings.value?.mode
   if (saving.value || before === undefined || before === mode) return
+  const hadChipFocus = Boolean(chipsRef.value?.$el?.contains(document.activeElement))
   const version = getAuthSessionVersion()
   saving.value = true
   saveError.value = null
@@ -109,7 +121,15 @@ async function change(mode: HintMode, undoable = true): Promise<void> {
       saveError.value = resolveApiError(reason, t('account.hintsSaveFailed'))
     }
   } finally {
-    if (!isUnmounted()) saving.value = false
+    if (!isUnmounted()) {
+      saving.value = false
+      if (hadChipFocus) {
+        await nextTick()
+        if (!document.activeElement || document.activeElement === document.body) {
+          chipsRef.value?.focusSelected()
+        }
+      }
+    }
   }
 }
 </script>

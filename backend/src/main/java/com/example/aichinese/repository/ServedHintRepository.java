@@ -43,4 +43,11 @@ public interface ServedHintRepository extends JpaRepository<ServedHint, Long> {
             """)
     int findHighestStepAfter(@Param("studentId") Long studentId, @Param("itemRef") String itemRef,
             @Param("after") LocalDateTime after);
+
+    /** Hints served in Tracing sets since {@code from} (Tracing has no /check endpoint so it writes no PracticeAnswer rows). */
+    @Query("""
+            select count(h) from ServedHint h
+            where h.student.id = :studentId and h.itemRef like 'PRACTICE#TRACING#%' and h.createdAt >= :from
+            """)
+    long countTracingHintsSince(@Param("studentId") Long studentId, @Param("from") LocalDateTime from);
 }

@@ -65,11 +65,14 @@ class PracticeCatalogTests {
         when(matchingItemRepository.findInDisplayOrder(9L)).thenReturn(pairs);
 
         List<Item> items = catalog.content(PracticeType.MATCHING, game).items();
+        List<Item> repeated = catalog.content(PracticeType.MATCHING, game).items();
 
         assertThat(items).hasSize(6);
-        for (Item item : items) {
+        for (int index = 0; index < items.size(); index++) {
+            Item item = items.get(index);
             List<String> texts = item.gradable().options().stream().map(ChoiceOption::text).toList();
-            assertThat(texts).hasSize(4).contains(item.data().meaning()).doesNotHaveDuplicates();
+            List<String> repeatedTexts = repeated.get(index).gradable().options().stream().map(ChoiceOption::text).toList();
+            assertThat(texts).hasSize(4).contains(item.data().meaning()).doesNotHaveDuplicates().isEqualTo(repeatedTexts);
         }
     }
 

@@ -7,14 +7,6 @@ import type { AnswerCheck, PracticeItemAnswer, PracticeResult, PracticeSet } fro
 import { resolveApiError } from '@/utils/apiError'
 
 /**
- * An answer as a player checks it. A Listening skip also says when the item's audio did not play (`audioFailed`): the
- * server then shows the answer but counts nothing, neither a mistake nor an answer.
- */
-export interface CheckedAnswer extends PracticeItemAnswer {
-  readonly audioFailed?: true
-}
-
-/**
  * The server calls of one run of a Practice set: instant checks (a wrong answer becomes a mistake) and the finished
  * run. `busy` covers both; `error` holds the last failure in the interface language (`t` is the player's, with the
  * `practice` bundle).
@@ -43,15 +35,17 @@ export function usePracticeRun(set: () => PracticeSet, t: (key: string) => strin
   }
 
   /** One answer, with how sure the student was (the server counts it as a guess after a hint it gave). */
-  function check(answer: CheckedAnswer): Promise<AnswerCheck | null> {
+  function check(answer: PracticeItemAnswer): Promise<AnswerCheck | null> {
     const current = set()
-    return run(() => practiceApi.check(current.type, current.id, answer))
+    const session = getAuthSessionVersion()
+    return run(async () => {
+      const verdict = await practiceApi.check(current.type, current.id, answer)
+      if (!verdict.correct && !answer.audioFailed && session === getAuthSessionVersion()) notifyProgressChanged()
+      return verdict
+    })
   }
 
-  async function complete(
-    answers: readonly PracticeItemAnswer[],
-    strokeCount?: number,
-  ): Promise<PracticeResult | null> {
+  function complete(answers: readonly PracticeItemAnswer[], strokeCount?: number): Promise<PracticeResult | null> {
     const current = set()
     const session = getAuthSessionVersion()
     return run(async () => {

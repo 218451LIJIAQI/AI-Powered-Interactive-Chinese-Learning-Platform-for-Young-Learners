@@ -75,12 +75,15 @@ describe('AdminAnalyticsPage', () => {
     expect(wrapper.find('a[href="/admin/content"]').exists()).toBe(true)
     const ai = wrapper.findAll('[data-testid="admin-insights-ai-row"]').map((row) => row.text())
     expect(ai[0]).toContain('1,236 · 96.3%')
+    expect(wrapper.findAll('svg.mini-chart path title')).toHaveLength(7)
+    expect(wrapper.findAll('svg.mini-chart path title')[0]?.text()).toContain(' · 0')
 
     await wrapper.get('[data-testid="admin-insights-period-30"]').trigger('click')
     await flushPromises()
     expect(overview.analytics).toHaveBeenLastCalledWith(30)
     expect(wrapper.get('[data-testid="admin-insights-period-30"]').attributes('aria-pressed')).toBe('true')
     expect(wrapper.findAll('.admin-insights-axis li')).toHaveLength(30)
+    expect(wrapper.findAll('svg.mini-chart path title')).toHaveLength(30)
   })
 
   it('says so when another period cannot be loaded, and keeps the control on the numbers shown', async () => {
@@ -102,6 +105,7 @@ describe('AdminAnalyticsPage', () => {
     expect(wrapper.find('[role="alert"]').exists()).toBe(false)
     expect(wrapper.get('[data-testid="admin-insights-period-30"]').attributes('aria-pressed')).toBe('true')
     expect(wrapper.findAll('.admin-insights-axis li')).toHaveLength(30)
+    expect(wrapper.findAll('svg.mini-chart path title')).toHaveLength(30)
   })
 
   it('keeps the visible period selected until the replacement figures arrive', async () => {

@@ -13,6 +13,7 @@ function csvCell(value: CsvCell): string {
 
 /** CSV text with CRLF line ends, the way spreadsheet programs expect it. */
 export function toCsv(rows: readonly (readonly CsvCell[])[]): string {
+  if (rows.length === 0) return ''
   return rows.map((row) => row.map(csvCell).join(',')).join('\r\n') + '\r\n'
 }
 

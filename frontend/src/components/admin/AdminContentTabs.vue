@@ -17,14 +17,25 @@ import { contentCounts, ensureCurrentCountSession, reloadContentCounts } from '.
  * and Practice library (activities).
  */
 const props = defineProps<{
+  /** Skip fetching the classes count when the host page already loads unfiltered classes and syncs it. */
+  skipClasses?: boolean
   /** Skip fetching the full learning path when the host page already loads it and syncs the unit count. */
   skipUnits?: boolean
+  /** Skip fetching the practice count when the host page already loads unfiltered practice sets and syncs it. */
+  skipPractice?: boolean
 }>()
 
 const { t } = useI18n()
 
 ensureCurrentCountSession()
-onMounted(() => void reloadContentCounts({ keepUnits: true, skipUnits: props.skipUnits }))
+onMounted(
+  () =>
+    void reloadContentCounts({
+      skipClasses: props.skipClasses,
+      skipUnits: props.skipUnits,
+      skipPractice: props.skipPractice,
+    }),
+)
 
 const tabs = computed<RouteTab[]>(() => [
   {

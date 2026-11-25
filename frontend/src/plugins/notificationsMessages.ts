@@ -37,7 +37,7 @@ export const notificationsMessages = {
     pageTitle: 'Pemberitahuan',
     markAllRead: 'Tandakan semua telah dibaca',
     markedAllRead: 'Semua pemberitahuan ditandakan telah dibaca.',
-    markAllError: 'Pemberitahuan tidak ditandakan telah dibaca.',
+    markAllError: 'Semua pemberitahuan tidak dapat ditandakan telah dibaca.',
     undoError: 'Pemberitahuan tidak dapat ditandakan belum dibaca semula.',
     allNotifications: 'Semua pemberitahuan',
     filterLabel: 'Tunjukkan pemberitahuan',
@@ -71,7 +71,7 @@ export const notificationsMessages = {
     pageTitle: '通知',
     markAllRead: '全部标为已读',
     markedAllRead: '所有通知已标为已读。',
-    markAllError: '通知未能标为已读。',
+    markAllError: '未能将所有通知标为已读。',
     undoError: '通知未能恢复为未读。',
     allNotifications: '全部通知',
     filterLabel: '显示通知',
@@ -100,4 +100,4 @@ export const notificationsMessages = {
     emptyReadTitle: '还没有已读通知',
     emptyReadMessage: '你读过的通知会显示在这里。',
   },
-}
+} as const

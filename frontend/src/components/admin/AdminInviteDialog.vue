@@ -3,7 +3,7 @@
     :title="t('adminUsers.inviteAdmin')"
     :subtitle="t('adminUsers.inviteIntro')"
     :busy="inviting"
-    test-id="admin-users-invite-drawer"
+    test-id="admin-users-invite-dialog"
     @close="emit('close')"
   >
     <form id="admin-users-invite-form" class="form-grid" novalidate @submit.prevent="sendInvite">
@@ -28,7 +28,7 @@
             inviteProblem ? 'admin-users-invite-error admin-users-invite-hint' : 'admin-users-invite-hint'
           "
           data-testid="admin-users-invite-email"
-          @blur="checkInviteOnBlur"
+          @blur="validateInvite"
         />
         <p id="admin-users-invite-hint" class="field-hint">{{ t('adminUsers.inviteEmailHint') }}</p>
         <p v-if="inviteProblem" id="admin-users-invite-error" class="field-error" role="alert">
@@ -85,11 +85,7 @@ const { t } = useLocalMessages({ adminUsers: adminUsersMessages })
 const inviteEmail = ref('')
 const inviteField = ref<HTMLInputElement | null>(null)
 /** What is wrong with the address as typed: shown under the field, and Send invite waits until it is fixed. */
-const {
-  error: inviteError,
-  validate: validateInvite,
-  validateOnBlur: checkInviteOnBlur,
-} = useFieldCheck(inviteEmail, (value) => {
+const { error: inviteError, validate: validateInvite } = useFieldCheck(inviteEmail, (value) => {
   const email = value.trim()
   if (!email) return t('adminUsers.inviteEmailMissing')
   return isValidEmail(email) ? null : t('adminUsers.inviteEmailInvalid', { example: EMAIL_EXAMPLE })

@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -42,12 +43,19 @@ public interface ClassEnrolmentRepository extends JpaRepository<ClassEnrolment, 
     @Query("select e.coursePackage.id from ClassEnrolment e where e.student.id = :studentId and e.coursePackage.id in :classIds")
     Set<Long> findJoinedClassIds(@Param("studentId") Long studentId, @Param("classIds") Collection<Long> classIds);
 
-    long countByCoursePackageId(Long coursePackageId);
+    boolean existsByCoursePackageId(Long coursePackageId);
 
-    /** Ids of the active accounts of learners who joined the class ("Lesson updated"). */
+    /** Bounded ascending slice of active learner user ids who joined the class ("Lesson updated"). */
     @Query("""
             select e.student.user.id from ClassEnrolment e
-            where e.coursePackage.id = :classId and e.student.user.active = true and e.student.user.deletedAt is null
+            where e.coursePackage.id = :classId
+              and e.student.user.active = true
+              and e.student.user.deletedAt is null
+              and e.student.user.id > :afterUserId
+            order by e.student.user.id asc
             """)
-    List<Long> findActiveLearnerIdsOfClass(@Param("classId") Long classId);
+    List<Long> findActiveLearnerIdsOfClassAfter(
+            @Param("classId") Long classId,
+            @Param("afterUserId") Long afterUserId,
+            Pageable pageable);
 }

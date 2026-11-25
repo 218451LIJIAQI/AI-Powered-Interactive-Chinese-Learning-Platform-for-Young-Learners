@@ -1,7 +1,13 @@
 <template>
   <div class="plan-goal-form" :class="{ 'is-compact': compact }">
-    <section v-if="show('reason')" class="plan-form-section">
-      <h3 v-if="compact" class="plan-form-label">{{ t('plan.setup.reasonsLabel') }}</h3>
+    <section
+      v-if="show('reason')"
+      class="plan-form-section"
+      :aria-labelledby="compact ? `${baseId}-reason-label` : undefined"
+    >
+      <h3 v-if="compact" :id="`${baseId}-reason-label`" class="plan-form-label">
+        {{ t('plan.setup.reasonsLabel') }}
+      </h3>
       <PlanChoiceGrid
         :choices="reasonChoices"
         :selected="model.reason ? [model.reason] : []"
@@ -13,19 +19,34 @@
         @toggle="pickReason"
       />
       <div v-if="model.reason === 'OTHER'" class="field">
-        <label class="field-label" :for="`${baseId}-reason-text`">{{ t('plan.setup.otherLabel') }}</label>
+        <label class="field-label" :for="`${baseId}-reason-text`">
+          {{ t('plan.setup.otherLabel') }}<span class="required-mark" aria-hidden="true">*</span>
+        </label>
         <input
           :id="`${baseId}-reason-text`"
           v-model="reasonText"
           class="input"
           maxlength="120"
+          required
+          aria-required="true"
           :placeholder="t('plan.setup.otherPlaceholder')"
+          :aria-describedby="`${baseId}-reason-text-hint`"
         />
+        <div class="field-foot">
+          <p :id="`${baseId}-reason-text-hint`" class="field-hint">{{ t('plan.setup.ownWordsHint') }}</p>
+          <p class="field-hint field-counter">
+            {{ t('plan.setup.counter', { count: model.reasonText.length, max: 120 }) }}
+          </p>
+        </div>
       </div>
     </section>
 
-    <section v-if="show('goals')" class="plan-form-section">
-      <h3 v-if="compact" class="plan-form-label">{{ t('plan.setup.goalsLabel') }}</h3>
+    <section
+      v-if="show('goals')"
+      class="plan-form-section"
+      :aria-labelledby="compact ? `${baseId}-goals-label` : undefined"
+    >
+      <h3 v-if="compact" :id="`${baseId}-goals-label`" class="plan-form-label">{{ t('plan.setup.goalsLabel') }}</h3>
       <PlanChoiceGrid
         :choices="goalChoices"
         :selected="model.goals"
@@ -39,7 +60,7 @@
       <div class="field">
         <label class="field-label" :for="`${baseId}-own-words`">
           {{ t('plan.setup.ownWordsLabel') }}
-          <span v-if="!compact" class="plan-optional">{{ t('plan.setup.optional') }}</span>
+          <span class="plan-optional">{{ t('plan.setup.optional') }}</span>
         </label>
         <textarea
           :id="`${baseId}-own-words`"
@@ -63,7 +84,14 @@
       <h3 :id="`${baseId}-date-label`" class="plan-form-label">{{ t('plan.date.label') }}</h3>
       <!-- One row whether a date is picked or not: the field (click it to change the date) and "No date" beside it. -->
       <div class="plan-date-row" role="group" :aria-labelledby="`${baseId}-date-label`">
-        <button class="plan-date-field" type="button" data-testid="date-field" @click="calendarOpen = true">
+        <button
+          class="plan-date-field"
+          type="button"
+          aria-haspopup="dialog"
+          :aria-expanded="calendarOpen"
+          data-testid="date-field"
+          @click="calendarOpen = true"
+        >
           <span :class="{ 'is-placeholder': !model.deadline }">{{ dateFieldText }}</span>
           <IconGlyph name="calendar" :size="18" />
         </button>
@@ -78,13 +106,13 @@
           <IconGlyph v-if="model.deadline === null" name="check" :size="14" />{{ t('plan.date.noDate') }}
         </button>
       </div>
-      <p v-if="compact && studyLine" class="plan-form-note" data-testid="study-line">
+      <p v-if="compact && studyLine" class="plan-form-note" aria-live="polite" data-testid="study-line">
         <IconGlyph name="calendarCheck" :size="14" />{{ studyLine }}
       </p>
     </section>
 
-    <section v-if="show('pace')" class="plan-form-section">
-      <h3 class="plan-form-label">{{ t('plan.setup.timeLabel') }}</h3>
+    <section v-if="show('pace')" class="plan-form-section" :aria-labelledby="`${baseId}-pace-label`">
+      <h3 :id="`${baseId}-pace-label`" class="plan-form-label">{{ t('plan.setup.timeLabel') }}</h3>
       <PlanChoiceGrid
         :choices="paceChoices"
         :selected="[model.pace]"
@@ -95,13 +123,17 @@
         test-id="pace-choices"
         @toggle="pickPace"
       />
-      <p v-if="!compact && studyLine" class="plan-form-note" data-testid="study-line">
+      <p v-if="!compact && studyLine" class="plan-form-note" aria-live="polite" data-testid="study-line">
         <IconGlyph name="calendarCheck" :size="14" />{{ studyLine }}
       </p>
     </section>
 
-    <section v-if="show('focus')" class="plan-form-section">
-      <h3 v-if="compact" class="plan-form-label">{{ t('plan.setup.focusLabel') }}</h3>
+    <section
+      v-if="show('focus')"
+      class="plan-form-section"
+      :aria-labelledby="compact ? `${baseId}-focus-label` : undefined"
+    >
+      <h3 v-if="compact" :id="`${baseId}-focus-label`" class="plan-form-label">{{ t('plan.setup.focusLabel') }}</h3>
       <PlanChoiceGrid
         :choices="focusChoices"
         :selected="model.focus"
@@ -127,7 +159,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, useId } from 'vue'
+import { computed, ref, useId, watch } from 'vue'
 
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
@@ -137,7 +169,7 @@ import type { PlanFocus, PlanGoal, PlanOptions, PlanPace, PlanReason } from '@/t
 import { daysBetween, formatWeekdayLongDate } from '@/utils/format'
 
 import GoalDatePicker from './GoalDatePicker.vue'
-import { toggledFocus, toggledGoals, type GoalDraft } from './goalDraft'
+import { MAX_FOCUS, toggledFocus, toggledGoals, type GoalDraft } from './goalDraft'
 import PlanChoiceGrid, { type PlanChoice } from './PlanChoiceGrid.vue'
 import { studyFormula } from './planFormat'
 import { FOCUS_ICONS, PACES, REASON_ICONS } from './planLabels'
@@ -157,7 +189,7 @@ const props = withDefaults(
     compact?: boolean
     /** The focus the level check suggests ("listening was new to you"). */
     suggestedFocus?: PlanFocus | null
-    /** Whether the calendar repeats "No date" in its footer (not in the plan drawer, X2.17). */
+    /** Whether the calendar repeats "No date" in its footer (false in compact edit dialog and plan drawer). */
     calendarNoDate?: boolean
   }>(),
   { compact: false, suggestedFocus: null, calendarNoDate: true },
@@ -169,6 +201,13 @@ const { t, locale } = useLocalMessages({ plan: [planSummaryMessages, planSetupMe
 const baseId = useId()
 const focusLimit = ref(false)
 const calendarOpen = ref(false)
+
+watch(
+  () => model.value.focus.length,
+  (count) => {
+    if (count < MAX_FOCUS) focusLimit.value = false
+  },
+)
 
 const paceBand = computed(() => props.options.paces.find((pace) => pace.key === model.value.pace) ?? null)
 const daysToGo = computed(() => (model.value.deadline ? daysBetween(props.options.today, model.value.deadline) : 0))

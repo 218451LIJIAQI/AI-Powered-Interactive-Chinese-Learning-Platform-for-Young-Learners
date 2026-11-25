@@ -2,6 +2,7 @@ package com.example.aichinese.service.admin;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
@@ -44,6 +45,7 @@ public class AdminOverviewService {
     private static final int QUEUE_PREVIEW = 2;
     /** A student whose quiz average in the period is below this needs support. */
     private static final int NEEDS_SUPPORT_BELOW_PERCENT = 60;
+    private static final DateTimeFormatter BUCKET_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final String SCORED_ATTEMPTS_IN_PERIOD = """
              from QuizAttempt a
              where a.submitted = true and a.completedAt >= :start and a.completedAt < :end
@@ -113,8 +115,9 @@ public class AdminOverviewService {
      */
     private List<DayCount> registrationsPerDay(LocalDate from, LocalDate to, LocalDateTime start, LocalDateTime end) {
         Map<LocalDate, Long> perDay = new HashMap<>();
-        for (LocalDateTime createdAt : userRepository.findCreatedAtBetween(start, end)) {
-            perDay.merge(clock.dayOf(createdAt), 1L, Long::sum);
+        for (UserRepository.QuarterHourCount row : userRepository.countCreatedByQuarterHourBetween(start, end)) {
+            LocalDateTime bucket = LocalDateTime.parse(row.getBucket(), BUCKET_FORMAT);
+            perDay.merge(clock.dayOf(bucket), row.getCount(), Long::sum);
         }
         return from.datesUntil(to.plusDays(1)).map(day -> new DayCount(day, perDay.getOrDefault(day, 0L))).toList();
     }

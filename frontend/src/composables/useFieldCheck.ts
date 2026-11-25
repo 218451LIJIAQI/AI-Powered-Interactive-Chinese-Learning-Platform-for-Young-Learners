@@ -11,15 +11,10 @@ export function useFieldCheck(value: Ref<string>, check: (value: string) => stri
   const error = ref<string | null>(null)
   const currentIssue = computed(() => check(value.value))
 
-  /** Checks the value now, as on submit; true when it is fine. */
+  /** Checks the value now, on blur or submit; true when it is fine. */
   function validate(): boolean {
     error.value = currentIssue.value
     return error.value === null
-  }
-
-  /** For the field's `blur` event: surfaces an error once the learner leaves an untouched field. */
-  function validateOnBlur(): void {
-    if (error.value === null) validate()
   }
 
   /** Forgets the error, e.g. when the form opens again. */
@@ -32,5 +27,5 @@ export function useFieldCheck(value: Ref<string>, check: (value: string) => stri
     if (error.value !== null) error.value = issue
   })
 
-  return { error: readonly(error), validate, validateOnBlur, reset }
+  return { error: readonly(error), validate, reset }
 }

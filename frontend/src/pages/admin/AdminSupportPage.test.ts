@@ -437,11 +437,12 @@ describe('AdminSupportPage', () => {
     )
     expect(wrapper.text()).not.toMatch(/teacher/i)
   })
-  it('reports a reply that could not be sent and keeps the text', async () => {
+  it('reports a reply that could not be sent, keeps the text, and resyncs stale server state on 409', async () => {
     supportApi.reply.mockRejectedValue({
       response: { status: 409, data: { message: 'This request is already solved.' } },
     })
     const { wrapper } = await mountAtRoute(AdminSupportPage, '/admin/support?request=41')
+    const beforeProgress = progressVersion.value
 
     await wrapper.get('[data-testid="admin-support-reply"]').setValue('Following up')
     await wrapper.get('[data-testid="admin-support-detail"] form').trigger('submit')
@@ -451,5 +452,34 @@ describe('AdminSupportPage', () => {
     expect((wrapper.get('[data-testid="admin-support-reply"]').element as HTMLTextAreaElement).value).toBe(
       'Following up',
     )
+    expect(supportApi.queue).toHaveBeenCalledTimes(2)
+    expect(supportApi.get).toHaveBeenCalledTimes(2)
+    expect(progressVersion.value).toBe(beforeProgress + 1)
+  })
+
+  it('offers Reopen on solved requests and clears selection without reloading a missing 404 detail', async () => {
+    const solvedReq = summary({ id: 55, number: 1055, status: 'SOLVED', solvedAt: now, closedBy: 'SUPPORT' })
+    supportApi.queue.mockResolvedValue(queueOf('SOLVED', [solvedReq]))
+    supportApi.get.mockResolvedValue(detailOf(solvedReq))
+    supportApi.reopen.mockResolvedValueOnce(
+      detailOf({ ...solvedReq, status: 'ANSWERED', solvedAt: null, closedBy: null }),
+    )
+    const { wrapper } = await mountAtRoute(AdminSupportPage, '/admin/support?status=SOLVED&request=55')
+
+    await wrapper.get('[data-testid="admin-support-reopen"]').trigger('click')
+    await flushPromises()
+    expect(supportApi.reopen).toHaveBeenCalledWith(55)
+    expect(wrapper.get('[data-testid="toast"]').text()).toBe('#1055 reopened.')
+    expect(wrapper.find('[data-testid="admin-support-reply"]').exists()).toBe(true)
+
+    supportApi.get.mockClear()
+    supportApi.queue.mockResolvedValueOnce(queueOf('SOLVED', []))
+    supportApi.solve.mockRejectedValueOnce({
+      response: { status: 404, data: { message: 'Support request not found.' } },
+    })
+    await wrapper.get('[data-testid="admin-support-solve"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('.data-notice[role="alert"]').text()).toContain('Support request not found.')
+    expect(supportApi.get).not.toHaveBeenCalled()
   })
 })

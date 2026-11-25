@@ -1,11 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { effectScope, watch } from 'vue'
 
 import { FakeMediaRecorder } from '@/test/fakeMediaRecorder'
 import { deferred } from '@/test/helpers'
-import { MAX_RECORDING_SECONDS } from '@/utils/practiceUpload'
 
-import { useAudioRecorder } from './useAudioRecorder'
+import { MAX_RECORDING_SECONDS, recordingFileName, useAudioRecorder } from './useAudioRecorder'
 
 function fakeStream() {
   const track = { stop: vi.fn() }
@@ -30,11 +29,6 @@ function setup(browser: { getUserMedia?: () => Promise<MediaStream>; MediaRecord
 
 beforeEach(() => {
   vi.useFakeTimers()
-  FakeMediaRecorder.instances = []
-})
-
-afterEach(() => {
-  vi.useRealTimers()
 })
 
 describe('useAudioRecorder', () => {
@@ -190,5 +184,11 @@ describe('microphone errors', () => {
     expect(await statusAfter(Object.assign(new Error('no'), { name: 'SecurityError' }))).toBe('denied')
     expect(await statusAfter(Object.assign(new Error('no'), { name: 'NotFoundError' }))).toBe('error')
     expect(await statusAfter(new Error('boom'))).toBe('error')
+  })
+})
+
+describe('recordingFileName', () => {
+  it('stamps the recording with the local date and time', () => {
+    expect(recordingFileName(new Date(2026, 4, 18, 3, 5))).toBe('pronunciation-20260518-0305.webm')
   })
 })

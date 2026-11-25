@@ -32,7 +32,12 @@
         :aria-describedby="errors.fullName ? 'register-full-name-error' : undefined"
         @blur="checkOnLeave('fullName')"
       />
-      <p v-if="errors.fullName" id="register-full-name-error" class="field-error">
+      <p
+        v-if="errors.fullName"
+        id="register-full-name-error"
+        class="field-error"
+        :aria-live="summaryShown ? undefined : 'polite'"
+      >
         <IconGlyph name="alert" :size="14" />{{ t(errors.fullName) }}
       </p>
     </div>
@@ -54,7 +59,12 @@
         :aria-describedby="errors.email ? 'register-email-error' : undefined"
         @blur="checkOnLeave('email')"
       />
-      <p v-if="errors.email" id="register-email-error" class="field-error">
+      <p
+        v-if="errors.email"
+        id="register-email-error"
+        class="field-error"
+        :aria-live="summaryShown ? undefined : 'polite'"
+      >
         <IconGlyph name="alert" :size="14" />{{ t(errors.email) }}
       </p>
     </div>
@@ -75,7 +85,12 @@
             :aria-describedby="passwordDescribedBy"
             @blur="checkOnLeave('password')"
           />
-          <p v-if="errors.password" id="register-password-error" class="field-error">
+          <p
+            v-if="errors.password"
+            id="register-password-error"
+            class="field-error"
+            :aria-live="summaryShown ? undefined : 'polite'"
+          >
             <IconGlyph name="alert" :size="14" />{{ t(errors.password) }}
           </p>
         </div>
@@ -93,7 +108,12 @@
             :aria-describedby="errors.confirmPassword ? 'register-confirm-error' : undefined"
             @blur="checkOnLeave('confirmPassword')"
           />
-          <p v-if="errors.confirmPassword" id="register-confirm-error" class="field-error">
+          <p
+            v-if="errors.confirmPassword"
+            id="register-confirm-error"
+            class="field-error"
+            :aria-live="summaryShown ? undefined : 'polite'"
+          >
             <IconGlyph name="alert" :size="14" />{{ t(errors.confirmPassword) }}
           </p>
         </div>
@@ -103,31 +123,38 @@
       </p>
     </div>
 
-    <div class="auth-consent-field">
-      <label class="choice auth-choice auth-consent">
+    <div class="auth-consent-field" @focusout="checkConsentOnLeave">
+      <div class="choice auth-choice auth-consent">
         <input
+          id="register-consent"
           v-model="form.consent"
           type="checkbox"
           required
           data-testid="register-consent"
           :aria-invalid="Boolean(errors.consent)"
           :aria-describedby="errors.consent ? 'register-consent-error' : undefined"
-          @blur="checkOnLeave('consent')"
         />
-        <I18nT keypath="auth.consent" tag="span">
-          <template #terms>
-            <RouterLink to="/terms" target="_blank" rel="noopener">
-              {{ t('auth.terms') }}<span class="sr-only"> {{ t('common.opensInNewTab') }}</span>
-            </RouterLink>
-          </template>
-          <template #privacy>
-            <RouterLink to="/privacy" target="_blank" rel="noopener">
-              {{ t('auth.privacy') }}<span class="sr-only"> {{ t('common.opensInNewTab') }}</span>
-            </RouterLink>
-          </template>
-        </I18nT>
-      </label>
-      <p v-if="errors.consent" id="register-consent-error" class="field-error">
+        <label for="register-consent">
+          <I18nT keypath="auth.consent" tag="span">
+            <template #terms>
+              <RouterLink to="/terms" target="_blank" rel="noopener"
+                >{{ t('auth.terms') }}<span class="sr-only">{{ ` ${t('common.opensInNewTab')}` }}</span></RouterLink
+              >
+            </template>
+            <template #privacy>
+              <RouterLink to="/privacy" target="_blank" rel="noopener"
+                >{{ t('auth.privacy') }}<span class="sr-only">{{ ` ${t('common.opensInNewTab')}` }}</span></RouterLink
+              >
+            </template>
+          </I18nT>
+        </label>
+      </div>
+      <p
+        v-if="errors.consent"
+        id="register-consent-error"
+        class="field-error"
+        :aria-live="summaryShown ? undefined : 'polite'"
+      >
         <IconGlyph name="alert" :size="14" />{{ t(errors.consent) }}
       </p>
     </div>
@@ -138,6 +165,7 @@
       :disabled="submitting || errorCount > 0"
       :aria-busy="submitting"
       data-testid="register-submit"
+      @mousedown.prevent
     >
       <span>{{ submitting ? t('auth.creating') : t('auth.createAccount') }}</span>
       <IconGlyph name="chevronRight" :size="18" />
@@ -154,7 +182,7 @@ import { RouterLink, useRoute, useRouter, type RouteLocationRaw } from 'vue-rout
 import { getAuthSessionVersion } from '@/api/http'
 import { authApi } from '@/api/services'
 import IconGlyph from '@/components/common/IconGlyph.vue'
-import PasswordInput from '@/components/public/PasswordInput.vue'
+import PasswordInput from '@/components/common/PasswordInput.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { authMessages } from '@/plugins/authMessages'
 import { appLocale } from '@/plugins/i18n'
@@ -166,8 +194,6 @@ import { isBlankPassword, isWithinPasswordByteLimit, meetsPasswordMinimum } from
 import { defaultRouteForRole } from '@/utils/role'
 import { SERVER_MESSAGE } from '@/utils/serverMessages'
 
-/** The registration error the email field explains itself. */
-const EMAIL_TAKEN_MESSAGE = SERVER_MESSAGE.EMAIL_ALREADY_REGISTERED
 /** The fields of the create-account form (a learner account: the only kind anyone can create), in checking order. */
 const REGISTER_FIELDS = ['fullName', 'email', 'password', 'confirmPassword', 'consent'] as const
 type RegisterField = (typeof REGISTER_FIELDS)[number]
@@ -186,10 +212,17 @@ const form = reactive({ fullName: '', email: '', password: '', confirmPassword: 
 const address = computed(() => form.email.trim().toLowerCase())
 const errors = reactive<Partial<Record<RegisterField, string>>>({})
 const takenEmails = new Set<string>()
-const registerFailure = shallowRef<{ reason: unknown } | null>(null)
+const registerFailure = shallowRef<{ reason: unknown; navigation?: boolean } | null>(null)
 const registerError = computed(() =>
-  registerFailure.value ? resolveApiError(registerFailure.value.reason, t('auth.registerFailed')) : null,
+  registerFailure.value
+    ? resolveApiError(
+        registerFailure.value.reason,
+        registerFailure.value.navigation ? t('common.errorTitle') : t('auth.registerFailed'),
+      )
+    : null,
 )
+/** Address of an account already created and signed in here if the post-login navigation failed. */
+let signedInEmail: string | null = null
 
 /**
  * `shown` tracks whether this KeepAlive tab is visible, while `disposed` tracks permanent unmount. A registration that
@@ -257,6 +290,15 @@ function checkOnLeave(field: RegisterField): void {
   if (field === 'password' && form.confirmPassword) validateField('confirmPassword')
 }
 
+function checkConsentOnLeave(event: FocusEvent): void {
+  const container = event.currentTarget as HTMLElement | null
+  if (container && event.relatedTarget instanceof Node && container.contains(event.relatedTarget)) return
+  // Opening the Terms or Privacy link in a new tab blurs the document without moving focus to another form control.
+  if (!document.hasFocus()) return
+  if (container && document.activeElement instanceof Node && container.contains(document.activeElement)) return
+  validateField('consent')
+}
+
 watch(form, () => {
   for (const field of REGISTER_FIELDS) if (errors[field]) validateField(field)
 })
@@ -272,15 +314,7 @@ async function showSummary(): Promise<void> {
   summaryRef.value?.focus()
 }
 
-async function submit(): Promise<void> {
-  if (submitting.value) return
-  registerFailure.value = null
-  for (const field of REGISTER_FIELDS) validateField(field)
-  if (errorCount.value) return showSummary()
-
-  submitting.value = true
-  const sessionVersion = getAuthSessionVersion()
-  const email = address.value
+async function registerAndSignIn(email: string, sessionVersion: number): Promise<boolean> {
   const account = {
     fullName: form.fullName.trim(),
     email,
@@ -291,36 +325,49 @@ async function submit(): Promise<void> {
   try {
     await authApi.registerStudent(account)
   } catch (reason) {
-    submitting.value = false
-    if (!shown || isCancel(reason) || sessionVersion !== getAuthSessionVersion()) return
-    if (hasServerMessage(reason, EMAIL_TAKEN_MESSAGE)) {
+    if (!shown || isCancel(reason) || sessionVersion !== getAuthSessionVersion()) return false
+    if (hasServerMessage(reason, SERVER_MESSAGE.EMAIL_ALREADY_REGISTERED)) {
       takenEmails.add(email)
       validateField('email')
       await showSummary()
     } else {
       registerFailure.value = { reason }
     }
-    return
+    return false
   }
 
-  let signedIn = false
+  if (!shown || sessionVersion !== getAuthSessionVersion()) return false
   try {
-    if (!shown || sessionVersion !== getAuthSessionVersion()) return
     // Like a sign-in with "Keep me signed in" left off: closing the browser ends the session on a shared computer.
     await auth.login(email, account.password, false)
-    signedIn = true
+    signedInEmail = email
+    return true
   } catch (reason) {
-    if (!shown || isCancel(reason)) return
-    emit('fallbackSignIn', email)
-    return
-  } finally {
-    if (!signedIn) submitting.value = false
+    if (shown && !isCancel(reason)) emit('fallbackSignIn', email)
+    return false
   }
+}
 
+async function submit(): Promise<void> {
+  if (submitting.value) return
+  registerFailure.value = null
+  for (const field of REGISTER_FIELDS) validateField(field)
+  if (errorCount.value) return showSummary()
+
+  submitting.value = true
+  const sessionVersion = getAuthSessionVersion()
+  const email = address.value
   try {
-    if (!disposed) await router.push(learnerStartAfterRegister())
-  } catch (reason) {
-    if (!disposed && shown) registerFailure.value = { reason }
+    if ((signedInEmail !== email || !auth.isAuthenticated) && !(await registerAndSignIn(email, sessionVersion))) {
+      return
+    }
+    if (!disposed) {
+      try {
+        await router.push(learnerStartAfterRegister())
+      } catch (reason) {
+        if (shown) registerFailure.value = { reason, navigation: true }
+      }
+    }
   } finally {
     submitting.value = false
   }

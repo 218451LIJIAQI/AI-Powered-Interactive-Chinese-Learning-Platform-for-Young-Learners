@@ -80,28 +80,7 @@ class TencentSoeSocket implements AutoCloseable {
                     await(socket.sendText(END_MESSAGE, true), deadline);
                 }
             } catch (ExecutionException sendFailure) {
-                if (listener.result.isDone()) {
-                    try {
-                        return listener.result.get();
-                    } catch (ExecutionException serverFailure) {
-                        if (serverFailure.getCause() instanceof ServiceFailure) {
-                            throw serverFailure;
-                        }
-                    }
-                } else if (sendFailure.getCause() instanceof IOException) {
-                    long now = System.nanoTime();
-                    long graceDeadline = now + Math.min(deadline - now, TimeUnit.MILLISECONDS.toNanos(500L));
-                    try {
-                        return await(listener.result, graceDeadline);
-                    } catch (TimeoutException ignored) {
-                        // No server frame arrived before grace elapsed; propagate the send failure.
-                    } catch (ExecutionException serverFailure) {
-                        if (serverFailure.getCause() instanceof ServiceFailure) {
-                            throw serverFailure;
-                        }
-                    }
-                }
-                throw sendFailure;
+                return recoverFromSendFailure(listener.result, sendFailure, deadline);
             }
             return await(listener.result, deadline);
         } finally {
@@ -130,6 +109,9 @@ class TencentSoeSocket implements AutoCloseable {
         long streamStart = System.nanoTime();
         int frameIndex = 0;
         for (int offset = 0; offset < pcm.length && !result.isDone(); offset += FRAME_BYTES) {
+            if (System.nanoTime() >= deadline) {
+                throw new TimeoutException();
+            }
             int length = Math.min(FRAME_BYTES, pcm.length - offset);
             frameIndex++;
             long nextFrame = streamStart + frameIndex * FRAME_NANOS;
@@ -147,11 +129,34 @@ class TencentSoeSocket implements AutoCloseable {
                         result.get(waitNanos, TimeUnit.NANOSECONDS);
                         return;
                     } catch (TimeoutException pacingDone) {
-                        // Expected pacing delay elapsed; send the next audio frame.
+                        // Expected pacing delay elapsed; send the next audio frame unless deadline expired.
                     }
                 }
             }
         }
+    }
+
+    private static JsonNode recoverFromSendFailure(
+            CompletableFuture<JsonNode> result, ExecutionException sendFailure, long deadline)
+            throws InterruptedException, ExecutionException {
+        boolean alreadyDone = result.isDone();
+        if (!alreadyDone && !(sendFailure.getCause() instanceof IOException)) {
+            throw sendFailure;
+        }
+        try {
+            if (alreadyDone) {
+                return result.get();
+            }
+            long now = System.nanoTime();
+            return await(result, now + Math.min(deadline - now, TimeUnit.MILLISECONDS.toNanos(500L)));
+        } catch (TimeoutException ignored) {
+            // No server frame arrived before grace elapsed; propagate the send failure.
+        } catch (ExecutionException serverFailure) {
+            if (serverFailure.getCause() instanceof ServiceFailure) {
+                throw serverFailure;
+            }
+        }
+        throw sendFailure;
     }
 
     private static <T> T await(CompletableFuture<T> future, long deadline)

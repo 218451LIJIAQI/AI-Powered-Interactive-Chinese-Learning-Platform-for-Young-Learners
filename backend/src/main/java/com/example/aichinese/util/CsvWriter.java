@@ -1,6 +1,5 @@
 package com.example.aichinese.util;
 
-import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -9,15 +8,13 @@ import java.util.Locale;
 /**
  * Builds RFC 4180 CSV text. Cells are quoted when needed, and a cell that a spreadsheet would read as a formula
  * (starting with {@code =}, {@code +}, {@code -}, {@code @}, tab, CR or LF, or leading spaces followed by a formula
- * trigger) is prefixed with an apostrophe. Local times are written as {@code yyyy-MM-dd HH:mm:ss} and offset times as
- * {@code yyyy-MM-dd HH:mm:ssXXX}.
+ * trigger) is prefixed with an apostrophe. Offset times are written as {@code yyyy-MM-dd HH:mm:ssXXX}.
  */
 public final class CsvWriter {
 
     private static final String LINE_END = "\r\n";
     private static final String FORMULA_PREFIXES = "=+-@";
     private static final String FORMULA_LEADING_TRIGGERS = "=+-@\t\r\n";
-    private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ROOT);
     private static final DateTimeFormatter OFFSET_TIME =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ssXXX", Locale.ROOT);
 
@@ -43,11 +40,7 @@ public final class CsvWriter {
         if (value == null) {
             return "";
         }
-        String raw = switch (value) {
-            case OffsetDateTime offsetTime -> OFFSET_TIME.format(offsetTime);
-            case LocalDateTime localTime -> TIME.format(localTime);
-            default -> value.toString();
-        };
+        String raw = value instanceof OffsetDateTime offsetTime ? OFFSET_TIME.format(offsetTime) : value.toString();
         if (needsFormulaNeutralization(raw)) {
             raw = "'" + raw;
         }

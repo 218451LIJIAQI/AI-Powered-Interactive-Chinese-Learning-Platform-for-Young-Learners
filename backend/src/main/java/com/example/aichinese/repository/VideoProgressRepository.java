@@ -13,4 +13,6 @@ public interface VideoProgressRepository extends JpaRepository<VideoProgress, Lo
     Optional<VideoProgress> findByStudentIdAndRecordedVideoId(Long studentId, Long recordedVideoId);
 
     List<VideoProgress> findByStudentIdAndRecordedVideoIdIn(Long studentId, Collection<Long> recordedVideoIds);
+
+    boolean existsByRecordedVideoId(Long recordedVideoId);
 }

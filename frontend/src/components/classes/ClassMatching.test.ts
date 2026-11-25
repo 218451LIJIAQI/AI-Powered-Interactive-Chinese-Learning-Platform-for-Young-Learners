@@ -1,5 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { useHintSettings } from '@/composables/useHintSettings'
 import { i18n } from '@/plugins/i18n'
@@ -8,10 +8,12 @@ import type { HintMode, HintSettings } from '@/types/learn'
 import type { ActivityOutcome } from '@/types/classes'
 
 const api = vi.hoisted(() => ({ checkMatching: vi.fn(), matchingHint: vi.fn() }))
-const hintApi = vi.hoisted(() => ({ settings: vi.fn(), report: vi.fn() }))
+const hintApi = vi.hoisted(() => ({ settings: vi.fn() }))
+const aiHelperApi = vi.hoisted(() => ({ report: vi.fn() }))
 
 vi.mock('@/api/classes', () => ({ studentClassesApi: api }))
 vi.mock('@/api/learn', () => ({ hintApi }))
+vi.mock('@/api/ai', () => ({ aiHelperApi }))
 
 import ClassMatching from './ClassMatching.vue'
 
@@ -26,7 +28,7 @@ const BOTH_WRONG: ActivityOutcome = {
     { wordId: 1, correct: false },
     { wordId: 2, correct: false },
   ],
-  lessonStatus: 'IN_PROGRESS',
+  lessonCompletedNow: false,
 }
 
 function settings(mode: HintMode): HintSettings {
@@ -59,16 +61,12 @@ describe('ClassMatching', () => {
   beforeEach(async () => {
     api.checkMatching.mockReset()
     api.matchingHint.mockReset()
-    hintApi.report.mockReset()
+    aiHelperApi.report.mockReset()
     hintApi.settings.mockResolvedValue(settings('OFF'))
     // The setting loads once for the file; each test starts with hints off and sets the mode it needs.
     hintSettings = withSetup(useHintSettings).result
     await flushPromises()
     useMode('OFF')
-  })
-
-  afterEach(() => {
-    vi.useRealTimers()
   })
 
   it('checks a full board on the server at once, marks the wrong pairs and finishes when every pair is right', async () => {
@@ -89,7 +87,7 @@ describe('ClassMatching', () => {
     // Wrong pairs stay on show, marked, until the learner changes them.
     expect(wrapper.get('[data-testid="match-word-1"]').classes()).toContain('is-wrong')
     expect(wrapper.text()).toContain('2 of 2 pairs are wrong')
-    expect(wrapper.text()).toContain('Tap a marked pair to fix it.')
+    expect(wrapper.text()).toContain('Click a marked pair to fix it.')
     expect(wrapper.emitted('outcome')).toBeUndefined()
 
     // Try again takes the wrong pairs apart. The same button then reads Reset, off with nothing paired: the focus stays.
@@ -100,13 +98,13 @@ describe('ClassMatching', () => {
     expect(buttonNamed(wrapper, 'Reset').element).toBe(footerStart.element)
     expect(footerStart.attributes('aria-disabled')).toBe('true')
 
-    const outcome = {
+    const outcome: ActivityOutcome = {
       done: true,
       pairs: [
         { wordId: 1, correct: true },
         { wordId: 2, correct: true },
       ],
-      lessonStatus: 'IN_PROGRESS',
+      lessonCompletedNow: false,
     }
     api.checkMatching.mockResolvedValueOnce(outcome)
     await pair(wrapper, 1, 'mum')
@@ -141,7 +139,7 @@ describe('ClassMatching', () => {
     const wrapper = mountMatching(true, ['你好', '再见'])
 
     expect(wrapper.text()).toContain('Question')
-    expect(wrapper.text()).toContain('Tap a question, then its answer.')
+    expect(wrapper.text()).toContain('Click a question, then its answer.')
   })
 
   it('offers a SparkBot hint to a stuck learner after their delay, and a pair made starts the wait again', async () => {
@@ -162,7 +160,7 @@ describe('ClassMatching', () => {
   it('shows the hint for the first word not paired yet, with the AI note, and lets the learner report it', async () => {
     useMode('ON_REQUEST')
     api.matchingHint.mockResolvedValue({ wordId: 1, meaning: 'mum' })
-    hintApi.report.mockResolvedValue(undefined)
+    aiHelperApi.report.mockResolvedValue(undefined)
     const wrapper = mountMatching()
 
     await wrapper.get('[data-testid="class-hint-show"]').trigger('click')
@@ -182,12 +180,16 @@ describe('ClassMatching', () => {
     await wrapper.get('[data-testid="hint-report-form"]').trigger('submit')
     await flushPromises()
 
-    expect(hintApi.report).toHaveBeenCalledWith(
-      expect.objectContaining({ aiResponseSnapshot: '妈妈 means “mum”.', reasonCategory: 'INCORRECT_CONTENT' }),
+    expect(aiHelperApi.report).toHaveBeenCalledWith(
+      expect.objectContaining({
+        featureKey: 'HINT',
+        aiResponseSnapshot: '妈妈 means “mum”.',
+        reasonCategory: 'INCORRECT_CONTENT',
+      }),
     )
-    expect(hintApi.report.mock.calls[0]![0].promptSnapshot).toContain('My Family · Family')
+    expect(aiHelperApi.report.mock.calls[0]![0].promptSnapshot).toContain('My Family · Family')
     expect(wrapper.get('[data-testid="toast"]').text()).toBe(
-      'Report sent. An admin replies in Ask SparkBot › My reports.',
+      'Report sent. An admin replies in AI Helper › Ask SparkBot › My reports.',
     )
     expect(wrapper.get('[data-testid="class-hint-report"]').text()).toBe('Reported')
     i18n.global.locale.value = 'ms'
@@ -286,7 +288,7 @@ describe('ClassMatching', () => {
   it('keeps Reported hint state across a wrong-check cycle and keeps the confirmation toast after completion', async () => {
     useMode('ON_REQUEST')
     api.matchingHint.mockResolvedValue({ wordId: 1, meaning: 'mum' })
-    hintApi.report.mockResolvedValue({ id: 9 })
+    aiHelperApi.report.mockResolvedValue({ id: 9 })
     api.checkMatching.mockResolvedValueOnce(BOTH_WRONG)
     const wrapper = mountMatching()
 
@@ -297,7 +299,7 @@ describe('ClassMatching', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('Report sent')
 
-    // Wrong check unmounts ClassHint; Try again remounts it and must remember that word 1's hint was reported.
+    // Wrong check unmounts HintPanel; Try again remounts it and must remember that word 1's hint was reported.
     await pair(wrapper, 1, 'dad')
     await pair(wrapper, 2, 'mum')
     await flushPromises()

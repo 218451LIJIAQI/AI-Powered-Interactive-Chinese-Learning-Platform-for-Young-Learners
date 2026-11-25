@@ -1,6 +1,6 @@
 <template>
-  <div class="practice-player" :data-testid="isTyping ? undefined : `${set.type.toLowerCase()}-player`">
-    <PracticeProgress :label="counterLabel" />
+  <div class="practice-player" :data-testid="`${set.type.toLowerCase()}-player`">
+    <p class="practice-counter" aria-live="polite" data-testid="practice-counter">{{ counterLabel }}</p>
 
     <div v-if="isAgain" class="practice-combo">
       <span class="tag is-outline" data-testid="once-more">
@@ -47,17 +47,7 @@
     <div class="practice-footer">
       <div v-if="!check" class="btn-group">
         <button
-          v-if="!isSentence && !isTyping"
-          class="btn btn-secondary"
-          type="button"
-          :disabled="run.busy.value"
-          data-testid="skip"
-          @click="submit(null, null)"
-        >
-          {{ t('common.skip') }}
-        </button>
-        <button
-          v-else
+          v-if="isSentence || isTyping"
           class="btn btn-secondary"
           type="button"
           :disabled="run.busy.value"
@@ -67,6 +57,15 @@
         >
           {{ t('practice.reset') }}
         </button>
+        <button
+          class="btn btn-secondary"
+          type="button"
+          :disabled="run.busy.value"
+          data-testid="skip"
+          @click="submit(null, null)"
+        >
+          {{ t('common.skip') }}
+        </button>
       </div>
       <div class="practice-footer-end">
         <button
@@ -74,28 +73,47 @@
           ref="nextButton"
           class="btn btn-primary"
           type="button"
-          :disabled="run.busy.value"
+          :disabled="run.busy.value || completed"
           :aria-busy="run.busy.value"
           data-testid="continue"
           @click="next"
         >
           {{ isLast ? t('common.seeResult') : t('practice.nextItem') }}
         </button>
-        <ConfidenceActions
-          v-else
-          :disabled="answer === null || run.busy.value || hint.loading.value"
-          :busy="run.busy.value"
-          :hint-used="hint.used.value"
-          :picked="answer !== null"
-          @answer="submit(answer, $event)"
-        />
+        <div v-else class="practice-confidence" role="group" :aria-labelledby="`${baseId}-confidence`">
+          <span :id="`${baseId}-confidence`" class="practice-confidence-label">
+            {{ hint.used.value && answer !== null ? t('answer.hintUsedGuess') : t('answer.howSure') }}
+          </span>
+          <div class="btn-group">
+            <button
+              class="btn btn-secondary"
+              type="button"
+              :disabled="answerDisabled"
+              :aria-busy="run.busy.value && submittingConfidence === 'GUESS'"
+              data-testid="answer-guess"
+              @click="submit(answer, 'GUESS')"
+            >
+              {{ t('answer.guessing') }}
+            </button>
+            <button
+              class="btn btn-secondary"
+              type="button"
+              :disabled="answerDisabled || hint.used.value"
+              :aria-busy="run.busy.value && submittingConfidence === 'SURE'"
+              data-testid="answer-sure"
+              @click="submit(answer, 'SURE')"
+            >
+              {{ t('answer.sure') }}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, useTemplateRef, watch } from 'vue'
 
 import { practiceApi } from '@/api/learn'
 import IconGlyph from '@/components/common/IconGlyph.vue'
@@ -103,23 +121,14 @@ import QuestionStage from '@/components/learn/QuestionStage.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { practiceAnswerMessages } from '@/plugins/practiceAnswerMessages'
 import { practiceMessages } from '@/plugins/practiceMessages'
-import type {
-  AnswerCheck,
-  AnswerConfidence,
-  PracticeItemAnswer,
-  PracticeResult,
-  PracticeSet,
-  QuestionView,
-} from '@/types/learn'
+import type { AnswerCheck, AnswerConfidence, PracticeItemAnswer, PracticeSet, QuestionView } from '@/types/learn'
 import { questionShortcut } from '@/utils/questionShortcut'
 
-import ConfidenceActions from './ConfidenceActions.vue'
 import PracticeHint from './PracticeHint.vue'
-import PracticeProgress from './PracticeProgress.vue'
 import PracticeVerdict from './PracticeVerdict.vue'
 import TypingStage from './TypingStage.vue'
-import type { RunTally } from './practiceTypes'
-import { usePracticeRun, type CheckedAnswer } from './usePracticeRun'
+import type { PracticeCompletion } from './practiceTypes'
+import { usePracticeRun } from './usePracticeRun'
 import { hintReportContext, useStuckHint } from './useStuckHint'
 
 /**
@@ -128,9 +137,10 @@ import { hintReportContext, useStuckHint } from './useStuckHint'
  * tally (no recap: the done card says instead whether anything went to Mistakes).
  */
 const props = defineProps<{ set: PracticeSet }>()
-const emit = defineEmits<{ finished: [result: PracticeResult, recap: string, tally: RunTally] }>()
+const emit = defineEmits<{ finished: [completion: PracticeCompletion] }>()
 
 const { t } = useLocalMessages({ practice: practiceMessages, answer: practiceAnswerMessages })
+const baseId = useId()
 const isListening = computed(() => props.set.type === 'LISTENING')
 const isSentence = computed(() => props.set.type === 'DRAG_DROP')
 const isTyping = computed(() => props.set.type === 'TYPING')
@@ -149,11 +159,13 @@ const allRight = ref(true)
 const answer = ref<string | null>(null)
 const typed = ref('')
 const check = ref<AnswerCheck | null>(null)
-const given = ref<CheckedAnswer | null>(null)
+const given = ref<PracticeItemAnswer | null>(null)
+const submittingConfidence = ref<AnswerConfidence | null>(null)
 const audioFailed = ref(false)
 const nextButton = useTemplateRef<HTMLButtonElement>('nextButton')
 const typingStage = useTemplateRef<InstanceType<typeof TypingStage>>('typingStage')
 const locked = computed(() => check.value !== null || run.busy.value)
+const answerDisabled = computed(() => answer.value === null || run.busy.value || hint.loading.value)
 const comesBack = computed(() => check.value?.correct === true && given.value?.confidence === 'GUESS' && !isAgain.value)
 const setXp = computed(() =>
   check.value?.correct && isLast.value && allRight.value && !props.set.done ? props.set.xpReward : 0,
@@ -198,23 +210,25 @@ const question = computed<QuestionView | null>(() => {
     hanzi: current.hanzi,
     pinyin: current.pinyin,
     meaning: null,
-    audioText: isListening.value ? current.audioText : null,
+    audioText: current.audioText,
     options: current.options,
     tiles: [],
   }
 })
 
 function onKeydown(event: KeyboardEvent): void {
-  if (isTyping.value || run.busy.value) return
-  const current = question.value
-  if (!current) return
+  if (run.busy.value || completed.value) return
   const shortcut = questionShortcut(event)
   if (shortcut === null) return
   if (shortcut === 'enter') {
-    if (check.value) void next()
+    if (check.value) {
+      event.preventDefault()
+      void next()
+    }
     return
   }
-  if (locked.value || current.answerKind !== 'CHOICE') return
+  const current = question.value
+  if (!current || locked.value || current.answerKind !== 'CHOICE') return
   const option = current.options[shortcut]
   if (option && !hint.ruledOut.value.includes(option.text)) answer.value = option.text
 }
@@ -233,34 +247,44 @@ function clearAnswer(): void {
 }
 
 function resetAnswer(): void {
+  run.error.value = null
   if (hasAnswer.value) clearAnswer()
 }
 
 async function submit(value: string | null, confidence: AnswerConfidence | null): Promise<void> {
   const current = item.value
   if (!current || locked.value) return
-  const sent: CheckedAnswer =
+  const sent: PracticeItemAnswer =
     value === null && isListening.value && audioFailed.value
       ? { itemKey: current.key, answer: null, confidence, audioFailed: true }
       : { itemKey: current.key, answer: value, confidence }
-  const verdict = await run.check(sent)
+  submittingConfidence.value = confidence
+  let verdict: AnswerCheck | null
+  try {
+    verdict = await run.check(sent)
+  } finally {
+    submittingConfidence.value = null
+  }
   if (!verdict) return
+  const effectiveConfidence = verdict.effectiveConfidence !== undefined ? verdict.effectiveConfidence : confidence
   answer.value = value
   check.value = verdict
-  given.value = sent
+  given.value = { ...sent, confidence: effectiveConfidence }
   if (!verdict.correct && !sent.audioFailed) tally.mistakes += 1
   if (!isAgain.value) {
     answers.push({ itemKey: current.key, answer: value })
     if (value !== null) tally.answered += 1
     if (!verdict.correct) allRight.value = false
-    if (verdict.correct && confidence === 'GUESS') queue.value.push(current)
+    if (verdict.correct && effectiveConfidence === 'GUESS') queue.value.push(current)
   }
   await nextTick()
   nextButton.value?.focus()
 }
 
+const completed = ref(false)
+
 async function next(): Promise<void> {
-  if (!check.value || run.busy.value) return
+  if (!check.value || run.busy.value || completed.value) return
   if (!isLast.value) {
     position.value += 1
     check.value = null
@@ -270,6 +294,9 @@ async function next(): Promise<void> {
     return
   }
   const result = await run.complete(answers)
-  if (result) emit('finished', result, '', { ...tally })
+  if (result) {
+    completed.value = true
+    emit('finished', { result, tally: { ...tally } })
+  }
 }
 </script>

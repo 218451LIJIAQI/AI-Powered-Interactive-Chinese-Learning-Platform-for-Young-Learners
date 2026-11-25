@@ -1,11 +1,11 @@
 <template>
-  <section class="panel admin-detail" :aria-labelledby="`${baseId}-title`" data-testid="admin-hint-rules">
-    <div class="admin-hint-head">
+  <section class="panel admin-detail">
+    <div class="admin-detail-heading">
       <h2 :id="`${baseId}-title`" class="card-title">{{ t('adminAi.hintsTitle') }}</h2>
       <p class="admin-meta">{{ t('adminAi.hintsIntro') }}</p>
     </div>
 
-    <StatePanel v-if="resource.loading.value" tone="loading" :title="t('common.loadingTitle')" message="" />
+    <StatePanel v-if="resource.loading.value" tone="loading" :title="t('common.loadingTitle')" />
     <StatePanel
       v-else-if="resource.error.value"
       tone="error"
@@ -14,8 +14,8 @@
       @retry="resource.reload"
     />
 
-    <form v-else novalidate @submit.prevent="save">
-      <div class="data-table-wrap">
+    <form v-else class="admin-detail" novalidate @submit.prevent="save">
+      <div class="data-table-wrap" role="region" :aria-labelledby="`${baseId}-title`" tabindex="0">
         <table class="data-table admin-hint-table">
           <thead>
             <tr>

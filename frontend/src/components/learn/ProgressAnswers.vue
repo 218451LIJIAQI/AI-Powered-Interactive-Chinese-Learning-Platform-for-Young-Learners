@@ -1,6 +1,6 @@
 <template>
   <dl v-if="data" class="progress-answers">
-    <div v-if="data.sureAndRight > 0 || reviewAnswers" class="progress-answers-row" data-testid="answers-this-week">
+    <div v-if="hasAnswers" class="progress-answers-row" data-testid="answers-this-week">
       <dt>{{ t('progress.answersThisWeek') }}</dt>
       <dd>
         <span class="tag">{{ t('progress.sureAndRight', { count: data.sureAndRight }) }}</span>
@@ -10,7 +10,7 @@
           {{ t('progress.wrongGuesses', { count: data.wrongGuesses }) }}
         </span>
         <RouterLink
-          v-if="reviewAnswers"
+          v-if="hasWrongAnswers"
           class="btn btn-secondary btn-sm"
           :to="{ name: 'student-practice', params: { type: 'mistakes' } }"
         >
@@ -51,9 +51,14 @@ const { t } = useLocalMessages({ progress: progressMessages })
 
 const { data } = useResource(xpApi.progressAnswers)
 
-const reviewAnswers = computed(() => {
+const hasWrongAnswers = computed(() => {
   const week = data.value
-  return week && (week.sureButWrong > 0 || week.luckyGuesses > 0 || week.wrongGuesses > 0)
+  return Boolean(week && (week.sureButWrong > 0 || week.wrongGuesses > 0))
+})
+
+const hasAnswers = computed(() => {
+  const week = data.value
+  return Boolean(week && (week.sureAndRight > 0 || week.luckyGuesses > 0 || hasWrongAnswers.value))
 })
 
 const mostIn = computed(() => {

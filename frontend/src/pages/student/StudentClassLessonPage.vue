@@ -41,13 +41,7 @@
               @watched="markWatched"
               @report="reporting = true"
             />
-            <DataNotice :error="videoProgressError">
-              <template #actions>
-                <button class="btn btn-secondary btn-sm" type="button" @click="markWatched">
-                  {{ t('common.retry') }}
-                </button>
-              </template>
-            </DataNotice>
+            <DataNotice :error="videoProgressError" @retry="markWatched" />
           </div>
 
           <div v-if="lesson.keyPhrases.length" class="student-lesson-block">
@@ -65,7 +59,7 @@
             <h2 id="lesson-activities-title" class="card-title">{{ t('studentClasses.lesson.activities') }}</h2>
             <!-- Each row is one link: Start on an activity to do, a chevron on a done one. An archived class's rows only
                  show what was done. -->
-            <ol class="row-list student-lesson-activities">
+            <ol class="row-list">
               <li
                 v-for="activity in lesson.activities"
                 :key="`${activity.type}-${activity.id}`"
@@ -182,17 +176,18 @@
         :message="loadError"
         :back-to="classRoute"
         :back-label="t('classes.openClass')"
-        @retry="load"
+        @retry="resource.reload"
       />
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
 import { studentClassesApi } from '@/api/classes'
+import { getAuthSessionVersion } from '@/api/http'
 import ClassLoadError from '@/components/classes/ClassLoadError.vue'
 import ClassPageHeader from '@/components/classes/ClassPageHeader.vue'
 import KeyPhraseCards from '@/components/classes/KeyPhraseCards.vue'
@@ -206,72 +201,42 @@ import CjkText from '@/components/learning/CjkText.vue'
 import { usePageRedirect } from '@/composables/usePageNavigation'
 import { useClassNotice } from '@/composables/useClassNotice'
 import { useLocalMessages } from '@/composables/useLocalMessages'
+import { useRecordById } from '@/composables/useResource'
 import { classesMessages } from '@/plugins/classesMessages'
 import { studentClassesMessages } from '@/plugins/studentClassesMessages'
 import type { StudentLesson } from '@/types/classes'
-import { apiErrorStatus, resolveApiError } from '@/utils/apiError'
+import { resolveApiError } from '@/utils/apiError'
 import { classActivityRoute, classLessonRoute } from '@/utils/classes'
 import { parseRecordId } from '@/utils/recordId'
 import '@/styles/classes.css'
 
 const { t } = useLocalMessages({ studentClasses: studentClassesMessages, classes: classesMessages })
 const route = useRoute()
-const { toast, showToast } = useClassNotice(undefined, 'student-class-lesson')
+const { toast, showToast } = useClassNotice('student-class-lesson')
 
 const routeClassId = computed(() => parseRecordId(route.params.classId))
-const lessonId = computed(() => parseRecordId(route.params.lessonId))
-const lesson = ref<StudentLesson | null>(null)
+const lessonId = computed(() => (route.name === 'student-class-lesson' ? parseRecordId(route.params.lessonId) : null))
+/**
+ * Reads the lesson; only the newest request counts. A lesson of a class the learner has not joined is refused (409):
+ * the 403 page says so and, from the lesson's address in `redirect`, offers its class.
+ */
+const resource = useRecordById(lessonId, studentClassesApi.lesson)
+const lesson = resource.data
 const classId = computed(() => lesson.value?.classId ?? routeClassId.value)
 const classRoute = computed(() =>
   classId.value !== null ? { name: 'student-class', params: { classId: classId.value } } : { name: 'student-classes' },
 )
 
-const loadFailure = shallowRef<{ reason: unknown } | null>(null)
-const needsEnrollment = computed(() => apiErrorStatus(loadFailure.value?.reason) === 409)
-const loadError = computed(() =>
-  loadFailure.value && !needsEnrollment.value
-    ? resolveApiError(loadFailure.value.reason, t('classes.lessonLoadError'))
-    : null,
-)
-/** Neither the lesson nor the reason it could not be read is in yet. */
-const loading = computed(() => lesson.value === null && loadError.value === null)
+const needsEnrollment = computed(() => resource.errorStatus.value === 409)
+const loadError = computed(() => (needsEnrollment.value ? null : resource.error.value))
+const loading = computed(() => resource.loading.value || needsEnrollment.value)
 const reporting = ref(false)
 const videoProgressError = ref<string | null>(null)
 let markingVideo: StudentLesson['video'] = null
-let request = 0
 
-/**
- * Reads the lesson; only the newest request counts. A lesson of a class the learner has not joined is refused (409):
- * the 403 page says so and, from the lesson's address in `redirect`, offers its class.
- */
-async function load(): Promise<void> {
-  const id = lessonId.value
-  const mine = ++request
-  loadFailure.value = null
-  if (id === null) {
-    loadFailure.value = { reason: null }
-    return
-  }
-  try {
-    const loaded = await studentClassesApi.lesson(id)
-    if (mine === request) lesson.value = loaded
-  } catch (reason) {
-    if (mine === request) loadFailure.value = { reason }
-  }
-}
-
-onMounted(load)
-onBeforeUnmount(() => {
-  request += 1
-})
-
-// Another lesson in this same page; leaving the page (to the refused page, say) loads nothing more.
 watch(lessonId, () => {
-  if (route.name !== 'student-class-lesson') return
   reporting.value = false
   videoProgressError.value = null
-  lesson.value = null
-  void load()
 })
 
 // The lesson id is global; a bookmarked URL may carry a different class in its parent segment.
@@ -298,16 +263,24 @@ const quiz = computed(() => lesson.value?.quizzes[0] ?? null)
 
 const nextAction = computed(() => {
   if (lesson.value?.archived) return { to: classRoute.value, label: t('studentClasses.lesson.backToClass') }
+  const notStarted = lesson.value?.status === 'NOT_STARTED'
   const activity = lesson.value?.activities.find((item) => !item.done)
   if (activity && classId.value !== null && lessonId.value !== null) {
     return {
       to: classActivityRoute(classId.value, lessonId.value, activity),
-      label: t('classes.continueNamed', { title: activity.title }),
+      label: t(notStarted ? 'studentClasses.classPage.start' : 'classes.continueNamed', { title: activity.title }),
     }
   }
   const currentQuiz = quiz.value
   if (currentQuiz && (currentQuiz.inProgress || !currentQuiz.attemptCount)) {
-    return { to: quizRoute(currentQuiz.id), label: t('studentClasses.lesson.continueQuiz') }
+    return {
+      to: quizRoute(currentQuiz.id),
+      label: t(
+        notStarted && !currentQuiz.inProgress
+          ? 'studentClasses.lesson.startQuiz'
+          : 'studentClasses.lesson.continueQuiz',
+      ),
+    }
   }
   return { to: classRoute.value, label: t('classes.openClass') }
 })
@@ -342,16 +315,21 @@ async function markWatched(): Promise<void> {
   const current = lesson.value
   const video = current?.video
   if (id === null || !current || !video || video.watched || markingVideo === video) return
+  const session = getAuthSessionVersion()
   markingVideo = video
   videoProgressError.value = null
   try {
     await studentClassesApi.markVideoWatched(id)
-    if (lesson.value !== current) return
-    video.watched = true
-    if (current.status === 'NOT_STARTED') current.status = 'IN_PROGRESS'
+    if (lesson.value !== current || session !== getAuthSessionVersion()) return
+    resource.replace({
+      ...current,
+      status: current.status === 'NOT_STARTED' ? 'IN_PROGRESS' : current.status,
+      video: { ...video, watched: true },
+    })
   } catch (reason) {
-    if (lesson.value === current)
+    if (lesson.value === current && session === getAuthSessionVersion()) {
       videoProgressError.value = resolveApiError(reason, t('studentClasses.lesson.videoProgressError'))
+    }
   } finally {
     if (markingVideo === video) markingVideo = null
   }

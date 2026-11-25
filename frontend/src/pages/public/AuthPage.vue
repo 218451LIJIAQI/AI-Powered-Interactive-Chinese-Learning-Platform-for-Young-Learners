@@ -55,7 +55,7 @@ import AuthSignInForm from '@/components/public/AuthSignInForm.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { authMessages } from '@/plugins/authMessages'
 import { useAuthStore } from '@/stores/auth'
-import { withoutQueryKeys } from '@/utils/queryText'
+import { withoutQueryKeys } from '@/utils/routeQuery'
 
 const TABS = [
   { id: 'signin', icon: 'profile', label: 'common.signIn' },
@@ -84,10 +84,10 @@ watch(
   { immediate: true },
 )
 
-function showTab(tab: AuthTab, keepCreated = false): void {
-  if (tab === activeTab.value && !keepCreated) return
+function showTab(tab: AuthTab): void {
+  if (tab === activeTab.value) return
   activeTab.value = tab
-  if (!keepCreated) createdEmail.value = null
+  createdEmail.value = null
   // The address keeps the open tab (a reload or a shared link opens it again) and drops a one-time notice. Older links
   // also carry a role: every new account is a learner.
   const query = withoutQueryKeys(route.query, 'reset', 'email', 'invite', 'reason', 'role', 'tab')
@@ -96,8 +96,8 @@ function showTab(tab: AuthTab, keepCreated = false): void {
 }
 
 function onFallbackSignIn(email: string): void {
+  showTab('signin')
   createdEmail.value = email
-  showTab('signin', true)
 }
 
 /** Arrow keys, Home and End move between the two tabs (only the selected tab is in the Tab order). */

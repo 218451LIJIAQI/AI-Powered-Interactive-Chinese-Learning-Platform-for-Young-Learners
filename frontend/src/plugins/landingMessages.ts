@@ -94,4 +94,4 @@ export const landingMessages = {
     planPathTitle: '沿着你的路径学习',
     planPathCopy: '由真实课时组成的按周计划，附带每日目标，可以随时修改。',
   },
-}
+} as const

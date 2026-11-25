@@ -2,8 +2,8 @@
 
 /* Ask SparkBot fills the space below the page navigation. */
 .ai-helper-page:has(> .ai-ask) {
-  height: max(640px, calc(100vh - var(--topbar-height) - var(--page-top) - var(--page-bottom)));
-  height: max(640px, calc(100dvh - var(--topbar-height) - var(--page-top) - var(--page-bottom)));
+  height: max(26rem, calc(100vh - var(--topbar-height) - var(--page-top) - var(--page-bottom)));
+  height: max(26rem, calc(100dvh - var(--topbar-height) - var(--page-top) - var(--page-bottom)));
 }
 
 .ai-helper-page > .ai-ask {
@@ -233,11 +233,11 @@
 
   .ai-ask-chat {
     height: max(
-      560px,
+      24rem,
       calc(100vh - var(--topbar-height) - var(--page-top) - var(--tab-height) - var(--section-gap) - var(--page-bottom))
     );
     height: max(
-      560px,
+      24rem,
       calc(
         100dvh - var(--topbar-height) - var(--page-top) - var(--tab-height) - var(--section-gap) - var(--page-bottom)
       )
@@ -250,6 +250,29 @@
 
   .ai-report-list {
     flex: 0 1 auto;
+    overflow-y: visible;
+  }
+}
+
+@media (max-height: 34rem) {
+  .ai-ask {
+    grid-template-rows: auto;
+  }
+
+  .ai-helper-page:has(> .ai-ask),
+  .ai-ask-chat {
+    height: auto;
+  }
+
+  .ai-helper-page > .ai-ask,
+  .ai-thread,
+  .ai-reports,
+  .ai-report-list {
+    flex: 0 1 auto;
+  }
+
+  .ai-thread,
+  .ai-report-list {
     overflow-y: visible;
   }
 }

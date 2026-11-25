@@ -7,11 +7,16 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.temporal.TemporalAdjusters;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiFunction;
+import java.util.function.Consumer;
+import java.util.function.ToLongFunction;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -46,6 +51,7 @@ public class LearnerReminderJobs {
     private static final int ACTIVE_DAYS = 7;
     /** The mistakes reminder waits for this many. */
     private static final long MIN_MISTAKES = 5;
+    private static final int REMINDER_BATCH_SIZE = 500;
 
     private final StudentProfileRepository studentProfileRepository;
     private final LearningMistakeRepository mistakeRepository;
@@ -77,16 +83,19 @@ public class LearnerReminderJobs {
             return 0;
         }
         LocalDate today = now.toLocalDate();
-        return jobs.runOnce(DAILY_GOAL_LAST_RUN_KEY, today, clock, () -> {
-            Map<Long, Long> reminders = new LinkedHashMap<>();
-            for (var goal : studentProfileRepository.findDailyGoalsForReminder(
-                    learnClock.startOf(today.minusDays(ACTIVE_DAYS - 1L)), learnClock.startOf(today),
-                    learnClock.startOf(today.plusDays(1)), XpService.SOURCE_DAILY_GOAL, today.toEpochDay())) {
-                reminders.put(goal.learnerId(), goal.remainingXp());
-            }
-            learnerNotifications.dailyGoalReminders(reminders);
-            return reminders.size();
-        });
+        if (!jobs.claimPeriod(DAILY_GOAL_LAST_RUN_KEY, today, clock)) {
+            return 0;
+        }
+        LocalDateTime activeSince = learnClock.startOf(today.minusDays(ACTIVE_DAYS - 1L));
+        LocalDateTime dayStart = learnClock.startOf(today);
+        LocalDateTime dayEnd = learnClock.startOf(today.plusDays(1));
+        long epochDay = today.toEpochDay();
+        return dispatchBatched(
+                (afterUserId, batchPage) -> studentProfileRepository.findDailyGoalsForReminder(
+                        activeSince, dayStart, dayEnd, XpService.SOURCE_DAILY_GOAL, epochDay, afterUserId, batchPage),
+                StudentProfileRepository.DailyGoal::learnerId,
+                StudentProfileRepository.DailyGoal::remainingXp,
+                learnerNotifications::dailyGoalReminders);
     }
 
     /** The week's mistakes reminders, if due (from Monday 10:00); returns how many learners were reminded. */
@@ -96,13 +105,42 @@ public class LearnerReminderJobs {
         if (now.toLocalDate().equals(monday) && now.toLocalTime().isBefore(MISTAKES_FROM)) {
             return 0;
         }
-        return jobs.runOnce(MISTAKES_LAST_RUN_KEY, monday, clock, () -> {
-            Map<Long, Long> reminders = new LinkedHashMap<>();
-            for (LearningMistakeRepository.Waiting learner : mistakeRepository.findLearnersWithWaitingMistakes(MIN_MISTAKES)) {
-                reminders.put(learner.userId(), learner.waiting());
+        if (!jobs.claimPeriod(MISTAKES_LAST_RUN_KEY, monday, clock)) {
+            return 0;
+        }
+        return dispatchBatched(
+                (afterUserId, batchPage) -> mistakeRepository.findLearnersWithWaitingMistakes(
+                        MIN_MISTAKES, afterUserId, batchPage),
+                LearningMistakeRepository.Waiting::userId,
+                LearningMistakeRepository.Waiting::waiting,
+                learnerNotifications::mistakesToReviewReminders);
+    }
+
+    private static <T> int dispatchBatched(
+            BiFunction<Long, PageRequest, List<T>> fetchSlice,
+            ToLongFunction<T> userIdOf,
+            ToLongFunction<T> metricOf,
+            Consumer<Map<Long, Long>> sendBatch) {
+        long afterUserId = 0L;
+        int totalReminded = 0;
+        PageRequest batchPage = PageRequest.of(0, REMINDER_BATCH_SIZE);
+        while (true) {
+            List<T> slice = fetchSlice.apply(afterUserId, batchPage);
+            if (slice.isEmpty()) {
+                break;
             }
-            learnerNotifications.mistakesToReviewReminders(reminders);
-            return reminders.size();
-        });
+            Map<Long, Long> reminders = new LinkedHashMap<>(slice.size());
+            for (T item : slice) {
+                long userId = userIdOf.applyAsLong(item);
+                reminders.put(userId, metricOf.applyAsLong(item));
+                afterUserId = userId;
+            }
+            sendBatch.accept(reminders);
+            totalReminded += reminders.size();
+            if (slice.size() < REMINDER_BATCH_SIZE) {
+                break;
+            }
+        }
+        return totalReminded;
     }
 }

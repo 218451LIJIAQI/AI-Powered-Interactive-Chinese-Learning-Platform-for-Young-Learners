@@ -51,7 +51,7 @@ import lombok.RequiredArgsConstructor;
  */
 @Component
 @RequiredArgsConstructor
-public class PlanViewAssembler {
+class PlanViewAssembler {
 
     /** Progress may trail the time passed by this many points and still be "on track". */
     private static final int ON_TRACK_TOLERANCE = 10;
@@ -68,14 +68,14 @@ public class PlanViewAssembler {
     private final LearnClock clock;
 
     /** The stored steps, catalogue and progress for the learner's plan, read once per request. */
-    public record Live(
+    record Live(
             List<LearningPlanStep> planSteps,
             PlanCatalogue.Catalogue catalogue,
             Map<Long, ClassViews.MyClassCard> joined,
             LocalDate today) {
     }
 
-    public Live live(StudentProfile student, LearningPlan plan) {
+    Live live(StudentProfile student, LearningPlan plan) {
         List<LearningPlanStep> planSteps = plan == null ? List.of() : stepRepository.findByPlanIdOrderByPositionAsc(plan.getId());
         Set<Long> classIds = planSteps.stream().filter(step -> step.getStepKind() == PlanStepKind.CLASS)
                 .map(LearningPlanStep::getRefId).collect(Collectors.toSet());
@@ -89,7 +89,7 @@ public class PlanViewAssembler {
 
     // Whole plan
 
-    public PlanViews.Plan plan(StudentProfile student, LearningPlan plan) {
+    PlanViews.Plan plan(StudentProfile student, LearningPlan plan) {
         Live live = live(student, plan);
         List<PlanViews.Step> steps = steps(live);
         PlanComposer.Goal goal = PlanCodec.goal(plan);
@@ -120,7 +120,7 @@ public class PlanViewAssembler {
      * The optional class the learner picked to take first, while the pick still means something: the class is one of
      * the plan's optional classes (not joined, still in the catalogue) and there is another to choose from.
      */
-    static Long pickedClass(LearningPlan plan, List<PlanViews.Step> steps) {
+    private static Long pickedClass(LearningPlan plan, List<PlanViews.Step> steps) {
         Long picked = plan.getPickedClassId();
         if (picked == null) {
             return null;
@@ -133,7 +133,7 @@ public class PlanViewAssembler {
 
     // At a glance
 
-    public PlanViews.Summary summary(StudentProfile student, LearningPlan plan, Live live) {
+    PlanViews.Summary summary(StudentProfile student, LearningPlan plan, Live live) {
         List<PlanViews.Step> steps = steps(live);
         PlanViews.Weeks weeks = weeks(plan, live.today());
         PlanViews.Progress progress = progress(student, plan, steps, live.today());
@@ -378,10 +378,10 @@ public class PlanViewAssembler {
                         completion.getLesson().getTitle(), clock.dayOf(completion.getFirstCompletedAt()))));
         LearnPathResponse.NextLesson next = live.catalogue().path().nextLesson();
         if (next != null) {
-            tasks.add(new PlanViews.WeekTask.LearnNext(next.title(), next.minutes(), next.id()));
+            tasks.add(new PlanViews.WeekTask.LearnNext(next.title(), next.minutes(), next.id(), next.kind()));
         } else {
             openCheckpoint(live.catalogue().path()).ifPresent(open -> tasks.add(new PlanViews.WeekTask.LearnNext(
-                    open.checkpoint().title(), open.minutes(), open.checkpoint().id())));
+                    open.checkpoint().title(), open.minutes(), open.checkpoint().id(), LearnLessonKind.CHECKPOINT)));
         }
         PlanViews.PracticeSuggestion practice = practice(student, plan);
         if (practice != null) {

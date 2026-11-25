@@ -13,12 +13,9 @@ import java.util.Map;
 
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -30,6 +27,7 @@ import com.example.aichinese.entity.LessonKeyPhrase;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.AiFeatureKey;
 import com.example.aichinese.entity.enums.AiRequestStatus;
+import com.example.aichinese.entity.enums.EnumLookups;
 import com.example.aichinese.entity.enums.PracticeCheckType;
 import com.example.aichinese.repository.AiPracticeCheckRepository;
 import com.example.aichinese.repository.LessonKeyPhraseRepository;
@@ -43,12 +41,16 @@ import com.example.aichinese.service.ai.AiProviderPrompt;
 import com.example.aichinese.util.AiInputSanitizer;
 import com.example.aichinese.util.LanguageCodes;
 import com.example.aichinese.util.PaginationUtils;
+import com.example.aichinese.util.PersonalDataRedactor;
 import com.example.aichinese.util.TextUtils;
+
+import lombok.RequiredArgsConstructor;
 
 /**
  * Pronunciation and handwriting practice checks for the learner. Only the scores and feedback are saved.
  */
 @Service
+@RequiredArgsConstructor
 public class AiPracticeCheckService {
 
     /** How long a deleted check can be brought back (the Undo of Delete in Recent checks). */
@@ -70,28 +72,7 @@ public class AiPracticeCheckService {
     private final LessonProgressRepository lessonProgressRepository;
     private final LessonKeyPhraseRepository keyPhraseRepository;
     /** The lesson of a check is read in a short transaction of its own: the AI call runs outside any transaction. */
-    private final TransactionTemplate readOnlyTransaction;
-    private final TransactionTemplate writeTransaction;
-
-    public AiPracticeCheckService(
-            CurrentAccount currentAccount,
-            AiGateway gateway,
-            FileStorageService fileStorageService,
-            AiPracticeCheckRepository checkRepository,
-            LessonProgressRepository lessonProgressRepository,
-            LessonKeyPhraseRepository keyPhraseRepository,
-            PlatformTransactionManager transactionManager) {
-        this.currentAccount = currentAccount;
-        this.gateway = gateway;
-        this.fileStorageService = fileStorageService;
-        this.checkRepository = checkRepository;
-        this.lessonProgressRepository = lessonProgressRepository;
-        this.keyPhraseRepository = keyPhraseRepository;
-        this.readOnlyTransaction = new TransactionTemplate(transactionManager);
-        this.readOnlyTransaction.setReadOnly(true);
-        this.writeTransaction = new TransactionTemplate(transactionManager);
-        this.writeTransaction.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
-    }
+    private final TransactionRunner transactions;
 
     /** The uploaded file, the learner's target, and its context. */
     public record CheckRequest(
@@ -105,8 +86,7 @@ public class AiPracticeCheckService {
     /** Scores one recording or photo; only a scored check is saved. */
     public PracticeCheckResponses.Result check(SecurityUserDetails currentUser, CheckRequest request) {
         User user = currentAccount.require(currentUser);
-        PracticeCheckType type = PracticeCheckType.tryFrom(request.type())
-                .filter(kind -> kind != PracticeCheckType.TONES)
+        PracticeCheckType type = EnumLookups.tryFrom(PracticeCheckType.class, request.type())
                 .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Check type must be RECORDING or HANDWRITING."));
         String target = AiInputSanitizer.requireText(
                 request.targetText(), MAX_TARGET_TEXT_LENGTH, "Target text is required.");
@@ -125,33 +105,36 @@ public class AiPracticeCheckService {
             return save(currentUser, lessonId, check);
         }
 
+        String safeTarget = PersonalDataRedactor.redact(target);
         FileStorageService.PracticeUpload photo = fileStorageService.readPracticeImage(request.file());
-        AiGateway.AiCall call = AiGateway.AiCall.json(user, AiFeatureKey.PRACTICE_CHECK, language, handwritingPrompt(target),
-                        AiPracticeCheckService::validHandwritingReply)
-                .withSession(currentUser.getSessionId())
+        AiGateway.AiCall call = AiGateway.AiCall.json(
+                        user, currentUser.getSessionId(), AiFeatureKey.PRACTICE_CHECK, language,
+                        handwritingPrompt(safeTarget), AiPracticeCheckService::validHandwritingReply)
                 .withImage(new AiProviderPrompt.AiImageInput(photo.data(), photo.contentType()));
         AiExecutionResult result = gateway.execute(call);
         if (!result.succeeded()) {
             return new PracticeCheckResponses.Result(result.status(), result.userMessage(), null);
         }
         Map<String, Object> json = result.json();
-        if ("UNREADABLE".equals(json.get("status"))) {
+        if ("UNREADABLE".equals(AiJson.text(json, "status"))) {
             return new PracticeCheckResponses.Result(AiRequestStatus.FAILED, RETAKE_PHOTO, null);
         }
-        AiPracticeCheck check = newCheck(type, target, AiJson.percent(json, "score"), AiJson.text(json, "headline"));
+        AiPracticeCheck check = newCheck(type, safeTarget, AiJson.percent(json, "score"), AiJson.text(json, "headline"));
         check.setFeedback(TextUtils.safeTruncate(AiJson.text(json, "feedback"), MAX_FEEDBACK_LENGTH));
-        check.setTips(TextUtils.safeTruncate(AiJson.text(json, "tip").replace('\n', ' '), MAX_TIP_LENGTH));
+        check.setTips(TextUtils.safeTruncate(AiJson.text(json, "tip").replaceAll("\\R+", " "), MAX_TIP_LENGTH));
         return save(currentUser, lessonId, check);
     }
 
     private PracticeCheckResponses.Result save(SecurityUserDetails currentUser, Long lessonId, AiPracticeCheck check) {
-        return writeTransaction.execute(status -> {
+        return transactions.writeReadCommitted(() -> {
             User current = currentAccount.lock(currentUser);
+            // Purge checks whose Undo window expired so soft-deleted rows do not linger indefinitely.
+            checkRepository.deleteDeletedBefore(current.getId(), LocalDateTime.now().minus(UNDO_WINDOW));
             check.setStudentUser(current);
             // Re-resolve the lesson inside the write transaction so a detached entity is never attached across the AI call.
             if (lessonId != null) {
-                lessonProgressRepository.findOpenedPublishedLessons(current.getId(), lessonId, PageRequest.of(0, 1))
-                        .stream().findFirst().ifPresent(check::setLesson);
+                lessonProgressRepository.findOpenedPublishedLesson(current.getId(), lessonId)
+                        .ifPresent(check::setLesson);
             }
             return new PracticeCheckResponses.Result(AiRequestStatus.SUCCESS, null, toResponse(checkRepository.save(check)));
         });
@@ -162,8 +145,8 @@ public class AiPracticeCheckService {
     public PageResponse<PracticeCheckResponses.Check> list(SecurityUserDetails currentUser, int page, int size) {
         return PageResponse.from(
                 PaginationUtils.readPage(PaginationUtils.pageRequest(page, size),
-                        request -> checkRepository.findByStudentUserIdAndCheckTypeNotAndDeletedAtIsNullOrderByCreatedAtDescIdDesc(
-                                currentUser.getUserId(), PracticeCheckType.TONES, request)),
+                        request -> checkRepository.findByStudentUserIdAndDeletedAtIsNullOrderByCreatedAtDescIdDesc(
+                                currentUser.getUserId(), request)),
                 AiPracticeCheckService::toResponse);
     }
 
@@ -189,8 +172,7 @@ public class AiPracticeCheckService {
         User student = currentAccount.lock(currentUser);
         LocalDateTime now = LocalDateTime.now();
         checkRepository.deleteDeletedBefore(student.getId(), now.minus(UNDO_WINDOW));
-        AiPracticeCheck check = checkRepository.findByIdAndStudentUserIdAndCheckTypeNot(
-                        id, student.getId(), PracticeCheckType.TONES)
+        AiPracticeCheck check = checkRepository.findByIdAndStudentUserId(id, student.getId())
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, CHECK_NOT_FOUND));
         check.setDeletedAt(null);
         return toResponse(check);
@@ -203,7 +185,7 @@ public class AiPracticeCheckService {
     @Transactional(readOnly = true)
     public List<PracticeCheckResponses.Lesson> linkableLessons(SecurityUserDetails currentUser) {
         List<Lesson> lessons = lessonProgressRepository.findOpenedPublishedLessons(
-                currentUser.getUserId(), null, PageRequest.of(0, MAX_LINKABLE_LESSONS));
+                currentUser.getUserId(), PageRequest.of(0, MAX_LINKABLE_LESSONS));
         if (lessons.isEmpty()) {
             return List.of();
         }
@@ -265,7 +247,7 @@ public class AiPracticeCheckService {
     }
 
     private AiPracticeCheck findOwnCheck(Long studentUserId, Long id) {
-        return checkRepository.findByIdAndStudentUserIdAndCheckTypeNot(id, studentUserId, PracticeCheckType.TONES)
+        return checkRepository.findByIdAndStudentUserId(id, studentUserId)
                 .filter(check -> check.getDeletedAt() == null)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, CHECK_NOT_FOUND));
     }
@@ -275,8 +257,7 @@ public class AiPracticeCheckService {
     }
 
     private Lesson linkableLesson(User user, Long lessonId) {
-        return readOnlyTransaction.execute(status -> lessonProgressRepository.findOpenedPublishedLessons(
-                        user.getId(), lessonId, PageRequest.of(0, 1)).stream().findFirst()
+        return transactions.readOnly(() -> lessonProgressRepository.findOpenedPublishedLesson(user.getId(), lessonId)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Lesson was not found.")));
     }
 
@@ -294,10 +275,11 @@ public class AiPracticeCheckService {
     }
 
     private static boolean validHandwritingReply(Map<String, Object> json) {
-        if ("UNREADABLE".equals(json.get("status"))) {
+        String status = AiJson.text(json, "status");
+        if ("UNREADABLE".equals(status)) {
             return true;
         }
-        return "READABLE".equals(json.get("status")) && AiJson.percent(json, "score") != null
+        return "READABLE".equals(status) && AiJson.percent(json, "score") != null
                 && AiJson.hasText(json, "headline") && AiJson.hasText(json, "feedback")
                 && AiJson.hasText(json, "tip");
     }
@@ -305,7 +287,7 @@ public class AiPracticeCheckService {
     private static AiPracticeCheck newCheck(PracticeCheckType type, String target, int score, String headline) {
         AiPracticeCheck check = new AiPracticeCheck();
         check.setCheckType(type);
-        check.setTargetText(target);
+        check.setTargetText(TextUtils.safeTruncate(target, MAX_TARGET_TEXT_LENGTH));
         check.setScore(score);
         check.setHeadline(TextUtils.safeTruncate(headline, MAX_HEADLINE_LENGTH));
         return check;

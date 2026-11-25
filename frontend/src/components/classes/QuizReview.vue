@@ -30,8 +30,8 @@
             query: {
               q: t('classPlayer.result.askQuestion', {
                 question: question.text,
-                answer: question.yourAnswer ?? '',
-                correct: question.correctAnswer ?? '',
+                answer: oneLine(question.yourAnswer) || t('classPlayer.result.noAnswer'),
+                correct: oneLine(question.correctAnswer),
               }),
             },
           }"

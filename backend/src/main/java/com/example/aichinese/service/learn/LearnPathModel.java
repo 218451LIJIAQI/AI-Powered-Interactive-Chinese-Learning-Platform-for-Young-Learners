@@ -27,7 +27,7 @@ import com.example.aichinese.entity.enums.LearnLessonKind;
  * gate of the level, not part of that unit: it opens once every lesson of the level is done, the unit is done (and
  * earns Unit Champion) by then, and the checkpoint stays the path's next step until it is passed.
  */
-public final class LearnPathModel {
+final class LearnPathModel {
 
     private final List<UnitNode> units;
     private final Map<Long, StopNode> stopsById = new LinkedHashMap<>();
@@ -42,7 +42,7 @@ public final class LearnPathModel {
      * @param lessonsInOrder the stops of the whole path, in path order (those of other units are left out)
      * @param completedLessonIds stops the student finished
      */
-    public static LearnPathModel build(
+    static LearnPathModel build(
             List<LearnUnit> publishedUnits,
             List<LearnLesson> lessonsInOrder,
             Set<Long> completedLessonIds) {
@@ -80,20 +80,20 @@ public final class LearnPathModel {
         return new LearnPathModel(units);
     }
 
-    public List<UnitNode> units() {
+    List<UnitNode> units() {
         return units;
     }
 
-    public Optional<StopNode> stop(Long lessonId) {
+    Optional<StopNode> stop(Long lessonId) {
         return Optional.ofNullable(stopsById.get(lessonId));
     }
 
-    public Optional<UnitNode> unit(Long unitId) {
+    Optional<UnitNode> unit(Long unitId) {
         return units.stream().filter(node -> node.unit().getId().equals(unitId)).findFirst();
     }
 
     /** The next stop to do: the first open required stop, else the first open bonus chest. */
-    public Optional<StopNode> next() {
+    Optional<StopNode> next() {
         StopNode firstBonus = null;
         for (StopNode stop : stopsById.values()) {
             if (stop.state() == StopState.AVAILABLE) {
@@ -115,19 +115,19 @@ public final class LearnPathModel {
      *        numbered, carries the number of the lesson before it
      * @param unlockAfter the required stop that must be finished first, null for the first stop
      */
-    public record StopNode(LearnLesson lesson, int position, StopState state, LearnLesson unlockAfter) {
+    record StopNode(LearnLesson lesson, int position, StopState state, LearnLesson unlockAfter) {
 
-        public boolean required() {
+        boolean required() {
             return lesson.getLessonKind() != LearnLessonKind.BONUS;
         }
 
         /** A lesson or the unit review; not a bonus chest or a checkpoint. */
-        public boolean countsAsLesson() {
+        boolean countsAsLesson() {
             return lesson.getLessonKind().countsAsLesson();
         }
 
         /** Drawn on its unit's road: every stop but the level checkpoint. */
-        public boolean onRoad() {
+        boolean onRoad() {
             return lesson.getLessonKind() != LearnLessonKind.CHECKPOINT;
         }
     }
@@ -136,9 +136,9 @@ public final class LearnPathModel {
      * A unit with its stops; {@code previousUnit} must be finished before it opens. The last unit of a level also holds
      * the level's checkpoint, which is not part of its state.
      */
-    public record UnitNode(LearnUnit unit, List<StopNode> stops, int lessonCount, int completedCount, LearnUnit previousUnit) {
+    record UnitNode(LearnUnit unit, List<StopNode> stops, int lessonCount, int completedCount, LearnUnit previousUnit) {
 
-        public UnitState state() {
+        UnitState state() {
             if (lessonCount > 0 && completedCount == lessonCount) {
                 return UnitState.DONE;
             }
@@ -147,12 +147,12 @@ public final class LearnPathModel {
         }
 
         /** The stops on the unit's road, in order: its lessons, bonus chests and review. */
-        public List<StopNode> roadStops() {
+        List<StopNode> roadStops() {
             return stops.stream().filter(StopNode::onRoad).toList();
         }
 
         /** The checkpoint of the unit's level, held by its last unit: the gate to the next level. */
-        public Optional<StopNode> checkpoint() {
+        Optional<StopNode> checkpoint() {
             return stops.stream().filter(stop -> !stop.onRoad()).findFirst();
         }
     }

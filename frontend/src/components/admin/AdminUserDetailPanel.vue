@@ -1,17 +1,20 @@
 <template>
-  <div ref="panelRef" class="admin-users-side" tabindex="-1">
+  <div ref="panelRef" class="admin-detail-slot" tabindex="-1">
     <StatePanel
       v-if="loading || selectedId === null"
+      class="panel"
+      heading-tag="h2"
       tone="loading"
       :title="t('adminUsers.detailLoading')"
       :message="t('adminUsers.detailLoadingHint')"
     />
     <StatePanel
       v-else-if="error || !user"
+      class="panel"
+      heading-tag="h2"
       tone="error"
-      icon="alert"
       :title="t('adminUsers.detailError')"
-      :message="error ?? ''"
+      :message="error"
       @retry="emit('retry')"
     />
     <template v-else>
@@ -22,9 +25,15 @@
             <h2 id="admin-users-detail-name" class="admin-detail-title">{{ user.fullName }}</h2>
             <p class="admin-meta">{{ user.email }}</p>
             <div class="admin-tags">
-              <span v-if="user.role" class="tag is-outline">{{ t(ROLE_KEYS[user.role]) }}</span>
+              <span v-if="user.role" class="tag is-outline">{{ t(`roles.${user.role}`) }}</span>
               <StatusPill
-                :label="user.active ? t('adminUsers.accountActive') : t('adminUsers.accountDeactivated')"
+                :label="
+                  user.deleted
+                    ? t('adminUsers.accountDeleted')
+                    : user.active
+                      ? t('adminUsers.accountActive')
+                      : t('adminUsers.accountDeactivated')
+                "
                 :tone="accountTone(user.active)"
               />
             </div>
@@ -37,7 +46,7 @@
           <dl class="kv-list">
             <template v-if="user.deactivation">
               <dt>{{ t('adminUsers.reason') }}</dt>
-              <dd class="admin-users-reason" data-testid="admin-users-deactivation">
+              <dd class="admin-list-head" data-testid="admin-users-deactivation">
                 <span v-if="user.deactivation.reason">{{ user.deactivation.reason }}</span>
                 <span class="admin-meta">{{ deactivationLine }}</span>
               </dd>
@@ -47,9 +56,13 @@
           </dl>
         </section>
 
-        <div v-if="user.role" class="admin-section admin-ruled">
+        <div v-if="user.deleted" class="admin-section admin-ruled">
+          <p class="admin-meta" data-testid="admin-users-access-hint">{{ t('adminUsers.deletedNote') }}</p>
+        </div>
+        <div v-else-if="user.role" class="admin-section admin-ruled">
           <button
             v-if="!user.self && user.active"
+            ref="actionButtonRef"
             class="btn btn-secondary btn-block"
             type="button"
             :disabled="saving"
@@ -62,6 +75,7 @@
           <!-- Easy to take back (Deactivate again), so it runs at once: no question, no reason. -->
           <button
             v-else-if="!user.self"
+            ref="actionButtonRef"
             class="btn btn-primary btn-block"
             type="button"
             :disabled="saving"
@@ -88,7 +102,7 @@
       </section>
 
       <section class="panel admin-detail" aria-labelledby="admin-users-audit-title">
-        <div class="admin-section-head">
+        <div class="section-header">
           <h2 id="admin-users-audit-title" class="card-title">{{ t('adminUsers.recentAudit') }}</h2>
           <RouterLink
             class="btn btn-ghost btn-sm admin-link-action"
@@ -121,7 +135,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import { accountTone } from '@/components/admin/adminDisplay'
@@ -135,7 +149,6 @@ import { auditActionMessages } from '@/plugins/auditActionMessages'
 import type { AdminUserDetail, AuditEntry } from '@/types/ops'
 import { auditActionLabel } from '@/utils/auditActions'
 import { formatDate, formatDateTime } from '@/utils/format'
-import { ROLE_KEYS } from '@/utils/opsLabels'
 
 const props = defineProps<{
   selectedId: number | null
@@ -153,12 +166,32 @@ const { t } = useLocalMessages({
 })
 
 const panelRef = ref<HTMLElement | null>(null)
+const actionButtonRef = ref<HTMLButtonElement | null>(null)
 
 function focus(): void {
   const side = panelRef.value
-  // Under 1200 the person sits below the table: focusing them there scrolls them into view.
-  side?.focus({ preventScroll: side.getBoundingClientRect().top < window.innerHeight })
+  if (!side) return
+  const { top } = side.getBoundingClientRect()
+  // Under 1200 the person sits below the table: focusing them there scrolls them into view when off-screen.
+  side.focus({ preventScroll: top >= 0 && top < window.innerHeight })
 }
+
+// Restores keyboard focus into the detail panel if disabling/swapping Reactivate or Deactivate dropped focus to body.
+watch(
+  () => props.saving,
+  (saving, wasSaving) => {
+    if (saving || !wasSaving || !panelRef.value) return
+    const active = document.activeElement
+    if (!active || active === document.body || !panelRef.value.contains(active)) {
+      if (actionButtonRef.value && !actionButtonRef.value.disabled) {
+        actionButtonRef.value.focus({ preventScroll: true })
+      } else {
+        focus()
+      }
+    }
+  },
+  { flush: 'post' },
+)
 
 defineExpose({ focus })
 

@@ -105,8 +105,6 @@ class AiIntegrationTests extends ApiIntegrationTest {
                 .andExpect(status().isForbidden());
         mockMvc.perform(api.authGet("/api/v1/admin/ai/quiz-draft/availability", studentToken))
                 .andExpect(status().isForbidden());
-        mockMvc.perform(api.jsonPost("/api/v1/teachers/ai/quiz-draft", adminToken, Map.of("topic", "Greetings")))
-                .andExpect(status().isNotFound());
     }
 
     @Test
@@ -164,14 +162,14 @@ class AiIntegrationTests extends ApiIntegrationTest {
                 .isZero();
         assertThat(jdbc.queryForObject("select count(*) from ai_practice_checks where student_user_id = ?", Long.class, studentId))
                 .isZero();
-        List<AiUsageLog> usageLogs = aiUsageLogRepository.findByUserId(studentId);
+        List<Map<String, Object>> usageLogs = jdbc.queryForList(
+                "select feature_key, status, user_role, input_summary from ai_usage_logs where user_id = ?", studentId);
         assertThat(usageLogs)
-                .extracting(AiUsageLog::getFeatureKey)
-                .contains(AiFeatureKey.CHAT_TUTOR, AiFeatureKey.XIAOMEI_CONVERSATION, AiFeatureKey.QUIZ_GENERATOR,
-                        AiFeatureKey.STORY_GENERATOR, AiFeatureKey.PRACTICE_CHECK);
-        assertThat(usageLogs).allMatch(log -> log.getStatus() == AiRequestStatus.UNAVAILABLE
-                && "STUDENT".equals(log.getUserRole())
-                && (log.getInputSummary() == null || log.getInputSummary().startsWith("content_length=")));
+                .extracting(row -> (String) row.get("feature_key"))
+                .contains("CHAT_TUTOR", "XIAOMEI_CONVERSATION", "QUIZ_GENERATOR", "STORY_GENERATOR", "PRACTICE_CHECK");
+        assertThat(usageLogs).allMatch(row -> "UNAVAILABLE".equals(row.get("status"))
+                && "STUDENT".equals(row.get("user_role"))
+                && (row.get("input_summary") == null || ((String) row.get("input_summary")).startsWith("content_length=")));
     }
 
     @Test
@@ -269,29 +267,6 @@ class AiIntegrationTests extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.data.score").value(78));
         mockMvc.perform(api.authGet(CHECKS_PATH, ownerToken))
                 .andExpect(jsonPath("$.data.items[0].id").value(check.getId()));
-    }
-
-    @Test
-    void retiredToneScoresStayOutOfTheHistoryAndCannotBeRestoredOrReported() throws Exception {
-        String email = uniqueEmail("ai-retired-check");
-        String token = api.registerStudent(email);
-        User student = user(email);
-        AiPracticeCheck currentCheck = savedCheck(student);
-        AiPracticeCheck retiredCheck = savedCheck(student, PracticeCheckType.TONES);
-
-        mockMvc.perform(api.authGet(CHECKS_PATH, token))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.totalItems").value(1))
-                .andExpect(jsonPath("$.data.items[0].id").value(currentCheck.getId()));
-        mockMvc.perform(api.authDelete(CHECKS_PATH + "/" + retiredCheck.getId(), token))
-                .andExpect(status().isNotFound());
-        mockMvc.perform(api.authPost(CHECKS_PATH + "/" + retiredCheck.getId() + "/restore", token))
-                .andExpect(status().isNotFound());
-        mockMvc.perform(api.jsonPost(REPORTS_PATH, token, Map.of(
-                        "featureKey", "PRACTICE_CHECK", "reasonCategory", "SCORE_SEEMS_WRONG",
-                        "practiceCheckId", retiredCheck.getId())))
-                .andExpect(status().isNotFound());
-        assertThat(practiceCheckRepository.findById(retiredCheck.getId())).isPresent();
     }
 
     /** Once the Undo window is over, a deleted check is deleted for good and cannot come back. */
@@ -570,19 +545,18 @@ class AiIntegrationTests extends ApiIntegrationTest {
                             "aiNoticeText", "x".repeat(201), "sensitiveWordFilter", true, "aiSafetyCheck", true)))
                     .andExpect(status().isBadRequest());
             mockMvc.perform(api.jsonPut("/api/v1/admin/ai/settings", adminToken, Map.of(
-                            "aiNoticeText", "SparkBot can be wrong. Ask your teacher when unsure.",
+                            "aiNoticeText", "SparkBot can be wrong. Double-check important answers.",
                             "sensitiveWordFilter", true,
                             "aiSafetyCheck", false)))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.data.aiNoticeText").value("SparkBot can be wrong. Ask your teacher when unsure."))
+                    .andExpect(jsonPath("$.data.aiNoticeText").value("SparkBot can be wrong. Double-check important answers."))
                     .andExpect(jsonPath("$.data.aiSafetyCheck").value(false))
                     .andExpect(jsonPath("$.data.requestsPerMinute").value(10))
                     .andExpect(jsonPath("$.data.requestsPerDay").value(100))
                     .andExpect(jsonPath("$.data.lastChangedAt").isString())
-                    .andExpect(jsonPath("$.data.lastChangedBy").isString())
-                    .andExpect(jsonPath("$.data.platformName").doesNotExist());
+                    .andExpect(jsonPath("$.data.lastChangedBy").isString());
             mockMvc.perform(api.authGet("/api/v1/ai/status", studentToken))
-                    .andExpect(jsonPath("$.data.aiNotice").value("SparkBot can be wrong. Ask your teacher when unsure."));
+                    .andExpect(jsonPath("$.data.aiNotice").value("SparkBot can be wrong. Double-check important answers."));
             mockMvc.perform(api.authGet("/api/v1/admin/ai/settings", studentToken)).andExpect(status().isForbidden());
             mockMvc.perform(get("/api/v1/admin/ai/settings")).andExpect(status().isUnauthorized());
         } finally {
@@ -596,13 +570,9 @@ class AiIntegrationTests extends ApiIntegrationTest {
     }
 
     private AiPracticeCheck savedCheck(User student) {
-        return savedCheck(student, PracticeCheckType.RECORDING);
-    }
-
-    private AiPracticeCheck savedCheck(User student, PracticeCheckType type) {
         AiPracticeCheck check = new AiPracticeCheck();
         check.setStudentUser(student);
-        check.setCheckType(type);
+        check.setCheckType(PracticeCheckType.RECORDING);
         check.setTargetText("谢谢");
         check.setScore(78);
         check.setTonesScore(70);

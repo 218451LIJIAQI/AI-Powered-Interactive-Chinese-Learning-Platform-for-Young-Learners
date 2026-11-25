@@ -1,6 +1,6 @@
 <template>
   <div class="page-stack">
-    <PageHeaderBlock :title="t('adminAi.reportsTitle')" hide-title />
+    <h1 class="sr-only">{{ t('adminAi.reportsTitle') }}</h1>
     <AdminAiTabs />
     <DataNotice :error="decisionError" />
 
@@ -16,7 +16,6 @@
       v-else-if="reportsResource.error.value"
       heading-tag="h2"
       tone="error"
-      icon="alert"
       spacious
       :title="t('adminAi.reportsError')"
       :message="reportsResource.error.value"
@@ -32,43 +31,55 @@
         :message="t('adminAi.noReportsHint')"
       />
     </div>
-    <div v-else class="list-detail admin-list-detail">
+    <div v-else class="admin-list-detail">
       <section class="panel admin-list" :aria-labelledby="`${baseId}-list`">
         <header class="admin-list-head">
           <h2 :id="`${baseId}-list`" class="card-title">{{ t('adminAi.reports') }}</h2>
           <p class="admin-meta">{{ t('adminAi.openFirst') }}</p>
         </header>
-        <ul class="admin-select-list">
-          <li v-for="report in items" :key="report.id">
-            <button
-              class="select-card"
-              type="button"
-              :aria-current="report.id === selected?.id ? 'true' : undefined"
-              :data-testid="`admin-ai-report-${report.id}`"
-              @click="select(report.id)"
-            >
-              <span class="admin-select-row">
-                <strong class="admin-select-title">{{ t(reportReasonKey(report.reasonCategory)) }}</strong>
-                <StatusPill :label="t(REPORT_STATUS[report.status].labelKey)" :tone="adminReportTone(report.status)" />
-              </span>
-              <span class="admin-meta">{{ aiFeatureLabel(report.featureKey, t) }} · {{ report.studentName }}</span>
-              <span class="admin-meta">{{ formatDateTime(report.createdAt) }}</span>
-            </button>
-          </li>
-        </ul>
-        <PaginationBar
-          icon-only
-          :page="displayedPage"
-          :total-pages="totalPages"
-          :label="t('adminAi.reports')"
-          @update:page="goToReportPage"
+        <template v-if="items.length">
+          <ul class="admin-select-list">
+            <li v-for="report in items" :key="report.id">
+              <button
+                class="select-card"
+                type="button"
+                :aria-current="report.id === selected?.id ? 'true' : undefined"
+                :data-testid="`admin-ai-report-${report.id}`"
+                @click="select(report.id, { userInitiated: true })"
+              >
+                <span class="admin-select-row">
+                  <strong class="admin-select-title">{{ t(reportReasonKey(report.reasonCategory)) }}</strong>
+                  <StatusPill :label="t(AI_REPORT_STATUS_KEYS[report.status])" :tone="adminReportTone(report.status)" />
+                </span>
+                <span class="admin-meta">{{ aiFeatureLabel(report.featureKey, t) }} · {{ report.studentName }}</span>
+                <span class="admin-meta">{{ formatDateTime(report.createdAt) }}</span>
+              </button>
+            </li>
+          </ul>
+          <PaginationBar
+            icon-only
+            :page="displayedPage"
+            :total-pages="totalPages"
+            :label="t('adminAi.reports')"
+            @update:page="goToReportPage"
+          />
+        </template>
+        <StatePanel
+          v-else
+          heading-tag="h3"
+          tone="empty"
+          icon="check"
+          :title="t('adminAi.noReports')"
+          :message="t('adminAi.noReportsHint')"
         />
       </section>
 
       <div class="admin-detail-slot">
         <section
           v-if="selected"
+          ref="detailPanel"
           class="panel admin-detail"
+          tabindex="-1"
           :aria-labelledby="`${baseId}-detail`"
           data-testid="admin-ai-report-detail"
         >
@@ -79,7 +90,7 @@
               </h2>
               <p class="admin-meta">{{ t('adminAi.reportedAt', { time: formatDateTime(selected.createdAt) }) }}</p>
             </div>
-            <StatusPill :label="t(REPORT_STATUS[selected.status].labelKey)" :tone="adminReportTone(selected.status)" />
+            <StatusPill :label="t(AI_REPORT_STATUS_KEYS[selected.status])" :tone="adminReportTone(selected.status)" />
           </header>
 
           <dl class="kv-list admin-ai-facts">
@@ -121,7 +132,7 @@
                 :placeholder="t('adminAi.notePlaceholder')"
                 :aria-describedby="noteError ? `${baseId}-note-error ${baseId}-note-hint` : `${baseId}-note-hint`"
                 :aria-invalid="noteError ? 'true' : undefined"
-                @blur="checkNoteOnBlur"
+                @blur="validateNote"
               />
               <p :id="`${baseId}-note-hint`" class="field-hint">
                 {{ t('adminAi.noteHint', { name: selected.studentName }) }}
@@ -159,13 +170,17 @@
           </form>
           <section v-else class="admin-ai-said admin-ruled" :aria-labelledby="`${baseId}-decided`">
             <h3 :id="`${baseId}-decided`" class="admin-meta">{{ t('adminAi.noteToStudent') }}</h3>
-            <p>{{ selected.reviewerNote }}</p>
+            <p v-if="selected.reviewerNote">{{ selected.reviewerNote }}</p>
             <p class="admin-meta">
               {{
-                t(selected.status === 'RESOLVED' ? 'adminAi.resolvedBy' : 'adminAi.dismissedBy', {
-                  name: selected.reviewerName,
-                  time: formatDateTime(selected.reviewedAt),
-                })
+                selected.reviewedAt
+                  ? t(selected.status === 'RESOLVED' ? 'adminAi.resolvedBy' : 'adminAi.dismissedBy', {
+                      name: selected.reviewerName ?? t('roles.ADMIN'),
+                      time: formatDateTime(selected.reviewedAt),
+                    })
+                  : t(selected.status === 'RESOLVED' ? 'adminAi.resolvedByNoTime' : 'adminAi.dismissedByNoTime', {
+                      name: selected.reviewerName ?? t('roles.ADMIN'),
+                    })
               }}
             </p>
           </section>
@@ -173,6 +188,7 @@
         <StatePanel
           v-else-if="offPageId !== null && detail.loading.value"
           class="panel"
+          heading-tag="h2"
           tone="loading"
           :title="t('adminAi.reportsLoading')"
           :message="t('adminAi.reportsLoadingHint')"
@@ -180,8 +196,8 @@
         <StatePanel
           v-else-if="offPageId !== null && detail.error.value"
           class="panel"
+          heading-tag="h2"
           tone="error"
-          icon="alert"
           :title="t('adminAi.reportsError')"
           :message="detail.error.value"
           @retry="detail.reload"
@@ -193,30 +209,31 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject, onBeforeUnmount, reactive, ref, shallowRef, useId, watch } from 'vue'
+import { computed, nextTick, reactive, ref, shallowRef, useId, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import { getAuthSessionVersion } from '@/api/http'
 import { adminAiApi } from '@/api/ai'
 import { adminReportTone, aiFeatureLabel } from '@/components/admin/adminDisplay'
 import AdminAiTabs from '@/components/admin/AdminAiTabs.vue'
-import { REPORT_STATUS, reportReasonKey } from '@/components/ai/aiHelper'
 import AppToast from '@/components/common/AppToast.vue'
 import DataNotice from '@/components/common/DataNotice.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import PaginationBar from '@/components/common/PaginationBar.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
 import StatusPill from '@/components/common/StatusPill.vue'
-import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
-import { navigationCountsKey } from '@/composables/navigationCounts'
-import { pauseDuringNavigation } from '@/composables/usePageNavigation'
 import { useFieldCheck } from '@/composables/useFieldCheck'
+import { useIsUnmounted } from '@/composables/useIsUnmounted'
 import { useLocalMessages } from '@/composables/useLocalMessages'
+import { pauseDuringNavigation } from '@/composables/usePageNavigation'
 import { notifyProgressChanged } from '@/composables/useProgressRefresh'
 import { useRecordById, useResource, useServerPage } from '@/composables/useResource'
 import { useToast } from '@/composables/useToast'
 import { adminAiMessages } from '@/plugins/adminAiMessages'
+import { AI_REPORT_STATUS_KEYS, reportReasonKey } from '@/plugins/aiSafetyMessages'
 import { opsLabelMessages } from '@/plugins/opsLabelMessages'
-import type { AdminAiResponseReportResponse, AiFeatureKey } from '@/types/api'
+import type { AdminAiResponseReportResponse } from '@/types/ai'
+import type { AiFeatureKey } from '@/types/api'
 import { resolveApiError } from '@/utils/apiError'
 import { formatDateTime } from '@/utils/format'
 import { parseRecordId } from '@/utils/recordId'
@@ -249,12 +266,14 @@ const { t } = useLocalMessages({
 const baseId = useId()
 const route = useRoute()
 const router = useRouter()
-const navCounts = inject(navigationCountsKey, null)
 const { toast, showToast } = useToast()
 
 const page = ref(0)
 const reportsResource = useResource(() => adminAiApi.reports({ page: page.value, size: PAGE_SIZE }))
-const { items, displayedPage, totalPages, goToPage } = useServerPage(reportsResource, page)
+const { items, displayedPage, totalPages, goToPage } = useServerPage(reportsResource, page, {
+  stepBackFromEmpty: true,
+})
+const detailPanel = ref<HTMLElement | null>(null)
 const linkedId = computed(() => parseRecordId(route.query.report))
 const selectedId = ref<number | null>(null)
 const cachedReviewed = shallowRef<AdminAiResponseReportResponse | null>(null)
@@ -282,7 +301,6 @@ const noteField = ref<HTMLTextAreaElement | null>(null)
 const {
   error: noteError,
   validate: validateNote,
-  validateOnBlur: checkNoteOnBlur,
   reset: resetNoteError,
 } = useFieldCheck(note, (text) => (text.trim() ? null : t('adminAi.noteRequired')))
 const deciding = reactive(new Map<number, Decision>())
@@ -291,27 +309,22 @@ const selectedDecision = computed<Decision | null>(() =>
 )
 const isDecidingSelected = computed(() => selectedDecision.value !== null)
 const decisionError = ref<string | null>(null)
-let selectionVersion = 0
 let expectedQueryId: number | null | undefined
-let disposed = false
-onBeforeUnmount(() => {
-  disposed = true
-  selectionVersion += 1
-})
+const isUnmounted = useIsUnmounted()
 
 watch(
   linkedId,
   (id) => {
-    if (expectedQueryId !== undefined && id !== expectedQueryId) return
-    expectedQueryId = undefined
+    if (expectedQueryId !== undefined) {
+      if (id !== expectedQueryId) return
+      expectedQueryId = undefined
+      return
+    }
     pendingPageSwitch = false
     select(id ?? items.value[0]?.id ?? null, { syncQuery: false })
   },
   { immediate: true },
 )
-watch(reportsResource.error, (error) => {
-  if (error !== null) pendingPageSwitch = false
-})
 const selectFromPage = watch(items, (list) => {
   if (pendingPageSwitch) {
     pendingPageSwitch = false
@@ -325,20 +338,37 @@ const selectFromPage = watch(items, (list) => {
 pauseDuringNavigation(selectFromPage)
 
 /** A note belongs to the report it was written for, so another report starts with an empty one. */
-function select(id: number | null, { syncQuery = true, keepError = false } = {}): void {
-  if (id === selectedId.value) return
-  selectionVersion += 1
+function select(id: number | null, { syncQuery = true, keepError = false, userInitiated = false } = {}): void {
+  if (id === selectedId.value) {
+    if (userInitiated) focusDetail()
+    return
+  }
   selectedId.value = id
   cachedReviewed.value = null
   note.value = ''
   resetNoteError()
   if (!keepError) decisionError.value = null
-  if (syncQuery && route.query.report !== undefined && (id !== linkedId.value || expectedQueryId !== undefined)) {
+  if (
+    syncQuery &&
+    (userInitiated || route.query.report !== undefined) &&
+    (id !== linkedId.value || expectedQueryId !== undefined)
+  ) {
     expectedQueryId = id
     void router.replace({ query: { ...route.query, report: id === null ? undefined : String(id) } }).finally(() => {
       if (expectedQueryId === id) expectedQueryId = undefined
     })
   }
+  if (userInitiated) focusDetail()
+}
+
+function focusDetail(): void {
+  void nextTick(() => {
+    const panel = detailPanel.value
+    if (!panel) return
+    const { top } = panel.getBoundingClientRect()
+    if (top < 0 || top >= window.innerHeight) panel.scrollIntoView?.({ block: 'start' })
+    panel.focus({ preventScroll: true })
+  })
 }
 
 function goToReportPage(next: number): void {
@@ -350,7 +380,8 @@ function goToReportPage(next: number): void {
 async function decide(decision: Decision): Promise<void> {
   const report = selected.value
   if (!report || deciding.has(report.id)) return
-  const version = selectionVersion
+  const authSession = getAuthSessionVersion()
+  const isStale = () => isUnmounted() || authSession !== getAuthSessionVersion()
   decisionError.value = null
   if (!validateNote()) {
     noteField.value?.focus()
@@ -360,22 +391,26 @@ async function decide(decision: Decision): Promise<void> {
   try {
     const reviewed = await adminAiApi.reviewReport(report.id, decision, note.value.trim())
     // The sidebar badge counts outlive this page: they catch up even when the admin has already moved on.
-    notifyProgressChanged()
-    if (disposed) return
+    if (authSession === getAuthSessionVersion()) notifyProgressChanged()
+    if (isStale()) return
     showToast(
       t(decision === 'RESOLVED' ? 'adminAi.resolvedNotice' : 'adminAi.dismissedNotice', { name: report.studentName }),
     )
-    if (version === selectionVersion) note.value = ''
-    if (selectedId.value === report.id) cachedReviewed.value = reviewed
+    if (selectedId.value === report.id) {
+      note.value = ''
+      cachedReviewed.value = reviewed
+    }
     await reportsResource.reload()
   } catch (reason) {
-    if (disposed) return
+    // Another admin may have closed the report meanwhile ("already closed"): refresh badges and show current state.
+    if (authSession === getAuthSessionVersion()) notifyProgressChanged()
+    if (isStale()) return
     if (selectedId.value === report.id) decisionError.value = resolveApiError(reason, t('adminAi.decisionError'))
-    // Another admin may have closed the report meanwhile ("already closed"): show it as the server has it now.
-    void navCounts?.reload()
     const wasOffPage = offPageId.value === report.id
     await reportsResource.reload()
-    if (!disposed && wasOffPage && offPageId.value === report.id) await detail.reload()
+    if (!isStale() && wasOffPage && offPageId.value === report.id) {
+      await detail.reload()
+    }
   } finally {
     deciding.delete(report.id)
   }

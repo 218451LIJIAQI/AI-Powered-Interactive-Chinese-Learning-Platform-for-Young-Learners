@@ -12,8 +12,6 @@ import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 
 import com.example.aichinese.config.seed.DemoLearnSeeder;
 import com.example.aichinese.config.seed.DemoPersonas;
@@ -30,6 +28,8 @@ import com.example.aichinese.repository.LearnLessonCompletionRepository;
 import com.example.aichinese.repository.PointsTransactionRepository;
 import com.example.aichinese.repository.PracticeCompletionRepository;
 import com.example.aichinese.repository.StudentProfileRepository;
+import com.example.aichinese.repository.UserRepository;
+import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.RewardBadge;
 import com.example.aichinese.service.RewardRules;
 import com.example.aichinese.service.learn.LearnClock;
@@ -38,10 +38,10 @@ import com.example.aichinese.service.learn.MistakeService;
 import com.example.aichinese.service.learn.ProgressOverviewService;
 import com.example.aichinese.service.learn.SkillProgressService;
 import com.example.aichinese.service.learn.XpService;
+import com.example.aichinese.support.DemoProfileTest;
 
 /** The demo histories read through the real services, as the student pages show them. */
-@SpringBootTest
-@ActiveProfiles({"demo", "demo-test"})
+@DemoProfileTest
 class DemoLearnSeederTests {
 
     @Autowired
@@ -49,6 +49,9 @@ class DemoLearnSeederTests {
 
     @Autowired
     private StudentProfileRepository studentProfileRepository;
+
+    @Autowired
+    private UserRepository userRepository;
 
     @Autowired
     private LearnLessonCompletionRepository completionRepository;
@@ -80,6 +83,7 @@ class DemoLearnSeederTests {
     @Test
     void amiraIsInUnitOneWithASevenDayStreakAndSixMistakesWaiting() {
         StudentProfile amira = student(DemoPersonas.STUDENT);
+        SecurityUserDetails amiraPrincipal = principal(DemoPersonas.STUDENT);
 
         LearnPathResponse path = learnPathService.path(amira);
         assertThat(path.completedLessons()).isEqualTo(2);
@@ -96,12 +100,12 @@ class DemoLearnSeederTests {
         assertThat(today.goalReached()).isFalse();
         assertThat(xpService.streak(amira).current()).isEqualTo(7);
         assertThat(today.week()).filteredOn(TodayResponse.Day::goalReached).hasSize(6);
-        MistakeListResponse mistakes = mistakeService.list(amira, null, 20);
+        MistakeListResponse mistakes = mistakeService.list(amiraPrincipal, null, 20);
         assertThat(mistakes.all()).isEqualTo(6);
         assertThat(mistakes.learn()).isEqualTo(2);
         assertThat(mistakes.practice()).isEqualTo(4);
 
-        ProgressOverviewResponse progress = progressOverviewService.overview(amira, null);
+        ProgressOverviewResponse progress = progressOverviewService.overview(amiraPrincipal, null);
         assertThat(progress.totalXp()).isEqualTo(279);
         assertThat(progress.level()).isEqualTo(3);
         assertThat(progress.badges()).filteredOn(ProgressOverviewResponse.BadgeView::earned).hasSize(5);
@@ -114,7 +118,7 @@ class DemoLearnSeederTests {
 
     @Test
     void amiraHasASpreadOfSkillsWithListeningTheWeakest() {
-        SkillProgressResponse skills = skillProgressService.skills(student(DemoPersonas.STUDENT));
+        SkillProgressResponse skills = skillProgressService.skills(principal(DemoPersonas.STUDENT));
         assertThat(skills.skills()).extracting(SkillProgressResponse.SkillRow::skill).containsExactly(
                 SkillProgressResponse.Skill.VOCABULARY, SkillProgressResponse.Skill.LISTENING,
                 SkillProgressResponse.Skill.CHARACTERS, SkillProgressResponse.Skill.SENTENCES);
@@ -125,7 +129,7 @@ class DemoLearnSeederTests {
         assertThat(skills.skills()).extracting(SkillProgressResponse.SkillRow::weeklyChange).containsExactly(31, 9, 33, 16);
         assertThat(skills.weakest()).isEqualTo(SkillProgressResponse.Skill.LISTENING);
 
-        SkillProgressResponse nobody = skillProgressService.skills(student(DemoPersonas.NUR_AISYAH));
+        SkillProgressResponse nobody = skillProgressService.skills(principal(DemoPersonas.NUR_AISYAH));
         assertThat(nobody.weakest()).isNull();
         assertThat(nobody.skills()).allSatisfy(row -> {
             assertThat(row.percent()).isZero();
@@ -195,7 +199,7 @@ class DemoLearnSeederTests {
                     .flatMap(level -> level.units().stream())
                     .anyMatch(unit -> unit.state() == UnitState.DONE);
             assertThat(total).as(persona.email()).isEqualTo(student.getTotalPoints());
-            for (ProgressOverviewResponse.BadgeView badge : progressOverviewService.overview(student, null).badges()) {
+            for (ProgressOverviewResponse.BadgeView badge : progressOverviewService.overview(principal(persona), null).badges()) {
                 if (badge.key().equals(RewardBadge.XP_STARTER.name()) || badge.key().equals(RewardBadge.XP_300.name())) {
                     assertThat(badge.earned() ? clock.dayOf(badge.earnedAt()) : null).as(persona.email() + " " + badge.key())
                             .isEqualTo(reached.get(badge.key()));
@@ -227,5 +231,9 @@ class DemoLearnSeederTests {
 
     private StudentProfile student(DemoPersonas.Persona persona) {
         return studentProfileRepository.findByUserEmail(persona.email()).orElseThrow();
+    }
+
+    private SecurityUserDetails principal(DemoPersonas.Persona persona) {
+        return new SecurityUserDetails(userRepository.findByEmailWithRoles(persona.email()).orElseThrow());
     }
 }

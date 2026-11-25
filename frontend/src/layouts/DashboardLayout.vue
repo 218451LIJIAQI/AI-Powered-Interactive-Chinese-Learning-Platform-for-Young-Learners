@@ -23,11 +23,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { isNavigationFailure, NavigationFailureType, RouterView, useRoute, useRouter } from 'vue-router'
 
-import { notificationsApi, shellApi, studentApi, systemApi } from '@/api/services'
+import { xpApi } from '@/api/learn'
+import { notificationsApi, shellApi, systemApi } from '@/api/services'
 import AppOverlay from '@/components/common/AppOverlay.vue'
 import DashboardSidebar from '@/components/layout/DashboardSidebar.vue'
 import DashboardTopbar from '@/components/layout/DashboardTopbar.vue'
@@ -36,7 +37,6 @@ import { progressVersion } from '@/composables/useProgressRefresh'
 import { useResource } from '@/composables/useResource'
 import { useWorkspaceRole } from '@/composables/useWorkspaceRole'
 import { useAuthStore } from '@/stores/auth'
-import type { NavCounts } from '@/types/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -66,23 +66,18 @@ onBeforeUnmount(
 // The sidebar's rank, XP and streak change after lessons, practice and reviews, and this layout stays mounted across
 // pages, so a signed-in learner's reward summary is read again after each navigation and each progress report.
 const { data: rewardSummary, reload: reloadRewardSummary } = useResource(
-  studentApi.rewards,
+  xpApi.rewards,
   loadShellOnMount && role.value === 'STUDENT',
 )
 // Sidebar badges (mistakes waiting, open AI reports and support requests) follow the same rhythm.
-const { data: latestNavCounts, reload: reloadNavCounts } = useResource(
-  () => shellApi.navCounts().catch(() => null),
-  loadShellOnMount,
+const navCountsResource = useResource(shellApi.navCounts, loadShellOnMount)
+const latestNavCounts = computed(() =>
+  navCountsResource.error.value || navCountsResource.loading.value ? null : navCountsResource.data.value,
 )
-provide(navigationCountsKey, { latest: latestNavCounts, reload: reloadNavCounts })
+provide(navigationCountsKey, { latest: latestNavCounts })
 const unreadNotifications = useResource(notificationsApi.unreadCount, loadShellOnMount)
 provide(unreadNotificationsKey, unreadNotifications)
 
-// The sidebar keeps the last successful counts when a refresh fails.
-const navCounts = shallowRef<NavCounts | null>(null)
-watch(latestNavCounts, (counts) => {
-  if (counts !== null) navCounts.value = counts
-})
 // The card shows no badge until the first check finishes. A completed check can carry a null (offline) result.
 const { data: healthCheck, reload: reloadHealth } = useResource(
   async () => ({ health: await systemApi.health().catch(() => null) }),
@@ -90,14 +85,14 @@ const { data: healthCheck, reload: reloadHealth } = useResource(
 )
 const sidebarProps = computed(() => ({
   rewardSummary: rewardSummary.value,
-  navCounts: navCounts.value,
+  navCounts: navCountsResource.data.value,
   health: healthCheck.value?.health,
 }))
 
 watch([() => route.path, progressVersion], () => {
   if (route.meta.focus || !auth.isAuthenticated) return
   if (role.value === 'STUDENT') void reloadRewardSummary()
-  void reloadNavCounts()
+  void navCountsResource.reload()
   void unreadNotifications.reload()
   if (role.value === 'ADMIN') void reloadHealth()
 })

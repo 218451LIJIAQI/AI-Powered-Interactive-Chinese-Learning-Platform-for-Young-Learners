@@ -1,10 +1,10 @@
 <template>
   <div class="page-stack">
-    <PageHeaderBlock :title="t('nav.support')" hide-title />
+    <h1 class="sr-only">{{ t('nav.support') }}</h1>
 
     <DataNotice :error="actionError" :error-title="t('adminSupport.noticeFailed')" />
 
-    <div class="list-detail admin-list-detail">
+    <div class="admin-list-detail">
       <section class="panel admin-list" aria-labelledby="admin-support-queue-title">
         <h2 id="admin-support-queue-title" class="sr-only">{{ t('adminSupport.queueLabel') }}</h2>
         <FilterChips
@@ -23,7 +23,6 @@
         <StatePanel
           v-else-if="queue.error.value"
           tone="error"
-          icon="alert"
           :title="t('adminSupport.listError')"
           :message="queue.error.value"
           @retry="queue.reload"
@@ -62,17 +61,18 @@
       </section>
 
       <div ref="detailRef" class="admin-detail-slot" tabindex="-1">
-        <div v-if="selectedId === null && !queue.loading.value && !requests.length" class="panel">
-          <StatePanel
-            tone="empty"
-            icon="support"
-            spacious
-            :title="t('adminSupport.chooseRequest')"
-            :message="t('adminSupport.chooseRequestHint')"
-          />
-        </div>
+        <StatePanel
+          v-if="selectedId === null && !queue.loading.value && !requests.length"
+          class="panel"
+          tone="empty"
+          icon="support"
+          spacious
+          :title="t('adminSupport.chooseRequest')"
+          :message="t('adminSupport.chooseRequestHint')"
+        />
         <StatePanel
           v-else-if="detail.loading.value || selectedId === null"
+          class="panel"
           tone="loading"
           spacious
           :title="t('adminSupport.detailLoading')"
@@ -80,11 +80,11 @@
         />
         <StatePanel
           v-else-if="detail.error.value || !current"
+          class="panel"
           tone="error"
-          icon="alert"
           spacious
           :title="t('adminSupport.detailError')"
-          :message="detail.error.value ?? ''"
+          :message="detail.error.value"
           @retry="detail.reload"
         />
         <article
@@ -189,6 +189,18 @@
               </button>
             </div>
           </form>
+          <div v-else class="form-actions">
+            <button
+              class="btn btn-secondary"
+              type="button"
+              :disabled="pendingAction !== null"
+              :aria-busy="pendingAction === 'reopen'"
+              data-testid="admin-support-reopen"
+              @click="reopen(current.request.id, true)"
+            >
+              {{ t('adminSupport.reopen') }}
+            </button>
+          </div>
         </article>
       </div>
     </div>
@@ -198,7 +210,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, reactive, ref, shallowRef, watch } from 'vue'
 import { RouterLink, useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
 
 import { adminSupportApi } from '@/api/ops'
@@ -211,7 +223,7 @@ import IconGlyph from '@/components/common/IconGlyph.vue'
 import PaginationBar from '@/components/common/PaginationBar.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
 import StatusPill from '@/components/common/StatusPill.vue'
-import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
+import { useIsUnmounted } from '@/composables/useIsUnmounted'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { notifyProgressChanged } from '@/composables/useProgressRefresh'
 import { useResource, useServerPage } from '@/composables/useResource'
@@ -226,11 +238,11 @@ import {
   type SupportRequesterRole,
   type SupportStatus,
 } from '@/types/ops'
-import { resolveApiError } from '@/utils/apiError'
+import { apiErrorStatus, resolveApiError } from '@/utils/apiError'
 import { formatDate, formatDateTime, formatFileSize, formatRelativeTime } from '@/utils/format'
-import { openFileDownload } from '@/utils/opsFiles'
-import { QUEUE_STATUS_KEYS, ROLE_KEYS, SUPPORT_TOPIC_KEYS } from '@/utils/opsLabels'
-import { queryOption } from '@/utils/queryText'
+import { openFileDownload } from '@/utils/download'
+import { QUEUE_STATUS_KEYS, SUPPORT_TOPIC_KEYS } from '@/utils/opsLabels'
+import { pageFromQuery, pageQuery, queryOption } from '@/utils/routeQuery'
 import '@/styles/admin-shared.css'
 import '@/styles/ops-admin.css'
 
@@ -256,9 +268,21 @@ function queryStatus(): SupportStatus {
 }
 
 const status = ref<SupportStatus>(queryStatus())
-const page = ref(0)
+const page = ref(pageFromQuery(route.query.page))
 const queue = useResource(() => adminSupportApi.queue(status.value, page.value, PAGE_SIZE))
 const queuePage = computed(() => queue.data.value?.requests ?? null)
+
+function statusQuery(): LocationQueryRaw {
+  return {
+    status: status.value === 'OPEN' ? undefined : status.value,
+    page: pageQuery(page.value),
+  }
+}
+
+function writeAddress(): void {
+  void router.replace({ query: { ...route.query, ...statusQuery() } })
+}
+
 // A later page emptied by a reply or a solve (its last request moved to another tab) steps back to one with requests,
 // instead of saying the whole tab is empty while its pagination is gone.
 const {
@@ -268,45 +292,48 @@ const {
   goToPage,
 } = useServerPage({ data: queuePage, reload: queue.reload }, page, {
   stepBackFromEmpty: true,
+  onPageChange: writeAddress,
 })
 
-function statusQuery(): LocationQueryRaw {
-  return { status: status.value === 'OPEN' ? undefined : status.value }
-}
+const counts = shallowRef<Record<SupportStatus, number> | null>(null)
+watch(
+  queue.data,
+  (loaded) => {
+    if (loaded) counts.value = loaded.counts
+  },
+  { immediate: true },
+)
 
 const filterOptions = computed(() =>
   SUPPORT_STATUSES.map((value) => ({
     value,
     label: t(QUEUE_STATUS_KEYS[value]),
-    count: queue.data.value?.counts[value],
+    count: counts.value?.[value],
     testId: `admin-support-tab-${value.toLowerCase()}`,
   })),
 )
 
-function showTab(next: SupportStatus): void {
-  if (status.value === next) return
+function showTab(next: SupportStatus, nextPage = 0): void {
+  if (status.value === next && page.value === nextPage) return
   status.value = next
-  page.value = 0
+  page.value = nextPage
   queue.data.value = null
   void queue.reload()
 }
 
 function selectTab(next: SupportStatus): void {
-  showTab(next)
-  void router.replace({ query: { ...route.query, ...statusQuery() } })
+  showTab(next, 0)
+  writeAddress()
 }
 
 // The address can also change under the page (the sidebar's Support link opens it with no tab): the queue follows it.
-watch(
-  () => route.query.status,
-  () => {
-    if (route.name === 'admin-support') showTab(queryStatus())
-  },
-)
+watch([() => route.query.status, () => route.query.page], () => {
+  if (route.name === 'admin-support') showTab(queryStatus(), pageFromQuery(route.query.page))
+})
 
 /** "learner" for a learner's request; null for a role the platform no longer has (requests sent before 2026-11). */
 function requesterRoleLabel(role: SupportRequesterRole): string | null {
-  return role === 'STUDENT' ? t(ROLE_KEYS.STUDENT).toLowerCase() : null
+  return role === 'STUDENT' ? t('roles.STUDENT').toLowerCase() : null
 }
 
 function requestMeta(request: SupportRequestSummary): string {
@@ -326,8 +353,8 @@ function requestMeta(request: SupportRequestSummary): string {
 const reply = ref('')
 type SupportAction = 'reply' | 'solve' | 'reopen'
 const pendingActions = reactive(new Map<number, SupportAction>())
+const isUnmounted = useIsUnmounted()
 let selectionVersion = 0
-let disposed = false
 
 const { selectedId, detail, select } = useSelectedRecord(
   'request',
@@ -346,20 +373,24 @@ const messages = computed(() =>
   })),
 )
 
+let preserveErrorOnSelectionChange = false
 watch(selectedId, () => {
   selectionVersion += 1
-  actionError.value = null
+  if (preserveErrorOnSelectionChange) preserveErrorOnSelectionChange = false
+  else actionError.value = null
   reply.value = ''
 })
 onBeforeUnmount(() => {
-  disposed = true
   selectionVersion += 1
 })
 
 async function selectRequest(id: number): Promise<void> {
   await select(id)
   await nextTick()
-  detailRef.value?.focus({ preventScroll: true })
+  const panel = detailRef.value
+  if (!panel) return
+  const { top } = panel.getBoundingClientRect()
+  panel.focus({ preventScroll: top >= 0 && top < window.innerHeight })
 }
 
 const fromLine = computed(() => {
@@ -392,9 +423,13 @@ const statusNote = computed(() => {
   return ''
 })
 
-/** Support's replies name who wrote them; only a visitor's message has no author. */
+/** Support's replies name who wrote them; only a visitor's message (or a deleted admin) has no author. */
 function authorLabel(message: SupportMessage): string {
-  if (message.fromSupport) return t('adminSupport.supportAuthor', { name: message.authorName })
+  if (message.fromSupport) {
+    return message.authorName
+      ? t('adminSupport.supportAuthor', { name: message.authorName })
+      : t('adminSupport.supportFallback')
+  }
   return message.authorName ?? t('adminSupport.visitorAuthor')
 }
 
@@ -420,18 +455,32 @@ async function changeRequest(
     const updated = await change()
     // The sidebar badge counts outlive this page: they catch up even when the admin has already moved on.
     notifyProgressChanged()
-    if (disposed) return false
+    if (isUnmounted()) return false
     // Update the open pane and deliver feedback whenever the modified request is currently displayed (including after switching back).
     if (selectedId.value === updated.request.id) {
-      detail.clear()
-      current.value = updated
+      detail.replace(updated)
       announce?.()
     }
     void queue.reload()
     return version === selectionVersion
   } catch (failure) {
-    if (!disposed && (selectedId.value === targetId || (action === 'reopen' && version === selectionVersion))) {
+    const httpStatus = apiErrorStatus(failure)
+    const stateDrift = httpStatus === 400 || httpStatus === 404 || httpStatus === 409
+    if (stateDrift) notifyProgressChanged()
+    if (isUnmounted()) return false
+    if (selectedId.value === targetId || (action === 'reopen' && version === selectionVersion)) {
       actionError.value = resolveApiError(failure, t(failureKey))
+    }
+    if (stateDrift) {
+      void queue.reload()
+      if (selectedId.value === targetId) {
+        if (httpStatus === 404) {
+          preserveErrorOnSelectionChange = true
+          void select(null)
+        } else {
+          void detail.reload()
+        }
+      }
     }
     return false
   } finally {
@@ -479,9 +528,16 @@ async function markSolved(): Promise<void> {
   if (solved) reply.value = ''
 }
 
-/** The Undo of Mark as solved: back to Answered after a reply, otherwise Open. */
-async function reopen(id: number): Promise<void> {
-  await changeRequest(id, 'reopen', () => adminSupportApi.reopen(id), 'adminSupport.reopenFailed')
+/** Reopens a solved request (either from Undo or from the Solved detail footer): back to Answered or Open. */
+async function reopen(id: number, announce = false): Promise<void> {
+  const number = current.value?.request.id === id ? current.value.request.number : null
+  await changeRequest(
+    id,
+    'reopen',
+    () => adminSupportApi.reopen(id),
+    'adminSupport.reopenFailed',
+    announce && number !== null ? () => showToast(t('adminSupport.reopenedToast', { number })) : undefined,
+  )
 }
 
 const openingAttachments = reactive(new Set<number>())

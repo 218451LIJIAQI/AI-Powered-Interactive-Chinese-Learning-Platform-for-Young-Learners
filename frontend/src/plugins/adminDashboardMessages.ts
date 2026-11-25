@@ -1,7 +1,6 @@
 /** The admin dashboard: what needs attention (class drafts, AI reports, support), each with its first items. */
 export const adminDashboardMessages = {
   en: {
-    pageTitle: 'Dashboard',
     loading: 'Loading the dashboard',
     loadError: 'The dashboard could not be loaded',
     needsAttention: 'Needs attention',
@@ -20,7 +19,6 @@ export const adminDashboardMessages = {
     viewAllLabel: 'View all: {queue}',
   },
   ms: {
-    pageTitle: 'Papan pemuka',
     loading: 'Memuatkan papan pemuka',
     loadError: 'Papan pemuka tidak dapat dimuatkan',
     needsAttention: 'Perlu perhatian',
@@ -39,7 +37,6 @@ export const adminDashboardMessages = {
     viewAllLabel: 'Lihat semua: {queue}',
   },
   'zh-CN': {
-    pageTitle: '仪表盘',
     loading: '正在加载仪表盘',
     loadError: '无法加载仪表盘',
     needsAttention: '需要处理',
@@ -57,4 +54,4 @@ export const adminDashboardMessages = {
     viewAll: '查看全部',
     viewAllLabel: '查看全部：{queue}',
   },
-}
+} as const

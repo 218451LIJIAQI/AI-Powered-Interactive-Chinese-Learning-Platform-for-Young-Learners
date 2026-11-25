@@ -99,7 +99,7 @@ describe('StudentAiHelperPage', () => {
     await flushPromises()
 
     expect(wrapper.get('[data-testid="talk-tab"]').attributes('data-deployment-id')).toBe('demo-deployment')
-    expect(wrapper.get('[data-testid="ai-blocked"]').text()).toContain('Tap the mic to talk with Xiaomei live.')
+    expect(wrapper.get('[data-testid="ai-blocked"]').text()).toContain('Click the mic to talk with Xiaomei live.')
   })
 
   it.each(['ask', 'talk'])(
@@ -369,11 +369,11 @@ describe('StudentAiHelperPage', () => {
     router.route.params.tab = 'talk'
     await flushPromises()
 
-    const retry = wrapper.get('.data-notice.is-error button')
+    const retry = wrapper.get('.data-notice button')
     await retry.trigger('click')
     await flushPromises()
     expect(api.status).toHaveBeenCalledTimes(2)
-    expect(wrapper.find('.data-notice.is-error').exists()).toBe(false)
+    expect(wrapper.find('.data-notice').exists()).toBe(false)
 
     wrapper.findComponent({ name: 'AiTalkTab' }).vm.$emit('used')
     await flushPromises()
@@ -383,11 +383,24 @@ describe('StudentAiHelperPage', () => {
     wrapper.findComponent({ name: 'AiTalkTab' }).vm.$emit('reported')
     await flushPromises()
     expect(wrapper.get('[data-testid="toast"]').text()).toBe(
-      'Report sent. An admin replies in Ask SparkBot › My reports.',
+      'Report sent. An admin replies in AI Helper › Ask SparkBot › My reports.',
     )
 
     router.route.params.tab = 'ask'
     await flushPromises()
     expect(api.reports).toHaveBeenCalledExactlyOnceWith(0)
+  })
+
+  it('still shows a status refresh error notice even when a previous blocked status is displayed', async () => {
+    api.status.mockResolvedValueOnce(status({ available: false })).mockRejectedValueOnce(new Error('offline'))
+    const wrapper = mountPage()
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="ai-blocked"]').exists()).toBe(true)
+    wrapper.findComponent({ name: 'AiTalkTab' }).vm.$emit('used')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="ai-blocked"]').exists()).toBe(true)
+    expect(wrapper.find('.data-notice').exists()).toBe(true)
   })
 })

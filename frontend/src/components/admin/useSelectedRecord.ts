@@ -1,7 +1,7 @@
 import { computed, watch } from 'vue'
 import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
 
-import { pauseDuringNavigation, usePageActive } from '@/composables/usePageNavigation'
+import { usePageActive } from '@/composables/usePageNavigation'
 import { useRecordById } from '@/composables/useResource'
 import { parseRecordId } from '@/utils/recordId'
 
@@ -31,14 +31,13 @@ export function useSelectedRecord<T>(
     })
   }
 
-  const selectFirst = watch(
-    [firstId, selectedId],
-    ([first, id]) => {
-      if (pageActive.value && id === null && first !== undefined) void select(first)
+  watch(
+    [pageActive, firstId, selectedId],
+    ([active, first, id]) => {
+      if (active && id === null && first !== undefined) void select(first)
     },
     { immediate: true },
   )
-  pauseDuringNavigation(selectFirst, pageActive)
 
   return { selectedId, detail, select }
 }

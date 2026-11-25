@@ -30,7 +30,9 @@ import lombok.Setter;
 @Entity
 @Table(name = "support_requests", indexes = {
         @Index(name = "idx_support_requests_requester_created", columnList = "requester_user_id,created_at"),
-        @Index(name = "idx_support_requests_status_created", columnList = "request_status,created_at"),
+        @Index(name = "idx_support_requests_status_updated", columnList = "request_status,updated_at,id"),
+        @Index(name = "idx_support_requests_status_solved", columnList = "request_status,solved_at,id"),
+        @Index(name = "idx_support_requests_requester_email", columnList = "requester_email"),
         @Index(name = "idx_support_requests_status_closes", columnList = "request_status,closes_at")
 }, uniqueConstraints = {
         @UniqueConstraint(name = "uk_support_requests_number", columnNames = "request_number")

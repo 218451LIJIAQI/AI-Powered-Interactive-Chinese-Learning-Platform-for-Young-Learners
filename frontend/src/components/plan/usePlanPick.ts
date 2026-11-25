@@ -3,7 +3,7 @@
  * plan (the setup's draft too, which "Start my path" makes the plan), so Home shows the same class on any device
  * (S3.19/S3.20). It counts only while the plan offers that class among others.
  */
-import { computed, onScopeDispose, ref, toRaw, watch, type Ref } from 'vue'
+import { computed, onScopeDispose, ref, watch, type Ref } from 'vue'
 
 import { getAuthSessionVersion } from '@/api/http'
 import { planApi } from '@/api/plan'
@@ -46,7 +46,7 @@ export function usePlanPick(plan: Ref<LearningPlan | null>, failedMessage: () =>
   let planEpoch = 0
   let saving = Promise.resolve()
   let active = true
-  let lastPatchedPlan: LearningPlan | null = null
+  let patching = false
 
   onScopeDispose(() => {
     active = false
@@ -56,9 +56,8 @@ export function usePlanPick(plan: Ref<LearningPlan | null>, failedMessage: () =>
 
   watch(
     plan,
-    (next) => {
-      if (next !== null && lastPatchedPlan !== null && toRaw(next) === toRaw(lastPatchedPlan)) return
-      lastPatchedPlan = null
+    () => {
+      if (patching) return
       planEpoch += 1
       latest += 1
       pending.value = undefined
@@ -86,9 +85,12 @@ export function usePlanPick(plan: Ref<LearningPlan | null>, failedMessage: () =>
         if (!active || request !== latest || epoch !== planEpoch || session !== getAuthSessionVersion()) return
         const saved = await planApi.pickClass(next)
         if (active && epoch === planEpoch && session === getAuthSessionVersion() && plan.value) {
-          const patched = { ...plan.value, pickedClassId: saved.pickedClassId }
-          lastPatchedPlan = patched
-          plan.value = patched
+          patching = true
+          try {
+            plan.value = { ...plan.value, pickedClassId: saved.pickedClassId }
+          } finally {
+            patching = false
+          }
         }
       } catch (reason) {
         if (active && request === latest && epoch === planEpoch && session === getAuthSessionVersion()) {

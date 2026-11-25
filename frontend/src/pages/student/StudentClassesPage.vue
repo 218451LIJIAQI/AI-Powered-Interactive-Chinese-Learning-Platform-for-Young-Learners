@@ -1,9 +1,12 @@
 <template>
   <div class="page-stack">
-    <PageHeaderBlock :title="t('classCatalogue.tabs.mine')" hide-title />
+    <h1 class="sr-only">{{ t('classCatalogue.tabs.mine') }}</h1>
     <StudentClassesTabs :joined-count="overview?.classes.length" :catalogue-count="overview?.moreClassCount" />
     <AppToast :message="toast" :action="toastAction" />
-    <DataNotice :error="undoError ?? (overview ? resource.error.value : null)" />
+    <DataNotice
+      :error="undoError ?? (overview ? resource.error.value : null)"
+      :on-retry="undoError ? undefined : resource.reload"
+    />
 
     <div v-if="resource.loading.value && !overview" class="student-classes-list" aria-busy="true">
       <span class="sr-only" role="status">{{ t('classes.loading') }}</span>
@@ -24,7 +27,6 @@
       v-else-if="resource.error.value && !overview"
       heading-tag="h2"
       tone="error"
-      icon="alert"
       :title="t('studentClasses.mine.loadErrorTitle')"
       :message="resource.error.value"
       @retry="resource.reload"
@@ -64,7 +66,7 @@
               <!-- What the main button opens, so the row says where the learner goes on. -->
               <p v-if="entry.nextStep && !entry.archived" class="student-classes-next" data-testid="my-class-next">
                 <IconGlyph name="play" :size="12" />
-                <span>{{ t('studentClasses.mine.next', { title: entry.nextStep.lessonTitle }) }}</span>
+                <span><CjkText :text="t('studentClasses.mine.next', { title: entry.nextStep.lessonTitle })" /></span>
               </p>
             </div>
             <div class="student-classes-progress">
@@ -124,7 +126,6 @@ import IconGlyph from '@/components/common/IconGlyph.vue'
 import ProgressBar from '@/components/common/ProgressBar.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
 import CjkText from '@/components/learning/CjkText.vue'
-import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useClassNotice } from '@/composables/useClassNotice'
 import { useIsUnmounted } from '@/composables/useIsUnmounted'
 import { useLocalMessages } from '@/composables/useLocalMessages'
@@ -179,16 +180,16 @@ async function undoJoin(classId: number, fallbackTitle?: string): Promise<void> 
   } catch (reason) {
     if (isCurrent()) undoError.value = resolveApiError(reason)
   }
-  if (isCurrent() && router.currentRoute.value.name === 'student-classes') await resource.reload()
+  if (isCurrent() && router.currentRoute.value.name === 'student-classes') {
+    await resource.reload()
+    if (isCurrent() && !resource.error.value) undoError.value = null
+  }
 }
 
-const { toast, toastAction } = useClassNotice(
-  {
-    label: t('common.undo'),
-    run: (classId, title) => void undoJoin(classId, title),
-  },
-  'student-classes',
-)
+const { toast, toastAction } = useClassNotice('student-classes', {
+  label: t('common.undo'),
+  run: (classId, title) => void undoJoin(classId, title),
+})
 
 /** Nothing begun yet in the whole class. */
 function isNotStarted(entry: MyClassCard): boolean {

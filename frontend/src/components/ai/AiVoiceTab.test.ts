@@ -1,5 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h, KeepAlive, ref } from 'vue'
 
 import { FakeMediaRecorder } from '@/test/fakeMediaRecorder'
@@ -43,8 +43,6 @@ const HANDWRITING_CHECK: PracticeCheck = {
   tips: ['Give 女 a little more room.'],
   checkedAt: '2026-10-28T09:00:00Z',
 }
-
-afterEach(() => vi.useRealTimers())
 
 async function mountVoice(status: AiHelperStatus | null = STATUS) {
   const wrapper = mount(AiVoiceTab, {
@@ -110,7 +108,7 @@ describe('AiVoiceTab (pronunciation and handwriting)', () => {
 
     expect(wrapper.get('.field-error').text()).toBe('Choose a JPG or PNG photo.')
     expect(wrapper.get('.ai-file-name').text()).toContain('hao.gif')
-    expect(wrapper.get<HTMLButtonElement>('.ai-check-submit button').element.disabled).toBe(true)
+    expect(wrapper.get<HTMLButtonElement>('.card-footer button').element.disabled).toBe(true)
     expect(api.checkPractice).not.toHaveBeenCalled()
 
     await wrapper.get('.ai-file-row > button').trigger('click')
@@ -291,7 +289,7 @@ describe('AiVoiceTab (pronunciation and handwriting)', () => {
   it('takes another audio file after one that is too large, and checks it (S9.10 → S9.25)', async () => {
     const wrapper = await mountVoice({ ...STATUS, audioUploadMaxBytes: 10 * MB })
     await wrapper.get('input.cjk-text').setValue('谢谢')
-    const submit = () => wrapper.get<HTMLButtonElement>('.ai-check-submit button')
+    const submit = () => wrapper.get<HTMLButtonElement>('.card-footer button')
 
     await chooseFile(wrapper.get('input[type="file"]'), fileWithSize('xiexie.wav', 'audio/wav', 14 * MB))
     expect(wrapper.get('.ai-file-name').text()).toBe('xiexie.wav · 14 MB')
@@ -321,7 +319,7 @@ describe('AiVoiceTab (pronunciation and handwriting)', () => {
       await wrapper.get('input.cjk-text').setValue('谢')
       const file = fileWithSize(name, type, 12 * MB)
       await chooseFile(wrapper.get('input[type="file"]'), file)
-      const submit = wrapper.get<HTMLButtonElement>('.ai-check-submit button')
+      const submit = wrapper.get<HTMLButtonElement>('.card-footer button')
       expect(submit.element.disabled).toBe(false)
       expect(wrapper.text()).toContain(`${formats} · up to 20 MB`)
 
@@ -362,7 +360,7 @@ describe('AiVoiceTab (pronunciation and handwriting)', () => {
     expect(api.checkPractice).not.toHaveBeenCalled()
     await wrapper.setProps({ status: { ...STATUS, audioUploadMaxBytes: 5 } })
     expect(wrapper.find('form [role="alert"]').exists()).toBe(false)
-    expect(wrapper.get<HTMLButtonElement>('.ai-check-submit button').element.disabled).toBe(false)
+    expect(wrapper.get<HTMLButtonElement>('.card-footer button').element.disabled).toBe(false)
   })
 
   it('says what is happening while the chosen audio file is being checked', async () => {
@@ -372,7 +370,7 @@ describe('AiVoiceTab (pronunciation and handwriting)', () => {
 
     await submitRecording(wrapper)
 
-    const submit = wrapper.get('.ai-check-submit')
+    const submit = wrapper.get('.card-footer')
     expect(submit.text()).toContain('Checking your audio file…')
     expect(submit.get('button').text()).toBe('Checking…')
 
@@ -428,7 +426,7 @@ describe('AiVoiceTab (pronunciation and handwriting)', () => {
 
     expect(wrapper.find('.callout.is-warning').exists()).toBe(false)
     // Nothing can be sent before the status says what SparkBot can check.
-    expect(wrapper.get<HTMLButtonElement>('.ai-check-submit button').element.disabled).toBe(true)
+    expect(wrapper.get<HTMLButtonElement>('.card-footer button').element.disabled).toBe(true)
   })
 
   it('offers the audio file, not typing, when the microphone is refused', async () => {
@@ -464,7 +462,7 @@ describe('AiVoiceTab (pronunciation and handwriting)', () => {
 
     expect(wrapper.get('[data-testid="ai-record-stop"]').text()).toBe('Stop')
     expect(wrapper.get('[data-testid="ai-recorder-status"]').text()).toBe(
-      'Recording… 0:03 · say 谢谢 now. It stays on this device until you check it.',
+      'Recording… 0:03 · say 谢谢 now. The recording stays on this device until you check it.',
     )
     // The clock is not read out every second.
     expect(wrapper.get('[data-testid="ai-recorder-status"] [aria-hidden="true"]').text()).toBe('0:03')
@@ -472,7 +470,7 @@ describe('AiVoiceTab (pronunciation and handwriting)', () => {
     await wrapper.get('[data-testid="ai-record-stop"]').trigger('click')
     await flushPromises()
     expect(wrapper.get('.ai-recording').text()).toContain('Your recording')
-    const submit = () => wrapper.get<HTMLButtonElement>('.ai-check-submit button')
+    const submit = () => wrapper.get<HTMLButtonElement>('.card-footer button')
     expect(submit().element.disabled).toBe(false)
 
     vi.spyOn(wrapper.get('audio').element, 'play').mockRejectedValue(

@@ -92,13 +92,34 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("select u.id from User u join u.roles r where r.name = :roleName and u.active = true and u.deletedAt is null")
     List<Long> findActiveIdsByRoleName(@Param("roleName") RoleName roleName);
 
-    /**
-     * When the accounts created in [start, end) were created, for the registrations chart: like the user totals, only
-     * accounts that still have a role and were not deleted by their owners since.
-     */
     @Query("""
-            select u.createdAt from User u where u.createdAt >= :start and u.createdAt < :end
-              and u.deletedAt is null and u.roles is not empty
+            select distinct u from User u join u.roles r
+            where r.name = com.example.aichinese.entity.enums.RoleName.ADMIN
+              and u.active = true and u.deletedAt is null and u.notifyReviewQueues = true
             """)
-    List<LocalDateTime> findCreatedAtBetween(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+    List<User> findActiveDigestAdmins();
+
+    /** Bounded 15-minute bucket count for platform-day registration aggregation across arbitrary timezones and DST. */
+    interface QuarterHourCount {
+        String getBucket();
+        long getCount();
+    }
+
+    /**
+     * Counts accounts created in [start, end) grouped into 15-minute server-local buckets (at most 96 rows/day,
+     * covering every timezone offset including half/quarter-hour offsets and DST without loading all rows into heap).
+     */
+    @Query(value = """
+            select concat(date_format(u.created_at, '%Y-%m-%d %H:'),
+                          lpad(floor(minute(u.created_at) / 15) * 15, 2, '0'),
+                          ':00') as bucket,
+                   count(*) as count
+            from users u
+            where u.created_at >= :start and u.created_at < :end
+              and u.deleted_at is null
+              and exists (select 1 from user_roles ur where ur.user_id = u.id)
+            group by bucket
+            """, nativeQuery = true)
+    List<QuarterHourCount> countCreatedByQuarterHourBetween(
+            @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 }

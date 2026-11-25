@@ -104,9 +104,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<ApiResponse<Void>> handleResponseStatusException(ResponseStatusException exception) {
         if (exception.getStatusCode().is5xxServerError()) {
-            // The user only sees a friendly message, so a server-side failure must at least reach the log.
-            log.error("Request failed with HTTP {} [requestId={}]", exception.getStatusCode().value(),
-                    RequestIdHolder.currentOrDash(), exception);
+            // The user only sees a friendly message, so a server-side failure reaches the log in redacted form.
+            log.error("Request failed with HTTP {} [requestId={}]: {}",
+                    exception.getStatusCode().value(),
+                    RequestIdHolder.currentOrDash(),
+                    ExceptionLogUtils.safeSummary(exception));
+            ExceptionLogUtils.debugOrigin(log, exception);
         }
         String message = FriendlyErrorMessageResolver.resolve(exception.getStatusCode(), exception.getReason());
         return jsonError(exception.getStatusCode()).headers(exception.getHeaders()).body(failure(message));
@@ -189,8 +192,13 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGenericException(Exception exception) {
-        log.error("Unhandled exception caught by GlobalExceptionHandler [requestId={}]",
-                RequestIdHolder.currentOrDash(), exception);
+        Throwable cause = NestedExceptionUtils.getMostSpecificCause(exception);
+        String summary = cause == exception
+                ? ExceptionLogUtils.safeSummary(exception)
+                : ExceptionLogUtils.safeSummary(exception) + " (cause=" + ExceptionLogUtils.safeSummary(cause) + ")";
+        log.error("Unhandled exception caught by GlobalExceptionHandler [requestId={}]: {}",
+                RequestIdHolder.currentOrDash(), summary);
+        ExceptionLogUtils.debugOrigin(log, exception);
         return jsonError(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(failure(FriendlyErrorMessageResolver.serverUnavailableMessage()));
     }

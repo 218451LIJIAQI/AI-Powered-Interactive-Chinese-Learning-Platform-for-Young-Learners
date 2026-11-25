@@ -1,14 +1,17 @@
 import type { EditorQuestion, EditorQuiz, LessonEditor, QuestionPayload } from '@/types/adminClasses'
-import type { ClassActivityType, KeyPhrase } from '@/types/classes'
+import type { AiQuizGeneratorResponse, QuizQuestionType } from '@/types/api'
+import type { KeyPhrase } from '@/types/classes'
+import { draftAnswerIndex } from '@/utils/aiPracticeQuiz'
+import { isTypedQuestion, normalizeQuestionType } from '@/utils/classes'
+import { truncateText } from '@/utils/truncateText'
+
+const MAX_EXPLANATION_LENGTH = 2000
 
 export interface LessonContentForm {
   title: string
   unitId: number | null
   keyPhrases: KeyPhrase[]
 }
-
-/** Every lesson has exactly these three activities, in this order. */
-export const LESSON_ACTIVITY_TYPES: readonly ClassActivityType[] = ['FLASHCARDS', 'TRACING', 'MATCHING']
 
 /** A lesson quiz has exactly this many questions: at this many, adding and AI drafts stop until one is deleted. */
 export const QUIZ_SIZE = 5
@@ -71,7 +74,7 @@ export function uncheckedAiDraftQuestionNumbers(quiz: EditorQuiz | null): number
 /** A question as the editor would send it again: Undo of a delete puts it back with this. */
 export function questionPayload(question: EditorQuestion): QuestionPayload {
   return {
-    questionType: question.type,
+    questionType: normalizeQuestionType(question.type),
     questionText: question.text,
     points: question.points,
     correctAnswerText: question.correctAnswerText,
@@ -86,4 +89,44 @@ export function questionPayload(question: EditorQuestion): QuestionPayload {
     })),
     aiDraft: question.aiDraft,
   }
+}
+
+/** The type the AI wrote ("fill blank", "true-false"), or multiple choice when options or media do not fit. */
+function normalizeQuizQuestionType(value: string, optionCount: number): QuizQuestionType {
+  const type = normalizeQuestionType(
+    value
+      .trim()
+      .toUpperCase()
+      .replace(/[\s-]+/g, '_'),
+  )
+  if (type === 'LISTEN_CHOOSE' || type === 'MATCH_WORD_IMAGE') return 'MULTIPLE_CHOICE'
+  if (type === 'TRUE_FALSE' && optionCount !== 2) return 'MULTIPLE_CHOICE'
+  return type
+}
+
+/** Maps an AI-assisted quiz draft (FRAI05) directly onto unchecked AI-draft question payloads ready to save. */
+export function quizDraftToQuestionPayloads(response: AiQuizGeneratorResponse): QuestionPayload[] {
+  return response.questions.map((question) => {
+    const questionType = normalizeQuizQuestionType(question.questionType, question.options.length)
+    const correctIndex = draftAnswerIndex(question.options, question.correctAnswer)
+    const answerText = correctIndex < 0 ? question.correctAnswer : question.options[correctIndex]
+    const explanation = truncateText(
+      [question.explanation, question.pinyin, question.translation]
+        .map((part) => part?.trim())
+        .filter((part): part is string => Boolean(part))
+        .join(' · '),
+      MAX_EXPLANATION_LENGTH,
+    )
+    return {
+      questionType,
+      questionText: question.questionText,
+      points: DEFAULT_QUESTION_POINTS,
+      correctAnswerText: answerText || null,
+      explanation: explanation || null,
+      options: isTypedQuestion(questionType)
+        ? []
+        : question.options.map((optionText, index) => ({ optionText, correctOption: index === correctIndex })),
+      aiDraft: true,
+    }
+  })
 }

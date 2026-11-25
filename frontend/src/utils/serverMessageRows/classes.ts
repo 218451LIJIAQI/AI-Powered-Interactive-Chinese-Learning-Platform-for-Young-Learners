@@ -1,5 +1,7 @@
 import type { MessageRow } from './types'
 
+export const JOIN_CLASS_TO_OPEN_LESSONS_MESSAGE = 'Join this class to open its lessons.'
+
 /** Backend messages of the classes module, translated like the rows in utils/serverMessages.ts. */
 export const CLASSES_MESSAGES: readonly MessageRow[] = [
   // Classes and units (admin class authoring)
@@ -63,6 +65,31 @@ export const CLASSES_MESSAGES: readonly MessageRow[] = [
     '没有尚未发布的更改可以发布。',
   ],
   ['Lesson title is required.', 'Tajuk pelajaran diperlukan.', '请填写课时标题。'],
+  [
+    'Chinese is required for every key phrase.',
+    'Teks Cina diperlukan untuk setiap frasa utama.',
+    '每条重点短语都必须填写中文。',
+  ],
+  [
+    'Pinyin is required for every key phrase.',
+    'Pinyin diperlukan untuk setiap frasa utama.',
+    '每条重点短语都必须填写拼音。',
+  ],
+  [
+    'Meaning is required for every key phrase.',
+    'Maksud diperlukan untuk setiap frasa utama.',
+    '每条重点短语都必须填写释义。',
+  ],
+  [
+    'A published class can have at most 6 published lessons.',
+    'Kelas yang diterbitkan boleh mempunyai paling banyak 6 pelajaran yang diterbitkan.',
+    '已发布的课堂最多只能有 6 节已发布的课时。',
+  ],
+  [
+    'A published class needs at least one published lesson. Archive the class instead.',
+    'Kelas yang diterbitkan memerlukan sekurang-kurangnya satu pelajaran yang diterbitkan. Arkibkan kelas itu sebaliknya.',
+    '已发布的课堂至少需要保留一节已发布的课时。请直接归档该课堂。',
+  ],
   ['Choose a video file to upload.', 'Pilih fail video untuk dimuat naik.', '请选择要上传的视频文件。'],
   // The publish checks of the lesson editor (its checklist names the missing parts).
   [
@@ -93,11 +120,24 @@ export const CLASSES_MESSAGES: readonly MessageRow[] = [
     'Tambah sekurang-kurangnya satu aksara untuk disurih.',
     '请至少添加一个要描红的汉字。',
   ],
+  ['Enter the character to trace.', 'Masukkan aksara untuk disurih.', '请输入要描红的汉字。'],
+  ['Pinyin is required for every character.', 'Pinyin diperlukan untuk setiap aksara.', '每个汉字都必须填写拼音。'],
   ['Enter one character per row.', 'Masukkan satu aksara bagi setiap baris.', '每行只能输入一个汉字。'],
+  ['Chinese is required for every card.', 'Teks Cina diperlukan untuk setiap kad.', '每张闪卡都必须填写中文。'],
+  ['Pinyin is required for every card.', 'Pinyin diperlukan untuk setiap kad.', '每张闪卡都必须填写拼音。'],
+  ['Meaning is required for every card.', 'Maksud diperlukan untuk setiap kad.', '每张闪卡都必须填写释义。'],
   [
     'A matching activity needs at least 2 pairs.',
     'Aktiviti padanan memerlukan sekurang-kurangnya 2 pasangan.',
     '配对活动至少需要 2 组配对。',
+  ],
+  ['Chinese is required for every pair.', 'Teks Cina diperlukan untuk setiap pasangan.', '每组配对都必须填写中文。'],
+  ['Pinyin is required for every pair.', 'Pinyin diperlukan untuk setiap pasangan.', '每组配对都必须填写拼音。'],
+  ['Meaning is required for every pair.', 'Maksud diperlukan untuk setiap pasangan.', '每组配对都必须填写释义。'],
+  [
+    'Each Chinese word can only be used once.',
+    'Setiap perkataan Cina hanya boleh digunakan sekali.',
+    '每个中文词语只能使用一次。',
   ],
   ['Each meaning can only be used once.', 'Setiap maksud hanya boleh digunakan sekali.', '每个释义只能使用一次。'],
   ['Choose one meaning per word.', 'Pilih satu maksud untuk setiap perkataan.', '每个词只能选择一个释义。'],
@@ -143,9 +183,14 @@ export const CLASSES_MESSAGES: readonly MessageRow[] = [
     '词图配对题需要提供图片链接。',
   ],
   [
-    'At least one answer option is required.',
-    'Sekurang-kurangnya satu pilihan jawapan diperlukan.',
-    '至少需要一个答案选项。',
+    'A true-or-false question needs exactly 2 answer options.',
+    'Soalan benar atau salah memerlukan tepat 2 pilihan jawapan.',
+    '判断题必须正好有 2 个答案选项。',
+  ],
+  [
+    'At least 2 answer options are required.',
+    'Sekurang-kurangnya 2 pilihan jawapan diperlukan.',
+    '至少需要 2 个答案选项。',
   ],
   [
     'Exactly one correct answer option is required.',
@@ -212,7 +257,7 @@ export const CLASSES_MESSAGES: readonly MessageRow[] = [
 
   // Joining, leaving and archived classes (learners)
   [
-    'Join this class to open its lessons.',
+    JOIN_CLASS_TO_OPEN_LESSONS_MESSAGE,
     'Sertai kelas ini untuk membuka pelajarannya.',
     '加入这个课堂后才能打开其课时。',
   ],

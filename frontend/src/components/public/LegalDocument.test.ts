@@ -1,7 +1,11 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 
-vi.mock('vue-router', async () => ({ RouterLink: (await import('@/test/helpers')).routerLinkStub }))
+vi.mock('vue-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('vue-router')>()),
+  RouterLink: (await import('@/test/helpers')).routerLinkStub,
+  useRoute: () => ({ hash: '' }),
+}))
 
 import LegalDocument from './LegalDocument.vue'
 

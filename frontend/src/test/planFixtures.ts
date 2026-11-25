@@ -74,7 +74,7 @@ export function learningPlan(overrides: Partial<LearningPlan> = {}): LearningPla
       newSkills: ['LISTENING'],
     },
     weeks: { current: 2, total: 10, content: 8 },
-    progress: { percent: 18, status: 'ON_TRACK', daysThisWeek: 2, daysBehind: 0 },
+    progress: { percent: 18, status: 'ON_TRACK', daysThisWeek: 2 },
     pace: { key: 'HOURS_1_TO_2', minMinutesPerDay: 60, maxMinutesPerDay: 120 },
     steps: [
       planStep(),
@@ -137,7 +137,7 @@ export function learningPlan(overrides: Partial<LearningPlan> = {}): LearningPla
     milestone: null,
     thisWeek: [
       { kind: 'LEARN_DONE', title: 'Polite phrases', doneOn: '2026-05-16' },
-      { kind: 'LEARN_NEXT', title: 'Introduce yourself', minutes: 4, lessonId: 103 },
+      { kind: 'LEARN_NEXT', title: 'Introduce yourself', minutes: 4, lessonId: 103, lessonKind: 'LESSON' },
       { kind: 'PRACTICE', title: 'At the Café', practiceType: 'LISTENING', practiceSetId: 7 },
       { kind: 'XIAOMEI', done: true },
     ],
@@ -244,7 +244,6 @@ export function checkDone(overrides: Partial<LevelCheckStep> = {}): LevelCheckSt
     done: true,
     result: {
       level: 'BEGINNER_1',
-      knownSkills: ['VOCABULARY'],
       newSkills: ['LISTENING'],
     },
     answeredCount: 3,

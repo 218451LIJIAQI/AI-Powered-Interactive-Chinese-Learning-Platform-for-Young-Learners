@@ -39,6 +39,7 @@ export const SUPPORT_STATUSES = ['OPEN', 'ANSWERED', 'SOLVED'] as const
 export type SupportStatus = (typeof SUPPORT_STATUSES)[number]
 /** VERIFICATION only labels requests sent while teachers still applied to the platform; the forms no longer offer it. */
 export type SupportTopic = 'ACCOUNT' | 'CLASSES' | 'LEARNING' | 'AI_HELPER' | 'VERIFICATION' | 'SAFETY' | 'OTHER'
+export type SelectableSupportTopic = Exclude<SupportTopic, 'VERIFICATION'>
 /** A signed-in learner or a visitor of the Help page; TEACHER marks requests teacher accounts sent before 2026-11. */
 export type SupportRequesterRole = 'STUDENT' | 'TEACHER' | 'VISITOR'
 
@@ -80,21 +81,20 @@ export interface SupportQueueResponse {
 
 /** "Contact support" of a signed-in learner (S11.03, X2.21). */
 export interface NewSupportRequest {
-  topic: SupportTopic
+  topic: SelectableSupportTopic
   subject: string
   message: string
   screenshot?: File | null
 }
 
-/** The number a new request got, and the address support's e-mail reply goes to. */
+/** The address support's e-mail reply goes to after a request is created. */
 export interface SupportRequestCreated {
-  number: number
   email: string
 }
 
 export interface VisitorSupportMessage {
   email: string
-  topic: SupportTopic
+  topic: SelectableSupportTopic
   message: string
   /** The page's interface language: the e-mails that bring support's replies use it. */
   language: AppLanguage
@@ -130,6 +130,8 @@ export interface AuditEntry {
 export interface AdminUserDetail extends Omit<AdminUserListItem, 'role'> {
   /** Null for an account whose former role was removed. */
   role: UserRole | null
+  /** True once the learner permanently deleted their account; deleted accounts cannot be reactivated or deactivated. */
+  deleted?: boolean
   deactivation: { actorName: string | null; reason: string | null; at: string } | null
   self: boolean
   /** The account's own recent events ("Account created", "Account deactivated" …), newest first. */

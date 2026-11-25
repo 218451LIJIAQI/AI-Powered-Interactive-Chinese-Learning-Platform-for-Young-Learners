@@ -3,7 +3,7 @@ import { createI18n } from 'vue-i18n'
 
 import type { AppLanguage, UserRole } from '@/types/api'
 import { normalizeAppLanguage } from '@/utils/locale'
-import { readPersistedLocale, safeSetItem, storageKeys } from '@/utils/storage'
+import { safeGetItem, safeSetItem, storageKeys } from '@/utils/storage'
 
 import { aiSafetyMessages } from './aiSafetyMessages'
 import { practiceTypeMessages } from './practiceTypeMessages'
@@ -61,6 +61,7 @@ const messages = {
       skipToMain: 'Skip to main content',
       primaryNavigation: 'Primary',
       workspaceNavigation: 'Workspace navigation',
+      language: 'Interface language',
       switchEnglish: 'Switch to English',
       switchMalay: 'Switch to Bahasa Melayu',
       switchChinese: 'Switch to Simplified Chinese',
@@ -84,6 +85,22 @@ const messages = {
       users: 'Users',
       analytics: 'Analytics',
       progress: 'Progress',
+    },
+    tracingPad: {
+      keyboard: 'With a keyboard: Space starts or ends a stroke, the arrow keys draw.',
+    },
+    pagination: {
+      previous: 'Previous',
+      next: 'Next',
+      pageOf: 'Page {page} of {total}',
+    },
+    shell: {
+      createAccount: 'Create account',
+      openMyHome: 'Open my home',
+      footerNavigation: 'Footer',
+      footerContact: 'Contact us',
+      footerCopyright: '© {year} MandarinSpark',
+      footerBye: 'see you again',
     },
   },
   ms: {
@@ -127,7 +144,7 @@ const messages = {
     } satisfies Record<UserRole, string>,
     hsk: {
       level1: 'HSK 1 (Asas)',
-      level2: 'HSK 2 (Survival)',
+      level2: 'HSK 2 (Harian)',
       level3: 'HSK 3 (Perbualan)',
       number: 'HSK {level}',
     },
@@ -135,6 +152,7 @@ const messages = {
       skipToMain: 'Langkau ke kandungan utama',
       primaryNavigation: 'Navigasi utama',
       workspaceNavigation: 'Navigasi ruang kerja',
+      language: 'Bahasa antara muka',
       switchEnglish: 'Tukar kepada bahasa Inggeris',
       switchMalay: 'Tukar kepada Bahasa Melayu',
       switchChinese: 'Tukar kepada bahasa Cina Ringkas',
@@ -158,6 +176,22 @@ const messages = {
       users: 'Pengguna',
       analytics: 'Analitik',
       progress: 'Kemajuan',
+    },
+    tracingPad: {
+      keyboard: 'Dengan papan kekunci: Space memulakan atau menamatkan strok, kekunci anak panah melukis.',
+    },
+    pagination: {
+      previous: 'Sebelumnya',
+      next: 'Seterusnya',
+      pageOf: 'Halaman {page} daripada {total}',
+    },
+    shell: {
+      createAccount: 'Cipta akaun',
+      openMyHome: 'Buka laman saya',
+      footerNavigation: 'Navigasi kaki halaman',
+      footerContact: 'Hubungi kami',
+      footerCopyright: '© {year} MandarinSpark',
+      footerBye: 'jumpa lagi',
     },
   },
   'zh-CN': {
@@ -201,7 +235,7 @@ const messages = {
     } satisfies Record<UserRole, string>,
     hsk: {
       level1: 'HSK 1（基础）',
-      level2: 'HSK 2（生存）',
+      level2: 'HSK 2（日常）',
       level3: 'HSK 3（会话）',
       number: 'HSK {level}',
     },
@@ -209,6 +243,7 @@ const messages = {
       skipToMain: '跳转到主要内容',
       primaryNavigation: '主导航',
       workspaceNavigation: '工作区导航',
+      language: '界面语言',
       switchEnglish: '切换到英语',
       switchMalay: '切换到马来语',
       switchChinese: '切换到简体中文',
@@ -233,12 +268,28 @@ const messages = {
       analytics: '分析',
       progress: '进度',
     },
+    tracingPad: {
+      keyboard: '使用键盘：空格键开始或结束一笔，方向键书写。',
+    },
+    pagination: {
+      previous: '上一页',
+      next: '下一页',
+      pageOf: '第 {page} 页，共 {total} 页',
+    },
+    shell: {
+      createAccount: '创建账号',
+      openMyHome: '进入我的主页',
+      footerNavigation: '页脚导航',
+      footerContact: '联系我们',
+      footerCopyright: '© {year} MandarinSpark',
+      footerBye: '下次见',
+    },
   },
 } as const
 
 export const i18n = createI18n({
   legacy: false,
-  locale: readPersistedLocale(),
+  locale: normalizeAppLanguage(safeGetItem(storageKeys.language)) ?? 'en',
   fallbackLocale: 'en',
   messages,
 })
@@ -251,13 +302,13 @@ function syncDocumentLang(locale: AppLanguage): void {
   }
 }
 
-syncDocumentLang(i18n.global.locale.value)
-// Keep <html lang> (and therefore apiClientMessage / serverMessageOr) aligned even if locale is mutated directly.
-watch(
+// Keep <html lang> (and therefore apiClientMessage / serverMessageOr) aligned on load and if locale is mutated directly.
+const stopLangSync = watch(
   () => i18n.global.locale.value,
   (locale) => syncDocumentLang(locale),
-  { flush: 'sync' },
+  { immediate: true, flush: 'sync' },
 )
+import.meta.hot?.dispose(stopLangSync)
 
 export function setLocale(locale: AppLanguage): void {
   i18n.global.locale.value = locale

@@ -17,7 +17,7 @@ describe('useFieldCheck', () => {
     await nextTick()
     expect(field.error.value).toBeNull()
 
-    field.validateOnBlur()
+    field.validate()
     expect(field.error.value).toBe('Enter a reason.')
   })
 

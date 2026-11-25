@@ -11,9 +11,6 @@ import java.util.stream.Collectors;
 
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
-import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.example.aichinese.dto.ai.AiChatRequest;
@@ -29,6 +26,7 @@ import com.example.aichinese.entity.AiChatSession;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.AiChatSenderRole;
 import com.example.aichinese.entity.enums.AiFeatureKey;
+import com.example.aichinese.entity.enums.EnumLookups;
 import com.example.aichinese.entity.enums.QuizQuestionType;
 import com.example.aichinese.repository.AiChatMessageRepository;
 import com.example.aichinese.repository.AiChatSessionRepository;
@@ -39,11 +37,14 @@ import com.example.aichinese.service.ai.AiGateway;
 import com.example.aichinese.service.ai.AiJson;
 import com.example.aichinese.service.ai.AiPromptBuilder;
 import com.example.aichinese.service.ai.AiProviderPrompt;
+import com.example.aichinese.service.ai.AiSafetyGuard;
 import com.example.aichinese.service.classes.LessonEditorService;
 import com.example.aichinese.util.AiInputSanitizer;
 import com.example.aichinese.util.LanguageCodes;
 import com.example.aichinese.util.PersonalDataRedactor;
 import com.example.aichinese.util.TextUtils;
+
+import lombok.RequiredArgsConstructor;
 
 /**
  * Ask SparkBot, Quick quiz and Story for learners, and quiz drafts for lesson authors.
@@ -54,6 +55,7 @@ import com.example.aichinese.util.TextUtils;
  * again in the prompt builder before it is sent.</p>
  */
 @Service
+@RequiredArgsConstructor
 public class AiService {
 
     private static final int CHAT_HISTORY_LIMIT = 20;
@@ -80,23 +82,7 @@ public class AiService {
     private final AiChatSessionRepository aiChatSessionRepository;
     private final AiChatMessageRepository aiChatMessageRepository;
     private final LessonEditorService lessonEditorService;
-    private final TransactionTemplate transaction;
-
-    public AiService(
-            CurrentAccount currentAccount,
-            AiGateway gateway,
-            AiChatSessionRepository aiChatSessionRepository,
-            AiChatMessageRepository aiChatMessageRepository,
-            LessonEditorService lessonEditorService,
-            PlatformTransactionManager transactionManager) {
-        this.currentAccount = currentAccount;
-        this.gateway = gateway;
-        this.aiChatSessionRepository = aiChatSessionRepository;
-        this.aiChatMessageRepository = aiChatMessageRepository;
-        this.lessonEditorService = lessonEditorService;
-        this.transaction = new TransactionTemplate(transactionManager);
-        this.transaction.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
-    }
+    private final TransactionRunner transactions;
 
     /** Validated inputs and prior turns for a single Ask SparkBot turn, ready for provider execution. */
     public record PreparedChat(
@@ -105,14 +91,6 @@ public class AiService {
             String message,
             Long sessionId,
             List<AiProviderPrompt.AiMessage> history) {
-    }
-
-    /**
-     * One Ask SparkBot turn. The session's earlier turns give the answer its context; a turn is stored (redacted)
-     * only when SparkBot answered, so a blocked or failed question never comes back through the history.
-     */
-    public AiChatResponse chat(SecurityUserDetails currentUser, AiChatRequest request) {
-        return completeChat(currentUser, prepareChat(currentUser, request));
     }
 
     /**
@@ -131,11 +109,14 @@ public class AiService {
         return new PreparedChat(user, language, message, session == null ? null : session.getId(), history);
     }
 
-    /** Calls the AI provider and atomically stores a completed Ask SparkBot turn. */
+    /**
+     * Calls the AI provider and atomically stores a completed Ask SparkBot turn (redacted). A blocked or failed
+     * question is never persisted so it cannot leak back through future conversation history.
+     */
     public AiChatResponse completeChat(SecurityUserDetails currentUser, PreparedChat prepared) {
         AiExecutionResult result = gateway.execute(
-                AiGateway.AiCall.text(prepared.user(), AiFeatureKey.CHAT_TUTOR, prepared.language(), chatPrompt(prepared.message()))
-                        .withSession(currentUser.getSessionId())
+                AiGateway.AiCall.text(prepared.user(), currentUser.getSessionId(), AiFeatureKey.CHAT_TUTOR,
+                                prepared.language(), chatPrompt(prepared.message()))
                         .withHistory(prepared.history()));
         if (!result.succeeded()) {
             return new AiChatResponse(prepared.sessionId(), null, result.userMessage(), result.status());
@@ -148,7 +129,7 @@ public class AiService {
             throw new IllegalStateException("The AI chat stream closed before the answer was stored.");
         }
         // Keep a turn atomic and adjacent for history and reports; never hold a lock while waiting for the provider.
-        return transaction.execute(status -> {
+        return transactions.writeReadCommitted(() -> {
             User current = currentAccount.lock(currentUser);
             AiChatSession activeSession = prepared.sessionId() == null ? newChatSession(current)
                     : aiChatSessionRepository.findLockedByIdAndUserId(prepared.sessionId(), current.getId())
@@ -162,7 +143,6 @@ public class AiService {
     private AiChatSession newChatSession(User user) {
         AiChatSession session = new AiChatSession();
         session.setUser(user);
-        session.setFeatureKey(AiFeatureKey.CHAT_TUTOR);
         return aiChatSessionRepository.save(session);
     }
 
@@ -203,8 +183,9 @@ public class AiService {
                 + (draft
                         ? ". Mix these question types; questionType is exactly one of them: "
                                 + String.join(", ", DRAFT_QUESTION_TYPES.stream().map(Enum::name).toList())
-                                + ". FILL_BLANK and REARRANGE_SENTENCE have no options; every other type has 2 to 4"
-                                + " options and correctAnswer is exactly one of the options. Usage mode: LESSON_QUIZ_DRAFT"
+                                + ". FILL_BLANK and REARRANGE_SENTENCE have no options; TRUE_FALSE has exactly 2"
+                                + " options; every other type has 2 to 4 options and correctAnswer is exactly one of"
+                                + " the options. Usage mode: LESSON_QUIZ_DRAFT"
                         : ". Every question is multiple choice with exactly 3 options and correctAnswer is exactly one"
                                 + " of the options; write questionText and explanation in the learner's language."
                                 + " Usage mode: SELF_PRACTICE")
@@ -212,16 +193,17 @@ public class AiService {
                 + ". Return keys: title, questions. Each question should include questionText, questionType, options,"
                 + " correctAnswer, explanation, pinyin, translation.";
         AiExecutionResult result = gateway.execute(AiGateway.AiCall.json(
-                        user, draft ? AiFeatureKey.QUIZ_DRAFT : AiFeatureKey.QUIZ_GENERATOR, language, prompt,
-                        json -> !quizQuestions(json, draft, questionCount).isEmpty())
-                .withSession(sessionId));
+                user, sessionId, draft ? AiFeatureKey.QUIZ_DRAFT : AiFeatureKey.QUIZ_GENERATOR, language, prompt,
+                json -> !quizQuestions(json, draft, questionCount).isEmpty()));
         if (!result.succeeded()) {
-            return new AiQuizGeneratorResponse(topic, List.of(), result.status());
+            String safeTitle = AiSafetyGuard.BLOCKED_INPUT_MESSAGE.equals(result.userMessage()) ? null : topic;
+            return new AiQuizGeneratorResponse(safeTitle, List.of(), result.status(), result.userMessage());
         }
         return new AiQuizGeneratorResponse(
                 TextUtils.defaultIfBlank(AiJson.text(result.json(), "title"), topic),
                 quizQuestions(result.json(), draft, questionCount),
-                result.status());
+                result.status(),
+                null);
     }
 
     /**
@@ -238,14 +220,18 @@ public class AiService {
                             ? draftQuestionType(AiJson.text(question, "questionType"))
                             : QuizQuestionType.MULTIPLE_CHOICE;
                     List<String> options = draft && !type.isOptionBased() ? List.of() : AiJson.strings(question, "options");
+                    String correctAnswer = AiJson.text(question, "correctAnswer");
+                    if (draft && !type.isOptionBased()) {
+                        correctAnswer = TextUtils.safeTruncate(correctAnswer, 1000);
+                    }
                     return new AiQuizGeneratorResponse.Question(
-                            AiJson.text(question, "questionText"),
+                            TextUtils.safeTruncate(AiJson.text(question, "questionText"), 1000),
                             type,
                             options,
-                            AiJson.text(question, "correctAnswer"),
-                            AiJson.text(question, "explanation"),
-                            AiJson.text(question, "pinyin"),
-                            AiJson.text(question, "translation"));
+                            correctAnswer,
+                            TextUtils.safeTruncate(AiJson.text(question, "explanation"), 1000),
+                            TextUtils.safeTruncate(AiJson.text(question, "pinyin"), 400),
+                            TextUtils.safeTruncate(AiJson.text(question, "translation"), 400));
                 })
                 .stream()
                 .filter(question -> question.questionText() != null && question.correctAnswer() != null)
@@ -258,15 +244,16 @@ public class AiService {
 
     /** The editor's question type the AI named; an unknown or missing one is multiple choice. */
     private static QuizQuestionType draftQuestionType(String value) {
-        return QuizQuestionType.tryFrom(value == null ? null : value.strip().replaceAll("[\\s-]+", "_"))
+        return EnumLookups.tryFrom(QuizQuestionType.class, value == null ? null : value.strip().replaceAll("[\\s-]+", "_"))
                 .orElse(QuizQuestionType.MULTIPLE_CHOICE);
     }
 
     private static boolean savableDraft(AiQuizGeneratorResponse.Question question) {
         QuizQuestionType type = question.questionType();
+        int maxOptions = type == QuizQuestionType.TRUE_FALSE ? 2 : MAX_DRAFT_OPTION_COUNT;
         return DRAFT_QUESTION_TYPES.contains(type)
                 && (!type.isOptionBased()
-                        || (question.options().size() <= MAX_DRAFT_OPTION_COUNT
+                        || (question.options().size() <= maxOptions
                                 && answerAmongOptions(question.options(), question.correctAnswer())));
     }
 
@@ -293,10 +280,12 @@ public class AiService {
                 + ", each with keys question, options (3 short options) and answer (exactly one of the options),"
                 + " written in the learner's language).";
         AiExecutionResult result = gateway.execute(AiGateway.AiCall.json(
-                        user, AiFeatureKey.STORY_GENERATOR, language, prompt, json -> !storyLines(json).isEmpty())
-                .withSession(currentUser.getSessionId()));
+                user, currentUser.getSessionId(), AiFeatureKey.STORY_GENERATOR, language, prompt,
+                json -> !storyLines(json).isEmpty()));
         if (!result.succeeded()) {
-            return new AiStoryGeneratorResponse(topic, null, List.of(), List.of(), List.of(), result.status());
+            String safeTitle = AiSafetyGuard.BLOCKED_INPUT_MESSAGE.equals(result.userMessage()) ? null : topic;
+            return new AiStoryGeneratorResponse(
+                    safeTitle, null, List.of(), List.of(), List.of(), result.status(), result.userMessage());
         }
 
         Map<String, Object> json = result.json();
@@ -328,7 +317,8 @@ public class AiService {
                                 AiJson.text(word, "bahasaMelayuMeaning"))
                         : null),
                 questions,
-                result.status());
+                result.status(),
+                null);
     }
 
     /** Story sentences with Chinese text to display and read aloud. */

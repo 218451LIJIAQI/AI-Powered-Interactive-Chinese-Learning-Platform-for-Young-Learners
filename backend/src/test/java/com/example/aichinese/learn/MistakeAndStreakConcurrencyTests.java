@@ -1,18 +1,15 @@
 package com.example.aichinese.learn;
 
-import static com.example.aichinese.support.ConcurrentTransactions.pauseAfterLookup;
+import static com.example.aichinese.support.ConcurrentTransactions.withAfterMethod;
 import static com.example.aichinese.support.ConcurrentTransactions.withPausedOperation;
 import static com.example.aichinese.support.ConcurrentTransactions.withRowLock;
 import static com.example.aichinese.support.LearningApiTestClient.uniqueEmail;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
 
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 import com.example.aichinese.dto.learn.MistakeReviewCompleteRequest;
 import com.example.aichinese.dto.learn.PracticeCompleteRequest;
@@ -25,6 +22,7 @@ import com.example.aichinese.entity.base.PracticeActivityContent;
 import com.example.aichinese.entity.enums.PracticeType;
 import com.example.aichinese.repository.DailyStreakRepository;
 import com.example.aichinese.repository.LearningMistakeRepository;
+import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.learn.LearnPathService;
 import com.example.aichinese.service.learn.MistakeService;
 import com.example.aichinese.service.learn.PracticeService;
@@ -54,75 +52,72 @@ class MistakeAndStreakConcurrencyTests extends ApiIntegrationTest {
     @Autowired
     private XpService xpService;
 
-    @MockitoSpyBean
+    @Autowired
     private LearningMistakeRepository mistakeRepository;
 
-    @MockitoSpyBean
+    @Autowired
     private DailyStreakRepository streakRepository;
 
     @Test
     void twoFirstWrongAnswersForTheSameLearnerAndQuestionCountTwiceOnOneMistake() throws Exception {
-        StudentProfile student = newLearner();
+        Learner student = newLearner();
         LearnLesson lesson = learnLesson(FIRST_LESSON);
         QuestionAnswer wrong = new QuestionAnswer(firstQuestion(lesson).getId(), "wrong");
-        boolean secondCorrect = withRowLock(jdbc, "student_profiles", pause -> {
-            pauseAfterLookup(pause).when(mistakeRepository)
-                    .findLockedByStudentIdAndItemRef(anyLong(), anyString());
-            assertThat(learnPathService.check(student, lesson.getId(), wrong).correct()).isFalse();
-        }, () -> learnPathService.check(student, lesson.getId(), wrong).correct());
+        boolean secondCorrect = withRowLock(jdbc, "student_profiles",
+                pause -> withAfterMethod(mistakeRepository, "findLockedByStudentIdAndItemRef", pause, () ->
+                        assertThat(learnPathService.check(student.principal(), lesson.getId(), wrong).correct()).isFalse()),
+                () -> learnPathService.check(student.principal(), lesson.getId(), wrong).correct());
         assertThat(secondCorrect).isFalse();
-        assertThat(jdbc.queryForList("select wrong_count from learning_mistakes where student_id = ?", Integer.class, student.getId()))
-                .containsExactly(2);
+        assertThat(jdbc.queryForList("select wrong_count from learning_mistakes where student_id = ?",
+                Integer.class, student.profile().getId())).containsExactly(2);
     }
 
     @Test
     void twoLearnersFirstWrongPracticeAnswersAtOnceAreBothKept() throws Exception {
-        StudentProfile first = newLearner();
-        StudentProfile second = newLearner();
+        Learner first = newLearner();
+        Learner second = newLearner();
         PracticeActivityContent set = practiceSet(PracticeType.LISTENING, "At the Café");
         String itemKey = practiceCatalog.content(PracticeType.LISTENING, set).items().get(0).key();
         PracticeItemAnswer wrong = new PracticeItemAnswer(itemKey, "wrong", null, false);
 
-        withPausedOperation(pause -> {
-            pauseAfterLookup(pause).when(mistakeRepository)
-                    .findLockedByStudentIdAndItemRef(anyLong(), anyString());
-            practiceService.check(first, PracticeType.LISTENING, set.getId(), wrong);
-        }, () -> practiceService.check(second, PracticeType.LISTENING, set.getId(), wrong));
+        withPausedOperation(
+                pause -> withAfterMethod(mistakeRepository, "findLockedByStudentIdAndItemRef", pause, () ->
+                        practiceService.check(first.principal(), PracticeType.LISTENING, set.getId(), wrong)),
+                () -> practiceService.check(second.principal(), PracticeType.LISTENING, set.getId(), wrong));
 
-        assertThat(mistakeRepository.countByStudentIdAndClearedAtIsNull(first.getId())).isEqualTo(1);
-        assertThat(mistakeRepository.countByStudentIdAndClearedAtIsNull(second.getId())).isEqualTo(1);
+        assertThat(mistakeRepository.countByStudentIdAndClearedAtIsNull(first.profile().getId())).isEqualTo(1);
+        assertThat(mistakeRepository.countByStudentIdAndClearedAtIsNull(second.profile().getId())).isEqualTo(1);
     }
 
     @Test
     void twoLearnersFirstWrongLessonAnswersAtOnceAreBothKept() throws Exception {
-        StudentProfile first = newLearner();
-        StudentProfile second = newLearner();
+        Learner first = newLearner();
+        Learner second = newLearner();
         LearnLesson lesson = learnLesson(FIRST_LESSON);
         QuestionAnswer wrong = new QuestionAnswer(firstQuestion(lesson).getId(), "wrong");
 
-        withPausedOperation(pause -> {
-            pauseAfterLookup(pause).when(mistakeRepository)
-                    .findLockedByStudentIdAndItemRef(anyLong(), anyString());
-            learnPathService.check(first, lesson.getId(), wrong);
-        }, () -> learnPathService.check(second, lesson.getId(), wrong));
+        withPausedOperation(
+                pause -> withAfterMethod(mistakeRepository, "findLockedByStudentIdAndItemRef", pause, () ->
+                        learnPathService.check(first.principal(), lesson.getId(), wrong)),
+                () -> learnPathService.check(second.principal(), lesson.getId(), wrong));
 
-        assertThat(mistakeRepository.countByStudentIdAndClearedAtIsNull(first.getId())).isEqualTo(1);
-        assertThat(mistakeRepository.countByStudentIdAndClearedAtIsNull(second.getId())).isEqualTo(1);
+        assertThat(mistakeRepository.countByStudentIdAndClearedAtIsNull(first.profile().getId())).isEqualTo(1);
+        assertThat(mistakeRepository.countByStudentIdAndClearedAtIsNull(second.profile().getId())).isEqualTo(1);
     }
 
     /** Lowering the goal to the XP already earned today reaches it: the bonus, and a learner's first streak day. */
     @Test
     void twoLearnersReachingTheirFirstGoalByLoweringItAtOnceBothStartAStreak() throws Exception {
-        StudentProfile first = learnerWithTenXpToday();
-        StudentProfile second = learnerWithTenXpToday();
+        Learner first = learnerWithTenXpToday();
+        Learner second = learnerWithTenXpToday();
 
-        withPausedOperation(pause -> {
-            pauseAfterLookup(pause).when(streakRepository).findLockedByStudentId(anyLong());
-            xpService.changeDailyGoal(first, 10);
-        }, () -> xpService.changeDailyGoal(second, 10));
+        withPausedOperation(
+                pause -> withAfterMethod(streakRepository, "findLockedByStudentId", pause, () ->
+                        xpService.changeDailyGoal(first.principal(), 10)),
+                () -> xpService.changeDailyGoal(second.principal(), 10));
 
-        assertThat(streakRepository.findByStudentId(first.getId()).orElseThrow().getCurrentStreak()).isEqualTo(1);
-        assertThat(streakRepository.findByStudentId(second.getId()).orElseThrow().getCurrentStreak()).isEqualTo(1);
+        assertThat(streakRepository.findByStudentId(first.profile().getId()).orElseThrow().getCurrentStreak()).isEqualTo(1);
+        assertThat(streakRepository.findByStudentId(second.profile().getId()).orElseThrow().getCurrentStreak()).isEqualTo(1);
     }
 
     /** With a goal of 10 XP, the review's 10 XP reaches it: a learner's first streak day. */
@@ -130,49 +125,52 @@ class MistakeAndStreakConcurrencyTests extends ApiIntegrationTest {
     void twoLearnersReachingTheirFirstGoalInAReviewAtOnceBothStartAStreak() throws Exception {
         LearnLesson lesson = learnLesson(FIRST_LESSON);
         LearnQuestion question = firstQuestion(lesson);
-        StudentProfile first = learnerWithAMistakeAndAGoalOfTen(lesson, question);
-        StudentProfile second = learnerWithAMistakeAndAGoalOfTen(lesson, question);
+        Learner first = learnerWithAMistakeAndAGoalOfTen(lesson, question);
+        Learner second = learnerWithAMistakeAndAGoalOfTen(lesson, question);
         MistakeReviewCompleteRequest firstReview = rightAnswerToTheMistake(first, question);
         MistakeReviewCompleteRequest secondReview = rightAnswerToTheMistake(second, question);
 
-        withPausedOperation(pause -> {
-            pauseAfterLookup(pause).when(streakRepository).findLockedByStudentId(anyLong());
-            mistakeService.completeReview(first, firstReview);
-        }, () -> mistakeService.completeReview(second, secondReview));
+        withPausedOperation(
+                pause -> withAfterMethod(streakRepository, "findLockedByStudentId", pause, () ->
+                        mistakeService.completeReview(first.principal(), firstReview)),
+                () -> mistakeService.completeReview(second.principal(), secondReview));
 
-        assertThat(streakRepository.findByStudentId(first.getId()).orElseThrow().getCurrentStreak()).isEqualTo(1);
-        assertThat(streakRepository.findByStudentId(second.getId()).orElseThrow().getCurrentStreak()).isEqualTo(1);
+        assertThat(streakRepository.findByStudentId(first.profile().getId()).orElseThrow().getCurrentStreak()).isEqualTo(1);
+        assertThat(streakRepository.findByStudentId(second.profile().getId()).orElseThrow().getCurrentStreak()).isEqualTo(1);
     }
 
-    private StudentProfile newLearner() throws Exception {
+    private record Learner(StudentProfile profile, SecurityUserDetails principal) {
+    }
+
+    private Learner newLearner() throws Exception {
         String email = uniqueEmail("first-rows");
         api.registerStudentAccount(email);
-        return studentProfile(email);
+        return new Learner(studentProfile(email), principalFor(email));
     }
 
     /** A new learner with 10 XP today (a flashcard set reviewed), short of the default goal of 20 XP. */
-    private StudentProfile learnerWithTenXpToday() throws Exception {
-        StudentProfile learner = newLearner();
+    private Learner learnerWithTenXpToday() throws Exception {
+        Learner learner = newLearner();
         PracticeActivityContent cards = practiceSet(PracticeType.FLASHCARDS, "Campus Words");
         List<PracticeItemAnswer> ratings = practiceCatalog.content(PracticeType.FLASHCARDS, cards).items().stream()
                 .map(card -> new PracticeItemAnswer(card.key(), "GOT_IT", null, false))
                 .toList();
-        practiceService.complete(learner, PracticeType.FLASHCARDS, cards.getId(),
+        practiceService.complete(learner.principal(), PracticeType.FLASHCARDS, cards.getId(),
                 new PracticeCompleteRequest(ratings, null));
         return learner;
     }
 
     /** A new learner with a goal of 10 XP (none earned yet) and a waiting mistake on {@code question}. */
-    private StudentProfile learnerWithAMistakeAndAGoalOfTen(LearnLesson lesson, LearnQuestion question)
+    private Learner learnerWithAMistakeAndAGoalOfTen(LearnLesson lesson, LearnQuestion question)
             throws Exception {
-        StudentProfile learner = newLearner();
-        xpService.changeDailyGoal(learner, 10);
-        learnPathService.check(learner, lesson.getId(), new QuestionAnswer(question.getId(), "wrong"));
+        Learner learner = newLearner();
+        xpService.changeDailyGoal(learner.principal(), 10);
+        learnPathService.check(learner.principal(), lesson.getId(), new QuestionAnswer(question.getId(), "wrong"));
         return learner;
     }
 
-    private MistakeReviewCompleteRequest rightAnswerToTheMistake(StudentProfile learner, LearnQuestion question) {
-        Long mistakeId = mistakeService.list(learner, null, 1).page().items().getFirst().id();
+    private MistakeReviewCompleteRequest rightAnswerToTheMistake(Learner learner, LearnQuestion question) {
+        Long mistakeId = mistakeService.list(learner.principal(), null, 1).page().items().getFirst().id();
         return new MistakeReviewCompleteRequest(List.of(new QuestionAnswer(mistakeId, question.getAnswer())));
     }
 

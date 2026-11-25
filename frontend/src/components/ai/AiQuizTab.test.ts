@@ -142,7 +142,7 @@ describe('Quick quiz', () => {
       featureKey: 'QUIZ_GENERATOR',
       promptSnapshot: 'Food',
       aiResponseSnapshot:
-        'Food words\n1. What does 米饭 mean? [rice / noodles / tea] → rice\n2. Which word means tea? [水 / 茶 / 汤] → 茶',
+        'Food words\n1. What does 米饭 mean? [rice / noodles / tea] → rice (米饭 (mǐfàn) is cooked rice.)\n2. Which word means tea? [水 / 茶 / 汤] → 茶 (茶 (chá) is tea.)',
       reasonCategory: 'INCORRECT_CONTENT',
       description: undefined,
     })
@@ -174,6 +174,21 @@ describe('Quick quiz', () => {
 
     expect(wrapper.find('[data-testid="ai-quiz-result"]').exists()).toBe(false)
     expect(wrapper.find('.callout.is-danger').exists()).toBe(true)
+  })
+
+  it('shows the server safety reason when the quiz request is blocked and keeps AI notice visible when blocked', async () => {
+    const blockedMsg =
+      'This request was not sent to the AI helper because it may contain unsafe content. Please keep AI requests to Mandarin learning.'
+    api.quiz.mockResolvedValue({ title: null, status: 'FAILED', questions: [], message: blockedMsg })
+    const wrapper = mountQuiz()
+
+    await submitTopic(wrapper, 'Unsafe')
+    await flushPromises()
+
+    expect(wrapper.get('.callout.is-danger').text()).toBe(blockedMsg)
+
+    const unavailableWrapper = mountQuiz('unavailable')
+    expect(unavailableWrapper.text()).toContain('AI can make mistakes.')
   })
 
   it('cannot make a quiz while AI requests are blocked', () => {

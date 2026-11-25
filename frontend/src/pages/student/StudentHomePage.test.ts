@@ -12,7 +12,9 @@ const api = vi.hoisted(() => ({ home: vi.fn(), resend: vi.fn(), setDailyGoal: vi
 
 vi.mock('@/api/plan', () => ({
   planApi: { home: api.home },
-  emailConfirmationApi: { resend: api.resend },
+}))
+vi.mock('@/api/ops', () => ({
+  accountOpsApi: { resendEmailConfirmation: api.resend },
 }))
 vi.mock('@/api/learn', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/api/learn')>()),
@@ -308,31 +310,56 @@ describe('StudentHomePage', () => {
 
   it('says it is offline with a way to try again, and reads today again when the connection returns', async () => {
     const onLine = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
-    const { wrapper } = await mountPage()
+    try {
+      const { wrapper } = await mountPage()
 
-    const offline = wrapper.get('[data-testid="home-offline"]')
-    expect(offline.text()).toContain('You’re offline. Lessons and practice need a connection.')
-    const reloading = deferred<HomeView>()
-    api.home.mockReturnValueOnce(reloading.promise)
-    const retry = offline.get<HTMLButtonElement>('[data-testid="home-retry"]')
-    await retry.trigger('click')
-    await flushPromises()
-    expect(api.home).toHaveBeenCalledTimes(2)
-    // The page keeps what it had while the retry request is still in flight.
-    expect(wrapper.find('[data-testid="home-next"]').exists()).toBe(true)
-    expect(retry.element.disabled).toBe(true)
+      const offline = wrapper.get('[data-testid="home-offline"]')
+      expect(offline.text()).toContain('You’re offline. Lessons and practice need a connection.')
+      expect(offline.attributes('role')).toBeUndefined()
+      expect(offline.get('.home-notice-copy').attributes('role')).toBe('status')
+      const reloading = deferred<HomeView>()
+      api.home.mockReturnValueOnce(reloading.promise)
+      const retry = offline.get<HTMLButtonElement>('[data-testid="home-retry"]')
+      await retry.trigger('click')
+      await flushPromises()
+      expect(api.home).toHaveBeenCalledTimes(2)
+      // The page keeps what it had while the retry request is still in flight.
+      expect(wrapper.find('[data-testid="home-next"]').exists()).toBe(true)
+      expect(retry.element.disabled).toBe(true)
 
-    reloading.resolve(homeView())
-    await flushPromises()
-    expect(retry.element.disabled).toBe(false)
+      reloading.resolve(homeView())
+      await flushPromises()
+      expect(retry.element.disabled).toBe(false)
 
-    onLine.mockReturnValue(true)
-    window.dispatchEvent(new Event('online'))
-    await flushPromises()
-    expect(wrapper.find('[data-testid="home-offline"]').exists()).toBe(false)
-    expect(wrapper.get('[data-testid="toast"]').text()).toBe('You’re back online.')
-    expect(api.home).toHaveBeenCalledTimes(3)
-    onLine.mockRestore()
+      onLine.mockReturnValue(true)
+      window.dispatchEvent(new Event('online'))
+      await flushPromises()
+      expect(wrapper.find('[data-testid="home-offline"]').exists()).toBe(false)
+      expect(wrapper.get('[data-testid="toast"]').text()).toBe('You’re back online.')
+      expect(api.home).toHaveBeenCalledTimes(3)
+    } finally {
+      onLine.mockRestore()
+    }
+  })
+
+  it('surfaces a non-destructive refresh error with Retry and omits the back-online toast if reload fails', async () => {
+    const onLine = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    try {
+      const { wrapper } = await mountPage()
+      api.home.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(homeView())
+
+      onLine.mockReturnValue(true)
+      window.dispatchEvent(new Event('online'))
+      await flushPromises()
+
+      expect(wrapper.find('[data-testid="toast"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="home-next"]').exists()).toBe(true)
+      await wrapper.get('.data-notice button').trigger('click')
+      await flushPromises()
+      expect(wrapper.find('.data-notice').exists()).toBe(false)
+    } finally {
+      onLine.mockRestore()
+    }
   })
 
   const WAIT_A_MINUTE = 'We just sent a link. Please wait a minute before asking for another one.'
@@ -437,5 +464,16 @@ describe('StudentHomePage', () => {
     expect(wrapper.get('[data-testid="home-today"] h2').text()).toBe('Today')
     expect(wrapper.get('[data-testid="home-next"] .page-eyebrow').text()).toContain('Next in Learn')
     expect(wrapper.find('[data-testid="home-plan-notice"]').exists()).toBe(false)
+  })
+
+  it('shows a first milestone date on the goal strip even when the plan has no overall deadline', async () => {
+    api.home.mockResolvedValue(
+      homeView({ plan: planSummary({ deadline: null, milestoneDate: '2026-06-01', week: 1, totalWeeks: 4 }) }),
+    )
+    const { wrapper } = await mountPage()
+
+    expect(wrapper.get('[data-testid="home-goal"] .home-strip-title').text()).toBe(
+      'Travel to Shanghai · first milestone by Mon 1 Jun',
+    )
   })
 })

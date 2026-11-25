@@ -1,7 +1,7 @@
 <template>
   <div class="focus-stage class-quiz-result">
     <header class="class-focus-head" data-testid="quiz-result">
-      <h1 class="focus-headline">
+      <h1 ref="scoreHeading" class="focus-headline" tabindex="-1">
         {{
           t('classPlayer.result.scored', {
             correct: result.correctCount,
@@ -13,13 +13,11 @@
       <p class="class-focus-sub">{{ submittedLine }}</p>
     </header>
     <DataNotice :error="actionError" />
-    <DataNotice :error="lessonError" :error-title="t('classes.lessonLoadError')">
-      <template #actions>
-        <button class="btn btn-secondary btn-sm" type="button" @click="emit('retryLesson', result.quiz.lessonId)">
-          {{ t('common.retry') }}
-        </button>
-      </template>
-    </DataNotice>
+    <DataNotice
+      :error="lessonError"
+      :error-title="t('classes.lessonLoadError')"
+      @retry="emit('retryLesson', result.quiz.lessonId)"
+    />
     <QuizReview :result="result" :title="t('classPlayer.result.toReview', result.wrongCount)" />
 
     <FocusFooter>
@@ -50,7 +48,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { RouterLink, type RouteLocationRaw } from 'vue-router'
 
 import QuizReview from '@/components/classes/QuizReview.vue'
@@ -82,6 +80,11 @@ const emit = defineEmits<{
 const { t } = useLocalMessages({
   classPlayer: classPlayerMessages,
   classes: classesMessages,
+})
+
+const scoreHeading = ref<HTMLHeadingElement | null>(null)
+onMounted(() => {
+  if (props.justSubmitted) scoreHeading.value?.focus()
 })
 
 const submittedLine = computed(() => {

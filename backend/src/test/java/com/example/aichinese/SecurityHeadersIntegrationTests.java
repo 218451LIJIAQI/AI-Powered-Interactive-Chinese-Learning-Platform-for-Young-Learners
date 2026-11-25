@@ -44,6 +44,15 @@ class SecurityHeadersIntegrationTests extends ApiIntegrationTest {
                         .contentType("multipart/form-data; boundary=oversized")
                         .content(new byte[70 * 1024]))
                 .andExpect(status().isPayloadTooLarge())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, WEB_APP_ORIGIN))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"));
+
+        // Anonymous callers hit authentication (401) before multipart size inspection (413).
+        mockMvc.perform(post("/api/v1/users/me/support")
+                        .header(HttpHeaders.ORIGIN, WEB_APP_ORIGIN)
+                        .contentType("multipart/form-data; boundary=oversized")
+                        .content(new byte[70 * 1024]))
+                .andExpect(status().isUnauthorized())
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, WEB_APP_ORIGIN));
     }
 }

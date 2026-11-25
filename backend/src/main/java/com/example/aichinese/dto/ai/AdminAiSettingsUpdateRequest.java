@@ -1,6 +1,8 @@
 package com.example.aichinese.dto.ai;
 
-import static com.example.aichinese.dto.DtoNormalization.strip;
+import static com.example.aichinese.dto.DtoNormalization.stripMultiline;
+
+import com.example.aichinese.util.AiInputSanitizer;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -16,6 +18,6 @@ public record AdminAiSettingsUpdateRequest(
         Boolean aiSafetyCheck) {
 
     public AdminAiSettingsUpdateRequest {
-        aiNoticeText = strip(aiNoticeText);
+        aiNoticeText = AiInputSanitizer.sanitizeUnbounded(stripMultiline(aiNoticeText));
     }
 }

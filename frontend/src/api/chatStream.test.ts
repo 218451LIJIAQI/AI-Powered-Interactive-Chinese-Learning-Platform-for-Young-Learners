@@ -13,7 +13,7 @@ import {
 import { apiChatStream } from './chatStream'
 import { axiosHttpError, axiosResponse, restoreAxiosAdapterAfterEach } from '@/test/axiosCapture'
 import { deferred } from '@/test/helpers'
-import type { AiChatResponse } from '@/types/api'
+import type { AiChatResponse } from '@/types/ai'
 
 const CHAT_MESSAGE = 'hello'
 const FRESH_TOKEN = 'fresh-token'
@@ -85,7 +85,6 @@ describe('apiChatStream', () => {
   const originalFetch = window.fetch
 
   afterEach(() => {
-    vi.useRealTimers()
     window.fetch = originalFetch
     setAccessToken(null)
   })

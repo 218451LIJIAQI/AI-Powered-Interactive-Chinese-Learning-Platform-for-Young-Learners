@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-    <div class="toast-region" role="status" aria-live="polite" aria-atomic="true">
+    <div class="toast-region" role="status" aria-live="polite" aria-atomic="true" :inert="hasOpenOverlay || undefined">
       <Transition name="toast">
         <p
           v-if="message"
@@ -26,6 +26,7 @@
 import { ref, watch } from 'vue'
 
 import IconGlyph from '@/components/common/IconGlyph.vue'
+import { hasOpenOverlay } from '@/composables/useOverlayFocus'
 import type { ToastAction } from '@/composables/useToast'
 
 /**
@@ -39,6 +40,10 @@ let hovered = false
 
 function isFocused(): boolean {
   return Boolean(toastEl.value && toastEl.value.contains(document.activeElement))
+}
+
+function isHovered(): boolean {
+  return hovered || Boolean(toastEl.value?.matches(':hover'))
 }
 
 function onPointerEnter(): void {
@@ -57,24 +62,29 @@ function onPointerLeave(): void {
 
 function onFocusOut(event: FocusEvent): void {
   const toast = event.currentTarget as HTMLElement
-  if (
-    hovered ||
-    toast.matches(':hover') ||
-    (event.relatedTarget instanceof Node && toast.contains(event.relatedTarget))
-  )
-    return
+  if (isHovered() || (event.relatedTarget instanceof Node && toast.contains(event.relatedTarget))) return
   props.action?.release()
 }
+
+// Release hover hold if a modal overlay makes the toast region inert while hovered.
+watch(hasOpenOverlay, (inert) => {
+  if (!inert || !isHovered()) return
+  hovered = false
+  props.action?.release()
+})
 
 // A toast updated in place starts a fresh auto-hide timer in useToast; re-hold it if the user is still interacting.
 watch(
   [() => props.message, () => props.action],
   ([message, action]) => {
-    if (!message || !action) {
+    if (!message || !action || hasOpenOverlay.value) {
       hovered = false
       return
     }
-    if (hovered || toastEl.value?.matches(':hover') || isFocused()) {
+    if (isHovered()) {
+      hovered = true
+      action.hold()
+    } else if (isFocused()) {
       action.hold()
     }
   },

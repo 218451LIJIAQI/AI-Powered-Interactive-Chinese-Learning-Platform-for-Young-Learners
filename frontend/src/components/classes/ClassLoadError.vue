@@ -1,5 +1,5 @@
 <template>
-  <StatePanel heading-tag="h2" tone="error" icon="alert" spacious :title="title" :message="message ?? ''">
+  <StatePanel heading-tag="h2" tone="error" spacious :title="title" :message="message">
     <template #actions>
       <button v-if="onRetry" class="btn btn-secondary" type="button" @click="onRetry">{{ t('common.retry') }}</button>
       <RouterLink class="btn btn-primary" :to="backTo">{{ backLabel }}</RouterLink>

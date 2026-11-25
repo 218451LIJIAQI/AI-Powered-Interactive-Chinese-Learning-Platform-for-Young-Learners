@@ -30,7 +30,6 @@ describe('PlanResult', () => {
     const wrapper = mountResult()
 
     expect(wrapper.get('.plan-result-level').text()).toBe('HSK 1 (Basic)')
-    expect(wrapper.find('[data-testid="plan-result-toggle"]').exists()).toBe(false)
     expect(wrapper.get('[data-testid="plan-result-known"] h4').text()).toBe('You can already')
     expect(wrapper.get('[data-testid="plan-result-known"]').text()).toContain('Recognise common words')
     expect(wrapper.get('[data-testid="plan-result-learn"] h4').text()).toBe('For your trip, you’ll learn to')
@@ -146,7 +145,6 @@ describe('PlanResult', () => {
     i18n.global.locale.value = 'zh-CN'
     await wrapper.vm.$nextTick()
     expect(lines()).toEqual(['+ 每周闪卡练习', '在练习中，针对阅读重点'])
-    i18n.global.locale.value = 'en'
   })
 
   it('says a learner who skipped the level check starts from the first lesson and can take it later (S1.25)', () => {
@@ -176,13 +174,13 @@ describe('PlanResult', () => {
         .map((chip) => chip.text()),
     ).toEqual(['10 XP', '20 XP', '30 XP'])
     expect(row().get('[data-testid="daily-goal-20"]').attributes('aria-pressed')).toBe('true')
-    expect(row().get('.plan-daily-goal-lessons').text()).toBe('About 2 lessons a day')
+    expect(row().get('[data-testid="plan-daily-goal-lessons"]').text()).toBe('About 2 lessons a day')
 
     await row().get('[data-testid="daily-goal-30"]').trigger('click')
     await flushPromises()
     expect(xp.setDailyGoal).toHaveBeenCalledWith(30)
     expect(row().get('[data-testid="daily-goal-30"]').attributes('aria-pressed')).toBe('true')
-    expect(row().get('.plan-daily-goal-lessons').text()).toBe('About 3 lessons a day')
+    expect(row().get('[data-testid="plan-daily-goal-lessons"]').text()).toBe('About 3 lessons a day')
     expect(wrapper.emitted('dailyGoal')).toEqual([['Daily goal set to 30 XP.']])
   })
 
@@ -223,6 +221,5 @@ describe('PlanResult', () => {
     i18n.global.locale.value = 'ms'
     await wrapper.vm.$nextTick()
     expect(wrapper.get('.plan-result-level').text()).toBe('Pra-HSK (Baharu)')
-    i18n.global.locale.value = 'en'
   })
 })

@@ -55,10 +55,6 @@
   min-width: 0;
 }
 
-.ai-panel .btn-ghost:not(:disabled):hover {
-  background: var(--color-ink-200);
-}
-
 /* A ghost button lined up with the right edge of the panel header. */
 .ai-result-report.btn-ghost {
   margin-right: calc(-1 * var(--space-2));
@@ -363,11 +359,7 @@
   font-size: var(--font-size-md);
 }
 
-.ai-key-word:disabled {
-  cursor: default;
-}
-
-.ai-key-word:hover:not(:disabled) {
+button.ai-key-word:hover:not(:disabled) {
   color: var(--text-link-hover);
 }
 
@@ -388,24 +380,14 @@
   }
 }
 
-@media (max-width: 40rem) {
+@media (max-width: 48rem) {
   .ai-maker-form,
   .ai-maker-form.has-count {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .ai-key-word {
-    grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto;
-  }
-
-  .ai-key-word > .icon-glyph {
-    grid-row: 1;
-    grid-column: 3;
-  }
-
-  .ai-key-word-meaning {
-    grid-row: 2;
-    grid-column: 1 / -1;
+  .ai-maker-form .btn {
+    justify-self: start;
   }
 }
 

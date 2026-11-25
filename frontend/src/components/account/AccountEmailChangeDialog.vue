@@ -1,11 +1,5 @@
 <template>
-  <AppOverlay
-    :open="open"
-    :title="t('account.changeEmail')"
-    :busy="sending"
-    test-id="account-email-dialog"
-    @close="emit('close')"
-  >
+  <AppOverlay :title="t('account.changeEmail')" :busy="sending" test-id="account-email-dialog" @close="emit('close')">
     <form id="account-email-form" class="form-grid" novalidate @submit.prevent="submit">
       <div class="field">
         <label for="account-new-email">
@@ -23,7 +17,8 @@
           required
           :aria-invalid="Boolean(newEmailError)"
           :aria-describedby="newEmailError ? 'account-new-email-error' : undefined"
-          @blur="normalizedEmail && checkNewEmail()"
+          @input="emailTouched = true"
+          @blur="onEmailBlur"
         />
         <p v-if="newEmailError" id="account-new-email-error" class="field-error" role="alert">
           {{ t(newEmailError) }}
@@ -33,18 +28,18 @@
         <label for="account-email-password">
           {{ t('account.passwordToConfirm') }}<span class="required-mark" aria-hidden="true">*</span>
         </label>
-        <input
+        <PasswordInput
           id="account-email-password"
           v-model="form.password"
           :readonly="sending"
-          class="input"
-          type="password"
           autocomplete="current-password"
           required
           :placeholder="t('account.passwordPlaceholder')"
+          :aria-invalid="Boolean(error)"
+          :aria-describedby="error ? 'account-email-error' : undefined"
         />
       </div>
-      <div v-if="error" class="alert alert-danger" role="alert">
+      <div v-if="error" id="account-email-error" class="callout is-danger" role="alert">
         <IconGlyph name="alert" :size="18" />
         <span>{{ error }}</span>
       </div>
@@ -74,18 +69,17 @@ import { getAuthSessionVersion } from '@/api/http'
 import { accountOpsApi } from '@/api/ops'
 import AppOverlay from '@/components/common/AppOverlay.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
+import PasswordInput from '@/components/common/PasswordInput.vue'
 import { useIsUnmounted } from '@/composables/useIsUnmounted'
 import { useFieldCheck } from '@/composables/useFieldCheck'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { accountMessages } from '@/plugins/accountMessages'
 import { resolveApiError } from '@/utils/apiError'
 import { isValidEmail } from '@/utils/email'
-import { isBlankPassword } from '@/utils/password'
+import { isBlankPassword, isWithinPasswordByteLimit } from '@/utils/password'
 
 const props = defineProps<{
-  open: boolean
-  currentEmail: string | null
-  disabled: boolean
+  currentEmail: string
 }>()
 const emit = defineEmits<{ close: []; requested: [pendingEmail: string] }>()
 
@@ -95,39 +89,32 @@ const isUnmounted = useIsUnmounted()
 
 const sending = ref(false)
 const error = ref<string | null>(null)
+const emailTouched = ref(false)
 const form = reactive({ newEmail: '', password: '' })
 const normalizedEmail = computed(() => form.newEmail.trim().toLowerCase())
 
 function newEmailIssue(address: string): string | null {
   if (!isValidEmail(address)) return 'account.newEmailInvalid'
-  return address === props.currentEmail?.toLowerCase() ? 'account.newEmailSame' : null
+  return address === props.currentEmail.toLowerCase() ? 'account.newEmailSame' : null
 }
 
-const {
-  error: newEmailError,
-  validate: checkNewEmail,
-  reset: resetNewEmail,
-} = useFieldCheck(normalizedEmail, newEmailIssue)
-const canSend = computed(
-  () =>
-    !props.disabled &&
-    Boolean(props.currentEmail) &&
-    !newEmailIssue(normalizedEmail.value) &&
-    !isBlankPassword(form.password),
-)
+const { error: newEmailError, validate: checkNewEmail } = useFieldCheck(normalizedEmail, newEmailIssue)
+const canSend = computed(() => !newEmailIssue(normalizedEmail.value) && !isBlankPassword(form.password))
 
-watch(
-  () => props.open,
-  (opened) => {
-    if (!opened) return
-    Object.assign(form, { newEmail: '', password: '' })
-    resetNewEmail()
-    error.value = null
-  },
-)
+function onEmailBlur(): void {
+  if (emailTouched.value || normalizedEmail.value) checkNewEmail()
+}
+
+watch(form, () => {
+  error.value = null
+})
 
 async function submit(): Promise<void> {
   if (sending.value || !canSend.value) return
+  if (!isWithinPasswordByteLimit(form.password)) {
+    error.value = t('account.currentPasswordWrong')
+    return
+  }
   const version = getAuthSessionVersion()
   sending.value = true
   error.value = null

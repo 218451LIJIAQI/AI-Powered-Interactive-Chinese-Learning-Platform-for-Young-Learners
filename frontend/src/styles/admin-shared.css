@@ -21,14 +21,18 @@
   flex: 1 1 100%;
 }
 
-/* A table card (.panel): filters, table and paging share the card's padding box. */
-.admin-table-card {
+/* A table, list, or detail card (.panel): its blocks share the card's padding box with min-width: 0. */
+.admin-table-card,
+.admin-list,
+.admin-detail {
   display: grid;
   align-content: start;
   gap: var(--space-4);
 }
 
-.admin-table-card > * {
+.admin-table-card > *,
+.admin-list > *,
+.admin-detail > * {
   min-width: 0;
 }
 
@@ -64,11 +68,11 @@
   cursor: pointer;
 }
 
-.admin-table tbody tr:hover :is(td, th):first-child {
+.admin-table tbody tr:is(:hover, :focus-within) :is(td, th):first-child {
   box-shadow: calc(-1 * var(--space-3)) 0 0 var(--color-ink-25);
 }
 
-.admin-table tbody tr:hover :is(td, th):last-child {
+.admin-table tbody tr:is(:hover, :focus-within) :is(td, th):last-child {
   box-shadow: var(--space-3) 0 0 var(--color-ink-25);
 }
 
@@ -104,16 +108,7 @@
   white-space: nowrap;
 }
 
-/* Section heads and metadata shared by cards and drawers across all admin areas. */
-.admin-section-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2) var(--space-4);
-  min-width: 0;
-}
-
+/* Sections and metadata shared by cards and drawers across all admin areas. */
 .admin-section {
   display: grid;
   align-content: start;

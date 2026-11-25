@@ -20,7 +20,7 @@ import { activitySlug } from '@/utils/classes'
 
 /** A lesson video download gets 10 minutes: a slow connection still finishes, a stalled one fails. */
 const VIDEO_DOWNLOAD_TIMEOUT_MS = 10 * 60_000
-const API_PREFIX = /^\/api\/v1/
+const API_PREFIX = /^\/api\/v1(?=\/|$)/
 
 /** The uploaded video behind a `streamPath` the server returned, fetched with the signed-in user's token. */
 export async function videoBlob(streamPath: string, signal?: AbortSignal): Promise<Blob> {

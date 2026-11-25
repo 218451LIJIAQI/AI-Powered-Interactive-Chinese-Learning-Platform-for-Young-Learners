@@ -24,10 +24,9 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 
-import { useLocalMessages } from '@/composables/useLocalMessages'
-import { publicShellMessages } from '@/plugins/publicShellMessages'
 import { routeTitle } from '@/router/pageTitle'
 
 /**
@@ -36,7 +35,7 @@ import { routeTitle } from '@/router/pageTitle'
  * message form, the Safety centre and the policies are one click from the first page. What the header already offers
  * (the classes, Help, the account and the language switch) stays in view as the page scrolls and is not repeated.
  */
-const { t } = useLocalMessages({ shell: publicShellMessages })
+const { t } = useI18n()
 
 const year = new Date().getFullYear()
 

@@ -5,8 +5,6 @@ export const legalMessages = {
   en: {
     onThisPage: 'On this page',
     lastUpdated: 'Last updated {date}',
-    providerDeepseek: aiDisclosureMessages.en.providerDeepseek,
-    providerCompatible: aiDisclosureMessages.en.providerCompatible,
     terms: {
       title: 'Terms of Service',
       accountsTitle: 'Accounts and roles',
@@ -43,9 +41,6 @@ export const legalMessages = {
         aiDisclosureMessages.en.other,
       aiUnknown:
         'When the AI Helper is connected to an AI provider, what you submit, plus your level and the lesson topic, is sent to that provider through our server, never straight from your browser.',
-      aiOff: aiDisclosureMessages.en.off,
-      aiPronunciation: aiDisclosureMessages.en.pronunciation,
-      aiLiveVideo: aiDisclosureMessages.en.liveVideo,
       // After the provider's paragraph whenever requests can leave the server (S7.14).
       aiXiaomei:
         'Talk with Xiaomei also sends your plan goal and the short notes she remembers from earlier chats; you can forget them in any chat summary.',
@@ -73,8 +68,6 @@ export const legalMessages = {
   ms: {
     onThisPage: 'Dalam halaman ini',
     lastUpdated: 'Kemas kini terakhir: {date}',
-    providerDeepseek: aiDisclosureMessages.ms.providerDeepseek,
-    providerCompatible: aiDisclosureMessages.ms.providerCompatible,
     terms: {
       title: 'Terma Perkhidmatan',
       accountsTitle: 'Akaun dan peranan',
@@ -110,9 +103,6 @@ export const legalMessages = {
         aiDisclosureMessages.ms.other,
       aiUnknown:
         'Apabila Pembantu AI disambungkan kepada penyedia AI, apa yang anda hantar, serta tahap anda dan topik pelajaran, dihantar kepada penyedia itu melalui pelayan kami, tidak terus daripada pelayar anda.',
-      aiOff: aiDisclosureMessages.ms.off,
-      aiPronunciation: aiDisclosureMessages.ms.pronunciation,
-      aiLiveVideo: aiDisclosureMessages.ms.liveVideo,
       aiXiaomei:
         'Berbual dengan Xiaomei juga menghantar matlamat pelan anda dan nota ringkas yang diingatinya daripada perbualan terdahulu; anda boleh melupakannya dalam mana-mana ringkasan perbualan.',
       minimisationTitle: 'Peminimuman data',
@@ -139,8 +129,6 @@ export const legalMessages = {
   'zh-CN': {
     onThisPage: '本页内容',
     lastUpdated: '最后更新：{date}',
-    providerDeepseek: aiDisclosureMessages['zh-CN'].providerDeepseek,
-    providerCompatible: aiDisclosureMessages['zh-CN'].providerCompatible,
     terms: {
       title: '服务条款',
       accountsTitle: '账号与角色',
@@ -175,9 +163,6 @@ export const legalMessages = {
         aiDisclosureMessages['zh-CN'].other,
       aiUnknown:
         '当 AI 助手连接到 AI 提供方时，你提交的内容，以及你的水平和课时主题，会通过我们的服务器（而不是直接从你的浏览器）发送给该提供方。',
-      aiOff: aiDisclosureMessages['zh-CN'].off,
-      aiPronunciation: aiDisclosureMessages['zh-CN'].pronunciation,
-      aiLiveVideo: aiDisclosureMessages['zh-CN'].liveVideo,
       aiXiaomei:
         '“和小美聊天”还会发送你的计划目标和她从之前的聊天中记住的简短内容；你可以在任何一次聊天总结中让她忘记。',
       minimisationTitle: '数据最小化',
@@ -200,4 +185,4 @@ export const legalMessages = {
       contactCopy: '对隐私有疑问，或想申请删除数据？请使用帮助页面上的“联系我们”表单。请勿发送密码。',
     },
   },
-}
+} as const

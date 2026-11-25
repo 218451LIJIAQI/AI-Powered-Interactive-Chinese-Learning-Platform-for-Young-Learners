@@ -1,5 +1,8 @@
 package com.example.aichinese.dto.learn;
 
+import static com.example.aichinese.dto.DtoNormalization.redactLength;
+import static com.example.aichinese.dto.DtoNormalization.redactValue;
+
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -15,10 +18,26 @@ public record MistakeReviewResponse(
         LocalDateTime runStartedAt,
         String runSignature) {
 
+    @Override
+    public String toString() {
+        return "MistakeReviewResponse[questions=" + (questions == null ? 0 : questions.size())
+                + ", context=" + (context == null ? 0 : context.size())
+                + ", runStartedAt=" + runStartedAt
+                + ", runSignature=" + redactValue(runSignature) + "]";
+    }
+
     /**
      * Where a review question comes from and what the student answered last time; {@code stillLearning} for a flashcard
      * marked "Still learning" in Flashcards.
      */
     public record ReviewContext(String sourceTitle, boolean fromLearn, String yourAnswer, boolean stillLearning) {
+
+        @Override
+        public String toString() {
+            return "ReviewContext[sourceTitle=" + sourceTitle
+                    + ", fromLearn=" + fromLearn
+                    + ", yourAnswer=" + redactLength(yourAnswer)
+                    + ", stillLearning=" + stillLearning + "]";
+        }
     }
 }

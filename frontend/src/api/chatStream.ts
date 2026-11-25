@@ -9,15 +9,21 @@ import {
   reportServiceDown,
   requireCurrentSession,
 } from './http'
-import { AI_RESULT_STATUSES, type AiChatResponse, type AppLanguage } from '@/types/api'
+import type { AiChatResponse } from '@/types/ai'
+import { AI_RESULT_STATUSES, type AppLanguage } from '@/types/api'
 import { apiClientMessage } from '@/plugins/apiClientMessages'
-import { ApiEnvelopeError, cleanServerMessage } from '@/utils/apiError'
+import { ApiEnvelopeError, cleanServerMessage, httpStatusMessage } from '@/utils/apiError'
+
+import { JSON_CONTENT_TYPE_PATTERN } from './request'
 
 const AI_CHAT_STREAM_PATH = '/ai/chat/stream'
 /** Allow the server's 45 s stream deadline and network transit, both for headers and for the response body. */
 const AI_STREAM_TIMEOUT_MS = 50_000
 const JSON_CONTENT_TYPE = 'application/json'
-const JSON_CONTENT_TYPE_PATTERN = /application\/(?:[^;\s]+\+)?json/i
+
+function cancelBody(response: Response): void {
+  void response.body?.cancel().catch(() => undefined)
+}
 
 interface AiChatPayload {
   message: string
@@ -35,19 +41,11 @@ type AiStreamHandlers = {
 async function sseHttpError(response: Response): Promise<ApiEnvelopeError> {
   const { status } = response
   const isJson = JSON_CONTENT_TYPE_PATTERN.test(response.headers.get('content-type') ?? '')
-  if (!isJson) void response.body?.cancel().catch(() => undefined)
+  if (!isJson) cancelBody(response)
   const payload: { message?: unknown } | null = isJson ? await response.json().catch(() => null) : null
-  const fallbackKey =
-    status === 401
-      ? 'unauthorized'
-      : status === 403
-        ? 'forbidden'
-        : status === 429
-          ? 'rateLimited'
-          : status >= 500
-            ? 'server'
-            : 'streamFallback'
-  return new ApiEnvelopeError(cleanServerMessage(payload?.message) ?? apiClientMessage(fallbackKey), status)
+  const streamFallback = apiClientMessage('streamFallback')
+  const message = cleanServerMessage(payload?.message) ?? httpStatusMessage(status, streamFallback) ?? streamFallback
+  return new ApiEnvelopeError(message, status)
 }
 
 /**
@@ -87,10 +85,14 @@ async function readSseStream(
   sessionVersion: number,
   onDelta?: AiStreamHandlers['onDelta'],
 ): Promise<AiChatResponse> {
-  if (signal.aborted || sessionVersion !== getAuthSessionVersion()) {
-    void response.body?.cancel().catch(() => undefined)
+  const assertActive = () => {
     signal.throwIfAborted()
     requireCurrentSession(sessionVersion)
+  }
+
+  if (signal.aborted || sessionVersion !== getAuthSessionVersion()) {
+    cancelBody(response)
+    assertActive()
   }
   if (!response.body) {
     throw new ApiEnvelopeError(apiClientMessage('streamMissingBody'))
@@ -107,8 +109,7 @@ async function readSseStream(
   signal.addEventListener('abort', cancelRead, { once: true })
 
   const processEvent = (rawEvent: string): AiChatResponse | undefined => {
-    signal.throwIfAborted()
-    requireCurrentSession(sessionVersion)
+    assertActive()
     const parsed = parseSseEvent(rawEvent)
     if (parsed?.event === 'delta') {
       onDelta?.(parsed.data)
@@ -128,8 +129,7 @@ async function readSseStream(
 
   try {
     while (true) {
-      signal.throwIfAborted()
-      requireCurrentSession(sessionVersion)
+      assertActive()
       let chunk: ReadableStreamReadResult<Uint8Array>
       try {
         chunk = await reader.read()
@@ -148,8 +148,7 @@ async function readSseStream(
         if (complete) return complete
       }
       if (done) {
-        signal.throwIfAborted()
-        requireCurrentSession(sessionVersion)
+        assertActive()
         throw new ApiEnvelopeError(apiClientMessage('streamIncomplete'))
       }
     }
@@ -212,11 +211,11 @@ export async function apiChatStream(payload: AiChatPayload, handlers: AiStreamHa
     // A protected stream can retry once, while its original account session is still current.
     if (response.status === 401 && version === getAuthSessionVersion()) {
       const refreshedToken = await refreshStreamToken(signal, token).catch((error: unknown) => {
-        void response.body?.cancel().catch(() => undefined)
+        cancelBody(response)
         throw error
       })
       if (refreshedToken && version === getAuthSessionVersion()) {
-        void response.body?.cancel().catch(() => undefined)
+        cancelBody(response)
         response = await sendAiChatStreamRequest(payload, signal, refreshedToken)
       }
       if (response.status === 401) invalidateAuthSession(version)

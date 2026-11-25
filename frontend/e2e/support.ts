@@ -1,6 +1,43 @@
-import { expect, type APIRequestContext, type Locator, type Page } from '@playwright/test'
+import {
+  test as base,
+  expect,
+  type APIRequestContext,
+  type APIResponse,
+  type Locator,
+  type Page,
+} from '@playwright/test'
 
 import { E2E_BACKEND_PORT, NEW_STUDENT_PASSWORD, type E2eAccount } from './accounts'
+
+export { expect }
+
+/**
+ * Expected Chromium console network noise for intentional negative-path requests (e.g. unauthenticated refresh check,
+ * wrong-password 401, locked-lesson 409). Any other console error or uncaught pageerror fails the test.
+ */
+const EXPECTED_CONSOLE_ERROR = /^Failed to load resource: the server responded with a status of (?:401|409)\b/
+
+/** Extended Playwright test fixture that guards every page in the context against uncaught pageerrors and console errors. */
+export const test = base.extend({
+  context: async ({ context }, use) => {
+    const failures: string[] = []
+    const attach = (page: Page): void => {
+      page.on('pageerror', (error) => {
+        failures.push(`pageerror: ${error.stack ?? error.message}`)
+      })
+      page.on('console', (message) => {
+        if (message.type() !== 'error') return
+        const text = message.text()
+        if (EXPECTED_CONSOLE_ERROR.test(text)) return
+        failures.push(`console.error: ${text}`)
+      })
+    }
+    for (const existing of context.pages()) attach(existing)
+    context.on('page', attach)
+    await use(context)
+    expect(failures, 'Unexpected browser runtime or console errors').toEqual([])
+  },
+})
 
 /** The backend API, called directly (not through the Vite proxy) by the authorisation checks. */
 export const API_BASE_URL = `http://127.0.0.1:${E2E_BACKEND_PORT}/api/v1`
@@ -26,7 +63,10 @@ export async function signIn(page: Page, account: E2eAccount, redirect?: string)
 
 /** Signs out from the Account page (opened from the user chip in the header) and checks the visitor landing page. */
 export async function signOut(page: Page, account: E2eAccount): Promise<void> {
-  await page.getByRole('banner').getByRole('link', { name: account.name, exact: true }).click()
+  await page
+    .getByRole('banner')
+    .getByRole('link', { name: `Account: ${account.name}`, exact: true })
+    .click()
   await expect(page).toHaveURL(/\/(student|admin)\/account$/)
   await page.getByRole('button', { name: 'Sign out' }).click()
   await expect(page).toHaveURL(/\/$/)
@@ -101,4 +141,21 @@ export async function apiAuthHeaders(request: APIRequestContext, account: E2eAcc
   expect(response.status()).toBe(200)
   const body = (await response.json()) as { data: { token: string } }
   return { Authorization: `Bearer ${body.data.token}` }
+}
+
+/** Runs an authenticated API teardown call on a best-effort basis without masking a test's primary failure. */
+export async function bestEffortApi(
+  request: APIRequestContext,
+  account: E2eAccount,
+  run: (headers: Record<string, string>) => Promise<APIResponse>,
+): Promise<void> {
+  try {
+    const response = await run(await apiAuthHeaders(request, account))
+    if (!response.ok()) {
+      console.warn(`bestEffortApi teardown returned non-OK status: ${response.status()}`)
+    }
+  } catch (error) {
+    // Best-effort teardown: log visibly without masking the primary test failure.
+    console.warn('bestEffortApi teardown failed:', error)
+  }
 }

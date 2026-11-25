@@ -76,14 +76,14 @@ public class OpenAiResponsesAiProviderClient extends HttpAiProviderClient {
                     ? details.get("reason")
                     : null;
             if ("content_filter".equals(reason)) {
-                return AiProviderResult.failure("Provider response was filtered.", tokens);
+                return AiProviderResult.failure(FILTERED_ERROR, tokens);
             }
             // A truncated JSON document cannot be parsed safely, so incomplete JSON output is rejected.
             if (prompt.expectJson()) {
-                return AiProviderResult.failure("Provider response was incomplete.", tokens);
+                return AiProviderResult.failure(INCOMPLETE_ERROR, tokens);
             }
         }
-        return textResult(extractOutputText(responseBody.get("output")), responseBody);
+        return textResult(extractOutputText(responseBody.get("output")), tokens);
     }
 
     private static String extractOutputText(Object outputObject) {

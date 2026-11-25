@@ -16,7 +16,6 @@
     <StatePanel
       v-else-if="error"
       tone="error"
-      icon="alert"
       :title="t('adminLearning.activityError')"
       :message="error"
       @retry="emit('retry')"
@@ -24,8 +23,8 @@
     <template v-else-if="set">
       <StatusPill :label="t(setStatusKey(set.status))" :tone="contentStatusTone(set.status)" />
 
-      <section class="admin-section" aria-labelledby="set-details-preview">
-        <h3 id="set-details-preview" class="admin-section-title">{{ t('adminLearning.preview') }}</h3>
+      <section class="admin-section" :aria-labelledby="`${baseId}-preview`">
+        <h3 :id="`${baseId}-preview`" class="admin-section-title">{{ t('adminLearning.preview') }}</h3>
         <dl class="kv-list">
           <dt>{{ t('adminLearning.level') }}</dt>
           <dd>{{ set.hskLevel ? t('hsk.number', { level: set.hskLevel }) : '—' }}</dd>
@@ -39,9 +38,9 @@
         </dl>
       </section>
 
-      <section class="admin-section" aria-labelledby="set-details-history">
-        <h3 id="set-details-history" class="admin-section-title">{{ t('adminLearning.history') }}</h3>
-        <ol class="row-list admin-library-history">
+      <section class="admin-section" :aria-labelledby="`${baseId}-history`" data-testid="set-details-history">
+        <h3 :id="`${baseId}-history`" class="admin-section-title">{{ t('adminLearning.history') }}</h3>
+        <ol class="row-list is-flush">
           <li v-for="(entry, index) in set.history" :key="index">
             <span class="row-list-copy">
               <strong class="row-list-title">{{ t(HISTORY_KEYS[entry.action]) }}</strong>
@@ -62,6 +61,7 @@
           class="btn btn-ghost"
           type="button"
           :disabled="busy"
+          :aria-busy="busy || undefined"
           data-testid="set-archive"
           @click="emit('action', 'archive')"
         >
@@ -72,6 +72,7 @@
           class="btn btn-secondary"
           type="button"
           :disabled="busy"
+          :aria-busy="busy || undefined"
           data-testid="set-unpublish"
           @click="emit('action', 'unpublish')"
         >
@@ -97,7 +98,7 @@
           class="btn btn-primary"
           type="button"
           :disabled="busy"
-          :aria-busy="busy"
+          :aria-busy="busy || undefined"
           data-testid="set-restore"
           @click="emit('action', 'restore')"
         >
@@ -109,7 +110,7 @@
           class="btn btn-primary"
           type="button"
           :disabled="busy"
-          :aria-busy="busy"
+          :aria-busy="busy || undefined"
           data-testid="set-publish"
           @click="emit('action', 'publish')"
         >
@@ -121,6 +122,8 @@
 </template>
 
 <script setup lang="ts">
+import { useId } from 'vue'
+
 import { contentStatusTone } from '@/components/admin/adminDisplay'
 import AppOverlay from '@/components/common/AppOverlay.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
@@ -154,6 +157,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useLocalMessages({ adminLearning: [adminLearningSharedMessages, adminPracticeLibraryMessages] })
+const baseId = useId()
 
 const HISTORY_KEYS: Readonly<Record<PracticeHistoryAction, string>> = {
   CREATED: 'adminLearning.historyCreated',

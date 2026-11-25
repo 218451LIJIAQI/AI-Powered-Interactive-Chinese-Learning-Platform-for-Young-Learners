@@ -4,6 +4,7 @@ import static com.example.aichinese.dto.DtoNormalization.redactValue;
 import static com.example.aichinese.dto.DtoNormalization.strip;
 import static com.example.aichinese.dto.DtoNormalization.stripToNull;
 
+import com.example.aichinese.dto.DtoNormalization;
 import com.example.aichinese.util.LanguageCodes;
 
 import jakarta.validation.constraints.NotBlank;
@@ -19,6 +20,7 @@ public record AcceptAdminInviteRequest(
         @Size(max = 128, message = "Invite token must be at most 128 characters.")
         String token,
         @NotBlank(message = "Full name is required")
+        @Pattern(regexp = DtoNormalization.NO_CONTROL_CHARS_PATTERN, message = "Full name contains unsupported control characters")
         @Size(max = 120, message = "Full name must be at most 120 characters")
         String fullName,
         @NotBlank(message = "Password is required")

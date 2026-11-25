@@ -84,7 +84,7 @@ describe('AdminAiUsagePage', () => {
     expect(wrapper.text().match(/1,284/g)).toHaveLength(1)
   })
 
-  it('names every feature, the admin’s quiz drafts and the learners’ hints too, with its share', async () => {
+  it('names every provider-backed feature in the filter and shows shares including any legacy rows', async () => {
     const wrapper = await mountPage()
 
     const shares = wrapper.findAll('.admin-shares li').map((row) => row.text())
@@ -106,7 +106,6 @@ describe('AdminAiUsagePage', () => {
       'Pronunciation & handwriting',
       'Quiz drafts',
       'Learning plans',
-      'Hints',
     ])
   })
 
@@ -118,8 +117,10 @@ describe('AdminAiUsagePage', () => {
     expect(cellsOf(rows[0]!)).toEqual(['18 May, 1:42 PM', 'Amira Hassan', 'Learner', 'Ask SparkBot', 'Successful'])
     expect(cellsOf(rows[1]!)).toEqual(['18 May, 1:42 PM', 'Olivia Tan', 'Admin', 'Quiz drafts', 'Failed'])
     expect(cellsOf(rows[2]!).slice(2)).toEqual(['Learner', 'Hints', 'Unavailable'])
-    // What went wrong is on the result, not in the table.
+    // What went wrong is also expandable via keyboard/screen-reader button beside the result pill.
     expect(rows[1]!.findAll('td')[4]!.attributes('title')).toBe('The provider timed out.')
+    await wrapper.get('[data-testid="admin-ai-error-toggle-2"]').trigger('click')
+    expect(wrapper.get('.admin-ai-log-detail').text()).toBe('The provider timed out.')
     expect(wrapper.text()).toContain('For prompts and replies, the usage log records only their length.')
   })
 
@@ -142,11 +143,15 @@ describe('AdminAiUsagePage', () => {
   it('sends the feature and result filters', async () => {
     const wrapper = await mountPage()
 
-    await wrapper.findAll('select')[0]!.setValue('HINT')
+    await wrapper.findAll('select')[0]!.setValue('LEARNING_PLAN')
     await wrapper.findAll('select')[1]!.setValue('FAILED')
     await flushPromises()
 
-    expect(api.usageLogs).toHaveBeenLastCalledWith({ featureType: 'HINT', status: 'FAILED', userRole: '' }, 0, 10)
+    expect(api.usageLogs).toHaveBeenLastCalledWith(
+      { featureType: 'LEARNING_PLAN', status: 'FAILED', userRole: '' },
+      0,
+      10,
+    )
   })
 
   it('names no role for a request an account made before teachers were removed', async () => {
@@ -173,12 +178,20 @@ describe('AdminAiUsagePage', () => {
     expect(wrapper.find('nav.pagination').exists()).toBe(false)
   })
 
-  it('says when no request matches the filters', async () => {
+  it('distinguishes an unfiltered empty log from filtered empty results with Clear filters', async () => {
     api.usageLogs.mockResolvedValue(pageOf([]))
     const wrapper = await mountPage()
 
     expect(wrapper.get('.state-panel.is-empty h3').text()).toBe('No requests')
+    expect(wrapper.text()).toContain('AI requests appear here once learners or admins use AI features.')
+    expect(wrapper.find('[data-testid="admin-ai-usage-clear"]').exists()).toBe(false)
+
+    await wrapper.findAll('select')[1]!.setValue('FAILED')
+    await flushPromises()
     expect(wrapper.text()).toContain('No AI request matches these filters.')
+    await wrapper.get('[data-testid="admin-ai-usage-clear"]').trigger('click')
+    await flushPromises()
+    expect(api.usageLogs).toHaveBeenLastCalledWith(NO_FILTERS, 0, 10)
   })
 
   it('replaces old rows with a retry when loading a new filter fails', async () => {

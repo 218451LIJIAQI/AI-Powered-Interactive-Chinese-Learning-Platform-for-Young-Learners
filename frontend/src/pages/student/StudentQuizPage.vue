@@ -24,37 +24,48 @@
 
     <!-- An attempt in progress (keyed by attemptId so each attempt mounts with fresh local state) -->
     <QuizAttemptStage
-      v-else-if="session && session.questions.length > 0"
-      :key="session.attemptId"
-      :session="session"
-      :account="account"
+      v-else-if="activeSession"
+      :key="activeSession.attemptId"
+      v-model:error="actionError"
+      :session="activeSession"
       :leave-open="leaveOpen"
       :leaving="leaving"
-      :external-error="actionError"
       @progress="attemptProgress = $event"
       @submitting="submitting = $event"
       @submitted="onSubmitted"
       @toast="showToast"
-      @clear-external-error="actionError = null"
     />
 
     <div v-else class="focus-stage">
       <h1 class="sr-only">{{ t('classes.lessonQuiz') }}</h1>
       <StatePanel
-        v-if="starting || loadingResult"
+        v-if="starting || loadingResult || leaving"
         heading-tag="h2"
         tone="loading"
         spacious
         :title="t('classes.loading')"
         :message="t('classPlayer.quiz.loadingMessage')"
       />
+      <StatePanel
+        v-else-if="discardedTarget"
+        heading-tag="h2"
+        tone="empty"
+        spacious
+        :title="t('classPlayer.quiz.discardedTitle')"
+        :message="actionError ?? t('classPlayer.quiz.discardedMessage')"
+        data-testid="quiz-discarded"
+      >
+        <template #actions>
+          <RouterLink class="btn btn-primary" :to="discardedTarget">{{ t('classPlayer.openLesson') }}</RouterLink>
+        </template>
+      </StatePanel>
       <ClassLoadError
         v-else
         :title="t('classPlayer.quiz.loadErrorTitle')"
         :message="actionError"
         :back-to="{ name: 'student-classes' }"
         :back-label="t('nav.classes')"
-        :on-retry="invalidAttempt || (requestedAttempt === null && quizId === null) ? undefined : openRequestedAttempt"
+        :on-retry="requestedTarget.kind === 'invalid' ? undefined : openRequestedAttempt"
       />
     </div>
 
@@ -74,7 +85,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { RouterLink, useRoute, useRouter, type RouteLocationRaw } from 'vue-router'
 
 import { studentClassesApi } from '@/api/classes'
 import { getAuthSessionVersion } from '@/api/http'
@@ -107,19 +118,29 @@ const { toast, showToast } = useToast()
 
 const quizId = computed(() => parseRecordId(route.params.quizId))
 const requestedAttempt = computed(() => parseRecordId(route.query.attempt))
-const invalidAttempt = computed(() => route.query.attempt !== undefined && requestedAttempt.value === null)
+const requestedTarget = computed<{ kind: 'invalid' } | { kind: 'attempt'; id: number } | { kind: 'quiz'; id: number }>(
+  () => {
+    if (route.query.attempt !== undefined) {
+      return requestedAttempt.value === null ? { kind: 'invalid' } : { kind: 'attempt', id: requestedAttempt.value }
+    }
+    return quizId.value === null ? { kind: 'invalid' } : { kind: 'quiz', id: quizId.value }
+  },
+)
 
 const session = ref<QuizSession | null>(null)
+const activeSession = computed(() => (session.value?.questions.length ? session.value : null))
 const result = ref<QuizResult | null>(null)
 const startingQuizId = ref<number | null>(null)
 const starting = computed(() => startingQuizId.value !== null)
-const loadingResult = ref(false)
+const loadingAttemptId = ref<number | null>(null)
+const loadingResult = computed(() => loadingAttemptId.value !== null)
 const justSubmitted = ref(false)
 const submitting = ref(false)
 const attemptProgress = ref(0)
 const actionError = ref<string | null>(null)
 const leaveOpen = ref(false)
 const leaving = ref(false)
+const discardedTarget = ref<RouteLocationRaw | null>(null)
 let viewVersion = 0
 
 const lesson = ref<StudentLesson | null>(null)
@@ -137,12 +158,12 @@ const lessonRoute = computed(() => {
 
 const topProgress = computed(() => {
   if (result.value) return 100
-  if (!session.value || session.value.questions.length === 0) return null
-  return attemptProgress.value
+  return activeSession.value ? attemptProgress.value : null
 })
 
 const leaveMessage = computed(() => {
-  const best = lesson.value?.quizzes.find((quiz) => quiz.id === quizId.value)?.bestPercent ?? null
+  const activeQuizId = session.value?.quiz.id ?? quizId.value
+  const best = lesson.value?.quizzes.find((quiz) => quiz.id === activeQuizId)?.bestPercent ?? null
   return best === null ? t('classPlayer.quiz.leaveMessageFirst') : t('classPlayer.quiz.leaveMessage', { percent: best })
 })
 
@@ -171,11 +192,12 @@ function resetView(keepResult = false): number {
   }
   session.value = null
   startingQuizId.value = null
-  loadingResult.value = false
+  loadingAttemptId.value = null
   submitting.value = false
   attemptProgress.value = 0
   leaveOpen.value = false
   leaving.value = false
+  discardedTarget.value = null
   actionError.value = null
   return viewVersion
 }
@@ -223,7 +245,7 @@ function onSubmitted(next: QuizResult): void {
 
 function requestLeave(): void {
   if (submitting.value || leaving.value) return
-  if (session.value && session.value.questions.length > 0) leaveOpen.value = true
+  if (activeSession.value) leaveOpen.value = true
   else void router.push(lessonRoute.value)
 }
 
@@ -234,32 +256,43 @@ async function leave(): Promise<void> {
   const target = lessonRoute.value
   leaving.value = true
   actionError.value = null
-  let discarded = false
   try {
     await studentClassesApi.discardAttempt(current.attemptId)
-    discarded = true
   } catch (reason) {
-    if (ownsView(version)) actionError.value = resolveApiError(reason, t('classPlayer.quiz.leaveError'))
-  } finally {
     if (ownsView(version)) {
+      actionError.value = resolveApiError(reason, t('classPlayer.quiz.leaveError'))
       leaving.value = false
       leaveOpen.value = false
     }
+    return
   }
-  if (!discarded || !ownsView(version)) return
+  if (!ownsView(version)) return
+  leaveOpen.value = false
   session.value = null
-  if (!pageActive.value) return
+  discardedTarget.value = target
+  if (!pageActive.value) {
+    leaving.value = false
+    return
+  }
   try {
     await router.push(target)
   } catch (reason) {
     if (ownsView(version)) actionError.value = resolveApiError(reason)
+  } finally {
+    if (ownsView(version)) leaving.value = false
   }
 }
 
 async function showAttempt(attemptId: number): Promise<void> {
-  if (account !== getAuthSessionVersion() || result.value?.attemptId === attemptId) return
+  if (
+    account !== getAuthSessionVersion() ||
+    result.value?.attemptId === attemptId ||
+    loadingAttemptId.value === attemptId
+  ) {
+    return
+  }
   const version = resetView()
-  loadingResult.value = true
+  loadingAttemptId.value = attemptId
   try {
     const next = await studentClassesApi.quizResult(attemptId)
     if (!ownsView(version)) return
@@ -268,23 +301,26 @@ async function showAttempt(attemptId: number): Promise<void> {
   } catch (reason) {
     if (ownsView(version)) actionError.value = resolveApiError(reason, t('classPlayer.quiz.loadErrorTitle'))
   } finally {
-    if (ownsView(version)) loadingResult.value = false
+    if (ownsView(version)) loadingAttemptId.value = null
   }
 }
 
 function openRequestedAttempt(): void {
-  if (invalidAttempt.value) {
+  const target = requestedTarget.value
+  if (target.kind === 'invalid') {
     resetView()
-  } else if (requestedAttempt.value !== null) {
-    void showAttempt(requestedAttempt.value)
-  } else if (quizId.value === null) {
-    resetView()
-  } else if (session.value?.quiz.id !== quizId.value || session.value.questions.length === 0) {
-    void openQuiz(quizId.value)
+  } else if (target.kind === 'attempt') {
+    void showAttempt(target.id)
+  } else if (activeSession.value?.quiz.id !== target.id) {
+    void openQuiz(target.id)
   }
 }
 
-watch([quizId, requestedAttempt, invalidAttempt], openRequestedAttempt, { immediate: true })
+watch(
+  [() => requestedTarget.value.kind, () => ('id' in requestedTarget.value ? requestedTarget.value.id : null)],
+  openRequestedAttempt,
+  { immediate: true },
+)
 
 // A saved score names its quiz and attempt. A retake opens at the quiz address without the old attempt.
 usePageRedirect(() => {
@@ -297,8 +333,13 @@ usePageRedirect(() => {
       hash: route.hash,
     }
   }
-  if (session.value && route.query.attempt !== undefined) {
-    return { query: { ...route.query, attempt: undefined }, hash: route.hash }
+  if (session.value && (session.value.quiz.id !== quizId.value || route.query.attempt !== undefined)) {
+    return {
+      name: 'student-quiz',
+      params: { quizId: session.value.quiz.id },
+      query: { ...route.query, attempt: undefined },
+      hash: route.hash,
+    }
   }
   return null
 }, pageActive)

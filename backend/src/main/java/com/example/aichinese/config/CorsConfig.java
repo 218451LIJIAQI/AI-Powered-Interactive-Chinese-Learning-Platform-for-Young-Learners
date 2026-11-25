@@ -70,11 +70,7 @@ public class CorsConfig {
         return source;
     }
 
-    CorsConfigurationSource corsConfigurationSource(String allowedOrigins) {
-        return corsConfigurationSource(corsAllowedOrigins(allowedOrigins));
-    }
-
-    static Set<String> resolveExactOrigins(String allowedOrigins, boolean productionProfileActive) {
+    private static Set<String> resolveExactOrigins(String allowedOrigins, boolean productionProfileActive) {
         Set<String> exactOrigins = new LinkedHashSet<>();
         for (String rawOrigin : allowedOrigins.split(",")) {
             String origin = rawOrigin.strip();

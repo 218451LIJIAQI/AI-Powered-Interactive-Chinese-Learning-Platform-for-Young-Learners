@@ -3,6 +3,7 @@ package com.example.aichinese.repository;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -22,12 +23,19 @@ public interface PointsTransactionRepository extends JpaRepository<PointsTransac
             @Param("from") LocalDateTime from,
             @Param("to") LocalDateTime to);
 
-    /** Ids of the active accounts of learners who earned XP since {@code since} ("New in Practice"). */
+    /** Bounded ascending slice of active learner user ids who earned XP since {@code since} ("New in Practice"). */
     @Query("""
             select distinct p.student.user.id from PointsTransaction p
-            where p.createdAt >= :since and p.student.user.active = true and p.student.user.deletedAt is null
+            where p.createdAt >= :since
+              and p.student.user.active = true
+              and p.student.user.deletedAt is null
+              and p.student.user.id > :afterUserId
+            order by p.student.user.id asc
             """)
-    List<Long> findActiveLearnerIdsSince(@Param("since") LocalDateTime since);
+    List<Long> findActiveLearnerIdsSinceAfter(
+            @Param("since") LocalDateTime since,
+            @Param("afterUserId") Long afterUserId,
+            Pageable pageable);
 
     /** Source ids of one source type in a range (the daily-goal rows use the epoch day as their id). */
     @Query("""

@@ -42,6 +42,11 @@ export default defineConfig({
         UPLOAD_DIR: `${backendBuildDir}/uploads`,
         RECORDED_VIDEO_UPLOAD_DIR: `${backendBuildDir}/uploads/recorded-videos`,
         APP_CORS_ALLOWED_ORIGINS: frontendUrl,
+        // Never leak real external AI/SMTP calls if the host shell has credentials or flags exported.
+        AI_ENABLE_REAL_PROVIDER: 'false',
+        APP_AI_ENABLE_REAL_PROVIDER: 'false',
+        SMTP_ENABLED: 'false',
+        APP_EMAIL_ENABLED: 'false',
         // No scheduled jobs (the admins' daily summary e-mail, learner reminders) in the middle of a run.
         APP_SCHEDULING_ENABLED: 'false',
       },

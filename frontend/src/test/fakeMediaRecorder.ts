@@ -1,8 +1,8 @@
-import { RECORDER_MIME_TYPE } from '@/utils/practiceUpload'
+import { RECORDER_MIME_TYPE } from '@/composables/useAudioRecorder'
 
 /**
  * MediaRecorder stand-in for the recorder tests: a browser that records RECORDER_MIME_TYPE. It keeps every instance
- * (reset `instances` before each test); stop() delivers one chunk of audio and then fires `stop`.
+ * (`test/setup.ts` resets `instances` after each test); stop() delivers one chunk of audio and then fires `stop`.
  */
 export class FakeMediaRecorder {
   static instances: FakeMediaRecorder[] = []

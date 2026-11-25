@@ -13,8 +13,7 @@ import lombok.Setter;
 @Setter
 @Entity
 @Table(name = "tracing_exercises", indexes = {
-        @Index(name = "idx_tracing_exercises_status_updated", columnList = "content_status,updated_at"),
-        @Index(name = "idx_tracing_exercises_hsk_level", columnList = "hsk_level")
+        @Index(name = "idx_tracing_exercises_status_updated", columnList = "content_status,updated_at")
 })
 public class TracingExercise extends LessonActivity {
 

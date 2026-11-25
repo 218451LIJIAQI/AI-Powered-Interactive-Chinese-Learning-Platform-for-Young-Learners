@@ -28,7 +28,6 @@ class NavCountServiceTests {
     private final SupportService supportService = mock(SupportService.class);
     private final NavCountService service = new NavCountService(mistakeRepository, aiResponseReportRepository, supportService);
 
-    /** No review queue, teacher applications or support replies any more: AI reports and open support requests. */
     @Test
     void adminsSeeTheAiReportsAndSupportRequestsWaitingForThem() {
         when(aiResponseReportRepository.countByStatus(AiResponseReportStatus.PENDING_REVIEW)).thenReturn(1L);

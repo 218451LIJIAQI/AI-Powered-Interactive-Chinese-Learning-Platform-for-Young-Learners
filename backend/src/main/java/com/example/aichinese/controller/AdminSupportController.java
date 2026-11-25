@@ -18,6 +18,7 @@ import com.example.aichinese.dto.ApiResponse;
 import com.example.aichinese.dto.support.SupportQueueResponse;
 import com.example.aichinese.dto.support.SupportReplyRequest;
 import com.example.aichinese.dto.support.SupportRequestDetailResponse;
+import com.example.aichinese.entity.enums.EnumLookups;
 import com.example.aichinese.entity.enums.SupportRequestStatus;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.support.SupportService;
@@ -39,7 +40,7 @@ public class AdminSupportController {
             @RequestParam(value = "status", defaultValue = "OPEN") String status,
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "20") int size) {
-        SupportRequestStatus parsed = SupportRequestStatus.tryFrom(status)
+        SupportRequestStatus parsed = EnumLookups.tryFrom(SupportRequestStatus.class, status)
                 .orElseThrow(() -> new ResponseStatusException(BAD_REQUEST, "Invalid support status filter."));
         return ApiResponse.success("Support queue retrieved successfully.", supportService.queue(parsed, page, size));
     }

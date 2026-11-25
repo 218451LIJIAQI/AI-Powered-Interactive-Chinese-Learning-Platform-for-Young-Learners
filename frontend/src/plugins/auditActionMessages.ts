@@ -43,7 +43,6 @@ export const auditActionMessages = {
       ADMIN_LESSON_RESTORE: 'Lesson restored',
       LEARN_UNIT_PUBLISH: 'Learning path unit published',
       LEARN_UNIT_UNPUBLISH: 'Learning path unit unpublished',
-      LEVEL_CHECK_QUESTION_CREATE: 'Level check question added',
       LEVEL_CHECK_QUESTION_UPDATE: 'Level check question edited',
       LEVEL_CHECK_QUESTION_PUBLISH: 'Level check question published',
       LEVEL_CHECK_QUESTION_UNPUBLISH: 'Level check question unpublished',
@@ -109,7 +108,6 @@ export const auditActionMessages = {
       ADMIN_LESSON_RESTORE: 'Pelajaran dipulihkan',
       LEARN_UNIT_PUBLISH: 'Unit laluan pembelajaran diterbitkan',
       LEARN_UNIT_UNPUBLISH: 'Unit laluan pembelajaran dinyahterbit',
-      LEVEL_CHECK_QUESTION_CREATE: 'Soalan semakan tahap ditambah',
       LEVEL_CHECK_QUESTION_UPDATE: 'Soalan semakan tahap disunting',
       LEVEL_CHECK_QUESTION_PUBLISH: 'Soalan semakan tahap diterbitkan',
       LEVEL_CHECK_QUESTION_UNPUBLISH: 'Soalan semakan tahap dinyahterbit',
@@ -174,7 +172,6 @@ export const auditActionMessages = {
       ADMIN_LESSON_RESTORE: '课时已恢复',
       LEARN_UNIT_PUBLISH: '学习路径单元已发布',
       LEARN_UNIT_UNPUBLISH: '学习路径单元已取消发布',
-      LEVEL_CHECK_QUESTION_CREATE: '水平测试题已添加',
       LEVEL_CHECK_QUESTION_UPDATE: '水平测试题已编辑',
       LEVEL_CHECK_QUESTION_PUBLISH: '水平测试题已发布',
       LEVEL_CHECK_QUESTION_UNPUBLISH: '水平测试题已取消发布',
@@ -200,4 +197,4 @@ export const auditActionMessages = {
       SYSTEM: '系统',
     },
   },
-}
+} as const

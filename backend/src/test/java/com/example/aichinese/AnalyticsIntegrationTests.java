@@ -3,28 +3,40 @@ package com.example.aichinese;
 import static com.example.aichinese.support.LearningApiTestClient.uniqueEmail;
 import static com.example.aichinese.support.LearningApiTestClient.uniqueSuffix;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.doReturn;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.sql.Timestamp;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.transaction.support.TransactionTemplate;
 
+import com.example.aichinese.config.PlatformProperties;
+import com.example.aichinese.dto.admin.AdminAnalyticsResponse;
 import com.example.aichinese.entity.LearnLesson;
 import com.example.aichinese.entity.LessonProgress;
+import com.example.aichinese.repository.AiResponseReportRepository;
+import com.example.aichinese.repository.AiUsageLogRepository;
+import com.example.aichinese.repository.CoursePackageRepository;
 import com.example.aichinese.repository.LessonProgressRepository;
+import com.example.aichinese.repository.LessonRepository;
+import com.example.aichinese.service.admin.AdminOverviewService;
 import com.example.aichinese.service.learn.LearnClock;
+import com.example.aichinese.service.support.SupportService;
 import com.example.aichinese.support.ApiIntegrationTest;
 import com.example.aichinese.support.LearningApiTestClient.PublishedClass;
 import com.fasterxml.jackson.databind.JsonNode;
+
+import jakarta.persistence.EntityManager;
 
 /**
  * MockMvc coverage of the admin analytics: the chosen period, counts by status and role, lessons completed in the
@@ -34,11 +46,32 @@ class AnalyticsIntegrationTests extends ApiIntegrationTest {
 
     private static final String ADMIN_ANALYTICS_PATH = "/api/v1/admin/analytics";
 
-    @MockitoSpyBean
+    @Autowired
     private LearnClock learnClock;
 
     @Autowired
     private LessonProgressRepository lessonProgressRepository;
+
+    @Autowired
+    private SupportService supportService;
+
+    @Autowired
+    private AiResponseReportRepository aiResponseReportRepository;
+
+    @Autowired
+    private AiUsageLogRepository aiUsageLogRepository;
+
+    @Autowired
+    private LessonRepository lessonRepository;
+
+    @Autowired
+    private CoursePackageRepository coursePackageRepository;
+
+    @Autowired
+    private EntityManager entityManager;
+
+    @Autowired
+    private TransactionTemplate transactionTemplate;
 
     @Test
     void adminAnalyticsCoversTheChosenPeriodAndEveryStatus() throws Exception {
@@ -70,7 +103,6 @@ class AnalyticsIntegrationTests extends ApiIntegrationTest {
                 .isEqualTo(baseline.path("numbers").path("users").path("students").asLong() + 1L);
         assertThat(users.path("admins").asLong()).isPositive();
         assertThat(users.path("total").asLong()).isEqualTo(baseline.at("/numbers/users/total").asLong() + 1);
-        assertThat(users.has("teachers")).isFalse();
         assertThat(after.path("newRegistrations").asLong()).isEqualTo(baseline.path("newRegistrations").asLong() + 1L);
         JsonNode today = lastDay(after);
         // The platform day, like streaks and daily goals (AdminOverviewServiceTests covers another server zone).
@@ -148,16 +180,12 @@ class AnalyticsIntegrationTests extends ApiIntegrationTest {
 
         mockMvc.perform(api.jsonPut("/api/v1/admin/lessons/" + published.lessonId() + "/content", adminToken, Map.of(
                         "title", "Revised lesson",
-                        "minutes", 15,
-                        "summary", "Say hello and goodbye",
                         "keyPhrases", List.of(Map.of("chinese", "你好", "pinyin", "nǐ hǎo", "meaning", "hello")))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("PUBLISHED"))
                 .andExpect(jsonPath("$.data.hasUnpublishedChanges").value(true));
 
         JsonNode after = analyticsData(adminToken).path("contentByStatus");
-        assertThat(after.has("SUBMITTED")).isFalse();
-        assertThat(after.has("REJECTED")).isFalse();
         for (String status : List.of("DRAFT", "PUBLISHED", "ARCHIVED")) {
             assertThat(after.path(status).asLong()).as(status).isEqualTo(before.path(status).asLong());
         }
@@ -199,12 +227,18 @@ class AnalyticsIntegrationTests extends ApiIntegrationTest {
 
         // Use an isolated reporting week so other tests' attempts cannot change the rounded average.
         LocalDate day = LocalDate.of(2001, 6, 7);
-        LocalDateTime completed = learnClock.startOf(day).plusHours(12);
-        doReturn(day).when(learnClock).today();
+        LearnClock weekClock = new LearnClock(
+                new PlatformProperties("Asia/Singapore"),
+                Clock.fixed(day.atTime(12, 0).atZone(ZoneId.of("Asia/Singapore")).toInstant(), ZoneOffset.UTC));
+        AdminOverviewService isolatedOverview = new AdminOverviewService(
+                supportService, aiResponseReportRepository, aiUsageLogRepository, userRepository,
+                lessonRepository, coursePackageRepository, weekClock, entityManager);
+        LocalDateTime completed = weekClock.startOf(day).plusHours(12);
         try {
-            JsonNode emptyWeek = analyticsData(admin).path("learning");
-            assertThat(emptyWeek.get("quizAverage").isNull()).isTrue();
-            assertThat(emptyWeek.get("needsSupport").longValue()).isZero();
+            AdminAnalyticsResponse.Learning emptyWeek =
+                    transactionTemplate.execute(status -> isolatedOverview.analytics(7).learning());
+            assertThat(emptyWeek.quizAverage()).isNull();
+            assertThat(emptyWeek.needsSupport()).isZero();
             Timestamp completedAt = Timestamp.valueOf(completed);
             jdbc.batchUpdate("""
                     insert into quiz_attempts (quiz_id, student_id, score, max_score, submitted, completed_at, created_at, updated_at)
@@ -214,11 +248,11 @@ class AnalyticsIntegrationTests extends ApiIntegrationTest {
                     new Object[]{quizId, firstId, 1, 5, completedAt, completedAt, completedAt},
                     new Object[]{quizId, secondId, 3, 3, completedAt, completedAt, completedAt}));
 
-            mockMvc.perform(api.authGet(ADMIN_ANALYTICS_PATH, admin))
-                    .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.data.learning.activeStudents").value(2))
-                    .andExpect(jsonPath("$.data.learning.quizAverage").value(40))
-                    .andExpect(jsonPath("$.data.learning.needsSupport").value(1));
+            AdminAnalyticsResponse.Learning weekLearning =
+                    transactionTemplate.execute(status -> isolatedOverview.analytics(7).learning());
+            assertThat(weekLearning.activeStudents()).isEqualTo(2);
+            assertThat(weekLearning.quizAverage()).isEqualTo(40);
+            assertThat(weekLearning.needsSupport()).isEqualTo(1);
         } finally {
             jdbc.update("delete from quiz_attempts where quiz_id = ?", quizId);
         }

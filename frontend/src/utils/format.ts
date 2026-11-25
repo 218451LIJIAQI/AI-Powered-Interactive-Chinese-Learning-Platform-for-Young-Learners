@@ -197,7 +197,11 @@ export function createDateFormatter(options: Intl.DateTimeFormatOptions, locale?
       displayLocale !== DISPLAY_LOCALES.en ||
       options.dateStyle !== undefined ||
       options.timeStyle !== undefined ||
-      options.second !== undefined
+      options.second !== undefined ||
+      options.hour12 === false ||
+      options.hourCycle !== undefined ||
+      options.timeZoneName !== undefined ||
+      options.era !== undefined
     if (useNative) {
       const nativeFormatter = new Intl.DateTimeFormat(displayLocale, options)
       return (date) => nativeFormatter.format(date)

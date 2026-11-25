@@ -1,6 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { setAccessToken } from '@/api/http'
 import { deferred } from '@/test/helpers'
 
 const api = vi.hoisted(() => ({ chatStream: vi.fn(), report: vi.fn() }))
@@ -155,5 +156,52 @@ describe('AiAskTab (Ask SparkBot)', () => {
     expect(answer.text()).toBe('AI tutor is currently unavailable. Please try again later.')
     expect(wrapper.find('.ai-message-actions').exists()).toBe(false)
     expect(wrapper.find('[data-testid="ai-result-label"]').exists()).toBe(false)
+  })
+
+  it('ignores Enter during IME composition (including WebKit keyCode 229) and lets the learner stop a stream cleanly', async () => {
+    let signal: AbortSignal | undefined
+    let emitDelta: ((chunk: string) => void) | undefined
+    api.chatStream.mockImplementation((_payload, handlers) => {
+      signal = handlers.signal
+      emitDelta = handlers.onDelta
+      return new Promise((_resolve, reject) => {
+        signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))
+      })
+    })
+    const wrapper = mountAsk()
+    const textarea = wrapper.get('textarea')
+    await textarea.setValue('nihao')
+
+    // WebKit/Safari fires keyCode 229 with isComposing=false on Enter confirming Pinyin composition.
+    await textarea.trigger('keydown', { key: 'Enter', keyCode: 229 })
+    expect(api.chatStream).not.toHaveBeenCalled()
+
+    await textarea.trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    expect(api.chatStream).toHaveBeenCalledTimes(1)
+
+    emitDelta!('你好 means hello')
+    await flushPromises()
+    await wrapper.get('[data-testid="ai-ask-stop"]').trigger('click')
+    await flushPromises()
+
+    expect(signal?.aborted).toBe(true)
+    const stoppedBubble = wrapper.get('.ai-message.is-bot .ai-answer')
+    expect(stoppedBubble.text()).toBe('你好 means hello')
+    expect(stoppedBubble.classes()).not.toContain('is-problem')
+  })
+
+  it('unlocks the composer cleanly if the auth session changes before the stream starts', async () => {
+    api.chatStream.mockResolvedValue({ sessionId: 9, chatMessageId: 55, aiResponse: 'Answer', status: 'SUCCESS' })
+    const wrapper = mountAsk('Hello')
+
+    wrapper.get('form.ai-ask-bar').element.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+    setAccessToken('different-session-token')
+    await flushPromises()
+    setAccessToken(null)
+
+    expect(api.chatStream).not.toHaveBeenCalled()
+    expect(wrapper.findAll('.ai-message')).toHaveLength(0)
+    expect(wrapper.get<HTMLTextAreaElement>('textarea').element.disabled).toBe(false)
   })
 })

@@ -1,5 +1,7 @@
 import type { MessageRow } from './types'
 
+export const RESTART_LEVEL_CHECK_MESSAGE = 'Start the level check again.'
+
 /** Backend messages of the learn module, translated like the rows in utils/serverMessages.ts. */
 export const LEARN_MESSAGES: readonly MessageRow[] = [
   // Request parameters (LearnParams)
@@ -156,6 +158,7 @@ export const LEARN_MESSAGES: readonly MessageRow[] = [
   ['This unit is already a draft.', 'Unit ini sudah menjadi draf.', '这个单元已是草稿。'],
   ['Level check question not found.', 'Soalan semakan tahap tidak ditemui.', '找不到该水平测试题。'],
   ['This question is already published.', 'Soalan ini sudah diterbitkan.', '这道题已发布。'],
+  ['Question is required.', 'Soalan diperlukan.', '请填写题目。'],
   ['A question needs 2 to 6 answers.', 'Setiap soalan memerlukan 2 hingga 6 jawapan.', '每道题需要 2 至 6 个答案。'],
   ['Every answer needs text.', 'Setiap jawapan memerlukan teks.', '每个答案都需要文字。'],
   ['Tick exactly one right answer.', 'Tandakan tepat satu jawapan yang betul.', '请只勾选一个正确答案。'],
@@ -170,6 +173,7 @@ export const LEARN_MESSAGES: readonly MessageRow[] = [
     '水平测试的每项技能只能作答一次。',
   ],
   ['The level check is already complete.', 'Semakan tahap sudah selesai.', '水平测试已完成。'],
+  [RESTART_LEVEL_CHECK_MESSAGE, 'Mulakan semakan tahap semula.', '请重新开始水平测试。'],
 
   // Hints and pinyin typing (PracticeService, HintPolicyService)
   ['Checkpoints have no hints.', 'Titik semak tiada petunjuk.', '关卡没有提示。'],

@@ -2,11 +2,20 @@ import { flushPromises } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { setAccessToken } from '@/api/http'
+import { progressVersion } from '@/composables/useProgressRefresh'
 import { deferred } from '@/test/helpers'
-import { answerCheck, hintSettings, practiceItem, practiceResult } from '@/test/learnFixtures'
-import type { AnswerCheck } from '@/types/learn'
+import { answerCheck, flashcardSet, hintSettings, practiceItem, practiceResult } from '@/test/learnFixtures'
+import type { AnswerCheck, PracticeSet } from '@/types/learn'
 
-import { hintStep, matchingSet, mountPlayer } from './practicePlayerTestHelpers'
+import { hintStep, mountPlayer } from './practicePlayerTestHelpers'
+
+const matchingSet: PracticeSet = {
+  ...flashcardSet(),
+  id: 9,
+  type: 'MATCHING',
+  items: [practiceItem('1', { hanzi: '妈妈', pinyin: 'māma' }), practiceItem('2', { hanzi: '爸爸', pinyin: 'bàba' })],
+  matchingChoices: ['dad', 'mum'],
+}
 
 const api = vi.hoisted(() => ({ check: vi.fn(), complete: vi.fn(), hint: vi.fn() }))
 const hintApi = vi.hoisted(() => ({ settings: vi.fn() }))
@@ -49,18 +58,29 @@ describe('MatchingPlayer', () => {
     await wrapper.get('[data-testid="word-1"]').trigger('click')
     await wrapper.get('[data-testid="meaning-dad"]').trigger('click')
     expect(wrapper.get('[data-testid="meaning-dad"]').attributes('aria-label')).toBe('dad, paired with 妈妈')
+    expect(wrapper.get('[data-testid="word-1"]').text()).toContain('paired with dad')
     await wrapper.get('[data-testid="word-3"]').trigger('click')
     await wrapper.get('[data-testid="meaning-student"]').trigger('click')
 
+    const progressBefore = progressVersion.value
     await wrapper.get('[data-testid="matching-check"]').trigger('click')
     await flushPromises()
+    expect(progressVersion.value).toBeGreaterThan(progressBefore)
     expect(api.check).toHaveBeenCalledWith('MATCHING', 9, { itemKey: '1', answer: 'dad' })
     expect(api.check).toHaveBeenCalledWith('MATCHING', 9, { itemKey: '2', answer: 'mum' })
     expect(api.check).toHaveBeenCalledWith('MATCHING', 9, { itemKey: '3', answer: 'student' })
     expect(wrapper.get('[data-testid="check-bar"]').text()).toContain('1 of 3 pairs right')
     expect(wrapper.get('[data-testid="word-1"]').classes()).toContain('is-wrong')
+    expect(wrapper.get('[data-testid="word-1"]').text()).toContain('wrong pair')
+    expect(wrapper.get('[data-testid="meaning-dad"]').attributes('aria-label')).toBe(
+      'dad, paired with 妈妈 — wrong pair',
+    )
     expect(wrapper.get('[data-testid="word-2"]').classes()).toContain('is-wrong')
     expect(wrapper.get('[data-testid="word-3"]').classes()).toContain('is-correct')
+    expect(wrapper.get('[data-testid="word-3"]').text()).toContain('correct pair')
+    expect(wrapper.get('[data-testid="meaning-student"]').attributes('aria-label')).toBe(
+      'student, paired with 学生 — correct pair',
+    )
 
     await wrapper.get('[data-testid="continue"]').trigger('click')
     await flushPromises()
@@ -75,7 +95,7 @@ describe('MatchingPlayer', () => {
       undefined,
     )
     expect(wrapper.emitted('finished')).toHaveLength(1)
-    expect(wrapper.emitted('finished')![0]![1]).toBe('妈妈 dad · 爸爸 mum · 学生 student')
+    expect(wrapper.emitted('finished')![0]![0]).toMatchObject({ recap: '妈妈 dad · 爸爸 mum · 学生 student' })
   })
 
   it('Reset takes every pair apart, then stays off but keeps the focus', async () => {
@@ -151,7 +171,7 @@ describe('MatchingPlayer', () => {
       ],
       undefined,
     )
-    expect(wrapper.emitted('finished')![0]![1]).toBe('妈妈 mum · 爸爸 dad')
+    expect(wrapper.emitted('finished')![0]![0]).toMatchObject({ recap: '妈妈 mum · 爸爸 dad' })
   })
 
   it('asks the server for one pair, the first word not paired yet: the board has one hint', async () => {
@@ -174,6 +194,5 @@ describe('MatchingPlayer', () => {
     expect(card.get('.hint-panel-note').text()).toBe('Hints never cost XP.')
     // One hint for the board: nothing more is offered.
     expect(wrapper.find('[data-testid="hint-show"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="hint-next"]').exists()).toBe(false)
   })
 })

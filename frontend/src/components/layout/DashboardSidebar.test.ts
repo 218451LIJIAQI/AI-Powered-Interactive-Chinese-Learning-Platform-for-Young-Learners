@@ -5,7 +5,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 
 import { i18n } from '@/plugins/i18n'
 import { useAuthStore } from '@/stores/auth'
-import type { CurrentUserResponse, HealthStatusResponse, NavCounts, RewardSummaryResponse, UserRole } from '@/types/api'
+import type { HealthStatusResponse, NavCounts, RewardSummaryResponse, UserRole } from '@/types/api'
 
 import DashboardSidebar from './DashboardSidebar.vue'
 
@@ -33,10 +33,10 @@ async function mountAt(path: string, setup?: () => void, options: MountOptions =
   })
 }
 
-function signIn(role: UserRole, extra: Partial<CurrentUserResponse> = {}): () => void {
+function signIn(role: UserRole): () => void {
   return () => {
     const auth = useAuthStore()
-    auth.currentUser = { id: 7, fullName: 'Amira Hassan', email: 'a@example.com', roles: [role], ...extra }
+    auth.currentUser = { id: 7, fullName: 'Amira Hassan', email: 'a@example.com', roles: [role] }
   }
 }
 
@@ -75,7 +75,6 @@ describe('DashboardSidebar navigation', () => {
     i18n.global.locale.value = 'ms'
     await wrapper.vm.$nextTick()
     expect(wrapper.get('[data-testid="sidebar-role"]').text()).toBe('Pelajar')
-    i18n.global.locale.value = 'en'
   })
 
   it('shows badge counts from the nav-count response', async () => {
@@ -91,7 +90,7 @@ describe('DashboardSidebar navigation', () => {
     expect(badge.text()).toBe('99+')
     expect(badge.attributes('aria-hidden')).toBe('true')
     expect(link.attributes('aria-label')).toBe('Practice, 120 waiting')
-    expect(link.attributes('title')).toBe('120 waiting')
+    expect(link.attributes('title')).toBe('Practice, 120 waiting')
   })
 
   it('shows the admin sections with their waiting counts', async () => {

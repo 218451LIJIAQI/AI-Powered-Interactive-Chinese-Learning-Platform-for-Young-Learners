@@ -8,8 +8,7 @@ import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "drag_drop_activities", indexes = {
-        @Index(name = "idx_drag_drop_activities_status_updated", columnList = "content_status,updated_at"),
-        @Index(name = "idx_drag_drop_activities_hsk_level", columnList = "hsk_level")
+        @Index(name = "idx_drag_drop_activities_status_updated", columnList = "content_status,updated_at")
 })
 public class DragDropActivity extends PracticeActivityContent {
 }

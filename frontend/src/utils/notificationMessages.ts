@@ -1,11 +1,10 @@
 /**
  * Localiser for in-app notification titles and messages (stored in English by the backend).
  *
- * Kept separate from `serverMessages.ts` so Vite code-splits the notification rows, regex template matcher, and
- * `formatDate` helper into the Notifications page chunk instead of the main application bundle.
+ * Kept separate from `serverMessages.ts` so Vite code-splits the notification rows and regex template matcher into the
+ * Notifications page chunk instead of the main application bundle.
  */
 import type { AppLanguage } from '@/types/api'
-import { formatDate } from '@/utils/format'
 
 import { NOTIFICATION_MESSAGES } from './serverMessageRows/notifications'
 import type { MessageRow } from './serverMessageRows/types'
@@ -59,45 +58,6 @@ function compileTemplate([en, ms, zh]: MessageRow): Template {
   }
 }
 
-const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-const MONTHS = [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
-]
-/**
- * "3:00 PM on Saturday 14 November 2026": a live session's start as its stored reminder wrote it (the removed
- * LiveSessionReminderService), a wall-clock time in the session's zone.
- */
-const SESSION_START = /^(\d{1,2}):(\d{2}) ([AP]M) on ([A-Za-z]+) (\d{1,2}) ([A-Za-z]+) (\d{4})$/
-
-/** A live session's start in the reader's language, on the same wall clock; any other text is kept as sent. */
-function localizedSessionStart(value: string, locale: TranslatedLocale): string {
-  const match = SESSION_START.exec(value)
-  if (!match) return value
-  const [, hour, minute, half, weekday, day, month, year] = match
-  const hours = Number(hour)
-  const minutes = Number(minute)
-  const monthIndex = MONTHS.indexOf(month)
-  if (hours < 1 || hours > 12 || minutes >= 60 || monthIndex < 0) return value
-
-  const dayOfMonth = Number(day)
-  const date = new Date(
-    Date.UTC(Number(year), monthIndex, dayOfMonth, (hours % 12) + (half === 'PM' ? 12 : 0), minutes),
-  )
-  if (date.getUTCDate() !== dayOfMonth || WEEKDAYS[date.getUTCDay()] !== weekday) return value
-  return formatDate(date, { dateStyle: 'full', timeStyle: 'short', timeZone: 'UTC' }, locale)
-}
-
 /** Lazy fixed + template matcher; exported so matching rules can be unit-tested on custom rows. */
 export function createNotificationMessageLocalizer(rows: readonly MessageRow[]): MessageLocalizer {
   let compiled: {
@@ -129,10 +89,7 @@ export function createNotificationMessageLocalizer(rows: readonly MessageRow[]):
       const match = template.pattern.exec(trimmed)
       if (!match || match.slice(1).some((value) => !value.trim())) continue
       const values = new Map(template.names.map((name, index) => [name, match[index + 1]]))
-      return template.translations[locale].replace(PLACEHOLDER, (_, name: string) => {
-        const value = values.get(name) ?? ''
-        return name === 'start' ? localizedSessionStart(value, locale) : value
-      })
+      return template.translations[locale].replace(PLACEHOLDER, (_, name: string) => values.get(name) ?? '')
     }
     return message
   }

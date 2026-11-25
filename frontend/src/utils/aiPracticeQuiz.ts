@@ -2,7 +2,8 @@
  * Answer matching and vocabulary for browser-scored AI practice. The lesson editor also uses the answer key to fill
  * the quiz draft an admin reviews before saving.
  */
-import type { AiStoryGeneratorResponse, AppLanguage } from '@/types/api'
+import type { AiStoryGeneratorResponse } from '@/types/ai'
+import type { AppLanguage } from '@/types/api'
 
 const LETTER_KEY = /^\(?([a-d])[).:]?$/
 const TRAILING_PUNCTUATION = /[\s.,;:!?。，；：！？、]+$/u

@@ -84,6 +84,18 @@ public class MistakeService {
     }
 
     /** Records a mistake when the caller already holds {@code locked}'s profile lock in a READ_COMMITTED transaction. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    LearningMistake recordLocked(
+            StudentProfile locked,
+            MistakeSource source,
+            String itemRef,
+            String sourceTitle,
+            GradableItem item,
+            String yourAnswer,
+            boolean sure) {
+        return recordLocked(locked, source, itemRef, sourceTitle, item, yourAnswer, sure, false);
+    }
+
     private LearningMistake recordLocked(
             StudentProfile locked,
             MistakeSource source,
@@ -93,7 +105,7 @@ public class MistakeService {
             String yourAnswer,
             boolean sure,
             boolean stillLearning) {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = clock.serverTimeAt(clock.now());
         LearningMistake mistake = mistakeRepository.findLockedByStudentIdAndItemRef(locked.getId(), itemRef)
                 .orElse(null);
         boolean isNew = mistake == null;
@@ -132,7 +144,7 @@ public class MistakeService {
         mistake.setChoices(item.choicesJson());
         mistake.setAnswer(item.answer());
         mistake.setExplanation(item.explanation());
-        mistake.setYourAnswer(submittedAnswer(yourAnswer));
+        mistake.setYourAnswer(TextUtils.trimToNull(yourAnswer));
         mistake.setSureWrong(sure);
         mistake.setStillLearning(stillLearning);
         mistake.setLastWrongAt(now);
@@ -168,7 +180,7 @@ public class MistakeService {
         for (StillLearningEntry entry : entries) {
             byRef.putIfAbsent(entry.itemRef(), entry);
         }
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = clock.serverTimeAt(clock.now());
         Map<String, LearningMistake> existingByRef = mistakeRepository
                 .findLockedByStudentIdAndItemRefIn(lockedStudent.getId(), byRef.keySet()).stream()
                 .collect(Collectors.toMap(LearningMistake::getItemRef, Function.identity()));
@@ -186,21 +198,12 @@ public class MistakeService {
         }
     }
 
-    @Transactional(readOnly = true)
-    public MistakeListResponse list(
-            SecurityUserDetails currentUser, MistakeSource source, int size) {
-        return list(accessService.requireStudent(currentUser), source, size);
-    }
-
     /** The newest {@code size} waiting mistakes; the counts cover all of them. */
     @Transactional(readOnly = true)
-    public MistakeListResponse list(StudentProfile student, MistakeSource source, int size) {
+    public MistakeListResponse list(SecurityUserDetails currentUser, MistakeSource source, int size) {
+        StudentProfile student = accessService.requireStudent(currentUser);
         PageRequest pageable = PaginationUtils.pageRequest(0, size);
-        List<LearningMistake> rows = source == null
-                ? mistakeRepository.findByStudentIdAndClearedAtIsNullOrderBySureWrongDescLastWrongAtDescIdDesc(
-                        student.getId(), pageable)
-                : mistakeRepository.findByStudentIdAndMistakeSourceAndClearedAtIsNullOrderBySureWrongDescLastWrongAtDescIdDesc(
-                        student.getId(), source, pageable);
+        List<LearningMistake> rows = mistakeRepository.findWaiting(student.getId(), source, pageable);
         Map<MistakeSource, Long> counts = mistakeRepository.countWaitingBySource(student.getId()).stream()
                 .collect(Collectors.toMap(SourceCount::getSource, SourceCount::getTotal));
         long learn = counts.getOrDefault(MistakeSource.LEARN, 0L);
@@ -226,7 +229,7 @@ public class MistakeService {
             questions.add(item.view(mistake.getId()));
             context.add(new MistakeReviewResponse.ReviewContext(
                     mistake.getSourceTitle(), mistake.getMistakeSource() == MistakeSource.LEARN,
-                    item.shown(submittedAnswer(mistake.getYourAnswer())), mistake.isStillLearning()));
+                    item.shown(TextUtils.trimToNull(mistake.getYourAnswer())), mistake.isStillLearning()));
         }
         return new MistakeReviewResponse(questions, context, run.startedAt(), run.signature());
     }
@@ -253,28 +256,24 @@ public class MistakeService {
                 HintBuilder.ladder(gradable(mistake)));
     }
 
-    @Transactional(isolation = Isolation.READ_COMMITTED)
-    public MistakeReviewCompleteResponse completeReview(
-            SecurityUserDetails currentUser, MistakeReviewCompleteRequest request) {
-        return completeReview(accessService.requireStudent(currentUser), request);
-    }
-
     /**
      * Clears every mistake answered right; +10 XP once a day when at least one was cleared. A mistake answered wrong
      * again stays waiting with that answer as its last one, as a wrong answer in a lesson or set records it; a skipped
      * one ("Skip": it stays in your mistakes) stays waiting as it was.
      */
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    public MistakeReviewCompleteResponse completeReview(StudentProfile student, MistakeReviewCompleteRequest request) {
+    public MistakeReviewCompleteResponse completeReview(
+            SecurityUserDetails currentUser, MistakeReviewCompleteRequest request) {
+        StudentProfile student = accessService.requireStudent(currentUser);
         Map<Long, String> answers =
                 LearnAnswers.firstAnswers(request.answers(), QuestionAnswer::questionId, QuestionAnswer::answer);
         XpService.XpSession session = xpService.begin(student);
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = session.sessionTimestamp();
         List<LearningMistake> mistakes = mistakeRepository.findLockedWaitingByStudentIdAndIdIn(
                 session.student().getId(), answers.keySet());
         int cleared = 0;
         for (LearningMistake mistake : mistakes) {
-            String given = submittedAnswer(answers.get(mistake.getId()));
+            String given = TextUtils.trimToNull(answers.get(mistake.getId()));
             if (given == null) {
                 continue;
             }
@@ -289,17 +288,11 @@ public class MistakeService {
             }
         }
         if (cleared > 0) {
-            session.award(XpService.SOURCE_MISTAKES_REVIEW, clock.today().toEpochDay(),
+            session.award(XpService.SOURCE_MISTAKES_REVIEW, session.sessionDay().toEpochDay(),
                     RewardRules.MISTAKES_REVIEW_XP, "Mistakes review");
         }
         long left = mistakeRepository.countByStudentIdAndClearedAtIsNull(session.student().getId());
         return new MistakeReviewCompleteResponse(cleared, left, session.finish());
-    }
-
-    /** A skipped answer has no text. Keep the learner's original spelling and internal spacing for review. */
-    private static String submittedAnswer(String value) {
-        String answer = TextUtils.stripFormSpaces(value);
-        return answer.isEmpty() ? null : answer;
     }
 
     private LearningMistake waitingMistake(StudentProfile student, Long mistakeId) {
@@ -332,7 +325,7 @@ public class MistakeService {
                 mistake.getPrompt(),
                 mistake.getHanzi(),
                 mistake.getMeaning(),
-                GradableItem.shown(mistake.getAnswerKind(), mistake.getHanzi(), submittedAnswer(mistake.getYourAnswer())),
+                GradableItem.shown(mistake.getAnswerKind(), mistake.getHanzi(), TextUtils.trimToNull(mistake.getYourAnswer())),
                 GradableItem.shown(mistake.getAnswerKind(), mistake.getHanzi(), mistake.getAnswer()),
                 mistake.isSureWrong(),
                 mistake.isStillLearning());

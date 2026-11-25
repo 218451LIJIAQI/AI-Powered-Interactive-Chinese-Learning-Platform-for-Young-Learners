@@ -140,11 +140,11 @@ public class ClassContentSupport {
 
     /** The working copy of a published lesson, while it has unpublished changes. */
     public Optional<Lesson> revisionOf(Lesson lesson) {
-        return lessonRepository.findFirstByRevisionOfId(lesson.getId());
+        return lessonRepository.findFirstByRevisionOfIdOrderByIdDesc(lesson.getId());
     }
 
     public List<LessonKeyPhrase> keyPhrases(Long lessonId) {
-        return keyPhraseRepository.findByLessonIdOrderBySortOrderAscIdAsc(lessonId);
+        return keyPhraseRepository.findByLessonIdInOrderBySortOrderAscIdAsc(List.of(lessonId));
     }
 
     /** The lesson's key phrases as the learner and the admin see them. */
@@ -291,7 +291,7 @@ public class ClassContentSupport {
 
     /** Every quiz of the lesson, oldest first. */
     public List<Quiz> quizzes(Long lessonId) {
-        return quizRepository.findByLessonIdOrderByCreatedAtAscIdAsc(lessonId);
+        return quizRepository.findByLessonIdInOrderByCreatedAtAscIdAsc(List.of(lessonId));
     }
 
     public Map<Long, List<Quiz>> quizzesByLesson(Collection<Long> lessonIds) {
@@ -303,7 +303,7 @@ public class ClassContentSupport {
     }
 
     public List<QuizQuestion> questions(Long quizId) {
-        return quizQuestionRepository.findInDisplayOrder(quizId);
+        return quizQuestionRepository.findInDisplayOrder(List.of(quizId));
     }
 
     /** Batch-loads questions in display order for multiple quizzes. */

@@ -23,9 +23,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import com.example.aichinese.config.EmailProperties;
 import com.example.aichinese.config.PlatformProperties;
-import com.example.aichinese.entity.Role;
 import com.example.aichinese.entity.User;
-import com.example.aichinese.entity.enums.RoleName;
 import com.example.aichinese.repository.SystemSettingRepository;
 import com.example.aichinese.repository.UserRepository;
 import com.example.aichinese.service.ScheduledJobRunner;
@@ -38,7 +36,8 @@ import com.example.aichinese.service.navigation.NavCountService.AdminQueueCounts
 
 /**
  * The admins' daily summary e-mail: from 8:00 in the platform zone, once per platform day, only when AI reports or
- * support requests wait, to every active admin who keeps it on, with the badge numbers and absolute links.
+ * support requests wait, with the badge numbers and absolute links. Recipient eligibility ({@code findActiveDigestAdmins})
+ * is verified by {@code ReviewQueueDigestIntegrationTests}.
  */
 class ReviewQueueDigestServiceTests {
 
@@ -72,7 +71,7 @@ class ReviewQueueDigestServiceTests {
         claims("2031-03-10");
         when(navCountService.adminQueueCounts()).thenReturn(new AdminQueueCounts(3, 2));
         User admin = admin("admin@example.com");
-        when(userRepository.findAllByRoleName(RoleName.ADMIN)).thenReturn(List.of(admin));
+        when(userRepository.findActiveDigestAdmins()).thenReturn(List.of(admin));
 
         assertThat(service.sendIfDue(Clock.fixed(MORNING, ZoneOffset.UTC))).isEqualTo(1);
 
@@ -82,26 +81,17 @@ class ReviewQueueDigestServiceTests {
     }
 
     @Test
-    void onlyActiveAdminsWhoKeepItOnGetIt() {
+    void emptyQueuesAreOmittedFromTheDigest() {
         lastRunDay("2031-03-09");
         claims("2031-03-10");
         when(navCountService.adminQueueCounts()).thenReturn(new AdminQueueCounts(0, 1));
-        User keepsItOn = admin("on@example.com");
-        User switchedOff = admin("off@example.com");
-        switchedOff.setNotifyReviewQueues(false);
-        User deactivated = admin("deactivated@example.com");
-        deactivated.setActive(false);
-        User deleted = admin("deleted@example.com");
-        deleted.setDeletedAt(LocalDateTime.of(2031, 1, 1, 9, 0));
-        when(userRepository.findAllByRoleName(RoleName.ADMIN))
-                .thenReturn(List.of(keepsItOn, switchedOff, deactivated, deleted));
+        User recipient = admin("on@example.com");
+        when(userRepository.findActiveDigestAdmins()).thenReturn(List.of(recipient));
 
         assertThat(service.sendIfDue(Clock.fixed(MORNING, ZoneOffset.UTC))).isEqualTo(1);
 
-        verify(emailDispatcher).enqueueReviewQueueDigest(eq(keepsItOn), anyList());
-        for (User other : List.of(switchedOff, deactivated, deleted)) {
-            verify(emailDispatcher, never()).enqueueReviewQueueDigest(eq(other), anyList());
-        }
+        verify(emailDispatcher).enqueueReviewQueueDigest(recipient, List.of(
+                new WaitingQueue(ReviewQueue.SUPPORT_REQUESTS, 1, "https://app.example.com/admin/support")));
     }
 
     /** The day is looked at once, at 8:00: nothing waiting then means no e-mail that day. */
@@ -115,7 +105,7 @@ class ReviewQueueDigestServiceTests {
 
         verify(settingRepository).advanceValue(eq(KEY), eq("2031-03-10"), any());
         verify(emailDispatcher, never()).enqueueReviewQueueDigest(any(), anyList());
-        verify(userRepository, never()).findAllByRoleName(any());
+        verify(userRepository, never()).findActiveDigestAdmins();
     }
 
     @Test
@@ -144,11 +134,11 @@ class ReviewQueueDigestServiceTests {
         when(settingRepository.findValueByKey(KEY)).thenReturn(Optional.empty());
         claims("2031-03-10");
         when(navCountService.adminQueueCounts()).thenReturn(new AdminQueueCounts(1, 0));
-        when(userRepository.findAllByRoleName(RoleName.ADMIN)).thenReturn(List.of(admin("admin@example.com")));
+        when(userRepository.findActiveDigestAdmins()).thenReturn(List.of(admin("admin@example.com")));
 
         assertThat(service.sendIfDue(Clock.fixed(MORNING, ZoneOffset.UTC))).isEqualTo(1);
 
-        verify(settingRepository).lockOrCreateEmpty(KEY);
+        verify(settingRepository).lockOrCreateEmpty(eq(KEY), any());
     }
 
     private void lastRunDay(String day) {
@@ -164,11 +154,8 @@ class ReviewQueueDigestServiceTests {
     }
 
     private static User admin(String email) {
-        Role role = new Role();
-        role.setName(RoleName.ADMIN);
         User user = new User();
         user.setEmail(email);
-        user.getRoles().add(role);
         return user;
     }
 }

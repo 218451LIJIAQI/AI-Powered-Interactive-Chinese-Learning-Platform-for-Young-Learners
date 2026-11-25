@@ -2,15 +2,9 @@
  * The AI Helper (`/ai/**`, students) and the admin AI area (`/admin/ai/**`; the lesson editor's quiz draft is in
  * adminClasses.ts).
  */
+import type { AiQuizGeneratorResponse, AppLanguage, PageResponse } from '@/types/api'
 import type {
   AdminAiResponseReportResponse,
-  AiQuizGeneratorResponse,
-  AiStoryGeneratorResponse,
-  AppLanguage,
-  PageResponse,
-  StudentAiResponseReportResponse,
-} from '@/types/api'
-import type {
   AdminAiSettings,
   AdminAiSettingsUpdate,
   AdminAiUsageFilters,
@@ -18,10 +12,12 @@ import type {
   AdminAiUsageSummary,
   AiHelperStatus,
   AiReportPayload,
+  AiStoryGeneratorResponse,
   PracticeCheck,
   PracticeCheckLesson,
   PracticeCheckResult,
   PracticeCheckType,
+  StudentAiResponseReportResponse,
   XiaomeiMemoryNote,
   XiaomeiReply,
   XiaomeiScenario,

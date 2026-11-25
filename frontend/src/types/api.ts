@@ -10,12 +10,12 @@ export const USER_ROLES = ['STUDENT', 'ADMIN'] as const
 export type UserRole = (typeof USER_ROLES)[number]
 /**
  * Publishing states of platform content (FRCONT06, FRADM04): DRAFT -> PUBLISHED (an admin publishes; there is no
- * review step), DRAFT | PUBLISHED -> ARCHIVED -> the status before archive.
+ * review step), DRAFT | PUBLISHED -> ARCHIVED; restoring returns an archived class or lesson to its prior state
+ * (subject to class capacity for published lessons) and returns an archived practice set to DRAFT (`unarchive` is the
+ * Undo of Archive that returns a practice set to its prior state).
  */
 export const CONTENT_STATUSES = ['PUBLISHED', 'DRAFT', 'ARCHIVED'] as const
 export type ContentStatus = (typeof CONTENT_STATUSES)[number]
-/** Optional scaffolding stage of a quiz or practice activity (FRCONT10). */
-export type LearningStage = 'GUIDED' | 'SCAFFOLDED' | 'INDEPENDENT'
 /** Open until an admin resolves it (the answer was wrong and the admin acted) or dismisses it (it was fine). */
 export type AiResponseReportStatus = 'PENDING_REVIEW' | 'RESOLVED' | 'DISMISSED'
 export type AiResponseReportReason =
@@ -26,8 +26,8 @@ export type AiResponseReportReason =
   /** An AI-written plan text that does not match what the learner wrote in the setup (X2.23). */
   | 'DOES_NOT_MATCH_INPUT'
   | 'OTHER'
-/** AI feature keys used by reports and usage filters. Rule-based hints can be reported without a provider request. */
-export const AI_FEATURES = [
+/** Provider-backed AI feature keys that appear in the admin usage summary and request-log filter (excludes HINT). */
+export const AI_USAGE_FEATURES = [
   'CHAT_TUTOR',
   'XIAOMEI_CONVERSATION',
   'QUIZ_GENERATOR',
@@ -35,8 +35,10 @@ export const AI_FEATURES = [
   'PRACTICE_CHECK',
   'QUIZ_DRAFT',
   'LEARNING_PLAN',
-  'HINT',
 ] as const
+export type AiUsageFeatureKey = (typeof AI_USAGE_FEATURES)[number]
+/** All AI feature keys, used by reports and usage labels (usage filters use AI_USAGE_FEATURES). Rule-based hints can be reported without a provider request. */
+export const AI_FEATURES = [...AI_USAGE_FEATURES, 'HINT'] as const
 export type AiFeatureKey = (typeof AI_FEATURES)[number]
 /** Outcomes of a provider-backed AI request, including a provider that is disabled or unavailable. */
 export const AI_RESULT_STATUSES = ['SUCCESS', 'FAILED', 'UNAVAILABLE'] as const
@@ -67,7 +69,6 @@ export interface ApiResponse<T> {
 export interface PageResponse<T> {
   items: T[]
   page: number
-  size: number
   totalItems: number
   totalPages: number
 }
@@ -119,50 +120,6 @@ export interface RewardSummaryResponse {
   currentStreak: number
 }
 
-export interface AiAvailabilityResponse {
-  available: boolean
-}
-
-export interface AiChatResponse {
-  sessionId?: number | null
-  /** The stored answer, named when the student reports it; null when SparkBot did not answer. */
-  chatMessageId?: number | null
-  aiResponse: string
-  status: AiResultStatus
-}
-
-interface AiStoryVocabularyItemResponse {
-  chineseWord: string
-  pinyin?: string | null
-  englishMeaning?: string | null
-  bahasaMelayuMeaning?: string | null
-}
-
-interface AiStoryComprehensionQuestionResponse {
-  question: string
-  options: string[]
-  answer: string
-}
-
-/**
- * Chinese with its pinyin and its translation into the student's language: a sentence of a story, or a line (or, for
- * a word, the meaning) in a talk with Xiaomei.
- */
-export interface AiStoryLine {
-  chinese: string
-  pinyin?: string | null
-  translation?: string | null
-}
-
-export interface AiStoryGeneratorResponse {
-  title: string
-  titleTranslation?: string | null
-  lines: AiStoryLine[]
-  vocabularyList: AiStoryVocabularyItemResponse[]
-  comprehensionQuestions: AiStoryComprehensionQuestionResponse[]
-  status: AiResultStatus
-}
-
 interface AiGeneratedQuizQuestionResponse {
   questionText: string
   questionType: string
@@ -174,31 +131,11 @@ interface AiGeneratedQuizQuestionResponse {
 }
 
 export interface AiQuizGeneratorResponse {
-  title: string
+  title: string | null
   questions: AiGeneratedQuizQuestionResponse[]
   status: AiResultStatus
-}
-
-export interface StudentAiResponseReportResponse {
-  id: number
-  featureKey: AiFeatureKey
-  reasonCategory: AiResponseReportReason
-  promptSnapshot?: string | null
-  aiResponseSnapshot?: string | null
-  status: AiResponseReportStatus
-  createdAt: string
-  reviewedAt?: string | null
-  /** The admin's note to the student, once the report is resolved or dismissed. */
-  reviewerNote?: string | null
-}
-
-export interface AdminAiResponseReportResponse extends StudentAiResponseReportResponse {
-  studentName: string
-  studentEmail: string
-  /** The student's own note about the report. */
-  description?: string | null
-  /** Who decided, once the report is resolved or dismissed. */
-  reviewerName?: string | null
+  /** Why there is no quiz (a fixed server message), when status is not SUCCESS. */
+  message?: string | null
 }
 
 export interface PublicPlatformSettingsResponse {

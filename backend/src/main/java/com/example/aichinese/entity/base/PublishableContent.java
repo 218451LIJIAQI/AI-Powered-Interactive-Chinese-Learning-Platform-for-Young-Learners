@@ -10,7 +10,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * Titled content an admin publishes (FRCONT07, FRADM03): classes, units, lessons, quizzes and the six
+ * Titled content an admin publishes (FRCONT07, FRADM03): classes, lessons, quizzes and the six
  * practice-activity types. Learners see only published content.
  */
 @Getter

@@ -19,18 +19,11 @@
   gap: var(--space-2);
 }
 
-.ai-checks .row-list > li:first-child {
-  padding-top: 0;
-}
-
-.ai-checks .row-list > li:last-child {
-  padding-bottom: 0;
-}
-
 /* Type hugs its segments; Lesson fills the rest of the row. */
 .ai-check-row {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
+  align-items: end;
   gap: var(--space-4);
 }
 
@@ -58,10 +51,6 @@
 
 .ai-recording {
   background: var(--surface-sunken);
-}
-
-.ai-recording .btn-ghost:not(:disabled):hover {
-  background: var(--color-ink-200);
 }
 
 .ai-recording .row-list-copy {
@@ -101,6 +90,8 @@
 
 .ai-file:has(:focus-visible) {
   border-color: var(--color-primary-500);
+  outline: var(--border-width-focus) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
   box-shadow: var(--focus-halo);
 }
 
@@ -120,11 +111,15 @@
 }
 
 .ai-file.is-invalid:has(:focus-visible) {
+  border-color: var(--color-danger);
+  outline: var(--border-width-focus) solid var(--color-danger);
+  outline-offset: var(--focus-ring-offset);
   box-shadow: 0 0 0 4px var(--color-danger-a12);
 }
 
 .ai-file .btn {
   flex: 0 0 auto;
+  background: var(--surface-sunken);
   pointer-events: none;
 }
 
@@ -153,8 +148,9 @@
 /* The score. */
 .ai-check-total {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-2) var(--space-4);
 }
 
 .ai-check-number {
@@ -191,6 +187,7 @@
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-strong);
   line-height: var(--line-height-normal);
+  overflow-wrap: anywhere;
 }
 
 .ai-check-meta {
@@ -198,6 +195,7 @@
   color: var(--text-secondary);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-normal);
+  overflow-wrap: anywhere;
 }
 
 .ai-subscores {
@@ -310,7 +308,7 @@
   width: 100%;
   height: 3rem;
   fill: none;
-  stroke: var(--text-primary);
+  stroke: currentColor;
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 2px;
@@ -363,13 +361,17 @@
   gap: var(--space-2);
 }
 
-@media (max-width: 40rem) {
+@media (max-width: 48rem) {
   .ai-check-row {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 
 @media (forced-colors: active) {
+  .ai-file .btn {
+    border-color: ButtonText;
+  }
+
   .ai-file:has(:focus-visible) {
     outline: var(--border-width-focus) solid Highlight;
     outline-offset: var(--focus-ring-offset);
@@ -381,5 +383,13 @@
 
   .ai-tone-card.is-different {
     border: var(--border-width-thick) solid Highlight;
+  }
+
+  .ai-tone-curves {
+    stroke: CanvasText;
+  }
+
+  .ai-tone-curves .is-target {
+    stroke: GrayText;
   }
 }

@@ -1,11 +1,10 @@
 package com.example.aichinese;
 
-import static com.example.aichinese.support.ConcurrentTransactions.pauseAfterLookup;
+import static com.example.aichinese.support.ConcurrentTransactions.withAfterMethod;
 import static com.example.aichinese.support.ConcurrentTransactions.withPausedOperation;
 import static com.example.aichinese.support.LearningApiTestClient.ADMIN_EMAIL;
 import static com.example.aichinese.support.LearningApiTestClient.uniqueEmail;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.Map;
@@ -13,7 +12,6 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 import com.example.aichinese.dto.ai.ReviewAiResponseReportRequest;
 import com.example.aichinese.entity.enums.AiResponseReportStatus;
@@ -31,16 +29,13 @@ import com.example.aichinese.support.ApiIntegrationTest;
  */
 class AiReportReviewConcurrencyTests extends ApiIntegrationTest {
 
-    private static final String CLIENT_IP = "203.0.113.8";
-    private static final String USER_AGENT = "concurrency-test";
-
     @Autowired
     private AiResponseReportService reports;
 
     @Autowired
     private RefreshTokenService refreshTokenService;
 
-    @MockitoSpyBean
+    @Autowired
     private AiResponseReportRepository reportRepository;
 
     @Test
@@ -53,15 +48,15 @@ class AiReportReviewConcurrencyTests extends ApiIntegrationTest {
                         "aiResponseSnapshot", "It starts with 一.")))
                 .andExpect(status().isOk())
                 .andReturn()).path("id").asLong();
-        String refreshToken = refreshTokenService.issue(user(email), CLIENT_IP, USER_AGENT, false).rawToken();
+        String refreshToken = refreshTokenService.issue(user(email), false).rawToken();
         SecurityUserDetails admin = principalFor(ADMIN_EMAIL);
         AtomicReference<RefreshTokenService.RefreshSession> rotated = new AtomicReference<>();
 
-        withPausedOperation(pause -> {
-            pauseAfterLookup(pause).when(reportRepository).findLockedById(anyLong());
-            reports.reviewReport(admin, reportId,
-                    new ReviewAiResponseReportRequest("RESOLVED", "Thanks, the hint no longer gives the answer away."));
-        }, () -> rotated.set(refreshTokenService.rotate(refreshToken, CLIENT_IP, USER_AGENT)));
+        withPausedOperation(
+                pause -> withAfterMethod(reportRepository, "findLockedById", pause,
+                        () -> reports.reviewReport(admin, reportId, new ReviewAiResponseReportRequest(
+                                "RESOLVED", "Thanks, the hint no longer gives the answer away."))),
+                () -> rotated.set(refreshTokenService.rotate(refreshToken)));
 
         assertThat(rotated.get().user().getEmail()).isEqualTo(email);
         assertThat(reportRepository.findById(reportId).orElseThrow().getStatus())

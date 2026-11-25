@@ -20,13 +20,13 @@
       </div>
     </div>
 
-    <!-- Nothing yet: adding the first unit is the main task here, so it is the primary button. -->
+    <!-- Nothing yet: adding the first unit is the main task here when editable; archived classes stay read-only. -->
     <StatePanel
       v-if="!units.length"
       tone="empty"
       icon="layers"
-      :title="t('adminClasses.units.firstUnit')"
-      :message="t('adminClasses.units.firstUnitHint')"
+      :title="t(editable ? 'adminClasses.units.firstUnit' : 'adminClasses.units.noUnits')"
+      :message="t(editable ? 'adminClasses.units.firstUnitHint' : 'adminClasses.units.noUnitsArchived')"
     >
       <template v-if="editable" #actions>
         <button
@@ -77,9 +77,15 @@
                   v-if="editable"
                   class="btn btn-secondary btn-sm"
                   :to="{ name: 'admin-lesson', params: { classId, lessonId: lesson.id } }"
-                  :aria-label="t('adminClasses.units.editLabel', { title: lesson.title })"
+                  :aria-label="
+                    t(lesson.status === 'ARCHIVED' ? 'adminClasses.list.openLabel' : 'adminClasses.units.editLabel', {
+                      title: lesson.title,
+                    })
+                  "
                 >
-                  <IconGlyph name="edit" :size="16" />{{ t('common.edit') }}
+                  <IconGlyph :name="lesson.status === 'ARCHIVED' ? 'chevronRight' : 'edit'" :size="16" />{{
+                    t(lesson.status === 'ARCHIVED' ? 'common.open' : 'common.edit')
+                  }}
                 </RouterLink>
               </div>
             </li>
@@ -122,7 +128,7 @@
             :aria-invalid="Boolean(textError)"
             :aria-describedby="textError ? `${baseId}-error` : undefined"
             data-autofocus
-            @blur="checkTextOnBlur"
+            @blur="validateText"
           />
           <p v-if="textError" :id="`${baseId}-error`" class="field-error" role="alert">{{ textError }}</p>
         </div>
@@ -222,7 +228,6 @@ const dialogKeys = computed(() => DIALOG_KEYS[textDialog.value?.kind ?? 'unit'])
 const {
   error: textError,
   validate: validateText,
-  validateOnBlur: checkTextOnBlur,
   reset: resetTextError,
 } = useFieldCheck(textValue, (value) => (value.trim() ? null : t(dialogKeys.value.missing)))
 

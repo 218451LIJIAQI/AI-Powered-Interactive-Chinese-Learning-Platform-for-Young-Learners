@@ -7,7 +7,7 @@
       </span>
       <span class="key-phrase-meaning">{{ phrase.meaning }}</span>
       <button
-        v-if="canListen"
+        v-if="canListen && phrase.chinese.trim()"
         type="button"
         class="btn btn-ghost btn-sm"
         :aria-label="t('classes.listenTo', { text: phrase.chinese })"

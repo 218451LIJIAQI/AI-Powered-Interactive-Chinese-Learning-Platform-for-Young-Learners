@@ -1,14 +1,7 @@
 <template>
+  <span class="sr-only" role="status" aria-live="polite" aria-atomic="true">{{ visible && text ? text : '' }}</span>
   <div v-if="visible && (text || offered || error)" class="hint-panel" :class="`hint-panel--${variant}`">
-    <div
-      v-if="text"
-      ref="card"
-      class="hint-panel-card"
-      role="status"
-      aria-live="polite"
-      tabindex="-1"
-      :data-testid="ui.cardTestId"
-    >
+    <div v-if="text" ref="card" class="hint-panel-card" tabindex="-1" :data-testid="ui.cardTestId">
       <div class="hint-panel-head">
         <p class="hint-panel-title">
           <IconGlyph :name="ui.icon" :size="16" />
@@ -51,29 +44,46 @@
       {{ error }}
     </p>
   </div>
-  <slot v-else-if="!visible" />
+  <slot v-else />
 
-  <HintReportDialog
-    v-if="reporting && text"
-    :text="text"
-    :context="reportContext"
+  <AiReportForm
+    v-if="visible && reporting && text"
+    test-id-prefix="hint-report"
+    :title="t('hintChrome.hintReportTitle')"
+    :attached="t('hintChrome.hintReportAttached')"
+    initial-reason="INCORRECT_CONTENT"
+    :submit-report="submitReport"
     @close="reporting = false"
     @sent="onReported"
-  />
+  >
+    <option v-for="option in HINT_REPORT_REASONS" :key="option.value" :value="option.value">
+      {{ t(option.labelKey) }}
+    </option>
+  </AiReportForm>
   <AppToast v-if="ownToast" :message="toast" />
 </template>
 
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 
+import { aiHelperApi } from '@/api/ai'
+import AiReportForm from '@/components/ai/AiReportForm.vue'
 import AppToast from '@/components/common/AppToast.vue'
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { useToast } from '@/composables/useToast'
 import { hintChromeMessages } from '@/plugins/hintChromeMessages'
+import type { AiResponseReportReason } from '@/types/api'
 
 import CjkText from './CjkText.vue'
-import HintReportDialog from './HintReportDialog.vue'
+
+/** The reasons of an AI report (the server's `AiResponseReportReason`), worded for a hint. */
+const HINT_REPORT_REASONS: readonly { value: AiResponseReportReason; labelKey: string }[] = [
+  { value: 'INCORRECT_CONTENT', labelKey: 'hintChrome.hintReasonWrong' },
+  { value: 'UNCLEAR_EXPLANATION', labelKey: 'hintChrome.hintReasonUnclear' },
+  { value: 'INAPPROPRIATE_CONTENT', labelKey: 'aiSafety.reasonInappropriate' },
+  { value: 'OTHER', labelKey: 'aiSafety.reasonOther' },
+]
 
 const VARIANT_UI = {
   practice: {
@@ -86,7 +96,7 @@ const VARIANT_UI = {
     errorTestId: 'hint-failed',
   },
   class: {
-    icon: 'about',
+    icon: 'sparkles',
     cardTestId: 'class-hint',
     reportTestId: 'class-hint-report',
     noteTestId: 'class-hint-settings',
@@ -130,12 +140,9 @@ const offerButton = ref<HTMLButtonElement | null>(null)
 const failure = ref<HTMLElement | null>(null)
 const reporting = ref(false)
 
-watch(
-  () => props.hintKey,
-  () => {
-    reporting.value = false
-  },
-)
+watch([() => props.hintKey, () => props.visible], ([nextKey, visible], [prevKey]) => {
+  if (nextKey !== prevKey || !visible) reporting.value = false
+})
 
 // When accepting an offer unmounts the offer button (replaced by the hint card or a hard refusal), move focus so
 // keyboard users do not drop to <body>. Transient errors keep the offer button mounted for immediate retry.
@@ -146,6 +153,17 @@ watch([() => props.text, () => props.offered, () => props.error], async ([nextTe
   if (nextText) card.value?.focus()
   else failure.value?.focus()
 })
+
+/** Reports the shown hint as feature `HINT` with what it was for and the page pathname. */
+function submitReport(reasonCategory: AiResponseReportReason, note: string) {
+  return aiHelperApi.report({
+    featureKey: 'HINT',
+    reasonCategory,
+    description: note || null,
+    promptSnapshot: `${props.reportContext} · ${window.location.pathname}`,
+    aiResponseSnapshot: props.text ?? '',
+  })
+}
 
 /** The Report button becomes disabled after submitting, so move focus onto the hint card itself. */
 async function onReported(): Promise<void> {

@@ -1,7 +1,14 @@
 <template>
   <form class="auth-form" novalidate @submit.prevent="submit">
     <!-- One line each: why the visitor is here (a notice), or what went wrong. A problem takes the notice's place. -->
-    <p v-if="lockedMinutes" id="login-locked" class="callout is-warning" role="alert" data-testid="auth-locked">
+    <p
+      v-if="lockedMinutes"
+      id="login-locked"
+      class="callout is-warning"
+      role="alert"
+      :aria-live="lockTicked ? 'off' : 'assertive'"
+      data-testid="auth-locked"
+    >
       <IconGlyph name="lock" :size="18" />
       <span>{{ t('auth.locked', { minutes: lockedMinutes }, lockedMinutes) }}</span>
     </p>
@@ -49,6 +56,7 @@
         name="username"
         autocomplete="username"
         required
+        maxlength="150"
         :placeholder="t('auth.emailPlaceholder')"
         :aria-invalid="loginFailure === 'fields' && !addressValid"
         :aria-describedby="describedBy"
@@ -104,24 +112,19 @@ import { I18nT } from 'vue-i18n'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import IconGlyph from '@/components/common/IconGlyph.vue'
-import PasswordInput from '@/components/public/PasswordInput.vue'
+import PasswordInput from '@/components/common/PasswordInput.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { authMessages } from '@/plugins/authMessages'
 import { useAuthStore } from '@/stores/auth'
 import { apiErrorStatus, hasServerMessage, resolveApiError } from '@/utils/apiError'
 import { signedInDestination } from '@/utils/appRoute'
 import { isValidEmail } from '@/utils/email'
-import { isBlankPassword } from '@/utils/password'
+import { isBlankPassword, isWithinPasswordByteLimit } from '@/utils/password'
 import { getSessionStorage, safeSetItem, storageKeys } from '@/utils/storage'
 import { SERVER_MESSAGE } from '@/utils/serverMessages'
 
 /** The sign-in lockout lasts 15 minutes; the server's Retry-After header says how much of it is left. */
 const DEFAULT_LOCK_SECONDS = 15 * 60
-/**
- * The sign-in refusal of a deactivated account (403, AccountGuards.ACCOUNT_UNAVAILABLE_MESSAGE): the server sends it
- * only once the password was right, so a wrong password never tells whether an account is deactivated.
- */
-const ACCOUNT_DEACTIVATED_MESSAGE = SERVER_MESSAGE.ACCOUNT_UNAVAILABLE
 
 const NOTICES = {
   created: { message: 'auth.createdSignIn', tone: 'success' },
@@ -165,6 +168,7 @@ const loginError = computed(() => {
   return resolveApiError(failure.reason, t('auth.signInFailed'))
 })
 const lockedMinutes = ref<number | null>(null)
+const lockTicked = ref(false)
 const deactivated = ref(false)
 let unlockTimer: ReturnType<typeof setTimeout> | undefined
 let shown = true
@@ -197,7 +201,10 @@ watch(address, () => {
 watch(
   () => props.initialEmail,
   (email) => {
-    if (email) form.email = email
+    if (email && email !== form.email) {
+      form.email = email
+      form.password = ''
+    }
   },
 )
 onActivated(() => {
@@ -222,17 +229,20 @@ function retryAfterSeconds(reason: unknown): number {
 /** Refresh the displayed minutes at each boundary and unlock at the server's deadline. */
 function pauseSignIn(seconds: number): void {
   clearTimeout(unlockTimer)
+  lockTicked.value = false
   const deadline = Date.now() + seconds * 1000
-  function updateRemaining(): void {
+  function updateRemaining(ticked: boolean): void {
     const remaining = deadline - Date.now()
     if (remaining <= 0) {
       lockedMinutes.value = null
+      lockTicked.value = false
       return
     }
+    lockTicked.value = ticked
     lockedMinutes.value = Math.ceil(remaining / 60_000)
-    unlockTimer = setTimeout(updateRemaining, remaining % 60_000 || 60_000)
+    unlockTimer = setTimeout(() => updateRemaining(true), remaining % 60_000 || 60_000)
   }
-  updateRemaining()
+  updateRemaining(false)
 }
 
 onBeforeUnmount(() => {
@@ -255,34 +265,40 @@ async function submit(): Promise<void> {
     focusField(addressValid.value ? 'login-password' : 'login-email')
     return
   }
+  if (!isWithinPasswordByteLimit(password)) {
+    form.password = ''
+    loginFailure.value = 'credentials'
+    focusField('login-password')
+    return
+  }
   try {
     await auth.login(currentAddress, password, form.keepSignedIn)
   } catch (reason) {
     if (disposed || currentAddress !== address.value || isCancel(reason)) return
-    if (form.password === password) form.password = ''
     const status = apiErrorStatus(reason)
-    if (status === 403 && hasServerMessage(reason, ACCOUNT_DEACTIVATED_MESSAGE)) {
+    // Clear the typed password only when credentials/account/rate-limit rejected it; preserve it on transient 5xx/network hiccups.
+    if ((status === 401 || status === 403 || status === 429) && form.password === password) form.password = ''
+    // The server sends 403 ACCOUNT_UNAVAILABLE only after the password matched, avoiding account-state enumeration.
+    if (status === 403 && hasServerMessage(reason, SERVER_MESSAGE.ACCOUNT_UNAVAILABLE)) {
       deactivated.value = true
       if (shown) focusField('login-email')
       return
     }
     if (status === 429) {
       pauseSignIn(retryAfterSeconds(reason))
-    } else if (!shown) {
+      if (shown) focusField('login-email')
       return
-    } else if (status === 401) {
-      loginFailure.value = 'credentials'
-    } else {
-      loginFailure.value = { reason }
     }
-    if (shown) focusField('login-password')
+    if (!shown) return
+    loginFailure.value = status === 401 ? 'credentials' : { reason }
+    focusField('login-password')
     return
   }
   if (disposed) return
   try {
     await router.push(signedInDestination(route.query.redirect, auth.roles))
   } catch (reason) {
-    if (!disposed && shown) loginFailure.value = { reason }
+    if (shown) loginFailure.value = { reason }
   }
 }
 </script>

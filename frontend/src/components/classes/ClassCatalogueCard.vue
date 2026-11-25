@@ -11,7 +11,9 @@
       </div>
     </div>
     <h3 class="class-catalogue-card-title">
-      <RouterLink :to="to" class="class-catalogue-card-link"><CjkText :text="card.title" /></RouterLink>
+      <RouterLink :to="to" class="class-catalogue-card-link" :aria-label="linkLabel">
+        <CjkText :text="card.title" />
+      </RouterLink>
     </h3>
     <p v-if="card.description" class="class-catalogue-card-description" data-testid="class-card-description">
       <CjkText :text="card.description" />
@@ -42,7 +44,7 @@ import ClassAvatar from './ClassAvatar.vue'
  * lines at most) and "5 lessons · best after Unit 4". Slots add a tag beside the theme (`badge`, "In your plan") and an
  * action at the foot, on the card's right edge (`actions`).
  */
-const props = defineProps<{ card: ClassCard; to: RouteLocationRaw }>()
+const props = defineProps<{ card: ClassCard; to: RouteLocationRaw; linkLabel?: string }>()
 
 const { t } = useLocalMessages({ classes: classesMessages })
 

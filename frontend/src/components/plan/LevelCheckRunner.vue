@@ -4,7 +4,6 @@
       v-if="error && !question"
       heading-tag="h2"
       tone="error"
-      icon="alert"
       :title="t('plan.check.loadError')"
       :message="error"
       spacious
@@ -23,21 +22,28 @@
       <QuestionStage v-model="choice" :question="question" :locked="pending || verdict !== null" :check="verdict" />
     </template>
 
-    <CheckBar
-      v-if="question"
-      :check="verdict"
-      :can-check="choice !== null"
-      :checking="pending"
-      :hint="t('common.choiceKeysHint', { count: question.options.length })"
-      :skip-label="t('plan.check.dontKnow')"
-      :wrong-title="wrongTitle"
-      :continue-label="t('plan.common.continue')"
-      @check="answer(selectedOptionId)"
-      @skip="answer(null)"
-      @continue="next"
-    />
-    <p v-if="error && question" class="alert alert-danger" role="alert">{{ error }}</p>
+    <div v-if="error && question" class="callout is-danger" role="alert">
+      <IconGlyph name="alert" :size="18" />
+      <span>{{ error }}</span>
+      <button v-if="restartable" class="btn btn-secondary btn-sm" type="button" @click="restart">
+        {{ t('common.retry') }}
+      </button>
+    </div>
   </div>
+
+  <CheckBar
+    v-if="question"
+    :check="verdict"
+    :can-check="choice !== null"
+    :checking="pending"
+    :hint="t('common.choiceKeysHint', { count: question.options.length })"
+    :skip-label="t('plan.check.dontKnow')"
+    :wrong-title="wrongTitle"
+    :continue-label="t('plan.common.continue')"
+    @check="answer(selectedOptionId)"
+    @skip="answer(null)"
+    @continue="next"
+  />
 </template>
 
 <script setup lang="ts">
@@ -45,15 +51,15 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import { levelCheckApi } from '@/api/learn'
 import { getAuthSessionVersion } from '@/api/http'
+import IconGlyph from '@/components/common/IconGlyph.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
 import CheckBar from '@/components/learn/CheckBar.vue'
 import QuestionStage from '@/components/learn/QuestionStage.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { planSetupMessages } from '@/plugins/planSetupMessages'
 import { planSummaryMessages } from '@/plugins/planSummaryMessages'
-import type { AnswerCheck, LevelCheckStep, MandarinLevel, QuestionView } from '@/types/learn'
-import type { LevelCheckAnswer } from '@/types/plan'
-import { resolveApiError } from '@/utils/apiError'
+import type { AnswerCheck, LevelCheckAnswer, LevelCheckStep, MandarinLevel, QuestionView } from '@/types/learn'
+import { apiErrorStatus, resolveApiError } from '@/utils/apiError'
 import { questionShortcut } from '@/utils/questionShortcut'
 
 /**
@@ -72,7 +78,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   /** The question on screen: how many are answered and the most there can be, for the page's progress bar. */
   progress: [answered: number, max: number]
-  finished: [answers: LevelCheckAnswer[], result: NonNullable<LevelCheckStep['result']>]
+  finished: [answers: LevelCheckAnswer[], result: NonNullable<LevelCheckStep['result']>, runToken: string | null]
 }>()
 
 const { t } = useLocalMessages({ plan: [planSummaryMessages, planSetupMessages] })
@@ -83,12 +89,12 @@ const after = ref<LevelCheckStep | null>(null)
 const choice = ref<string | null>(null)
 const pending = ref(false)
 const error = ref<string | null>(null)
+const restartable = ref(false)
 const sessionVersion = getAuthSessionVersion()
-let active = true
 let requestVersion = 0
 
 function isCurrent(version: number): boolean {
-  return active && version === requestVersion && sessionVersion === getAuthSessionVersion()
+  return version === requestVersion && sessionVersion === getAuthSessionVersion()
 }
 
 const question = computed<QuestionView | null>(() => {
@@ -157,7 +163,7 @@ const verdict = computed<AnswerCheck | null>(() => {
  */
 function show(step: LevelCheckStep): void {
   if (step.done && step.result) {
-    emit('finished', answers.value, step.result)
+    emit('finished', answers.value, step.result, step.runToken ?? null)
     return
   }
   if (!step.next) {
@@ -167,18 +173,29 @@ function show(step: LevelCheckStep): void {
   current.value = step
   after.value = null
   choice.value = null
+  restartable.value = false
   emit('progress', step.answeredCount, step.maxQuestions)
 }
 
 async function load(): Promise<void> {
   const version = ++requestVersion
   error.value = null
+  restartable.value = false
   try {
-    const step = await levelCheckApi.next(props.startLevel, answers.value)
+    const step = await levelCheckApi.next(props.startLevel, [])
     if (isCurrent(version)) show(step)
   } catch (reason) {
     if (isCurrent(version)) error.value = resolveApiError(reason, t('plan.check.loadError'))
   }
+}
+
+function restart(): void {
+  answers.value = []
+  current.value = null
+  after.value = null
+  choice.value = null
+  restartable.value = false
+  void load()
 }
 
 /** Checks the chosen option, or sends "I don't know yet" (`null`): either way the feedback comes back first. */
@@ -188,15 +205,19 @@ async function answer(optionId: number | null): Promise<void> {
   const version = ++requestVersion
   pending.value = true
   error.value = null
+  restartable.value = false
   const sent = [...answers.value, { questionId: next.id, optionId }]
   try {
-    const step = await levelCheckApi.next(props.startLevel, sent)
+    const step = await levelCheckApi.next(props.startLevel, sent, current.value?.runToken ?? null)
     if (!isCurrent(version)) return
     after.value = step
     if (optionId === null) choice.value = null
     answers.value = sent
   } catch (reason) {
-    if (isCurrent(version)) error.value = resolveApiError(reason, t('plan.check.loadError'))
+    if (isCurrent(version)) {
+      restartable.value = apiErrorStatus(reason) === 400
+      error.value = resolveApiError(reason, t('plan.check.loadError'))
+    }
   } finally {
     if (isCurrent(version)) pending.value = false
   }
@@ -212,8 +233,13 @@ function onKeydown(event: KeyboardEvent): void {
   const shortcut = questionShortcut(event)
   if (shortcut === null) return
   if (shortcut === 'enter') {
-    if (after.value) next()
-    else if (choice.value !== null) void answer(selectedOptionId.value)
+    if (after.value) {
+      event.preventDefault()
+      next()
+    } else if (choice.value !== null) {
+      event.preventDefault()
+      void answer(selectedOptionId.value)
+    }
     return
   }
   if (after.value) return
@@ -226,7 +252,6 @@ onMounted(() => {
   document.addEventListener('keydown', onKeydown)
 })
 onBeforeUnmount(() => {
-  active = false
   requestVersion += 1
   document.removeEventListener('keydown', onKeydown)
 })

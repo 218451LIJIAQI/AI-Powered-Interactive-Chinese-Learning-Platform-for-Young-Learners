@@ -74,6 +74,12 @@ class AdminClassAuthoringIntegrationTests extends ApiIntegrationTest {
         String activities = ADMIN + "/lessons/" + lessonId + "/activities";
         mockMvc.perform(api.jsonPost(activities, admin, Map.of(
                         "type", "MATCHING", "title", "Match", "pairs", List.of(
+                                Map.of("chinese", "妈妈", "pinyin", "māma", "meaning", "ＡＢ"),
+                                Map.of("chinese", "爸爸", "pinyin", "bàba", "meaning", "a b")))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Each meaning can only be used once."));
+        mockMvc.perform(api.jsonPost(activities, admin, Map.of(
+                        "type", "MATCHING", "title", "Match", "pairs", List.of(
                                 Map.of("chinese", "妈妈", "pinyin", "māma", "meaning", "mum"),
                                 Map.of("chinese", "爸爸", "pinyin", "bàba", "meaning", "dad")))))
                 .andExpect(status().isOk());
@@ -112,7 +118,7 @@ class AdminClassAuthoringIntegrationTests extends ApiIntegrationTest {
         String admin = api.adminToken();
         long classId = api.draftClass(admin, "Tied positions " + uniqueSuffix());
         long unitId = api.unit(admin, classId, "Unit");
-        JsonNode published = api.publishedLesson(admin, unitId, "Greetings", "Common greetings", true, null);
+        JsonNode published = api.publishedLesson(admin, unitId, "Greetings");
         String lesson = ADMIN + "/lessons/" + published.path("lessonId").asLong();
         JsonNode quiz = published.path("quizzes").get(0);
         long quizId = quiz.path("id").asLong();
@@ -147,7 +153,7 @@ class AdminClassAuthoringIntegrationTests extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.data.quizzes[0].questions[1].options[0].correct").value(true))
                 .andExpect(jsonPath("$.data.quizzes[0].questions[2].id").value(second));
 
-        Map<String, Object> edit = new HashMap<>(LearningApiTestClient.quizQuestions(null).get(0));
+        Map<String, Object> edit = new HashMap<>(LearningApiTestClient.quizQuestions().get(0));
         edit.put("questionText", "Choose hello.");
         JsonNode revision = api.data(mockMvc.perform(api.jsonPut(lesson + "/questions/" + first, admin, edit))
                 .andExpect(status().isOk())
@@ -168,7 +174,7 @@ class AdminClassAuthoringIntegrationTests extends ApiIntegrationTest {
     void flashcardsHaveTheirOwnCardsAnswersTheirFeedbackAndLearnersHearOfPublishedChanges() throws Exception {
         String admin = api.adminToken();
         String classTitle = "Hawker cards " + uniqueSuffix();
-        PublishedClass published = api.publishedClass(admin, classTitle, "Hawker food", "Order at a stall");
+        PublishedClass published = api.publishedClass(admin, classTitle, "Hawker food");
         String email = uniqueEmail("cards-student");
         String studentToken = api.registerStudent(email);
         api.join(studentToken, published.classId());
@@ -230,13 +236,13 @@ class AdminClassAuthoringIntegrationTests extends ApiIntegrationTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message").value("A class has 2 units."));
         for (int number = 1; number <= 3; number++) {
-            api.publishedLesson(admin, firstUnit, "Lesson " + number, "Summary " + number, true, null);
+            api.publishedLesson(admin, firstUnit, "Lesson " + number);
         }
         // 3 published lessons, all in one unit; a draft lesson in the second unit does not count.
         Long draftLesson = api.draftLesson(admin, secondUnit, "Lesson 4");
         assertCannotPublish(admin, classId);
 
-        api.readyLesson(admin, draftLesson, "Summary 4");
+        api.readyLesson(admin, draftLesson);
         api.publishLesson(admin, draftLesson);
         // A draft lesson beside them does not count either, and does not stop the class.
         api.draftLesson(admin, secondUnit, "Lesson 5");
@@ -297,7 +303,7 @@ class AdminClassAuthoringIntegrationTests extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.message").value(CLASS_ARCHIVED));
         mockMvc.perform(api.jsonPost(ADMIN + "/units/" + published.unitId() + "/lessons", admin, Map.of("title", "New")))
                 .andExpect(status().isConflict());
-        mockMvc.perform(api.jsonPut(ADMIN + "/lessons/" + published.lessonId() + "/content", admin, content("Archived", "No")))
+        mockMvc.perform(api.jsonPut(ADMIN + "/lessons/" + published.lessonId() + "/content", admin, content("Archived")))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message").value(CLASS_ARCHIVED));
         mockMvc.perform(api.authGet(ADMIN + "/lessons/" + published.lessonId(), admin))
@@ -329,7 +335,7 @@ class AdminClassAuthoringIntegrationTests extends ApiIntegrationTest {
         String admin = api.adminToken();
         Long classId = api.draftClass(admin, "Delete class " + uniqueSuffix());
         Long lessonId = api.draftLesson(admin, api.unit(admin, classId, "Unit 1"), "Doomed lesson");
-        api.readyLesson(admin, lessonId, "Everything in it goes");
+        api.readyLesson(admin, lessonId);
 
         mockMvc.perform(api.authDelete(ADMIN + "/classes/" + classId, admin))
                 .andExpect(status().isOk())
@@ -386,12 +392,12 @@ class AdminClassAuthoringIntegrationTests extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.message").value(
                         "To publish, add a video, key phrases, all 3 activities and a 5-question quiz."));
 
-        JsonNode ready = api.readyLesson(admin, lessonId, "Complete");
+        JsonNode ready = api.readyLesson(admin, lessonId);
         assertThat(ready.path("checklist").path("missing")).isEmpty();
         JsonNode quiz = ready.path("quizzes").get(0);
         assertThat(quiz.path("questions").size()).isEqualTo(5);
         String quizQuestionsPath = lesson + "/quizzes/" + quiz.path("id").asLong() + "/questions";
-        List<Map<String, ?>> sampleQuestions = LearningApiTestClient.quizQuestions(null);
+        List<Map<String, ?>> sampleQuestions = LearningApiTestClient.quizQuestions();
 
         // One activity per slot, one quiz, and no sixth question.
         mockMvc.perform(api.jsonPost(lesson + "/activities", admin, Map.of("type", "MATCHING", "title", "Second",
@@ -450,12 +456,12 @@ class AdminClassAuthoringIntegrationTests extends ApiIntegrationTest {
         String admin = api.adminToken();
         Long classId = api.draftClass(admin, "Draft question class " + uniqueSuffix());
         Long lessonId = api.draftLesson(admin, api.unit(admin, classId, "Unit 1"), "Draft questions");
-        JsonNode ready = api.readyLesson(admin, lessonId, "Questions");
+        JsonNode ready = api.readyLesson(admin, lessonId);
         String lesson = ADMIN + "/lessons/" + lessonId;
         JsonNode quiz = ready.path("quizzes").get(0);
         long quizId = quiz.path("id").asLong();
         JsonNode second = quiz.path("questions").get(1);
-        Map<String, ?> original = LearningApiTestClient.quizQuestions(null).get(1);
+        Map<String, ?> original = LearningApiTestClient.quizQuestions().get(1);
 
         mockMvc.perform(api.authDelete(lesson + "/questions/" + second.path("id").asLong(), admin))
                 .andExpect(status().isOk());
@@ -488,7 +494,7 @@ class AdminClassAuthoringIntegrationTests extends ApiIntegrationTest {
     @Test
     void editsOfAPublishedLessonWaitInAWorkingCopy() throws Exception {
         String admin = api.adminToken();
-        PublishedClass published = api.publishedClass(admin, "Working copy " + uniqueSuffix(), "Greetings", "Say hello");
+        PublishedClass published = api.publishedClass(admin, "Working copy " + uniqueSuffix(), "Greetings");
         String studentToken = api.registerStudent(uniqueEmail("working-copy-student"));
         api.join(studentToken, published.classId());
         String studentLesson = STUDENT + "/lessons/" + published.lessonId();
@@ -500,8 +506,6 @@ class AdminClassAuthoringIntegrationTests extends ApiIntegrationTest {
 
         Map<String, Object> twoPhrases = Map.of(
                 "title", "Greetings",
-                "minutes", 15,
-                "summary", "Say hello and goodbye",
                 "keyPhrases", List.of(
                         Map.of("chinese", "你好", "pinyin", "nǐ hǎo", "meaning", "hello"),
                         Map.of("chinese", "再见", "pinyin", "zàijiàn", "meaning", "goodbye")));
@@ -509,7 +513,7 @@ class AdminClassAuthoringIntegrationTests extends ApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("PUBLISHED"))
                 .andExpect(jsonPath("$.data.hasUnpublishedChanges").value(true))
-                .andExpect(jsonPath("$.data.summary").value("Say hello and goodbye"));
+                .andExpect(jsonPath("$.data.keyPhrases.length()").value(2));
         mockMvc.perform(api.authGet(ADMIN + "/classes/" + published.classId(), admin))
                 .andExpect(jsonPath("$.data.units[0].lessons[0].hasUnpublishedChanges").value(true));
         mockMvc.perform(api.authGet(studentLesson, studentToken))
@@ -535,10 +539,10 @@ class AdminClassAuthoringIntegrationTests extends ApiIntegrationTest {
                 .containsExactlyInAnyOrder("ADMIN_LESSON_PUBLISH", "ADMIN_LESSON_EDIT");
 
         // Discarded: learners never saw the changes.
-        mockMvc.perform(api.jsonPut(lesson + "/content", admin, content("Greetings", "A summary to throw away")))
+        mockMvc.perform(api.jsonPut(lesson + "/content", admin, content("Greetings to throw away")))
                 .andExpect(jsonPath("$.data.hasUnpublishedChanges").value(true));
         api.uploadLessonVideo(admin, published.lessonId(), "Working copy video");
-        long draftId = lessonRepository.findFirstByRevisionOfId(published.lessonId()).orElseThrow().getId();
+        long draftId = lessonRepository.findFirstByRevisionOfIdOrderByIdDesc(published.lessonId()).orElseThrow().getId();
         long draftUpload = classContent.video(draftId).orElseThrow().getUploadedFile().getId();
         String storedName = jdbc.queryForObject("select stored_file_name from uploaded_files where id = ?",
                 String.class, draftUpload);
@@ -548,7 +552,7 @@ class AdminClassAuthoringIntegrationTests extends ApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Changes discarded."))
                 .andExpect(jsonPath("$.data.hasUnpublishedChanges").value(false))
-                .andExpect(jsonPath("$.data.summary").value("Say hello and goodbye"));
+                .andExpect(jsonPath("$.data.title").value("Greetings"));
         assertThat(jdbc.queryForList("select id from uploaded_files where id = ?", Long.class, draftUpload)).isEmpty();
         assertThat(draftFile).doesNotExist();
         assertThat(classContent.video(published.lessonId()).orElseThrow().getUploadedFile().getId()).isEqualTo(liveUpload);
@@ -559,8 +563,20 @@ class AdminClassAuthoringIntegrationTests extends ApiIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("This lesson has no changes to discard."));
 
+        // Replacing an unwatched published video removes the superseded video row and file on disk after publish.
+        String liveStoredName = jdbc.queryForObject("select stored_file_name from uploaded_files where id = ?",
+                String.class, liveUpload);
+        Path liveFile = Path.of(uploadProperties.getRecordedVideoDirectory(), liveStoredName);
+        assertThat(liveFile).exists();
+        api.uploadLessonVideo(admin, published.lessonId(), "Replaced video");
+        mockMvc.perform(api.authPost(lesson + "/publish", admin))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.video.title").value("Replaced video"));
+        assertThat(jdbc.queryForList("select id from uploaded_files where id = ?", Long.class, liveUpload)).isEmpty();
+        assertThat(liveFile).doesNotExist();
+
         // An edit undone leaves nothing to publish.
-        mockMvc.perform(api.jsonPut(lesson + "/content", admin, content("Greetings", "Changed")))
+        mockMvc.perform(api.jsonPut(lesson + "/content", admin, content("Greetings changed")))
                 .andExpect(jsonPath("$.data.hasUnpublishedChanges").value(true));
         mockMvc.perform(api.jsonPut(lesson + "/content", admin, twoPhrases))
                 .andExpect(jsonPath("$.data.hasUnpublishedChanges").value(false));
@@ -574,13 +590,13 @@ class AdminClassAuthoringIntegrationTests extends ApiIntegrationTest {
     @Test
     void aLessonMovedToTheOtherUnitGoesLastThereAtOnce() throws Exception {
         String admin = api.adminToken();
-        PublishedClass published = api.publishedClass(admin, "Move class " + uniqueSuffix(), "Greetings", "Say hello");
+        PublishedClass published = api.publishedClass(admin, "Move class " + uniqueSuffix(), "Greetings");
         String classPath = ADMIN + "/classes/" + published.classId();
         long secondUnit = api.data(mockMvc.perform(api.authGet(classPath, admin)).andReturn())
                 .path("units").get(1).path("id").asLong();
         String lesson = ADMIN + "/lessons/" + published.lessonId();
         // The lesson's own content, in the second unit.
-        Map<String, Object> moved = new HashMap<>(content("Greetings", "Say hello"));
+        Map<String, Object> moved = new HashMap<>(content("Greetings"));
         moved.put("unitId", secondUnit);
 
         mockMvc.perform(api.jsonPut(lesson + "/content", admin, moved))
@@ -605,12 +621,12 @@ class AdminClassAuthoringIntegrationTests extends ApiIntegrationTest {
         String admin = api.adminToken();
         long classId = api.draftClass(admin, "Answer labels " + uniqueSuffix());
         long lessonId = api.draftLesson(admin, api.unit(admin, classId, "Unit"), "Pinyin tones");
-        JsonNode editor = api.readyLesson(admin, lessonId, "Tones");
+        JsonNode editor = api.readyLesson(admin, lessonId);
         JsonNode question = editor.path("quizzes").get(0).path("questions").get(0);
         long questionId = question.path("id").asLong();
         String lesson = ADMIN + "/lessons/" + lessonId;
         String questionPath = lesson + "/questions/" + questionId;
-        Map<String, Object> edit = new HashMap<>(LearningApiTestClient.quizQuestions(null).getFirst());
+        Map<String, Object> edit = new HashMap<>(LearningApiTestClient.quizQuestions().getFirst());
         edit.put("options", List.of(Map.of("optionText", "mā", "correctOption", true),
                 Map.of("optionText", "m\u200Bā", "correctOption", false)));
         mockMvc.perform(api.jsonPut(questionPath, admin, edit))
@@ -648,7 +664,7 @@ class AdminClassAuthoringIntegrationTests extends ApiIntegrationTest {
         mockMvc.perform(api.authDelete(firstQuestion, admin))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(locked));
-        mockMvc.perform(api.jsonPut(firstQuestion, admin, LearningApiTestClient.quizQuestions(null).get(0)))
+        mockMvc.perform(api.jsonPut(firstQuestion, admin, LearningApiTestClient.quizQuestions().get(0)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(locked));
 
@@ -676,7 +692,7 @@ class AdminClassAuthoringIntegrationTests extends ApiIntegrationTest {
         String classPath = ADMIN + "/classes/" + published.classId();
         long questionId = api.data(mockMvc.perform(api.authGet(lesson, admin)).andReturn())
                 .path("quizzes").get(0).path("questions").get(0).path("id").asLong();
-        Map<String, Object> edit = new HashMap<>(LearningApiTestClient.quizQuestions(null).get(0));
+        Map<String, Object> edit = new HashMap<>(LearningApiTestClient.quizQuestions().get(0));
         edit.put("questionText", "An edited question " + uniqueSuffix());
         mockMvc.perform(api.jsonPut(lesson + "/questions/" + questionId, admin, edit))
                 .andExpect(status().isOk())
@@ -714,7 +730,7 @@ class AdminClassAuthoringIntegrationTests extends ApiIntegrationTest {
         mockMvc.perform(api.authGet(studentLesson, studentToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.available").value(false));
-        mockMvc.perform(api.jsonPut(lesson + "/content", admin, content("Archived lesson", "No")))
+        mockMvc.perform(api.jsonPut(lesson + "/content", admin, content("Archived lesson")))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message").value("Restore the lesson before you edit it."));
 
@@ -749,6 +765,7 @@ class AdminClassAuthoringIntegrationTests extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.data.summary.bestAfterUnit").value(4));
         // The blank option clears "best after".
         mockMvc.perform(api.jsonPut(ADMIN + "/classes/" + published.classId(), admin, details(renamed, null)))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.bestAfterUnit").doesNotExist());
         Map<String, Object> unknownCategory = new HashMap<>(details(renamed, null));
         unknownCategory.put("categoryId", 999_999);
@@ -840,7 +857,7 @@ class AdminClassAuthoringIntegrationTests extends ApiIntegrationTest {
         String admin = api.adminToken();
         Long classId = api.draftClass(admin, "Practice check " + uniqueSuffix());
         Long lessonId = api.draftLesson(admin, api.unit(admin, classId, "Unit 1"), "Not a practice set");
-        JsonNode editor = api.readyLesson(admin, lessonId, "Its activities stay here");
+        JsonNode editor = api.readyLesson(admin, lessonId);
         api.publishLesson(admin, lessonId);
         String learner = api.registerStudent(uniqueEmail("practice-check-learner"));
 
@@ -858,7 +875,7 @@ class AdminClassAuthoringIntegrationTests extends ApiIntegrationTest {
         }
     }
 
-    /** Learners never author classes; the teacher endpoints are gone. */
+    /** Learners never author classes. */
     @Test
     void onlyAdminsAuthorClasses() throws Exception {
         String studentToken = api.registerStudent(uniqueEmail("authoring-student"));
@@ -867,7 +884,6 @@ class AdminClassAuthoringIntegrationTests extends ApiIntegrationTest {
         mockMvc.perform(api.jsonPost(ADMIN + "/classes", studentToken, details("Mine", null)))
                 .andExpect(status().isForbidden());
         mockMvc.perform(api.authGet(ADMIN + "/lessons/1", studentToken)).andExpect(status().isForbidden());
-        mockMvc.perform(api.authGet("/api/v1/teachers/classes", api.adminToken())).andExpect(status().isNotFound());
     }
 
     private void assertCannotPublish(String admin, Long classId) throws Exception {
@@ -902,8 +918,8 @@ class AdminClassAuthoringIntegrationTests extends ApiIntegrationTest {
         return details;
     }
 
-    private static Map<String, Object> content(String title, String summary) {
-        return Map.of("title", title, "minutes", 12, "summary", summary,
+    private static Map<String, Object> content(String title) {
+        return Map.of("title", title,
                 "keyPhrases", List.of(Map.of("chinese", "你好", "pinyin", "nǐ hǎo", "meaning", "hello")));
     }
 }

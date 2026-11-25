@@ -18,12 +18,6 @@ public interface QuizQuestionRepository extends JpaRepository<QuizQuestion, Long
     long countByQuizId(Long quizId);
 
     @Query("""
-            select q from QuizQuestion q where q.quiz.id = :quizId
-            order by q.sortOrder, q.createdAt, q.id
-            """)
-    List<QuizQuestion> findInDisplayOrder(@Param("quizId") Long quizId);
-
-    @Query("""
             select q from QuizQuestion q where q.quiz.id in :quizIds
             order by q.sortOrder, q.createdAt, q.id
             """)

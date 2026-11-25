@@ -15,12 +15,13 @@
           <RouterLink class="btn btn-primary btn-lg" :to="homeRoute" data-testid="system-home">
             {{ homeLabel }}
           </RouterLink>
-          <RouterLink class="btn btn-secondary btn-lg" :to="classesRoute" data-testid="system-classes">
+          <RouterLink class="btn btn-secondary btn-lg" :to="classesRoute">
             {{ t('common.exploreClasses') }}
           </RouterLink>
         </template>
         <button
           v-else-if="kind === 'maintenance'"
+          ref="retryButton"
           class="btn btn-primary btn-lg"
           type="button"
           :disabled="busy"
@@ -37,6 +38,7 @@
             {{ t('system.backToClass') }}
           </RouterLink>
           <button
+            ref="joinButton"
             class="btn btn-primary btn-lg"
             type="button"
             :disabled="busy"
@@ -53,6 +55,7 @@
             {{ t('system.myHome') }}
           </RouterLink>
           <button
+            ref="switchAccountButton"
             class="btn btn-secondary btn-lg"
             type="button"
             :disabled="busy"
@@ -73,9 +76,9 @@
         </template>
       </div>
 
-      <p v-if="joinError" class="system-note is-error" role="alert" data-testid="system-join-error">
+      <p v-if="actionError" class="system-note is-error" role="alert" data-testid="system-join-error">
         <IconGlyph name="alert" :size="16" />
-        <span>{{ joinError }}</span>
+        <span>{{ actionError }}</span>
       </p>
 
       <!-- Always in the page, so the answer to "Try again" is announced when its text arrives. -->
@@ -100,11 +103,13 @@ import IconGlyph from '@/components/common/IconGlyph.vue'
 import LanguageSwitcher from '@/components/common/LanguageSwitcher.vue'
 import AppBrand from '@/components/layout/AppBrand.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
+import { finishSessionEndNavigation } from '@/composables/usePageNavigation'
 import { systemMessages } from '@/plugins/systemMessages'
 import { useAuthStore } from '@/stores/auth'
 import { resolveApiError } from '@/utils/apiError'
 import { normalizeAppRoute } from '@/utils/appRoute'
-import { firstQueryText } from '@/utils/queryText'
+import { restoreFocusIfDropped } from '@/utils/focus'
+import { firstQueryText } from '@/utils/routeQuery'
 import { defaultRouteForRole } from '@/utils/role'
 import '@/styles/ops-public.css'
 
@@ -162,9 +167,14 @@ const signInRoute = computed<RouteLocationRaw>(() =>
 )
 
 const busy = ref(false)
-const joinFailure = shallowRef<{ reason: unknown } | null>(null)
-const joinError = computed(() =>
-  joinFailure.value ? resolveApiError(joinFailure.value.reason, t('system.joinError')) : null,
+const retryButton = ref<HTMLButtonElement | null>(null)
+const joinButton = ref<HTMLButtonElement | null>(null)
+const switchAccountButton = ref<HTMLButtonElement | null>(null)
+const actionFailure = shallowRef<{ reason: unknown; fallbackKey: 'system.joinError' | 'common.errorTitle' } | null>(
+  null,
+)
+const actionError = computed(() =>
+  actionFailure.value ? resolveApiError(actionFailure.value.reason, t(actionFailure.value.fallbackKey)) : null,
 )
 const stillDown = ref(false)
 let visit = 0
@@ -173,7 +183,7 @@ let visit = 0
 watch([() => props.kind, refusedPath, lockedClassId], () => {
   visit++
   busy.value = false
-  joinFailure.value = null
+  actionFailure.value = null
   stillDown.value = false
 })
 onBeforeUnmount(() => {
@@ -184,14 +194,22 @@ onBeforeUnmount(() => {
 async function useAnotherAccount(): Promise<void> {
   if (busy.value) return
   const started = visit
+  const target = signInRoute.value
   busy.value = true
+  actionFailure.value = null
   try {
     const signedOut = await auth.logout()
-    if (started !== visit) return
-    if (signedOut) await router.push(signInRoute.value)
+    if (!signedOut) return
+    await finishSessionEndNavigation(router, target, started === visit)
+  } catch (reason) {
+    if (started === visit) actionFailure.value = { reason, fallbackKey: 'common.errorTitle' }
   } finally {
     if (started === visit) busy.value = false
   }
+  await restoreFocusIfDropped(
+    () => switchAccountButton.value,
+    () => started === visit,
+  )
 }
 
 /** "Join class": joins the refused lesson's class and opens the lesson; a refusal (an archived class) says why. */
@@ -203,15 +221,23 @@ async function joinClass(): Promise<void> {
   const version = getAuthSessionVersion()
   const stillHere = () => started === visit && lockedClassId.value === classId && version === getAuthSessionVersion()
   busy.value = true
-  joinFailure.value = null
+  actionFailure.value = null
+  let joined = false
   try {
     await studentClassesApi.join(Number(classId))
+    joined = true
     if (stillHere()) await router.replace(target)
   } catch (reason) {
-    if (stillHere()) joinFailure.value = { reason }
+    if (stillHere()) {
+      actionFailure.value = { reason, fallbackKey: joined ? 'common.errorTitle' : 'system.joinError' }
+    }
   } finally {
     if (started === visit) busy.value = false
   }
+  await restoreFocusIfDropped(
+    () => joinButton.value,
+    () => started === visit,
+  )
 }
 
 /**
@@ -243,5 +269,9 @@ async function tryAgain(): Promise<void> {
   } finally {
     if (started === visit) busy.value = false
   }
+  await restoreFocusIfDropped(
+    () => retryButton.value,
+    () => started === visit,
+  )
 }
 </script>

@@ -1,5 +1,5 @@
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { CanceledError } from 'axios'
 
 import { setAccessToken } from '@/api/http'
@@ -34,8 +34,6 @@ const REGISTER_SUBMIT = '[data-testid="register-submit"]'
 const EMAIL_TAKEN = { response: { status: 400, data: { message: SERVER_MESSAGE.EMAIL_ALREADY_REGISTERED } } }
 /** How the server refuses a deactivated account whose password was right (AccountGuards). */
 const DEACTIVATED = SERVER_MESSAGE.ACCOUNT_UNAVAILABLE
-
-afterEach(() => vi.useRealTimers())
 
 function mountPage(attachTo?: HTMLElement): VueWrapper {
   return mount(AuthPage, {
@@ -171,7 +169,7 @@ describe('AuthPage sign in (FRAUTH03)', () => {
   })
 
   it.each([
-    // "Sign in to join" on a public class page leads to the learner's class page; an admin signs in there.
+    // "Create account to start" on a public class page carries a redirect to the learner's class page; an admin switches to Sign in there.
     ['/student/classes/7', 'ADMIN', '/admin/dashboard'],
     // The session of an admin ended on a shared computer; a learner signs in next.
     ['/admin/users', 'STUDENT', '/student/home'],
@@ -467,7 +465,7 @@ describe('AuthPage create account (FRAUTH01, FRAUTH02)', () => {
     expect(wrapper.text()).not.toMatch(/teacher|account type/i)
     // Both documents open in a new tab, which screen readers are told.
     expect(wrapper.get('.auth-consent').text().replace(/\s+/g, ' ')).toBe(
-      'I am 18 or older and agree to the Terms of Service(opens in a new tab) and Privacy Notice(opens in a new tab).',
+      'I am 18 or older and agree to the Terms of Service (opens in a new tab) and Privacy Notice (opens in a new tab).',
     )
     expect(wrapper.get('[data-testid="register-consent"]').attributes('required')).toBeDefined()
     expect(wrapper.find('#register-password + button[aria-label="Show password"]').exists()).toBe(true)
@@ -796,5 +794,15 @@ describe('AuthPage create account (FRAUTH01, FRAUTH02)', () => {
 
     expect(wrapper.get<HTMLInputElement>('#login-password').element.value).toBe(PASSWORD)
     expect(wrapper.find('[data-testid="auth-error"]').exists()).toBe(true)
+  })
+
+  it('prevents mousedown on Create account from blurring an invalid field and aborting full-form validation', async () => {
+    const wrapper = mountPage()
+    const submitBtn = wrapper.get(REGISTER_SUBMIT)
+
+    const mousedown = new MouseEvent('mousedown', { bubbles: true, cancelable: true })
+    submitBtn.element.dispatchEvent(mousedown)
+    expect(mousedown.defaultPrevented).toBe(true)
+    expect(submitBtn.attributes('disabled')).toBeUndefined()
   })
 })

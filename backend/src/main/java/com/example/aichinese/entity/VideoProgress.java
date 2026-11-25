@@ -1,7 +1,5 @@
 package com.example.aichinese.entity;
 
-import java.time.LocalDateTime;
-
 import com.example.aichinese.entity.base.BaseEntity;
 
 import jakarta.persistence.Column;
@@ -28,10 +26,6 @@ public class VideoProgress extends BaseEntity {
     private StudentProfile student;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "lesson_id", nullable = false, updatable = false)
-    private Lesson lesson;
-
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "recorded_video_id", nullable = false, updatable = false)
     private RecordedLessonVideo recordedVideo;
 
@@ -41,7 +35,4 @@ public class VideoProgress extends BaseEntity {
 
     @Column(name = "completed", nullable = false)
     private boolean completed;
-
-    @Column(name = "last_watched_at")
-    private LocalDateTime lastWatchedAt;
 }

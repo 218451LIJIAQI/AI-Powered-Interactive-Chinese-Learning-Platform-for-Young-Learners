@@ -152,6 +152,13 @@ class PublicAuthRequestLimiterTests {
         limiter.checkLearnerSupportAllowed(43L);
         repeat(FORGOT_PASSWORD_THRESHOLD, () -> limiter.checkLearnerSupportAllowed(null));
         assertTooManyRequests(() -> limiter.checkLearnerSupportAllowed(null));
+
+        // AI report submission uses its own isolated per-userId bucket.
+        repeat(FORGOT_PASSWORD_THRESHOLD, () -> limiter.checkAiReportAllowed(42L));
+        assertTooManyRequests(() -> limiter.checkAiReportAllowed(42L));
+        limiter.checkAiReportAllowed(43L);
+        repeat(FORGOT_PASSWORD_THRESHOLD, () -> limiter.checkAiReportAllowed(null));
+        assertTooManyRequests(() -> limiter.checkAiReportAllowed(null));
     }
 
     @Test

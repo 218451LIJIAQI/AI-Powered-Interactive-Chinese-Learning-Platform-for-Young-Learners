@@ -34,13 +34,13 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class AiGateway {
 
-    static final String QUOTA_EXCEEDED_ERROR = "Platform AI request quota exceeded.";
+    private static final String QUOTA_EXCEEDED_ERROR = "Platform AI request quota exceeded.";
     static final String PROVIDER_FAILED_ERROR = "Provider request failed or timed out.";
     static final String EMPTY_REPLY_ERROR = "Provider response text was empty.";
-    static final String INVALID_JSON_ERROR = "Provider response was not valid JSON.";
-    static final String INCOMPLETE_JSON_ERROR = "Provider response was missing the fields the feature needs.";
-    static final String NO_IMAGE_SUPPORT_ERROR = "Configured provider does not support image input.";
-    static final String NO_SPEECH_SUPPORT_ERROR = "Tencent pronunciation assessment is disabled or not configured.";
+    private static final String INVALID_JSON_ERROR = "Provider response was not valid JSON.";
+    private static final String INCOMPLETE_JSON_ERROR = "Provider response was missing the fields the feature needs.";
+    private static final String NO_IMAGE_SUPPORT_ERROR = "Configured provider does not support image input.";
+    private static final String NO_SPEECH_SUPPORT_ERROR = "Tencent pronunciation assessment is disabled or not configured.";
 
     private static final Logger log = LoggerFactory.getLogger(AiGateway.class);
 
@@ -68,18 +68,14 @@ public class AiGateway {
 
         /** A request whose reply is a JSON object that {@code complete} accepts. */
         public static AiCall json(
-                User user, AiFeatureKey feature, String language, String userPrompt,
+                User user, String sessionId, AiFeatureKey feature, String language, String userPrompt,
                 Predicate<Map<String, Object>> complete) {
-            return new AiCall(user, null, feature, language, userPrompt, complete, List.of(), null);
+            return new AiCall(user, sessionId, feature, language, userPrompt, complete, List.of(), null);
         }
 
         /** A request whose reply is plain text. */
-        public static AiCall text(User user, AiFeatureKey feature, String language, String userPrompt) {
-            return new AiCall(user, null, feature, language, userPrompt, null, List.of(), null);
-        }
-
-        public AiCall withSession(String browserSessionId) {
-            return new AiCall(user, browserSessionId, feature, language, userPrompt, complete, history, image);
+        public static AiCall text(User user, String sessionId, AiFeatureKey feature, String language, String userPrompt) {
+            return new AiCall(user, sessionId, feature, language, userPrompt, null, List.of(), null);
         }
 
         public AiCall withHistory(List<AiProviderPrompt.AiMessage> turns) {

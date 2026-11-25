@@ -1,10 +1,15 @@
 package com.example.aichinese;
 
+import static com.example.aichinese.support.ConcurrentTransactions.readCommitted;
+import static com.example.aichinese.support.ConcurrentTransactions.withAfterMethod;
 import static com.example.aichinese.support.ConcurrentTransactions.withRowLock;
+import static com.example.aichinese.support.LearningApiTestClient.ADMIN_EMAIL;
 import static com.example.aichinese.support.LearningApiTestClient.MAX_PAGE_SIZE;
 import static com.example.aichinese.support.LearningApiTestClient.noStore;
 import static com.example.aichinese.support.LearningApiTestClient.uniqueEmail;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.everyItem;
+import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -21,16 +26,21 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import com.example.aichinese.dto.ai.CreateAiResponseReportRequest;
+import com.example.aichinese.dto.support.CreateSupportRequest;
 import com.example.aichinese.entity.Notification;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.entity.enums.NotificationStatus;
 import com.example.aichinese.entity.enums.NotificationType;
 import com.example.aichinese.entity.enums.RoleName;
+import com.example.aichinese.entity.enums.SupportTopic;
 import com.example.aichinese.security.SecurityUserDetails;
+import com.example.aichinese.service.AiResponseReportService;
 import com.example.aichinese.service.NotificationService;
+import com.example.aichinese.service.account.AccountDeletionService;
+import com.example.aichinese.service.support.SupportService;
 import com.example.aichinese.support.ApiIntegrationTest;
 import com.fasterxml.jackson.databind.JsonNode;
 
@@ -44,6 +54,15 @@ class NotificationIntegrationTests extends ApiIntegrationTest {
 
     @Autowired
     private NotificationService notificationService;
+
+    @Autowired
+    private AiResponseReportService aiResponseReportService;
+
+    @Autowired
+    private SupportService supportService;
+
+    @Autowired
+    private AccountDeletionService accountDeletionService;
 
     @Autowired
     private PlatformTransactionManager transactions;
@@ -70,10 +89,11 @@ class NotificationIntegrationTests extends ApiIntegrationTest {
         Long userId = user(email).getId();
         var lookedUp = new AtomicBoolean();
         new TransactionTemplate(transactions).executeWithoutResult(status -> {
-            notificationService.safeCreateNotifications(() -> {
+            notificationService.safeCreateNotifications((afterId, slice) -> {
                 lookedUp.set(true);
-                return List.of(userId);
-            }, NotificationType.LESSON_UPDATED, "Lesson updated", "New material.", null, null, null);
+                return afterId < userId ? List.of(userId) : List.of();
+            }, () -> NotificationService.draft(NotificationType.LESSON_UPDATED, "Lesson updated", "New material.",
+                    null, null, null), "LESSON:test");
             assertThat(lookedUp).isFalse();
             if (!commit) {
                 status.setRollbackOnly();
@@ -156,8 +176,9 @@ class NotificationIntegrationTests extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.data.unreadCount").value(0));
 
         // A notice arriving after mark-all is outside its Undo.
-        notificationService.safeCreateNotification(user(email), NotificationType.SYSTEM, "New arrival",
-                "Sent after mark-all.", null, null, null);
+        notificationService.safeCreateNotification(user(email),
+                NotificationService.draft(NotificationType.SYSTEM, "New arrival", "Sent after mark-all.",
+                        null, null, null));
         mockMvc.perform(unread(token, Map.of("ids", markedIds)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Notifications marked as unread."))
@@ -192,9 +213,7 @@ class NotificationIntegrationTests extends ApiIntegrationTest {
             change = () -> notificationService.markAllAsRead(recipient);
         }
 
-        var transaction = new TransactionTemplate(transactions);
-        transaction.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
-        var second = withRowLock(jdbc, "notifications", transaction,
+        var second = withRowLock(jdbc, "notifications", readCommitted(transactions),
                 () -> assertThat(change.get()).containsExactlyElementsOf(ids), change::get);
         assertThat(second).isEmpty();
 
@@ -202,6 +221,90 @@ class NotificationIntegrationTests extends ApiIntegrationTest {
             assertThat(notice.getNotificationStatus()).isEqualTo(undo ? NotificationStatus.UNREAD : NotificationStatus.READ);
             assertThat(notice.getReadAt() == null).isEqualTo(undo);
         });
+    }
+
+    /**
+     * Deleting a learner who triggered an earlier AI-report admin notice and a later support-request admin notice
+     * locks all notifications in ascending primary-key order, serializing cleanly with admin bulk read/unread marks.
+     */
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void deletingALearnerWithReportAndSupportNoticesSerializesWithAdminBulkMarks(boolean undo) throws Exception {
+        String email = uniqueEmail("notify-delete-lock-order");
+        api.registerStudentAccount(email);
+        SecurityUserDetails learner = principalFor(email);
+        SecurityUserDetails admin = principalFor(ADMIN_EMAIL);
+
+        Long reportId = aiResponseReportService.createReport(learner, new CreateAiResponseReportRequest(
+                null, null, "HINT", "INCORRECT_CONTENT", "Tone looks wrong.", "What is ma?", "Tone 2.")).id();
+        supportService.create(learner, new CreateSupportRequest(
+                SupportTopic.LEARNING, "Audio button stuck", "Cannot replay audio."), null);
+        Long requestId = jdbc.queryForObject(
+                "select id from support_requests where requester_user_id = ? order by id desc limit 1",
+                Long.class, learner.getUserId());
+
+        List<Long> reportNoticeIds = notificationRepository.findIdsByTarget(
+                AiResponseReportService.TARGET_TYPE, List.of(reportId));
+        List<Long> supportNoticeIds = notificationRepository.findIdsByTarget(
+                SupportService.TARGET_TYPE, List.of(requestId));
+        assertThat(reportNoticeIds).isNotEmpty();
+        assertThat(supportNoticeIds).isNotEmpty();
+        Long adminReportNoticeId = notificationsOf(ADMIN_EMAIL).stream()
+                .filter(n -> reportNoticeIds.contains(n.getId()))
+                .map(Notification::getId)
+                .findFirst()
+                .orElseThrow();
+        Long adminSupportNoticeId = notificationsOf(ADMIN_EMAIL).stream()
+                .filter(n -> supportNoticeIds.contains(n.getId()))
+                .map(Notification::getId)
+                .findFirst()
+                .orElseThrow();
+        assertThat(adminReportNoticeId).isLessThan(adminSupportNoticeId);
+
+        List<Long> bothAdminNoticeIds = List.of(adminReportNoticeId, adminSupportNoticeId);
+        if (undo) {
+            notificationService.markAllAsRead(admin);
+        }
+
+        withRowLock(jdbc, "notifications",
+                pause -> withAfterMethod(notificationRepository, "lockIdsInOrder", pause, () -> {
+                    if (undo) {
+                        notificationService.markUnread(admin, bothAdminNoticeIds);
+                    } else {
+                        notificationService.markAllAsRead(admin);
+                    }
+                }),
+                () -> {
+                    accountDeletionService.delete(learner, email);
+                    return null;
+                });
+
+        assertThat(notificationRepository.findIdsByTarget(AiResponseReportService.TARGET_TYPE, List.of(reportId)))
+                .isEmpty();
+        assertThat(notificationRepository.findIdsByTarget(SupportService.TARGET_TYPE, List.of(requestId)))
+                .isEmpty();
+    }
+
+    @Test
+    void notificationsCanBeFilteredByReadState() throws Exception {
+        String email = uniqueEmail("notify-filter");
+        String learnerToken = api.registerStudent(email);
+        notify(user(email), 2);
+
+        JsonNode unread = api.data(mockMvc.perform(api.authGet(NOTIFICATIONS + "?status=UNREAD", learnerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[*].status").value(everyItem(is("UNREAD"))))
+                .andReturn());
+        assertThat(unread.path("totalItems").asLong()).isPositive();
+        mockMvc.perform(api.authPatch(NOTIFICATIONS + "/read-all", learnerToken)).andExpect(status().isOk());
+        mockMvc.perform(api.authGet(NOTIFICATIONS + "?status=UNREAD", learnerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalItems").value(0));
+        mockMvc.perform(api.authGet(NOTIFICATIONS + "?status=READ", learnerToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.totalItems").value(unread.path("totalItems").asLong()));
+        mockMvc.perform(api.authGet(NOTIFICATIONS + "?status=SOMETIMES", learnerToken))
+                .andExpect(status().isBadRequest());
     }
 
     private MockHttpServletRequestBuilder unread(String token, Map<String, ?> body) throws Exception {
@@ -213,8 +316,9 @@ class NotificationIntegrationTests extends ApiIntegrationTest {
     /** Sends the user {@code count} notifications, as a flow would; returns their ids, oldest first. */
     private List<Long> notify(User user, int count) {
         for (int index = 1; index <= count; index++) {
-            notificationService.safeCreateNotification(user, NotificationType.SYSTEM, "Notice " + index,
-                    "Something happened.", null, null, "/student/practice");
+            notificationService.safeCreateNotification(user,
+                    NotificationService.draft(NotificationType.SYSTEM, "Notice " + index, "Something happened.",
+                            null, null, "/student/practice"));
         }
         return notificationsOf(user.getEmail()).stream()
                 .map(Notification::getId)

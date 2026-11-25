@@ -29,10 +29,11 @@
           <span class="plan-choice-head">
             <span class="plan-choice-label">{{ choice.label }}</span>
             <span v-if="choice.tag" class="tag is-sm is-outline">{{ choice.tag }}</span>
-            <span v-if="choice.suggested" class="tag is-sm is-strong">{{ suggestedLabel }}</span>
+            <span v-if="choice.suggested && suggestedLabel" class="tag is-sm is-strong">{{ suggestedLabel }}</span>
           </span>
           <span v-if="choice.lead" class="plan-choice-box">
-            <strong>{{ choice.lead }}:</strong> {{ choice.hint }}
+            <strong>{{ choice.lead }}{{ locale === 'zh-CN' ? '：' : ':' }}</strong
+            >{{ locale === 'zh-CN' ? '' : ' ' }}{{ choice.hint }}
           </span>
           <span v-else-if="choice.hint" class="plan-choice-hint">{{ choice.hint }}</span>
           <span v-if="choice.foot" class="plan-choice-foot">{{ choice.foot }}</span>
@@ -46,6 +47,8 @@
 </template>
 
 <script setup lang="ts" generic="T extends string">
+import { useI18n } from 'vue-i18n'
+
 import IconGlyph from '@/components/common/IconGlyph.vue'
 
 /**
@@ -83,6 +86,7 @@ const props = withDefaults(
 )
 
 const emit = defineEmits<{ toggle: [value: T] }>()
+const { locale } = useI18n()
 
 function isSelected(value: T): boolean {
   return props.selected.includes(value)

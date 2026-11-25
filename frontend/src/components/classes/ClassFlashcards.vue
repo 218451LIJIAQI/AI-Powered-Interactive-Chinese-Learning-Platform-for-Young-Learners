@@ -38,7 +38,7 @@
           </span>
         </template>
         <template v-else>
-          <strong class="class-flashcard-meaning">{{ card.meaning }}</strong>
+          <strong class="class-flashcard-meaning"><CjkText :text="card.meaning" /></strong>
           <span class="class-flashcard-pinyin">
             <span class="cjk-text" lang="zh-CN">{{ card.chinese }}</span>
             <template v-if="card.pinyin"> · {{ card.pinyin }}</template>

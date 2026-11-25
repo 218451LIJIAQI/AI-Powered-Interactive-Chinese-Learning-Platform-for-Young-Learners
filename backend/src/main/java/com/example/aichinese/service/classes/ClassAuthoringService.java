@@ -46,6 +46,10 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class ClassAuthoringService {
 
+    public static final String ACTION_CLASS_CREATE = "ADMIN_CLASS_CREATE";
+    public static final String ACTION_CLASS_PUBLISH = "ADMIN_CLASS_PUBLISH";
+    public static final String ACTION_CLASS_ARCHIVE = "ADMIN_CLASS_ARCHIVE";
+
     /** The shape of a class (Library · UI rules, Classes): 2 units, 4 to 6 lessons. */
     static final int UNITS_PER_CLASS = 2;
     static final int MIN_LESSONS_TO_PUBLISH = 4;
@@ -55,6 +59,7 @@ public class ClassAuthoringService {
     private final ClassAuthoringAccess access;
     private final ClassContentSupport content;
     private final LessonRevisionService revisions;
+    private final LessonRevisionDiff revisionDiff;
     private final LessonEditorAssembler lessonEditorAssembler;
     private final LearningCategoryRepository learningCategoryRepository;
     private final CoursePackageRepository coursePackageRepository;
@@ -71,7 +76,7 @@ public class ClassAuthoringService {
         applyDetails(coursePackage, request);
         coursePackage.setContentStatus(ContentStatus.DRAFT);
         CoursePackage saved = coursePackageRepository.save(coursePackage);
-        access.audit(admin, "ADMIN_CLASS_CREATE", saved, "Admin created a class as a draft.");
+        access.audit(admin, ACTION_CLASS_CREATE, saved, "Admin created a class as a draft.");
         return page(saved);
     }
 
@@ -108,7 +113,7 @@ public class ClassAuthoringService {
             throw new ResponseStatusException(BAD_REQUEST, "To publish a class, give it 2 units with 4 to 6 published lessons.");
         }
         coursePackage.setContentStatus(ContentStatus.PUBLISHED);
-        access.audit(admin, "ADMIN_CLASS_PUBLISH", coursePackage, "Admin published a class.");
+        access.audit(admin, ACTION_CLASS_PUBLISH, coursePackage, "Admin published a class.");
         return page(coursePackage, units, lessonsByUnit);
     }
 
@@ -129,7 +134,7 @@ public class ClassAuthoringService {
         coursePackage.setStatusBeforeArchive(coursePackage.getContentStatus());
         coursePackage.setContentStatus(ContentStatus.ARCHIVED);
         coursePackage.setArchivedAt(LocalDateTime.now());
-        access.audit(admin, "ADMIN_CLASS_ARCHIVE", coursePackage, "Admin archived a class.");
+        access.audit(admin, ACTION_CLASS_ARCHIVE, coursePackage, "Admin archived a class.");
         return page(coursePackage);
     }
 
@@ -159,9 +164,16 @@ public class ClassAuthoringService {
         }
         List<LearningModule> exclusiveUnits = learningModuleRepository.findAllById(
                 packageItemRepository.findExclusiveItemIdsByClassId(classId));
-        for (Lesson lesson : content.lessonsByUnit(exclusiveUnits).values().stream().flatMap(List::stream).toList()) {
-            content.revisionOf(lesson).ifPresent(revisions::deleteLessonTree);
-            revisions.deleteLessonTree(lesson);
+        List<Lesson> lessons = content.lessonsByUnit(exclusiveUnits).values().stream().flatMap(List::stream).toList();
+        if (!lessons.isEmpty()) {
+            List<Lesson> workingCopies = lessonRepository.findByRevisionOfIdIn(
+                    lessons.stream().map(Lesson::getId).toList());
+            for (Lesson workingCopy : workingCopies) {
+                revisions.deleteLessonTree(workingCopy);
+            }
+            for (Lesson lesson : lessons) {
+                revisions.deleteLessonTree(lesson);
+            }
         }
         packageItemRepository.deleteByCoursePackage(coursePackage);
         packageItemRepository.flush();
@@ -186,8 +198,6 @@ public class ClassAuthoringService {
         }
         LearningModule unit = new LearningModule();
         unit.setTitle(contentSafetyService.requireSafeText(request.title(), 200, "Unit title is required."));
-        // A unit is structure: it shows to learners once it holds a published lesson.
-        unit.setContentStatus(ContentStatus.PUBLISHED);
         LearningModule saved = learningModuleRepository.save(unit);
         PackageItem item = new PackageItem();
         item.setCoursePackage(coursePackage);
@@ -226,7 +236,7 @@ public class ClassAuthoringService {
         lesson.setContentStatus(ContentStatus.DRAFT);
         Lesson saved = lessonRepository.saveAndFlush(lesson);
         touch(locked.coursePackage());
-        return lessonEditorAssembler.view(locked.coursePackage(), saved, saved);
+        return lessonEditorAssembler.view(locked.coursePackage(), saved, saved, false);
     }
 
     /** Audits an edit of a published class (learners see it at once); an edit of a draft class is not audited. */
@@ -249,7 +259,7 @@ public class ClassAuthoringService {
         // questions that learners have since locked can no longer be published).
         List<Lesson> workingCopies = lessons.isEmpty() ? List.of()
                 : lessonRepository.findByRevisionOfIdIn(lessons.stream().map(Lesson::getId).toList());
-        Set<Long> changedLessonIds = revisions.changedLessonIds(workingCopies);
+        Set<Long> changedLessonIds = revisionDiff.changedLessonIds(workingCopies);
         List<AdminClassViews.Unit> unitViews = new ArrayList<>();
         for (LearningModule unit : units) {
             List<AdminClassViews.LessonRow> rows = lessonsByUnit.getOrDefault(unit.getId(), List.of()).stream()
@@ -295,7 +305,7 @@ public class ClassAuthoringService {
     /** A draft class: it was never published (a class is never unpublished), so no learner saw or joined it. */
     private boolean canDelete(CoursePackage coursePackage) {
         return coursePackage.getContentStatus() == ContentStatus.DRAFT
-                && enrolmentRepository.countByCoursePackageId(coursePackage.getId()) == 0;
+                && !enrolmentRepository.existsByCoursePackageId(coursePackage.getId());
     }
 
     private void applyDetails(CoursePackage coursePackage, ClassRequests.ClassDetails request) {

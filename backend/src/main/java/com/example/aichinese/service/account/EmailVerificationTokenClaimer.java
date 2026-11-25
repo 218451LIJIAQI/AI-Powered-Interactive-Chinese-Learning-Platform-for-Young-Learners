@@ -10,8 +10,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.example.aichinese.entity.User;
-import com.example.aichinese.entity.base.EmailVerificationToken;
-import com.example.aichinese.repository.EmailVerificationTokenRepository;
+import com.example.aichinese.entity.base.OneTimeUserToken;
+import com.example.aichinese.repository.OneTimeUserTokenRepository;
 import com.example.aichinese.service.SecureTokens;
 
 import jakarta.persistence.EntityManager;
@@ -28,15 +28,15 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 class EmailVerificationTokenClaimer {
 
-    static final String INVALID_LINK = "This confirmation link is invalid or has already been used.";
+    private static final String INVALID_LINK = "This confirmation link is invalid or has already been used.";
 
     private final EntityManager entityManager;
 
-    record Claimed<T extends EmailVerificationToken>(T token, User user, LocalDateTime claimedAt) {
+    record Claimed<T extends OneTimeUserToken>(T token, User user, LocalDateTime claimedAt) {
     }
 
-    <T extends EmailVerificationToken> Claimed<T> claim(
-            EmailVerificationTokenRepository<T> repository,
+    <T extends OneTimeUserToken> Claimed<T> claim(
+            OneTimeUserTokenRepository<T> repository,
             String rawToken,
             BiPredicate<User, T> isStillValid,
             Supplier<ResponseStatusException> onExpired) {

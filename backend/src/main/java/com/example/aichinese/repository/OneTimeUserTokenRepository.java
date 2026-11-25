@@ -24,7 +24,9 @@ public interface OneTimeUserTokenRepository<T extends OneTimeUserToken> extends 
      * continue mutating their managed {@code User} entity in the same transaction.
      */
     @Modifying(flushAutomatically = true)
-    @Query("update #{#entityName} t set t.usedAt = :now, t.updatedAt = :now "
+    @Query("update #{#entityName} t "
+            + "set t.usedAt = case when t.createdAt > :now then t.createdAt else :now end, "
+            + "t.updatedAt = case when t.createdAt > :now then t.createdAt else :now end "
             + "where t.id = :id and t.usedAt is null and t.expiresAt > :now")
     int consumeActiveToken(@Param("id") Long id, @Param("now") LocalDateTime now);
 
@@ -33,7 +35,13 @@ public interface OneTimeUserTokenRepository<T extends OneTimeUserToken> extends 
      * write-locked {@code User} attached for subsequent updates.
      */
     @Modifying(flushAutomatically = true)
-    @Query("update #{#entityName} t set t.usedAt = :now, t.updatedAt = :now "
+    @Query("update #{#entityName} t "
+            + "set t.usedAt = case when t.createdAt > :now then t.createdAt else :now end, "
+            + "t.updatedAt = case when t.createdAt > :now then t.createdAt else :now end "
             + "where t.user.id = :userId and t.usedAt is null")
     int retireOpenTokensForUser(@Param("userId") Long userId, @Param("now") LocalDateTime now);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("delete from #{#entityName} t where t.user.id = :userId")
+    int deleteByUserId(@Param("userId") Long userId);
 }

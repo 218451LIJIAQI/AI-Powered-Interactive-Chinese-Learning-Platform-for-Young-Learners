@@ -1,6 +1,7 @@
 import type { Translate } from '@/plugins/i18n'
 import type { AdminUnitRow } from '@/types/learn'
 import { formatNumber } from '@/utils/format'
+import { setStatusKey } from '@/utils/learnLabels'
 
 type UnitCounts = Pick<AdminUnitRow, 'lessonCount' | 'bonusCount'>
 
@@ -22,12 +23,13 @@ function learnersStarted(t: Translate, unit: AdminUnitRow): string[] {
 }
 
 /** A unit row of the Learning path (A4.01): "7 lessons + bonus chest · 8 learners started". */
-export function unitMetaParts(t: Translate, unit: AdminUnitRow): string[] {
-  return [unitLessonsLabel(t, unit), ...learnersStarted(t, unit)]
+export function unitRowMeta(t: Translate, unit: AdminUnitRow): string {
+  return [unitLessonsLabel(t, unit), ...learnersStarted(t, unit)].join(' · ')
 }
 
 /** The unit drawer's line under its title (A4.02): "HSK 1 · 8 learners started · Published". */
 export function unitDrawerMeta(t: Translate, unit: AdminUnitRow): string {
-  const status = unit.status === 'PUBLISHED' ? t('adminLearning.published') : t('adminLearning.draft')
-  return [t('hsk.number', { level: unit.hskLevel }), ...learnersStarted(t, unit), status].join(' · ')
+  return [t('hsk.number', { level: unit.hskLevel }), ...learnersStarted(t, unit), t(setStatusKey(unit.status))].join(
+    ' · ',
+  )
 }

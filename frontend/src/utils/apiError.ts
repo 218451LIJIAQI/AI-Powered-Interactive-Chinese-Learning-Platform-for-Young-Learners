@@ -1,7 +1,10 @@
+import { isCancel } from 'axios'
+
 import { apiClientMessage } from '@/plugins/apiClientMessages'
 import { documentLanguage } from '@/utils/locale'
-import { localizeServerMessage, messageKey } from '@/utils/serverMessages'
-import { truncateText } from '@/utils/truncateText'
+import { cleanServerMessage, localizeServerMessage, messageKey } from '@/utils/serverMessages'
+
+export { cleanServerMessage }
 
 /** Gives REST envelope and streaming errors the same status and message shape as an HTTP failure. */
 export class ApiEnvelopeError extends Error {
@@ -25,26 +28,14 @@ type ApiErrorPayload = {
   code?: string
 }
 
-const MAX_USER_MESSAGE_LENGTH = 280
-// eslint-disable-next-line no-control-regex
-const UNSAFE_MESSAGE_CHARACTERS = /[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g
-const TRANSPORT_INTERNAL_MESSAGES = new Set(['Request failed', 'Network Error'])
-
-/**
- * A server message fit to show: control and bidi characters removed, spaces collapsed, at most 280 characters; null
- * for a non-string, an empty text or a bare transport error ("Network Error").
- */
-export function cleanServerMessage(value: unknown): string | null {
-  if (typeof value !== 'string') {
-    return null
-  }
-
-  const trimmed = value.replace(UNSAFE_MESSAGE_CHARACTERS, ' ').replace(/\s+/g, ' ').trim()
-  if (!trimmed || TRANSPORT_INTERNAL_MESSAGES.has(trimmed)) {
-    return null
-  }
-
-  return trimmed.length > MAX_USER_MESSAGE_LENGTH ? `${truncateText(trimmed, MAX_USER_MESSAGE_LENGTH - 3)}...` : trimmed
+/** Maps an HTTP status code to its generic SDD Table 6.3 message, or null when no status-specific message applies. */
+export function httpStatusMessage(status: number | undefined, fallback?: string): string | null {
+  if (status === 401) return apiClientMessage('unauthorized')
+  if (status === 403) return apiClientMessage('forbidden')
+  if (status === 404) return fallback ?? apiClientMessage('notFound')
+  if (status === 429) return apiClientMessage('rateLimited')
+  if (status && status >= 500) return apiClientMessage('server')
+  return null
 }
 
 /**
@@ -59,21 +50,27 @@ export function resolveApiError(reason: unknown, fallback?: string): string {
   // FRLANG02: known backend messages are shown in the interface language; others stay as sent.
   if (serverMessage) return localizeServerMessage(serverMessage, documentLanguage())
 
-  const status = payload?.response?.status
-  if (status === 401) return apiClientMessage('unauthorized')
-  if (status === 403) return apiClientMessage('forbidden')
-  if (status === 404) return fallback ?? apiClientMessage('notFound')
-  if (status === 429) return apiClientMessage('rateLimited')
-  if (status && status >= 500) return apiClientMessage('server')
+  const statusMessage = httpStatusMessage(payload?.response?.status, fallback)
+  if (statusMessage) return statusMessage
 
-  // Axios marks a timed-out request with this code.
-  if (payload?.code === 'ECONNABORTED') return apiClientMessage('timeout')
+  // Axios marks a timed-out request with ECONNABORTED or ETIMEDOUT.
+  if (payload?.code === 'ECONNABORTED' || payload?.code === 'ETIMEDOUT') return apiClientMessage('timeout')
 
-  if (payload?.request && !payload?.response) {
+  if (isNetworkError(reason)) {
     return apiClientMessage('network')
   }
 
   return fallback ?? apiClientMessage('fallback')
+}
+
+/** True when a request failed at the transport layer with no HTTP response, and was neither cancelled nor timed out. */
+export function isNetworkError(reason: unknown): boolean {
+  if (isCancel(reason)) return false
+  const payload = reason as ApiErrorPayload | null
+  if (payload?.code === 'ERR_CANCELED' || payload?.code === 'ECONNABORTED' || payload?.code === 'ETIMEDOUT') {
+    return false
+  }
+  return Boolean(payload?.request) && !payload?.response
 }
 
 /** HTTP status of a failed request, or null for network errors and non-HTTP failures. */

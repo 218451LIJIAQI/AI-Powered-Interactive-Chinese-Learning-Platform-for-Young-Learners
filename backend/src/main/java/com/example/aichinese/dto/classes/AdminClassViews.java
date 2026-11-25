@@ -137,8 +137,6 @@ public final class AdminClassViews {
             boolean hasUnpublishedChanges,
             boolean editable,
             String title,
-            Integer minutes,
-            String summary,
             List<LessonViews.KeyPhrase> keyPhrases,
             Video video,
             long videoUploadMaxBytes,

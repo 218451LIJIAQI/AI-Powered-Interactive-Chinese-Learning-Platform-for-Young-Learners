@@ -1,10 +1,9 @@
 import type { AxiosAdapter, InternalAxiosRequestConfig } from 'axios'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import { apiDownload } from './request'
-import { authApi, notificationsApi, publicApi, shellApi, studentApi, systemApi } from './services'
+import { authApi, notificationsApi, publicApi, shellApi, systemApi } from './services'
 import { http, setAccessToken } from './http'
-import { adminSupportApi } from './ops'
 import {
   axiosHttpError,
   axiosResponse,
@@ -17,6 +16,7 @@ import { deferred } from '@/test/helpers'
 const PASSWORD = 'Password123!'
 
 restoreAxiosAdapterAfterEach()
+afterEach(() => setAccessToken(null))
 
 function downloadResponse(config: InternalAxiosRequestConfig, blob: Blob) {
   return {
@@ -53,7 +53,7 @@ describe('REST API envelope handling', () => {
 })
 
 describe('shared REST API wrappers', () => {
-  it('map auth, notification, system and student calls to their endpoints', async () => {
+  it('map auth, public, notification, shell and system calls to their endpoints', async () => {
     await expectRequests([
       [() => authApi.login({ email: 'student@example.com', password: PASSWORD }), 'POST /auth/login'],
       [
@@ -67,14 +67,32 @@ describe('shared REST API wrappers', () => {
         'POST /auth/register/student',
       ],
       [() => authApi.me(), 'GET /auth/me'],
-      [() => authApi.session(), 'GET /users/me/session'],
       [() => authApi.logout(), 'POST /auth/logout'],
       [() => authApi.forgotPassword('student@example.com'), 'POST /auth/forgot-password'],
       [
         () => authApi.resetPassword({ token: 't', password: PASSWORD, confirmPassword: PASSWORD }),
         'POST /auth/reset-password',
       ],
+      [() => authApi.checkResetLink('t'), 'POST /auth/reset-password/check'],
+      [() => authApi.confirmEmail('t'), 'POST /auth/confirm-email'],
+      [() => authApi.confirmSignupEmail('t'), 'POST /auth/confirm-signup-email'],
+      [() => authApi.checkAdminInvite('t'), 'POST /auth/admin-invite/check'],
+      [
+        () =>
+          authApi.acceptAdminInvite({
+            token: 't',
+            fullName: 'A',
+            password: 'p',
+            confirmPassword: 'p',
+            preferredLanguage: 'zh-CN',
+          }),
+        'POST /auth/admin-invite/accept',
+      ],
       [() => publicApi.platformSettings(), 'GET /public/platform-settings'],
+      [
+        () => publicApi.sendHelpMessage({ email: 'a@b.co', topic: 'ACCOUNT', message: 'Hi', language: 'ms' }),
+        'POST /public/support',
+      ],
       [() => notificationsApi.page({ status: 'READ', page: 1, size: 20 }), 'GET /notifications'],
       [() => notificationsApi.unreadCount(), 'GET /notifications/unread-count'],
       [() => notificationsApi.markAsRead(7), 'PATCH /notifications/7/read'],
@@ -82,7 +100,6 @@ describe('shared REST API wrappers', () => {
       [() => notificationsApi.markUnread([3, 4]), 'PATCH /notifications/unread'],
       [() => shellApi.navCounts(), 'GET /users/me/nav-counts'],
       [() => systemApi.health(), 'GET /health'],
-      [() => studentApi.rewards(), 'GET /students/rewards'],
     ])
   })
 
@@ -90,7 +107,7 @@ describe('shared REST API wrappers', () => {
     const blob = new Blob(['%PDF'], { type: 'application/pdf' })
     http.defaults.adapter = (async (config) => downloadResponse(config, blob)) satisfies AxiosAdapter
 
-    await expect(adminSupportApi.attachment(4)).resolves.toMatchObject({ blob, fileName: 'support attachment.pdf' })
+    await expect(apiDownload('/downloads/sample')).resolves.toMatchObject({ blob, fileName: 'support attachment.pdf' })
   })
 
   it('reads the JSON error body of a failed blob download so the server message can be shown', async () => {
@@ -101,7 +118,7 @@ describe('shared REST API wrappers', () => {
       throw axiosHttpError(config, 404, body)
     }) satisfies AxiosAdapter
 
-    await expect(adminSupportApi.attachment(4)).rejects.toMatchObject({
+    await expect(apiDownload('/downloads/sample')).rejects.toMatchObject({
       response: { status: 404, data: { success: false, message: 'Attachment not found.' } },
     })
   })
@@ -115,7 +132,7 @@ describe('shared REST API wrappers', () => {
       return downloadResponse(config, new Blob(['private attachment']))
     }
     setAccessToken('attachment-owner')
-    const download = adminSupportApi.attachment(4)
+    const download = apiDownload('/downloads/sample')
     await started.promise
     setAccessToken(null)
     release.resolve()
@@ -128,7 +145,8 @@ describe('shared REST API wrappers', () => {
     await notificationsApi.page({ status: 'READ', page: 2, size: 15 })
     await notificationsApi.markUnread([3, 4])
 
-    expect(calls).toEqual([
+    expect(calls).toHaveLength(2)
+    expect(calls).toMatchObject([
       { method: 'GET', url: '/notifications', params: { status: 'READ', page: 2, size: 15 }, data: undefined },
       { method: 'PATCH', url: '/notifications/unread', params: undefined, data: { ids: [3, 4] } },
     ])

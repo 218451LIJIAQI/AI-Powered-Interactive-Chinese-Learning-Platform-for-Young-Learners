@@ -1,7 +1,5 @@
 package com.example.aichinese.entity.enums;
 
-import java.util.Optional;
-
 public enum QuizQuestionType {
 
     MULTIPLE_CHOICE,
@@ -28,10 +26,6 @@ public enum QuizQuestionType {
             "Invalid question type. Allowed values are MULTIPLE_CHOICE, TRUE_FALSE, "
                     + "FILL_BLANK, MATCH_WORD_MEANING, MATCH_WORD_IMAGE, LISTEN_CHOOSE, "
                     + "REARRANGE_SENTENCE, CHOOSE_PINYIN, CHOOSE_TONE, or CHARACTER_MEANING.";
-
-    public static Optional<QuizQuestionType> tryFrom(String value) {
-        return EnumLookups.tryFrom(QuizQuestionType.class, value);
-    }
 
     public boolean isOptionBased() {
         return this != FILL_BLANK && this != REARRANGE_SENTENCE;

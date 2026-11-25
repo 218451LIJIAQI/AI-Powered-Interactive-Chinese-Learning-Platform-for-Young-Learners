@@ -3,7 +3,10 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { i18n } from '@/plugins/i18n'
 
-vi.mock('vue-router', async () => ({ RouterLink: (await import('@/test/helpers')).routerLinkStub }))
+vi.mock('vue-router', async () => ({
+  RouterLink: (await import('@/test/helpers')).routerLinkStub,
+  useRoute: () => ({ hash: '' }),
+}))
 
 import SafetyPage from './SafetyPage.vue'
 

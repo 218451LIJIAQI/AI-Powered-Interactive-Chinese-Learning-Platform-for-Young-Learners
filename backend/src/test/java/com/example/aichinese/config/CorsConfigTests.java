@@ -79,7 +79,7 @@ class CorsConfigTests {
             "https://example.test:0, port"
     })
     void rejectsAnInvalidConfiguredOrigin(String origin, String expectedMessage) {
-        assertThatThrownBy(() -> config.corsConfigurationSource(origin))
+        assertThatThrownBy(() -> corsConfigurationSource(config, origin))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining(expectedMessage);
     }
@@ -106,7 +106,7 @@ class CorsConfigTests {
     void prodProfileRequiresExplicitCorsOrigins() {
         CorsConfig prodConfig = new CorsConfig(environment("prod"));
 
-        assertThatThrownBy(() -> prodConfig.corsConfigurationSource("  ,  *  ,"))
+        assertThatThrownBy(() -> corsConfigurationSource(prodConfig, "  ,  *  ,"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("APP_CORS_ALLOWED_ORIGINS");
     }
@@ -115,10 +115,10 @@ class CorsConfigTests {
     void prodProfileRequiresPublicHttpsCorsOrigins() {
         CorsConfig prodConfig = new CorsConfig(environment("prod"));
 
-        assertThatThrownBy(() -> prodConfig.corsConfigurationSource("http://app.example.test"))
+        assertThatThrownBy(() -> corsConfigurationSource(prodConfig, "http://app.example.test"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("HTTPS");
-        assertThatThrownBy(() -> prodConfig.corsConfigurationSource("https://localhost:5173"))
+        assertThatThrownBy(() -> corsConfigurationSource(prodConfig, "https://localhost:5173"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("non-loopback public host");
     }
@@ -141,7 +141,7 @@ class CorsConfigTests {
     })
     void productionRefusesLocalDestinations(String origin) {
         CorsConfig prod = new CorsConfig(environment("production"));
-        assertThatThrownBy(() -> prod.corsConfigurationSource(origin))
+        assertThatThrownBy(() -> corsConfigurationSource(prod, origin))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("public host");
     }
@@ -150,7 +150,7 @@ class CorsConfigTests {
     void aNumberedDnsLabelRemainsAHostName() {
         CorsConfig prod = new CorsConfig(environment("prod"));
         String origin = "https://127.campus.example.test";
-        UrlBasedCorsConfigurationSource source = (UrlBasedCorsConfigurationSource) prod.corsConfigurationSource(origin);
+        UrlBasedCorsConfigurationSource source = corsConfigurationSource(prod, origin);
         assertThat(source.getCorsConfigurations().get("/api/**").checkOrigin(origin)).isEqualTo(origin);
     }
 
@@ -169,8 +169,10 @@ class CorsConfigTests {
     }
 
     private CorsConfiguration apiCorsConfiguration(String allowedOrigins) {
-        UrlBasedCorsConfigurationSource source =
-                (UrlBasedCorsConfigurationSource) config.corsConfigurationSource(allowedOrigins);
-        return source.getCorsConfigurations().get("/api/**");
+        return corsConfigurationSource(config, allowedOrigins).getCorsConfigurations().get("/api/**");
+    }
+
+    private static UrlBasedCorsConfigurationSource corsConfigurationSource(CorsConfig target, String allowedOrigins) {
+        return (UrlBasedCorsConfigurationSource) target.corsConfigurationSource(target.corsAllowedOrigins(allowedOrigins));
     }
 }

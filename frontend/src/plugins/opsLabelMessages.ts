@@ -72,4 +72,4 @@ export const opsLabelMessages = {
       HINT: '提示',
     } satisfies Record<AiFeatureKey, string>,
   },
-}
+} as const

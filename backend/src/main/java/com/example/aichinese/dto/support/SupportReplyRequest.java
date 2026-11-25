@@ -1,7 +1,9 @@
 package com.example.aichinese.dto.support;
 
 import static com.example.aichinese.dto.DtoNormalization.redactLength;
-import static com.example.aichinese.dto.DtoNormalization.strip;
+import static com.example.aichinese.dto.DtoNormalization.stripMultiline;
+
+import com.example.aichinese.util.AiInputSanitizer;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -12,7 +14,7 @@ public record SupportReplyRequest(
         String body) {
 
     public SupportReplyRequest {
-        body = strip(body);
+        body = AiInputSanitizer.sanitizeUnbounded(stripMultiline(body));
     }
 
     @Override

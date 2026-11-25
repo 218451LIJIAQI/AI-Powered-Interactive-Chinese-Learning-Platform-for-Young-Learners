@@ -1,6 +1,7 @@
+import { flushPromises } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { pageOf } from '@/test/helpers'
+import { deferred, pageOf } from '@/test/helpers'
 import { mountAtRoute } from '@/test/routes'
 import type { ClassCard } from '@/types/classes'
 
@@ -57,7 +58,9 @@ describe('StudentFindClassesPage', () => {
     expect(cards[1]!.get('[data-testid="in-your-plan"]').text()).toBe('In your plan')
     expect(cards[2]!.get('[data-testid="in-your-plan"]').text()).toBe('In your plan')
     expect(cards[1]!.get('.btn').text()).toBe('View class')
-    expect(cards[1]!.get('.btn').attributes('href')).toBe('/student/classes/2')
+    expect(cards[1]!.findAll('a')).toHaveLength(1)
+    expect(cards[1]!.get('a').attributes('href')).toBe('/student/classes/2')
+    expect(cards[1]!.get('a').attributes('aria-label')).toBe('View class Shopping and Prices')
     expect(wrapper.findAll('.route-tab-count').map((badge) => badge.text())).toEqual(['2', '3'])
   })
 
@@ -66,6 +69,7 @@ describe('StudentFindClassesPage', () => {
     const wrapper = await mountPage()
 
     expect(wrapper.text()).toContain('You have joined every class')
+    expect(wrapper.get('.state-panel a.btn-primary').attributes('href')).toBe('/student/classes')
     const tab = wrapper.findAll('.route-tab').find((link) => link.text().includes('My classes'))!
     expect(tab.get('.route-tab-count').text()).toBe('2')
     expect(api.catalogueMembership).toHaveBeenCalledTimes(1)
@@ -76,6 +80,20 @@ describe('StudentFindClassesPage', () => {
 
     expect(wrapper.text()).toContain('No classes yet')
     expect(wrapper.text()).not.toContain('You have joined every class')
+  })
+
+  it('shows localized loading copy while membership is still loading for an empty catalogue', async () => {
+    const pendingMembership = deferred<{ joinedCount: number; plannedClassIds: number[] }>()
+    api.catalogueMembership.mockReturnValue(pendingMembership.promise)
+    const wrapper = await mountPage()
+
+    expect(wrapper.get('.state-panel').text()).toContain('Loading your content')
+    expect(wrapper.text()).not.toContain('common.loading')
+    expect(wrapper.text()).not.toContain('No classes yet')
+
+    pendingMembership.resolve({ joinedCount: 0, plannedClassIds: [] })
+    await flushPromises()
+    expect(wrapper.text()).toContain('No classes yet')
   })
 
   it('keeps the catalogue available if personal badges cannot load', async () => {

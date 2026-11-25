@@ -2,11 +2,11 @@
   <canvas
     ref="canvas"
     v-bind="$attrs"
+    class="tracing-pad-canvas"
     :tabindex="disabled ? -1 : 0"
     role="application"
     :aria-label="label"
     :aria-describedby="keysId"
-    :title="t('tracingPad.keyboard')"
     @focus="onFocus"
     @blur="onBlur"
     @pointerdown="onPointerDown"
@@ -21,17 +21,16 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, toRaw, useId, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
-import { useLocalMessages } from '@/composables/useLocalMessages'
-import { tracingPadMessages } from '@/plugins/tracingPadMessages'
 import { tracingGlyphs, moveCursor, toCanvasPoint, type StrokePoint } from '@/utils/tracing'
 
 /**
  * A 田字格 writing pad (purple guides, ink strokes), one square cell of `cellSize` per character, with an optional
  * faint model glyph under the strokes. The strokes are the v-model: the caller counts, undoes and clears them. Draw
- * with a mouse, a finger or a pen; keyboard: Space (or Enter) starts or ends a stroke, the arrow keys draw. The caller
- * styles the canvas through its class (keep `touch-action: none` there, so a finger draws instead of scrolling).
- * `disabled` keeps the strokes on show and takes no more input.
+ * with a mouse, trackpad or stylus; keyboard: Space (or Enter) starts or ends a stroke, the arrow keys draw. The pad
+ * sets `touch-action: none` on its own canvas so stylus input draws instead of scrolling; callers style sizing and
+ * borders through their class. `disabled` keeps the strokes on show and takes no more input.
  */
 defineOptions({ inheritAttrs: false })
 const props = defineProps<{
@@ -44,13 +43,14 @@ const props = defineProps<{
 const strokes = defineModel<StrokePoint[][]>('strokes', { required: true })
 
 const KEY_STEP = 10
+const COARSE_KEY_STEP = 40
 const MIN_POINTS = 2
 /** Ink width, model glyph size and the glyph's drop below the middle, as parts of a cell. */
 const INK = 1 / 26
 const GLYPH = 0.72
 const GLYPH_DROP = 0.023
 
-const { t } = useLocalMessages({ tracingPad: tracingPadMessages })
+const { t } = useI18n()
 const keysId = `${useId()}-keys`
 
 const canvas = ref<HTMLCanvasElement | null>(null)
@@ -65,6 +65,8 @@ let cursor: StrokePoint = { x: props.cellSize / 2, y: props.cellSize / 2 }
 let showCursor = false
 let context: CanvasRenderingContext2D | null = null
 let palette = { ink: '', guide: '', model: '', font: '', cursor: '', paper: '' }
+const forcedColorsQuery = typeof window !== 'undefined' ? window.matchMedia?.('(forced-colors: active)') : undefined
+let forcedColors = false
 
 function setup(): void {
   const element = canvas.value
@@ -77,14 +79,24 @@ function setup(): void {
   // Canvas cannot read var(); the tokens are read once the pad is mounted.
   const style = window.getComputedStyle(element)
   const token = (name: string) => style.getPropertyValue(name).trim()
-  palette = {
-    ink: token('--color-ink-900'),
-    guide: token('--grid-line'),
-    model: token('--color-ink-a12'),
-    font: token('--font-hanzi'),
-    cursor: token('--color-primary-700'),
-    paper: token('--surface-card'),
-  }
+  forcedColors = Boolean(forcedColorsQuery?.matches)
+  palette = forcedColors
+    ? {
+        ink: 'CanvasText',
+        guide: 'GrayText',
+        model: 'GrayText',
+        font: token('--font-hanzi'),
+        cursor: 'Highlight',
+        paper: 'Canvas',
+      }
+    : {
+        ink: token('--color-ink-900'),
+        guide: token('--grid-line'),
+        model: token('--color-ink-a12'),
+        font: token('--font-hanzi'),
+        cursor: token('--color-primary-700'),
+        paper: token('--surface-card'),
+      }
   redraw()
 }
 
@@ -116,7 +128,10 @@ function redraw(): void {
     }
     ctx.stroke()
     if (props.showModel) {
+      ctx.save()
+      if (forcedColors) ctx.globalAlpha = 0.25
       ctx.fillText(glyph, left + size / 2, size / 2 + Math.round(size * GLYPH_DROP))
+      ctx.restore()
     }
   }
   ctx.restore()
@@ -243,7 +258,14 @@ function onBlur(): void {
 }
 
 function onKeydown(event: KeyboardEvent): void {
-  if (props.disabled || capturedPointer !== null) return
+  if (props.disabled || capturedPointer !== null || event.isComposing || event.altKey || event.ctrlKey || event.metaKey)
+    return
+  if (event.key === 'Escape' && current) {
+    event.preventDefault()
+    event.stopPropagation()
+    cancelStroke()
+    return
+  }
   if (event.key === ' ' || event.key === 'Enter') {
     event.preventDefault()
     if (event.repeat) return
@@ -255,7 +277,17 @@ function onKeydown(event: KeyboardEvent): void {
     }
     return
   }
-  const moved = moveCursor(cursor, event.key, KEY_STEP, width.value, props.cellSize)
+  if (!current && glyphs.value.length > 1 && (event.key === 'PageDown' || event.key === 'PageUp')) {
+    event.preventDefault()
+    const currentCell = Math.min(glyphs.value.length - 1, Math.max(0, Math.floor(cursor.x / props.cellSize)))
+    const nextCell = Math.min(glyphs.value.length - 1, Math.max(0, currentCell + (event.key === 'PageDown' ? 1 : -1)))
+    showCursor = true
+    cursor = { x: nextCell * props.cellSize + props.cellSize / 2, y: props.cellSize / 2 }
+    redraw()
+    return
+  }
+  const step = event.shiftKey ? COARSE_KEY_STEP : KEY_STEP
+  const moved = moveCursor(cursor, event.key, step, width.value, props.cellSize)
   if (!moved) return
   event.preventDefault()
   showCursor = true
@@ -266,6 +298,7 @@ function onKeydown(event: KeyboardEvent): void {
 
 onMounted(() => {
   setup()
+  forcedColorsQuery?.addEventListener?.('change', setup)
   // Redraw once the Hanzi webfont finishes loading so the model glyph never stays in fallback font.
   void document.fonts?.ready.then(() => {
     if (!disposed) redraw()
@@ -273,6 +306,7 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   disposed = true
+  forcedColorsQuery?.removeEventListener?.('change', setup)
   cancelStroke()
 })
 watch([() => props.characters, () => props.cellSize], () => {
@@ -294,3 +328,9 @@ watch(strokes, (value) => {
 })
 watch(() => props.showModel, redraw)
 </script>
+
+<style scoped>
+.tracing-pad-canvas {
+  touch-action: none;
+}
+</style>

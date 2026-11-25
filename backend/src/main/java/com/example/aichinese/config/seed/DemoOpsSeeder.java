@@ -6,7 +6,6 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.temporal.TemporalAdjusters;
 import java.util.List;
-import java.util.Locale;
 import java.util.stream.Stream;
 
 import org.slf4j.Logger;
@@ -43,9 +42,14 @@ import com.example.aichinese.repository.SupportRequestRepository;
 import com.example.aichinese.repository.SystemSettingRepository;
 import com.example.aichinese.repository.UserRepository;
 import com.example.aichinese.service.AiResponseReportService;
+import com.example.aichinese.service.AuditLogService;
+import com.example.aichinese.service.AuthService;
 import com.example.aichinese.service.PlatformSettingsService;
-import com.example.aichinese.service.admin.AuditLogQueryService;
+import com.example.aichinese.service.admin.AdminUserService;
+import com.example.aichinese.service.classes.ClassAuthoringAccess;
+import com.example.aichinese.service.classes.ClassAuthoringService;
 import com.example.aichinese.service.classes.ClassContentSupport;
+import com.example.aichinese.service.learn.LearnerNotifications;
 import com.example.aichinese.service.learn.LearnerReminderJobs;
 import com.example.aichinese.service.learn.PracticeSetDirectory;
 import com.example.aichinese.service.support.SupportService;
@@ -154,7 +158,8 @@ public class DemoOpsSeeder implements CommandLineRunner {
         SupportRequest visitorRequest = request(1041, null, SupportRequesterRole.VISITOR, SupportTopic.ACCOUNT,
                 "Can't sign in after resetting my password", VISITOR_EMAIL, clock.now().minusHours(2));
         save(visitorRequest, "I reset my password, but the new one still doesn't work on the sign-in page.");
-        notifyNewRequest(admin, visitorRequest, "A visitor (" + VISITOR_EMAIL + ")");
+        notify(admin, SupportService.newRequestDraft(visitorRequest, "A visitor (" + VISITOR_EMAIL + ")"),
+                visitorRequest.getCreatedAt(), false);
 
         // Sent from "Still not loading? Report a problem" under the lesson video (Topic Classes, the message prefilled).
         SupportRequest videoRequest = request(1042, student, SupportRequesterRole.STUDENT, SupportTopic.CLASSES,
@@ -162,7 +167,8 @@ public class DemoOpsSeeder implements CommandLineRunner {
         save(videoRequest,
                 "The video “Meeting a classmate” in the Meeting Classmates lesson doesn’t load. It stays at 0:00. "
                         + "I tried Chrome and Edge.");
-        notifyNewRequest(admin, videoRequest, student.getDisplayName());
+        notify(admin, SupportService.newRequestDraft(videoRequest, student.getDisplayName()),
+                videoRequest.getCreatedAt(), false);
     }
 
     /** A request as its requester sent it, not saved yet: see {@link #save(SupportRequest, String)}. */
@@ -226,30 +232,17 @@ public class DemoOpsSeeder implements CommandLineRunner {
 
     // Notifications
 
-    /** "New support request", worded, targeted and linked as SupportService tells the admins of a request it receives. */
-    private void notifyNewRequest(User admin, SupportRequest request, String sender) {
-        notify(admin, NotificationType.SUPPORT_REQUEST, "New support request",
-                sender + " sent #" + request.getNumber() + " “" + request.getSubject() + "”. Reply within 2 working days.",
-                SupportService.TARGET_TYPE, request.getId(), "/admin/support?request=" + request.getId(),
-                request.getCreatedAt(), false);
-    }
-
     /**
-     * The notifications the real flows send for the demo's AI reports, worded, targeted and linked as
-     * AiResponseReportService writes them and stamped with the time of the event.
+     * The notifications the real flows send for the demo's AI reports, built through {@link AiResponseReportService}
+     * and stamped with the time of the event.
      */
     private void seedAiReportNotifications(User admin, List<AiResponseReport> reports) {
         for (AiResponseReport report : reports) {
             boolean waiting = report.getStatus() == AiResponseReportStatus.PENDING_REVIEW;
-            notify(admin, NotificationType.ADMIN_TASK, "AI report needs review",
-                    report.getStudentUser().getDisplayName() + " reported an AI answer ("
-                            + report.getReasonCategory().name().replace('_', ' ').toLowerCase(Locale.ROOT) + ").",
-                    AiResponseReportService.TARGET_TYPE, report.getId(), AiResponseReportService.adminReportPath(report),
+            notify(admin, AiResponseReportService.needsReviewDraft(report, report.getStudentUser().getDisplayName()),
                     report.getCreatedAt(), !waiting);
             if (report.getStatus() == AiResponseReportStatus.RESOLVED) {
-                notify(report.getStudentUser(), NotificationType.AI_REPORT_REVIEW, "An admin replied to your AI report",
-                        "Your report was resolved. Read the admin's note in AI Helper › Ask SparkBot › My reports.",
-                        AiResponseReportService.TARGET_TYPE, report.getId(), AiResponseReportService.STUDENT_REPORTS_PATH,
+                notify(report.getStudentUser(), AiResponseReportService.reviewedDraft(report, true),
                         report.getReviewedAt(), true);
             }
         }
@@ -257,10 +250,10 @@ public class DemoOpsSeeder implements CommandLineRunner {
 
     /**
      * Amira's inbox as in the prototype (S3.09): with the AI report reply of {@link #seedAiReportNotifications}, six
-     * notifications, three unread, worded, targeted and linked as LearnerNotifications writes them and stamped with the
-     * time of their event: today's daily-goal reminder (her 20 of 30 XP), the new listening set At the Café, the weekly
-     * mistakes reminder (her six mistakes), Rank 3 (reached two days ago, DemoLearnSeeder) and an update of the
-     * Greetings lesson of her class Mandarin Foundations three weeks ago.
+     * notifications, three unread, built through {@link LearnerNotifications} and stamped with the time of their event:
+     * today's daily-goal reminder (her 20 of 30 XP), the new listening set At the Café, the weekly mistakes reminder
+     * (her six mistakes), Rank 3 (reached two days ago, DemoLearnSeeder) and an update of the Greetings lesson of her
+     * class Mandarin Foundations three weeks ago.
      */
     private void seedLearnerNotifications(User student) {
         LocalDateTime todayStart = clock.at(clock.today(), LocalTime.MIDNIGHT);
@@ -268,47 +261,32 @@ public class DemoOpsSeeder implements CommandLineRunner {
         if (goalReminderAt.isBefore(todayStart)) {
             goalReminderAt = todayStart;
         }
-        notify(student, NotificationType.DAILY_GOAL_REMINDER, "Daily goal reminder",
-                "You're 10 XP away from today's goal.", null, null, "/student/home",
-                goalReminderAt, false);
+        notify(student, LearnerNotifications.dailyGoalReminderDraft(10), goalReminderAt, false);
         practiceSets.sets(PracticeType.LISTENING, ContentStatus.PUBLISHED).stream()
                 .filter(set -> "At the Café".equals(set.getTitle()))
                 .findFirst()
-                .ifPresent(set -> notify(student, NotificationType.NEW_PRACTICE_SET, "New in Practice",
-                        "A new listening set is ready: “At the Café”.", PracticeType.LISTENING.referenceType(),
-                        set.getId(), "/student/practice/listening?set=" + set.getId(), clock.daysAgo(0, 9, 30), false));
-        notify(student, NotificationType.MISTAKES_TO_REVIEW, "Mistakes to review",
-                "You have 6 mistakes saved. Fixing them takes about 3 minutes.", null, null,
-                "/student/practice/mistakes", clock.daysAgo(1, 10, 0), false);
-        notify(student, NotificationType.RANK_REACHED, "You reached Rank 3",
-                "You're now Rank 3 · Regular. Rank 4 is next.", "RANK", 3L, "/student/progress",
-                clock.daysAgo(2, 18, 30), true);
+                .ifPresent(set -> notify(student,
+                        LearnerNotifications.newPracticeSetDraft(PracticeType.LISTENING, set.getId(), set.getTitle()),
+                        clock.daysAgo(0, 9, 30), false));
+        notify(student, LearnerNotifications.mistakesToReviewDraft(6), clock.daysAgo(1, 10, 0), false);
+        notify(student, LearnerNotifications.rankReachedDraft(3), clock.daysAgo(2, 18, 30), true);
         lessonRepository.findByClassAndLessonTitle("Mandarin Foundations", DemoClassContent.GREETINGS.title())
                 .ifPresent(greetings -> {
                     CoursePackage foundations = classContent.requireClassOfLesson(greetings);
-                    notify(student, NotificationType.LESSON_UPDATED, "Lesson updated",
-                            "“" + greetings.getTitle() + "” in " + foundations.getTitle() + " was updated with new content.",
-                            "LESSON", greetings.getId(),
-                            "/student/classes/" + foundations.getId() + "/lessons/" + greetings.getId(),
+                    notify(student,
+                            LearnerNotifications.lessonUpdatedDraft(
+                                    foundations.getId(), foundations.getTitle(), greetings.getId(), greetings.getTitle()),
                             clock.daysAgo(21, 10, 0), true);
                 });
     }
 
-    private void notify(User recipient, NotificationType type, String title, String message, String targetType,
-            Long targetId, String path, LocalDateTime at, boolean read) {
-        Notification notification = new Notification();
-        notification.setUser(recipient);
-        notification.setNotificationType(type);
-        notification.setTitle(title);
-        notification.setMessage(message);
-        notification.setTargetType(targetType);
-        notification.setTargetId(targetId);
-        notification.setTargetPath(path);
-        notification.setNotificationStatus(read ? NotificationStatus.READ : NotificationStatus.UNREAD);
-        notification.setReadAt(read ? at.plusHours(1) : null);
-        notification.setCreatedAt(at);
-        notification.setUpdatedAt(read ? notification.getReadAt() : at);
-        entityManager.persist(notification);
+    private void notify(User recipient, Notification draft, LocalDateTime at, boolean read) {
+        draft.setUser(recipient);
+        draft.setNotificationStatus(read ? NotificationStatus.READ : NotificationStatus.UNREAD);
+        draft.setReadAt(read ? at.plusHours(1) : null);
+        draft.setCreatedAt(at);
+        draft.setUpdatedAt(read ? draft.getReadAt() : at);
+        entityManager.persist(draft);
     }
 
     // Audit log
@@ -318,21 +296,24 @@ public class DemoOpsSeeder implements CommandLineRunner {
         Stream<User> others = DemoPersonas.OTHER_STUDENTS.stream()
                 .map(persona -> userRepository.findByEmailWithRoles(persona.email()).orElseThrow());
         Stream.concat(Stream.of(student), Stream.concat(others, Stream.of(deactivated)))
-                .forEach(learner -> audit(learner, "ACCOUNT_CREATED", AuditLogQueryService.TARGET_USER, learner.getId(),
-                        null, null, "User created a learner account.", learner.getCreatedAt()));
-        audit(admin, "ADMIN_USER_DEACTIVATE", AuditLogQueryService.TARGET_USER, deactivated.getId(),
+                .forEach(learner -> audit(learner, AuthService.ACTION_ACCOUNT_CREATED, AuditLogService.TARGET_USER,
+                        learner.getId(), null, null, "User created a learner account.", learner.getCreatedAt()));
+        audit(admin, AdminUserService.ACTION_DEACTIVATE, AuditLogService.TARGET_USER, deactivated.getId(),
                 deactivated.getDisplayName(), "Shared the account with another person, against the Terms of Service.",
                 "Admin deactivated the account: signed out, sign-in blocked.", clock.daysAgo(6, 9, 15));
         List<CoursePackage> classes = coursePackageRepository.findAll();
         for (CoursePackage coursePackage : classes) {
-            audit(admin, "ADMIN_CLASS_CREATE", "CoursePackage", coursePackage.getId(), coursePackage.getTitle(), null,
+            audit(admin, ClassAuthoringService.ACTION_CLASS_CREATE, ClassAuthoringAccess.TARGET_CLASS,
+                    coursePackage.getId(), coursePackage.getTitle(), null,
                     "Admin created a class as a draft.", coursePackage.getCreatedAt());
             if (coursePackage.getContentStatus() != ContentStatus.DRAFT) {
-                audit(admin, "ADMIN_CLASS_PUBLISH", "CoursePackage", coursePackage.getId(), coursePackage.getTitle(), null,
+                audit(admin, ClassAuthoringService.ACTION_CLASS_PUBLISH, ClassAuthoringAccess.TARGET_CLASS,
+                        coursePackage.getId(), coursePackage.getTitle(), null,
                         "Admin published a class.", coursePackage.getCreatedAt().plusDays(2));
             }
             if (coursePackage.getContentStatus() == ContentStatus.ARCHIVED) {
-                audit(admin, "ADMIN_CLASS_ARCHIVE", "CoursePackage", coursePackage.getId(), coursePackage.getTitle(), null,
+                audit(admin, ClassAuthoringService.ACTION_CLASS_ARCHIVE, ClassAuthoringAccess.TARGET_CLASS,
+                        coursePackage.getId(), coursePackage.getTitle(), null,
                         "Admin archived a class.", coursePackage.getArchivedAt());
             }
         }
@@ -341,7 +322,8 @@ public class DemoOpsSeeder implements CommandLineRunner {
                 .forEach(report -> audit(report.getReviewerUser(), AiResponseReportService.REVIEW_RESOLVED_ACTION,
                         AiResponseReportService.TARGET_TYPE, report.getId(), null, null,
                         "Admin resolved an AI report with a note to the student.", report.getReviewedAt()));
-        audit(admin, PlatformSettingsService.SETTINGS_UPDATED_ACTION, "SYSTEM_SETTING", null, null, null,
+        audit(admin, PlatformSettingsService.SETTINGS_UPDATED_ACTION, PlatformSettingsService.TARGET_SYSTEM_SETTING,
+                null, null, null,
                 "Admin updated the AI notice, sensitive-word filter and AI safety check settings.",
                 clock.now().minusHours(4));
     }

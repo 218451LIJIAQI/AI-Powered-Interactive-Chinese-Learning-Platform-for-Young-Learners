@@ -15,11 +15,14 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.example.aichinese.entity.LevelCheckQuestion;
+import com.example.aichinese.entity.enums.PublishStatus;
 
 public interface LevelCheckQuestionRepository extends JpaRepository<LevelCheckQuestion, Long> {
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<LevelCheckQuestion> findLockedById(Long id);
+
+    List<LevelCheckQuestion> findByPublishStatusOrderByIdAsc(PublishStatus publishStatus);
 
     /** Includes earlier questions even if they were unpublished during the learner's run. */
     @Query("""

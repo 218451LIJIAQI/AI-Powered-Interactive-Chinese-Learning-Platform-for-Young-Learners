@@ -30,6 +30,7 @@ import com.example.aichinese.dto.ai.StudentAiResponseReportResponse;
 import com.example.aichinese.dto.ai.XiaomeiConversationRequest;
 import com.example.aichinese.dto.ai.XiaomeiReplyRequest;
 import com.example.aichinese.dto.ai.XiaomeiResponses;
+import com.example.aichinese.security.PublicAuthRequestLimiter;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.AiPracticeCheckService;
 import com.example.aichinese.service.AiResponseReportService;
@@ -43,6 +44,7 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
 import lombok.RequiredArgsConstructor;
@@ -64,6 +66,7 @@ public class AiController {
     private final XiaomeiService xiaomeiService;
     private final AiPracticeCheckService practiceCheckService;
     private final AiResponseReportService aiResponseReportService;
+    private final PublicAuthRequestLimiter requestLimiter;
 
     @GetMapping("/status")
     public ApiResponse<AiHelperStatusResponse> status(@AuthenticationPrincipal SecurityUserDetails currentUser) {
@@ -146,6 +149,7 @@ public class AiController {
             @NotBlank(message = "Target text is required.")
             @Size(max = 100, message = "Target text must not exceed 100 characters.")
             @RequestParam("targetText") String targetText,
+            @Positive(message = "Lesson id must be positive.")
             @RequestParam(value = "lessonId", required = false) Long lessonId,
             @Size(max = 20, message = "Language preference must not exceed 20 characters.")
             @RequestParam(value = "languagePreference", required = false) String languagePreference) {
@@ -189,6 +193,7 @@ public class AiController {
     public ApiResponse<StudentAiResponseReportResponse> reportAiResponse(
             @AuthenticationPrincipal SecurityUserDetails currentUser,
             @Valid @RequestBody CreateAiResponseReportRequest request) {
+        requestLimiter.checkAiReportAllowed(currentUser.getUserId());
         return ApiResponse.success(
                 "AI response report submitted for review successfully.",
                 aiResponseReportService.createReport(currentUser, request));

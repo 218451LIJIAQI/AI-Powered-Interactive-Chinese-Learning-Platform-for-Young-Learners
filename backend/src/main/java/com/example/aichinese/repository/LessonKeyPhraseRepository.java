@@ -9,7 +9,5 @@ import com.example.aichinese.entity.LessonKeyPhrase;
 
 public interface LessonKeyPhraseRepository extends JpaRepository<LessonKeyPhrase, Long> {
 
-    List<LessonKeyPhrase> findByLessonIdOrderBySortOrderAscIdAsc(Long lessonId);
-
     List<LessonKeyPhrase> findByLessonIdInOrderBySortOrderAscIdAsc(Collection<Long> lessonIds);
 }

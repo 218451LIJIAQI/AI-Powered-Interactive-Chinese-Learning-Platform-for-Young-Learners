@@ -27,6 +27,7 @@ import com.example.aichinese.util.TextUtils;
 public class AuditLogService {
 
     private static final Logger log = LoggerFactory.getLogger(AuditLogService.class);
+    public static final String TARGET_USER = "User";
     private static final int MAX_AUDIT_DESCRIPTION_LENGTH = 1000;
     private static final int MAX_TARGET_LABEL_LENGTH = 255;
     private static final int MAX_REASON_LENGTH = 1000;
@@ -73,11 +74,16 @@ public class AuditLogService {
 
     @Transactional
     public void record(SecurityUserDetails actor, String actionType, String targetType, Long targetId, String description) {
+        record(actor, actionType, AuditTarget.of(targetType, targetId), description);
+    }
+
+    @Transactional
+    public void record(SecurityUserDetails actor, String actionType, AuditTarget target, String description) {
         auditLogRepository.save(newAuditLog(
                 userRepository.getReferenceById(actor.getUserId()),
                 actor.getUsername(),
                 actionType,
-                AuditTarget.of(targetType, targetId),
+                target,
                 null,
                 description));
     }

@@ -26,7 +26,6 @@ class MultipartRequestSizeFilterTests {
     private static final String SUPPORT_PATH = "/api/v1/users/me/support";
     private static final String LESSON_VIDEO_PATH = "/api/v1/admin/lessons/1/video";
     private static final String PRACTICE_CHECK_PATH = "/api/v1/ai/practice-checks";
-    private static final DataSize GENERAL_LIMIT = DataSize.ofMegabytes(10);
     private static final DataSize VIDEO_LIMIT = DataSize.ofMegabytes(200);
 
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -39,9 +38,14 @@ class MultipartRequestSizeFilterTests {
     }
 
     @Test
-    void onlyTheAdminLessonVideoRouteGetsTheVideoLimit() throws Exception {
+    void onlyTheAdminLessonVideoRouteGetsTheVideoLimitAndNonUploadRoutesAreRejectedWith415() throws Exception {
         assertRouteLimit(LESSON_VIDEO_PATH, VIDEO_LIMIT);
-        assertRouteLimit("/api/v1/teachers/lessons/1/video", GENERAL_LIMIT);
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        MockFilterChain chain = new MockFilterChain();
+        filter.doFilter(multipartRequest("/api/v1/teachers/lessons/1/video", 128L), response, chain);
+        assertThat(response.getStatus()).isEqualTo(415);
+        assertThat(chain.getRequest()).isNull();
     }
 
     @ParameterizedTest
@@ -136,7 +140,6 @@ class MultipartRequestSizeFilterTests {
 
     private static UploadProperties uploadProperties() {
         UploadProperties properties = new UploadProperties();
-        properties.setMaxFileSize(GENERAL_LIMIT);
         properties.setMaxVideoFileSize(VIDEO_LIMIT);
         return properties;
     }

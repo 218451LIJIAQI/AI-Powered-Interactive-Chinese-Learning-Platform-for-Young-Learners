@@ -1,35 +1,17 @@
-import type { AxiosAdapter } from 'axios'
 import { describe, expect, it } from 'vitest'
 
-import { http } from '@/api/http'
 import { axiosResponse, expectRequests, installAxiosCapture, restoreAxiosAdapterAfterEach } from '@/test/axiosCapture'
 
-import { accountOpsApi, adminOverviewApi, adminSupportApi, adminUsersApi, publicOpsApi, supportApi } from './ops'
+import { accountOpsApi, adminOverviewApi, adminSupportApi, adminUsersApi, supportApi } from './ops'
 
 restoreAxiosAdapterAfterEach()
 
 describe('ops API', () => {
-  it('maps the public links, account and support endpoints', async () => {
+  it('maps the account and support endpoints', async () => {
     await expectRequests([
-      [
-        () => publicOpsApi.sendHelpMessage({ email: 'a@b.co', topic: 'ACCOUNT', message: 'Hi', language: 'ms' }),
-        'POST /public/support',
-      ],
-      [() => publicOpsApi.checkResetLink('t'), 'POST /auth/reset-password/check'],
-      [() => publicOpsApi.confirmEmail('t'), 'POST /auth/confirm-email'],
-      [() => publicOpsApi.checkAdminInvite('t'), 'POST /auth/admin-invite/check'],
-      [
-        () =>
-          publicOpsApi.acceptAdminInvite({
-            token: 't',
-            fullName: 'A',
-            password: 'p',
-            confirmPassword: 'p',
-            preferredLanguage: 'zh-CN',
-          }),
-        'POST /auth/admin-invite/accept',
-      ],
       [() => accountOpsApi.settings(), 'GET /users/me/account'],
+      [() => accountOpsApi.session(), 'GET /users/me/session'],
+      [() => accountOpsApi.resendEmailConfirmation(), 'POST /users/me/email-confirmation'],
       [() => accountOpsApi.updateProfile({ displayName: 'A', preferredLanguage: 'en' }), 'PUT /users/me/profile'],
       [() => accountOpsApi.updateProfile({ preferredLanguage: 'ms' }), 'PUT /users/me/profile'],
       [() => accountOpsApi.updatePreferences({ reviewQueues: false }), 'PUT /users/me/notification-preferences'],
@@ -103,20 +85,17 @@ describe('ops API', () => {
       { actor: 'olivia', page: 1 },
     ])
 
-    const blobCalls: Array<{ url?: string; params?: unknown; responseType?: string }> = []
-    http.defaults.adapter = (async (config) => {
-      blobCalls.push({ url: config.url, params: config.params, responseType: config.responseType })
-      return {
-        ...axiosResponse(config, 200, new Blob(['ok'])),
-        headers: { 'content-disposition': 'attachment; filename="audit.csv"' },
-      }
-    }) satisfies AxiosAdapter
+    const blobCalls = installAxiosCapture((config) => ({
+      ...axiosResponse(config, 200, new Blob(['ok'])),
+      headers: { 'content-disposition': 'attachment; filename="audit.csv"' },
+    }))
 
     const exported = await adminOverviewApi.exportAuditLog({ actor: 'olivia' })
     const attachment = await adminSupportApi.attachment(9)
     expect(exported.fileName).toBe('audit.csv')
     expect(attachment.fileName).toBe('audit.csv')
-    expect(blobCalls).toEqual([
+    expect(blobCalls).toHaveLength(2)
+    expect(blobCalls).toMatchObject([
       { url: '/admin/audit-logs/export', params: { actor: 'olivia' }, responseType: 'blob' },
       { url: '/admin/support/attachments/9', params: undefined, responseType: 'blob' },
     ])

@@ -88,11 +88,11 @@ describe('LandingPage (FRPUB01)', () => {
     const wrapper = mountPage()
 
     const pictures = wrapper.findAll('.landing-how-item .landing-art')
-    expect(pictures.map((picture) => picture.classes().filter((name) => name.startsWith('is-')))).toEqual([
-      ['is-path'],
-      ['is-cards'],
-      ['is-chat'],
-      ['is-scenes'],
+    expect(pictures.map((picture) => picture.element.firstElementChild?.className)).toEqual([
+      expect.objectContaining({ baseVal: 'landing-art-path' }),
+      'landing-art-cards',
+      'landing-art-chat',
+      'landing-art-scenes',
     ])
     expect(pictures.every((picture) => picture.attributes('aria-hidden') === 'true')).toBe(true)
   })

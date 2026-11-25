@@ -1,5 +1,5 @@
-import { computed, onScopeDispose, shallowRef, watch, type Ref, type WatchHandle } from 'vue'
-import { useRouter, type RouteLocationNormalized, type RouteLocationRaw } from 'vue-router'
+import { computed, shallowRef, watch, type Ref, type ShallowRef, type WatchHandle } from 'vue'
+import { useRouter, type RouteLocationNormalized, type RouteLocationRaw, type Router } from 'vue-router'
 
 /**
  * Normalises a route transition to its initial navigation target so multi-hop redirects, redirect-to-duplicate
@@ -10,22 +10,30 @@ function navigationRoot(to: RouteLocationNormalized): RouteLocationNormalized {
   return (to.redirectedFrom as RouteLocationNormalized | undefined) ?? to
 }
 
+const pendingByRouter = new WeakMap<Router, ShallowRef<RouteLocationNormalized | undefined>>()
+
+function routerPending(router: Router): ShallowRef<RouteLocationNormalized | undefined> {
+  let pending = pendingByRouter.get(router)
+  if (!pending) {
+    pending = shallowRef<RouteLocationNormalized>()
+    const navigationEnded = (to: RouteLocationNormalized): void => {
+      if (navigationRoot(to) === pending!.value) pending!.value = undefined
+    }
+    router.beforeEach((to) => {
+      pending!.value = navigationRoot(to)
+    })
+    router.afterEach(navigationEnded)
+    router.onError((_error, to) => navigationEnded(to))
+    pendingByRouter.set(router, pending)
+  }
+  return pending
+}
+
 /** Automatic changes to this page's address wait while a destination is loading, including when a guard cancels it. */
 export function usePageActive() {
   const router = useRouter()
   const pageName = router.currentRoute.value.name
-  const pending = shallowRef<RouteLocationNormalized>()
-
-  onScopeDispose(
-    router.beforeEach((to) => {
-      pending.value = navigationRoot(to)
-    }),
-  )
-  function navigationEnded(to: RouteLocationNormalized): void {
-    if (navigationRoot(to) === pending.value) pending.value = undefined
-  }
-  onScopeDispose(router.afterEach(navigationEnded))
-  onScopeDispose(router.onError((_error, to) => navigationEnded(to)))
+  const pending = routerPending(router)
   return computed(() => !pending.value && router.currentRoute.value.name === pageName)
 }
 
@@ -50,4 +58,21 @@ export function usePageRedirect(
     },
     { immediate: true },
   )
+}
+
+/**
+ * Completes navigation after a session-ending action (sign-out, email change, password reset). When the user stayed on
+ * the page, pushes to `target`; if they navigated to a protected route while the action was in flight, replaces that
+ * route so they are never stranded signed out on a protected page.
+ */
+export async function finishSessionEndNavigation(
+  router: Router,
+  target: RouteLocationRaw,
+  stillOnPage: boolean,
+): Promise<void> {
+  if (stillOnPage) {
+    await router.push(target)
+  } else if (router.currentRoute.value.meta.roles?.length) {
+    await router.replace(target).catch(() => undefined)
+  }
 }

@@ -1,5 +1,6 @@
 package com.example.aichinese.dto.classes;
 
+import static com.example.aichinese.dto.DtoNormalization.redactLength;
 import static com.example.aichinese.dto.DtoNormalization.strip;
 
 import jakarta.validation.constraints.NotNull;
@@ -23,5 +24,12 @@ public record QuizSubmissionAnswerRequest(
 
     public QuizSubmissionAnswerRequest {
         answerText = strip(answerText);
+    }
+
+    @Override
+    public String toString() {
+        return "QuizSubmissionAnswerRequest[questionId=" + questionId
+                + ", optionId=" + optionId
+                + ", answerText=" + redactLength(answerText) + "]";
     }
 }

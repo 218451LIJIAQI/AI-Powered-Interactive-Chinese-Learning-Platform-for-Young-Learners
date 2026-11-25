@@ -1,6 +1,8 @@
 package com.example.aichinese;
 
+import static com.example.aichinese.support.ConcurrentTransactions.withAfterMethod;
 import static com.example.aichinese.support.ConcurrentTransactions.withEarlierRead;
+import static com.example.aichinese.support.ConcurrentTransactions.withRowLock;
 import static com.example.aichinese.support.LearningApiTestClient.ADMIN_EMAIL;
 import static com.example.aichinese.support.LearningApiTestClient.USER_PASSWORD;
 import static com.example.aichinese.support.LearningApiTestClient.fromRemoteAddress;
@@ -8,7 +10,6 @@ import static com.example.aichinese.support.LearningApiTestClient.nextClientIp;
 import static com.example.aichinese.support.LearningApiTestClient.uniqueEmail;
 import static com.example.aichinese.support.LearningApiTestClient.uniqueSuffix;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -29,13 +30,17 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.web.server.ResponseStatusException;
 
 import com.example.aichinese.dto.auth.AcceptAdminInviteRequest;
+import com.example.aichinese.dto.auth.RegisterStudentRequest;
 import com.example.aichinese.entity.AuditLog;
+import com.example.aichinese.entity.enums.RoleName;
 import com.example.aichinese.repository.AdminInviteRepository;
 import com.example.aichinese.security.SecurityUserDetails;
+import com.example.aichinese.service.AuthService;
 import com.example.aichinese.service.SecureTokens;
+import com.example.aichinese.service.account.AccountDeletionService;
+import com.example.aichinese.service.account.AccountEmailService;
 import com.example.aichinese.service.admin.AdminInviteService;
 import com.example.aichinese.support.ApiIntegrationTest;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -57,6 +62,15 @@ class AdminUsersIntegrationTests extends ApiIntegrationTest {
     private AdminInviteService adminInviteService;
 
     @Autowired
+    private AccountDeletionService accountDeletionService;
+
+    @Autowired
+    private AccountEmailService accountEmailService;
+
+    @Autowired
+    private AuthService authService;
+
+    @Autowired
     private PlatformTransactionManager transactionManager;
 
     @Test
@@ -75,7 +89,6 @@ class AdminUsersIntegrationTests extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.data.items.length()").value(5))
                 .andExpect(jsonPath("$.data.items[0].email").value(newest))
                 .andExpect(jsonPath("$.data.items[0].role").value("STUDENT"))
-                .andExpect(jsonPath("$.data.items[0].verificationState").doesNotExist())
                 .andExpect(jsonPath("$.data.items[0].passwordHash").doesNotExist());
         mockMvc.perform(api.authGet(USERS + "?keyword=" + marker + "_0", adminToken))
                 .andExpect(status().isOk())
@@ -116,8 +129,7 @@ class AdminUsersIntegrationTests extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.data.active").value(true))
                 .andExpect(jsonPath("$.data.self").value(false))
                 .andExpect(jsonPath("$.data.role").value("STUDENT"))
-                .andExpect(jsonPath("$.data.recentAudit[0].actionType").value("ACCOUNT_CREATED"))
-                .andExpect(jsonPath("$.data.deactivationImpact").doesNotExist());
+                .andExpect(jsonPath("$.data.recentAudit[0].actionType").value("ACCOUNT_CREATED"));
         mockMvc.perform(api.jsonPost(deactivatePath, adminToken, Map.of("reason", " ")))
                 .andExpect(status().isBadRequest());
         mockMvc.perform(api.jsonPost(deactivatePath, studentToken, REASON))
@@ -128,8 +140,7 @@ class AdminUsersIntegrationTests extends ApiIntegrationTest {
                 .andExpect(jsonPath("$.data.active").value(false))
                 .andExpect(jsonPath("$.data.deactivation.reason").value(REASON.get("reason")))
                 .andExpect(jsonPath("$.data.recentAudit[0].actorEmail").value(ADMIN_EMAIL))
-                .andExpect(jsonPath("$.data.recentAudit[0].actionType").value("ADMIN_USER_DEACTIVATE"))
-                .andExpect(jsonPath("$.data.cancelledSessions").doesNotExist());
+                .andExpect(jsonPath("$.data.recentAudit[0].actionType").value("ADMIN_USER_DEACTIVATE"));
         mockMvc.perform(api.authGet("/api/v1/auth/me", studentToken)).andExpect(status().isUnauthorized());
         mockMvc.perform(api.loginRequest(email, USER_PASSWORD))
                 .andExpect(status().isForbidden())
@@ -254,9 +265,9 @@ class AdminUsersIntegrationTests extends ApiIntegrationTest {
         String newAdminToken = api.login(email, USER_PASSWORD);
         mockMvc.perform(api.authGet("/api/v1/auth/me", newAdminToken))
                 .andExpect(jsonPath("$.data.roles[0]").value("ADMIN"))
-                .andExpect(jsonPath("$.data.fullName").value("Farid Admin"))
-                .andExpect(jsonPath("$.data.teacherProfile").doesNotExist());
+                .andExpect(jsonPath("$.data.fullName").value("Farid Admin"));
         mockMvc.perform(api.authGet(INVITES, adminToken))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[*].email", not(hasItem(email))));
         mockMvc.perform(inviteLink("accept", Map.of(
                         "token", rawToken, "fullName", "Again",
@@ -276,6 +287,7 @@ class AdminUsersIntegrationTests extends ApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("Invite cancelled. The link no longer works."));
         mockMvc.perform(api.authGet(INVITES, adminToken))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[*].email", not(hasItem(email))));
         mockMvc.perform(inviteLink("check", Map.of("token", rawToken)))
                 .andExpect(status().isBadRequest());
@@ -368,7 +380,7 @@ class AdminUsersIntegrationTests extends ApiIntegrationTest {
         Long inviteId = adminInviteService.invite(admin, email).id();
         String rawToken = knownInviteToken(inviteId);
 
-        assertThatThrownBy(() -> withEarlierRead(transactionManager,
+        assertHttpError(() -> withEarlierRead(transactionManager,
                 () -> adminInviteRepository.findById(inviteId).orElseThrow(),
                 () -> adminInviteService.accept(acceptance(rawToken)),
                 () -> {
@@ -378,11 +390,7 @@ class AdminUsersIntegrationTests extends ApiIntegrationTest {
                         case "accept" -> adminInviteService.accept(acceptance(rawToken));
                         default -> throw new AssertionError(change);
                     }
-                })).isInstanceOfSatisfying(ResponseStatusException.class, error -> {
-                    assertThat(error.getStatusCode().value()).isEqualTo(400);
-                    assertThat(error.getReason())
-                            .isEqualTo("This invite link is invalid or has expired. Ask an admin to send a new one.");
-                });
+                }), 400, "This invite link is invalid or has expired. Ask an admin to send a new one.");
 
         // Only the earlier click's account exists.
         assertThat(userRepository.existsByEmailIgnoreCase(email)).isEqualTo(change.equals("accept"));
@@ -396,7 +404,7 @@ class AdminUsersIntegrationTests extends ApiIntegrationTest {
         Long inviteId = adminInviteService.invite(admin, email).id();
         String rawToken = knownInviteToken(inviteId);
 
-        assertThatThrownBy(() -> withEarlierRead(transactionManager,
+        assertHttpError(() -> withEarlierRead(transactionManager,
                 () -> adminInviteRepository.findById(inviteId).orElseThrow(),
                 () -> {
                     if (operation.equals("cancel")) {
@@ -405,17 +413,82 @@ class AdminUsersIntegrationTests extends ApiIntegrationTest {
                         adminInviteService.restore(admin, inviteId);
                     }
                 },
-                () -> adminInviteService.accept(acceptance(rawToken))))
-                .isInstanceOfSatisfying(ResponseStatusException.class, error -> {
-                    assertThat(error.getStatusCode().value()).isEqualTo(409);
-                    assertThat(error.getReason()).isEqualTo("This invite was already accepted.");
-                });
+                () -> adminInviteService.accept(acceptance(rawToken))), 409, "This invite was already accepted.");
 
         assertThat(userRepository.existsByEmailIgnoreCase(email)).isTrue();
         assertThat(adminInviteRepository.findById(inviteId).orElseThrow().getCancelledAt()).isNull();
         assertThat(auditEntriesAbout("AdminInvite", inviteId))
                 .extracting(AuditLog::getActionType)
                 .containsExactly("ADMIN_INVITE_SENT");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = { "cancel", "restore" })
+    void changesToAnInviteDeletedSinceItWasReadReturnNotFound(String operation) throws Exception {
+        String email = uniqueEmail("users-invite-delete-race");
+        SecurityUserDetails admin = principalFor(ADMIN_EMAIL);
+        Long inviteId = adminInviteService.invite(admin, email).id();
+        api.registerStudentAccount(email);
+        jdbc.update("update users set email_verified_at = ? where email = ?",
+                Timestamp.valueOf(LocalDateTime.now()), email);
+        SecurityUserDetails learner = principalFor(email);
+        if (operation.equals("cancel")) {
+            jdbc.update("update admin_invites set cancelled_at = null where id = ?", inviteId);
+        }
+
+        assertHttpError(() -> withEarlierRead(transactionManager,
+                () -> adminInviteRepository.findById(inviteId).orElseThrow(),
+                () -> {
+                    if (operation.equals("cancel")) {
+                        adminInviteService.cancel(admin, inviteId);
+                    } else {
+                        adminInviteService.restore(admin, inviteId);
+                    }
+                },
+                () -> accountDeletionService.delete(learner, email)), 404, "This invite was not found.");
+
+        assertThat(adminInviteRepository.findById(inviteId)).isEmpty();
+        assertThat(auditEntriesAbout("AdminInvite", inviteId))
+                .extracting(AuditLog::getActionType)
+                .containsExactly("ADMIN_INVITE_SENT");
+    }
+
+    /**
+     * Accepting an admin invite and claiming the same address through student sign-up or an email change both acquire
+     * the invite row lock before touching {@code users}, so they serialize cleanly with no InnoDB AB-BA deadlock.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = { "register", "email-change" })
+    void claimingTheSameAddressSerializesWithAcceptingAnAdminInviteWithoutDeadlock(String competingFlow)
+            throws Exception {
+        String email = uniqueEmail("users-invite-lock-order");
+        SecurityUserDetails admin = principalFor(ADMIN_EMAIL);
+        Long inviteId = adminInviteService.invite(admin, email).id();
+        String rawInviteToken = knownInviteToken(inviteId);
+        String emailChangeToken = null;
+        if (competingFlow.equals("email-change")) {
+            String existingEmail = uniqueEmail("users-invite-changer");
+            api.registerStudentAccount(existingEmail);
+            accountEmailService.requestChange(principalFor(existingEmail), email, USER_PASSWORD, nextClientIp());
+            emailChangeToken = knownEmailChangeToken(user(existingEmail).getId());
+        }
+        String changeToken = emailChangeToken;
+
+        assertHttpError(() -> withRowLock(jdbc, "admin_invites",
+                pause -> withAfterMethod(adminInviteRepository, "markAccepted", pause,
+                        () -> adminInviteService.accept(acceptance(rawInviteToken))),
+                () -> {
+                    if (competingFlow.equals("register")) {
+                        authService.registerStudent(new RegisterStudentRequest(
+                                "Competing Student", email, USER_PASSWORD, USER_PASSWORD, null));
+                    } else {
+                        accountEmailService.confirm(changeToken);
+                    }
+                    return null;
+                }), 400, "Email is already registered.");
+
+        assertThat(user(email).requirePrimaryRole()).isEqualTo(RoleName.ADMIN);
+        assertThat(adminInviteRepository.findById(inviteId).orElseThrow().getAcceptedAt()).isNotNull();
     }
 
     @Test
@@ -499,13 +572,12 @@ class AdminUsersIntegrationTests extends ApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.aiReports").isNumber())
                 .andExpect(jsonPath("$.data.supportOpen").isNumber())
-                .andExpect(jsonPath("$.data.teacherApplications").doesNotExist())
-                .andExpect(jsonPath("$.data.reviewQueue").doesNotExist())
-                .andExpect(jsonPath("$.data.supportReplies").doesNotExist());
+                .andExpect(jsonPath("$.data.mistakes").doesNotExist());
         mockMvc.perform(api.authGet("/api/v1/users/me/nav-counts", api.registerStudent(uniqueEmail("users-nav"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.mistakes").value(0))
-                .andExpect(jsonPath("$.data.supportReplies").doesNotExist());
+                .andExpect(jsonPath("$.data.aiReports").doesNotExist())
+                .andExpect(jsonPath("$.data.supportOpen").doesNotExist());
     }
 
     @Test
@@ -516,9 +588,6 @@ class AdminUsersIntegrationTests extends ApiIntegrationTest {
         mockMvc.perform(api.jsonPost(INVITES, studentToken, Map.of("email", uniqueEmail("x"))))
                 .andExpect(status().isForbidden());
         mockMvc.perform(get(USERS)).andExpect(status().isUnauthorized());
-        // The teacher-application endpoints are gone.
-        mockMvc.perform(api.authGet("/api/v1/admin/teacher-applications", api.adminToken()))
-                .andExpect(status().isNotFound());
     }
 
     private JsonNode sendInvite(String adminToken, String email) throws Exception {

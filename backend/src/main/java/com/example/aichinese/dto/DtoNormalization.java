@@ -8,6 +8,10 @@ import com.example.aichinese.util.TextUtils;
 public final class DtoNormalization {
 
     private static final String REDACTED = "<redacted>";
+    /** Rejects ASCII/Unicode control and format characters while allowing empty values to be handled by {@code @NotBlank}. */
+    public static final String NO_CONTROL_CHARS_PATTERN = "^[^\\p{Cc}\\p{Cf}]*$";
+    /** Requires at least one non-whitespace character when a nullable optional field is present. */
+    public static final String NON_BLANK_PATTERN = "(?s).*\\S.*";
 
     private DtoNormalization() {
     }
@@ -15,6 +19,11 @@ public final class DtoNormalization {
     /** Strip form whitespace before validation, preserving an omitted field for partial updates. */
     public static String strip(String value) {
         return value == null ? null : TextUtils.stripFormSpaces(value);
+    }
+
+    /** Normalise CRLF/CR line breaks to LF before stripping so multipart form limits match browser textareas. */
+    public static String stripMultiline(String value) {
+        return value == null ? null : TextUtils.stripFormSpaces(value.replace("\r\n", "\n").replace('\r', '\n'));
     }
 
     /** Strip form whitespace (including NBSP / full-width spaces) and convert blank optional fields to {@code null}. */

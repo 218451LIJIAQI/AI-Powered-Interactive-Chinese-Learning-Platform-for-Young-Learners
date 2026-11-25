@@ -1,8 +1,9 @@
 /** Admin Learning path route: units, unit detail drawer, and level-check questions (namespace `adminLearning`). */
 export const adminLearningPathMessages = {
   en: {
-    pathPageTitle: 'Learning path',
     unitsTitle: 'Units',
+    noUnits: 'No units yet',
+    noUnitsHint: 'Units appear here once the learning path is seeded.',
     unitTag: 'Unit {number}',
     openUnit: 'Open unit {number}: {title}',
     unitLessons: '1 lesson | {count} lessons',
@@ -78,8 +79,9 @@ export const adminLearningPathMessages = {
     publishQuestionLabel: 'Publish question: {question}',
   },
   ms: {
-    pathPageTitle: 'Laluan pembelajaran',
     unitsTitle: 'Unit',
+    noUnits: 'Belum ada unit',
+    noUnitsHint: 'Unit akan muncul di sini setelah laluan pembelajaran disediakan.',
     unitTag: 'Unit {number}',
     openUnit: 'Buka unit {number}: {title}',
     unitLessons: '{count} pelajaran',
@@ -155,8 +157,9 @@ export const adminLearningPathMessages = {
     publishQuestionLabel: 'Terbitkan soalan: {question}',
   },
   'zh-CN': {
-    pathPageTitle: '学习路径',
     unitsTitle: '单元',
+    noUnits: '还没有单元',
+    noUnitsHint: '初始化学习路径后，单元会显示在这里。',
     unitTag: '单元 {number}',
     openUnit: '打开单元 {number}：{title}',
     unitLessons: '{count} 个课时',

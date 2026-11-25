@@ -1,26 +1,78 @@
-import { flushPromises } from '@vue/test-utils'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { flushPromises, type VueWrapper } from '@vue/test-utils'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { setAccessToken } from '@/api/http'
 import { stubSpeech } from '@/test/fakeSpeech'
 import { buttonNamed, deferred } from '@/test/helpers'
-import { answerCheck, hintSettings, practiceItem, practiceResult } from '@/test/learnFixtures'
-import type { AnswerCheck, HintStep } from '@/types/learn'
+import { answerCheck, flashcardSet, hintSettings, practiceItem, practiceResult } from '@/test/learnFixtures'
+import type { AnswerCheck, HintStep, PracticeSet } from '@/types/learn'
 
-import {
-  enterSpelling,
-  hintStep,
-  listeningSet,
-  menuSet,
-  mountPlayer,
-  sentencesSet,
-  typingSet,
-} from './practicePlayerTestHelpers'
+import { hintStep, mountPlayer } from './practicePlayerTestHelpers'
+
+const sentencesSet: PracticeSet = {
+  ...flashcardSet(),
+  id: 11,
+  type: 'DRAG_DROP',
+  done: false,
+  xpReward: 15,
+  items: [practiceItem('1', { meaning: 'I go to the library.', tiles: ['图书馆', '我', '去'] })],
+}
+
+const listeningSet: PracticeSet = {
+  ...flashcardSet(),
+  id: 12,
+  type: 'LISTENING',
+  items: [
+    practiceItem('0', {
+      prompt: 'Which phrase did you hear?',
+      audioText: '一杯茶',
+      options: [
+        { text: '一杯茶', pinyin: 'yì bēi chá' },
+        { text: '一碗米饭', pinyin: 'yì wǎn mǐfàn' },
+      ],
+    }),
+  ],
+}
+
+/** Two listening questions with four answers each (the audio is left out: the strip above them is not under test). */
+const menuSet: PracticeSet = {
+  ...flashcardSet(),
+  id: 14,
+  type: 'LISTENING',
+  done: false,
+  xpReward: 15,
+  items: ['1', '2'].map((key) =>
+    practiceItem(key, {
+      prompt: `Question ${key}`,
+      options: [
+        { text: 'Bill', pinyin: null },
+        { text: 'Menu', pinyin: null },
+        { text: 'Rice', pinyin: null },
+        { text: 'Cup', pinyin: null },
+      ],
+    }),
+  ),
+}
+
+const typingSet: PracticeSet = {
+  ...flashcardSet(),
+  id: 15,
+  type: 'TYPING',
+  items: [practiceItem('0', { meaning: 'Thank you' })],
+}
+
+async function enterSpelling(wrapper: VueWrapper, text: string): Promise<void> {
+  await wrapper.get('[data-testid="typing-input"]').setValue(text)
+  vi.advanceTimersByTime(300)
+  await flushPromises()
+}
 
 const api = vi.hoisted(() => ({ check: vi.fn(), complete: vi.fn(), hint: vi.fn(), candidates: vi.fn() }))
-const hintApi = vi.hoisted(() => ({ settings: vi.fn(), report: vi.fn() }))
+const hintApi = vi.hoisted(() => ({ settings: vi.fn() }))
+const aiHelperApi = vi.hoisted(() => ({ report: vi.fn() }))
 
 vi.mock('@/api/learn', () => ({ practiceApi: api, hintApi }))
+vi.mock('@/api/ai', () => ({ aiHelperApi }))
 
 import AnswerPlayer from './AnswerPlayer.vue'
 
@@ -28,14 +80,11 @@ describe('AnswerPlayer', () => {
   beforeEach(() => {
     Object.values(api).forEach((fn) => fn.mockReset())
     Object.values(hintApi).forEach((fn) => fn.mockReset())
+    aiHelperApi.report.mockReset()
     // A new sign-in: the shared hint settings are loaded again.
     setAccessToken(null)
     hintApi.settings.mockResolvedValue(hintSettings({ mode: 'OFF' }))
     api.complete.mockResolvedValue(practiceResult({ type: 'LISTENING' }))
-  })
-
-  afterEach(() => {
-    vi.useRealTimers()
   })
 
   describe('Drag & Drop', () => {
@@ -195,7 +244,7 @@ describe('AnswerPlayer', () => {
         undefined,
       )
       // Both answered, and nothing went to Mistakes: the done card says so.
-      expect(wrapper.emitted('finished')![0]![2]).toEqual({ answered: 2, mistakes: 0 })
+      expect(wrapper.emitted('finished')![0]![0]).toMatchObject({ tally: { answered: 2, mistakes: 0 } })
     })
 
     it('counts every check that went to Mistakes, and the first answers given, for the done card', async () => {
@@ -222,7 +271,29 @@ describe('AnswerPlayer', () => {
       await wrapper.get('[data-testid="continue"]').trigger('click')
       await flushPromises()
 
-      expect(wrapper.emitted('finished')![0]![2]).toEqual({ answered: 1, mistakes: 2 })
+      expect(wrapper.emitted('finished')![0]![0]).toMatchObject({ tally: { answered: 1, mistakes: 2 } })
+    })
+
+    it('honors server effectiveConfidence when an earlier abandoned-run hint downgrades Sure to Guess', async () => {
+      api.check.mockResolvedValue(
+        answerCheck({
+          correct: true,
+          correctAnswer: 'Menu',
+          pinyin: null,
+          meaning: null,
+          effectiveConfidence: 'GUESS',
+        }),
+      )
+      const wrapper = await mountPlayer(AnswerPlayer, menuSet)
+
+      await wrapper.get('[data-testid="option-1"]').trigger('click')
+      await wrapper.get('[data-testid="answer-sure"]').trigger('click')
+      await flushPromises()
+
+      const bar = wrapper.get('[data-testid="check-bar"]')
+      expect(bar.text()).toContain('Correct, counted as a guess.')
+      expect(bar.text()).toContain('It comes back once more to make sure.')
+      expect(wrapper.text()).toContain('Question 1 of 3')
     })
 
     describe('audio that does not play', () => {
@@ -259,7 +330,7 @@ describe('AnswerPlayer', () => {
         await wrapper.get('[data-testid="continue"]').trigger('click')
         await flushPromises()
         expect(api.complete).toHaveBeenCalledWith('LISTENING', 12, [{ itemKey: '0', answer: null }], undefined)
-        expect(wrapper.emitted('finished')![0]![2]).toEqual({ answered: 0, mistakes: 0 })
+        expect(wrapper.emitted('finished')![0]![0]).toMatchObject({ tally: { answered: 0, mistakes: 0 } })
       })
 
       it('says so with Retry when the speech fails before it starts; a skip counts again once Retry plays', async () => {
@@ -472,6 +543,29 @@ describe('AnswerPlayer', () => {
       expect(wrapper.get('[data-testid="answer-sure"]').attributes('disabled')).toBeDefined()
       expect(document.activeElement).toBe(wrapper.get('[data-testid="typing-input"]').element)
     })
+
+    it('allows skipping a word when the learner cannot recall the pinyin spelling', async () => {
+      api.check.mockResolvedValue(
+        answerCheck({
+          correct: false,
+          correctAnswer: '谢谢',
+          pinyin: 'xièxie',
+          meaning: 'Thank you',
+          effectiveConfidence: null,
+        }),
+      )
+      api.complete.mockResolvedValue(practiceResult({ type: 'TYPING', correctCount: 0, allCorrect: false }))
+      const wrapper = await mountPlayer(AnswerPlayer, typingSet)
+
+      await wrapper.get('[data-testid="skip"]').trigger('click')
+      await flushPromises()
+      expect(api.check).toHaveBeenCalledWith('TYPING', 15, { itemKey: '0', answer: null, confidence: null })
+      expect(wrapper.get('[data-testid="check-bar"]').text()).toContain('Skipped.')
+      expect(wrapper.get('[data-testid="check-bar"]').text()).toContain('谢谢')
+      await wrapper.get('[data-testid="continue"]').trigger('click')
+      await flushPromises()
+      expect(api.complete).toHaveBeenCalledWith('TYPING', 15, [{ itemKey: '0', answer: null }], undefined)
+    })
   })
 
   describe('Hints and reporting', () => {
@@ -647,7 +741,7 @@ describe('AnswerPlayer', () => {
     it('reports a hint as an AI answer, and only a sent report makes the hint say Reported', async () => {
       hintApi.settings.mockResolvedValue(hintSettings({ mode: 'ON_REQUEST' }))
       api.hint.mockResolvedValueOnce(hintStep())
-      hintApi.report.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(undefined)
+      aiHelperApi.report.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(undefined)
       const wrapper = await mountPlayer(AnswerPlayer, menuSet)
       await wrapper.get('[data-testid="hint-show"]').trigger('click')
       await flushPromises()
@@ -669,19 +763,21 @@ describe('AnswerPlayer', () => {
       await flushPromises()
       expect(dialog().get('h2').text()).toBe('Report this hint')
 
-      // A failed send leaves the hint reportable (the dialog's own handling is in HintReportDialog.test).
+      // A failed send leaves the hint reportable (the form's own retry handling is in AiReportForm.test).
       await dialog().get('textarea').setValue('Cup is the right answer.')
       await send()
       expect(report().element.disabled).toBe(false)
 
       await send()
-      expect(hintApi.report).toHaveBeenCalledTimes(2)
-      const sent = hintApi.report.mock.calls[1]![0] as {
+      expect(aiHelperApi.report).toHaveBeenCalledTimes(2)
+      const sent = aiHelperApi.report.mock.calls[1]![0] as {
+        featureKey: string
         reasonCategory: string
         description: string
         promptSnapshot: string
         aiResponseSnapshot: string
       }
+      expect(sent.featureKey).toBe('HINT')
       expect(sent.reasonCategory).toBe('INCORRECT_CONTENT')
       expect(sent.description).toBe('Cup is the right answer.')
       expect(sent.promptSnapshot).toMatch(/^LISTENING #14 \/ 1 · \//)
@@ -690,13 +786,13 @@ describe('AnswerPlayer', () => {
       // Closed, confirmed by the shared toast, and this hint cannot be reported twice.
       expect(wrapper.find('[data-testid="hint-report-dialog"]').exists()).toBe(false)
       expect(wrapper.get('[data-testid="toast"]').text()).toBe(
-        'Report sent. An admin replies in Ask SparkBot › My reports.',
+        'Report sent. An admin replies in AI Helper › Ask SparkBot › My reports.',
       )
       expect(report().text()).toBe('Reported')
       expect(report().element.disabled).toBe(true)
       expect(document.activeElement).toBe(wrapper.get('[data-testid="hint-card"]').element)
       // A question has one hint: nothing further is offered after it.
-      expect(wrapper.find('[data-testid="hint-next"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="hint-show"]').exists()).toBe(false)
     })
   })
 })

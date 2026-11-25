@@ -68,7 +68,7 @@ public class CurrentAccount {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public User lock(Long userId, long sessionVersion, String sessionId) {
-        User user = findWithRolesById(userId);
+        User user = findById(userId);
         // Refresh also replaces an earlier managed snapshot after waiting for account deletion/revocation.
         entityManager.refresh(user, LockModeType.PESSIMISTIC_WRITE);
         AccountGuards.requireCurrent(user, sessionVersion);
@@ -83,10 +83,19 @@ public class CurrentAccount {
     @Transactional(propagation = Propagation.MANDATORY)
     public User lockWith(SecurityUserDetails actor, User other) {
         User user = findById(actor.getUserId());
-        AccountGuards.lockInIdOrder(entityManager, user, other);
+        lockInIdOrder(user, other);
         AccountGuards.requireCurrent(user, actor.getSessionVersion());
         requireActiveSession(user.getId(), actor.getSessionId());
         return user;
+    }
+
+    private void lockInIdOrder(User user, User other) {
+        User first = other != null && other.getId() < user.getId() ? other : user;
+        User second = first == user ? other : user;
+        entityManager.refresh(first, LockModeType.PESSIMISTIC_WRITE);
+        if (second != null && !second.getId().equals(first.getId())) {
+            entityManager.refresh(second, LockModeType.PESSIMISTIC_WRITE);
+        }
     }
 
     /**

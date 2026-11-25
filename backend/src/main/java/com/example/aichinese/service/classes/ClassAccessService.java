@@ -96,10 +96,10 @@ public class ClassAccessService {
         if (joined != null) {
             return new StudentLesson(joined, lesson);
         }
-        if (coursePackageRepository.existsInCatalogue(classIds)) {
+        if (ClassContentSupport.isLessonLive(lesson) && coursePackageRepository.existsInCatalogue(classIds)) {
             throw new ResponseStatusException(CONFLICT, "Join this class to open its lessons.");
         }
-        throw new ResponseStatusException(NOT_FOUND, ClassContentSupport.CLASS_NOT_FOUND);
+        throw new ResponseStatusException(NOT_FOUND, ClassContentSupport.LESSON_NOT_FOUND);
     }
 
     /**

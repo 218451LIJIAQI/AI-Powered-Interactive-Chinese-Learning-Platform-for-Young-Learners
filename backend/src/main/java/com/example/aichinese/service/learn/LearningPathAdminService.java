@@ -162,6 +162,9 @@ public class LearningPathAdminService {
         if (question.getPublishStatus() == PublishStatus.PUBLISHED) {
             throw new ResponseStatusException(BAD_REQUEST, "This question is already published.");
         }
+        if (TextUtils.isBlankOrSpaces(question.getPrompt())) {
+            throw new ResponseStatusException(BAD_REQUEST, "Question is required.");
+        }
         validateAudioForPublication(PublishStatus.PUBLISHED, question.getSkill(), question.getAudioText());
         List<LevelCheckQuestionData.Option> options = questionOptions(question);
         validateOptions(options);
@@ -202,7 +205,7 @@ public class LearningPathAdminService {
         question.setPublishStatus(request.status());
         LevelCheckQuestion saved = levelCheckQuestionRepository.save(question);
         // A student part-way through the level check keeps the answers already given when a question is corrected.
-        ChildRows.writeByPosition(levelCheckOptionRepository.findByQuestionIdOrderByPositionAsc(saved.getId()),
+        ChildRows.writeByPosition(levelCheckOptionRepository.findByQuestionIdOrderByPositionAscIdAsc(saved.getId()),
                 request.options(), LevelCheckOption::new, levelCheckOptionRepository, (option, position, data) -> {
                     option.setQuestion(saved);
                     option.setPosition(position);
@@ -292,7 +295,7 @@ public class LearningPathAdminService {
 
     private List<LevelCheckQuestionData.Option> questionOptions(LevelCheckQuestion question) {
         return levelCheckOptionRepository
-                .findByQuestionIdOrderByPositionAsc(question.getId()).stream()
+                .findByQuestionIdOrderByPositionAscIdAsc(question.getId()).stream()
                 .map(option -> new LevelCheckQuestionData.Option(
                         option.getOptionText(), option.isCorrect(), option.getExplanation()))
                 .toList();

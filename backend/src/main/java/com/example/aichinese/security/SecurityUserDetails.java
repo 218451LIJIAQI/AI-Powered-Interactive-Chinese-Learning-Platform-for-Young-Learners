@@ -18,7 +18,6 @@ public final class SecurityUserDetails implements UserDetails {
 
     private final Long userId;
     private final String username;
-    private final String password;
     private final boolean active;
     private final long sessionVersion;
     private final List<GrantedAuthority> authorities;
@@ -29,7 +28,6 @@ public final class SecurityUserDetails implements UserDetails {
     public SecurityUserDetails(User user) {
         this.userId = user.getId();
         this.username = user.getEmail();
-        this.password = user.getPasswordHash();
         this.active = AccountGuards.isAvailable(user);
         this.sessionVersion = user.getSessionVersion();
         this.authorities = user.orderedRoleNames()
@@ -42,8 +40,6 @@ public final class SecurityUserDetails implements UserDetails {
     private SecurityUserDetails(SecurityUserDetails source, boolean persistentSession, String sessionId) {
         this.userId = source.userId;
         this.username = source.username;
-        // JWT-authenticated requests never use password credentials; keep hashes out of SecurityContextHolder.
-        this.password = null;
         this.active = source.active;
         this.sessionVersion = source.sessionVersion;
         this.authorities = source.authorities;
@@ -89,7 +85,7 @@ public final class SecurityUserDetails implements UserDetails {
 
     @Override
     public String getPassword() {
-        return password;
+        return null;
     }
 
     @Override

@@ -1,6 +1,6 @@
 <template>
   <div class="learn-page">
-    <PageHeaderBlock :title="t('nav.learn')" hide-title />
+    <h1 class="sr-only">{{ t('nav.learn') }}</h1>
 
     <!-- Loading: the map's own skeleton, so the page keeps its shape when the path arrives. -->
     <div v-if="path.loading.value" class="learn-layout" data-testid="learn-loading">
@@ -91,7 +91,7 @@
                     :id="`learn-unit-${unit.number}-title`"
                     class="sr-only"
                   >
-                    {{ unit.title }} · {{ unit.titleZh }}
+                    {{ unit.title }} · <span lang="zh-CN">{{ unit.titleZh }}</span>
                   </h3>
                   <LearnUnitBanner
                     v-else
@@ -147,7 +147,12 @@
         </div>
       </div>
 
-      <LearnPathRail :path="path.data.value" :today="today.data.value" />
+      <LearnPathRail
+        :path="path.data.value"
+        :today="today.data.value"
+        :today-error="today.error.value"
+        @retry-today="today.reload"
+      />
     </div>
 
     <GuidebookDrawer v-if="guidebookUnit" :unit="guidebookUnit" @close="guidebookUnit = null" />
@@ -169,7 +174,6 @@ import LearnLevelMap from '@/components/learn/LearnLevelMap.vue'
 import LearnMapSkeleton from '@/components/learn/LearnMapSkeleton.vue'
 import LearnPathRail from '@/components/learn/LearnPathRail.vue'
 import LearnUnitBanner from '@/components/learn/LearnUnitBanner.vue'
-import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { useResource } from '@/composables/useResource'
 import { useToast } from '@/composables/useToast'

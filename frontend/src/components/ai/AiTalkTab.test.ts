@@ -55,7 +55,6 @@ function replyWith(chinese: string): XiaomeiReply {
 
 beforeEach(() => {
   Object.values(api).forEach((fn) => fn.mockReset())
-  FakeRecognition.last = null
 })
 
 describe('AiTalkTab (Talk with Xiaomei)', () => {
@@ -65,7 +64,7 @@ describe('AiTalkTab (Talk with Xiaomei)', () => {
     expect(wrapper.get('[data-testid="ai-talk-line"]').text()).toBe(OPENER)
     expect(wrapper.find('[data-testid="ai-talk-mic"]').exists()).toBe(false)
     expect(wrapper.find('.ai-talk-type input').exists()).toBe(true)
-    expect(wrapper.text()).not.toContain('Live video chat')
+    expect(wrapper.find('tavus-embed').exists()).toBe(false)
     // The scripted opener is not an AI answer, so it carries no AI label and cannot be reported.
     expect(wrapper.find('[data-testid="ai-result-label"]').exists()).toBe(false)
     expect(wrapper.get<HTMLButtonElement>('[data-testid="ai-talk-end"]').element.disabled).toBe(true)
@@ -73,7 +72,7 @@ describe('AiTalkTab (Talk with Xiaomei)', () => {
 
   it('starts live on the original microphone, shares the scenario and records the call in the same transcript', async () => {
     const wrapper = mountTalk('limit', 'demo-deployment')
-    expect(wrapper.get('[data-testid="ai-talk-status"]').text()).toBe('Tap the mic to talk with Xiaomei!')
+    expect(wrapper.get('[data-testid="ai-talk-status"]').text()).toBe('Click the mic to talk with Xiaomei!')
     expect(wrapper.findAll('.ai-talk-voice-dock button')).toHaveLength(1)
 
     await buttonNamed(wrapper, 'Order at a café').trigger('click')
@@ -177,6 +176,28 @@ describe('AiTalkTab (Talk with Xiaomei)', () => {
     expect(video.attributes('custom-greeting')).toBe('我们接着聊吧。')
     expect(video.attributes('conversational-context')).toContain('我有点渴。')
     expect(video.attributes('conversational-context')).toContain('你想喝什么？')
+  })
+
+  it('redacts personal identifiers from earlier turns before sending live-call context to Tavus', async () => {
+    api.xiaomeiReply.mockResolvedValue(replyWith('好的。'))
+    const wrapper = mountTalk(null, 'demo-deployment')
+    await wrapper.get('[data-testid="ai-talk-mic"]').trigger('click')
+    await flushPromises()
+    wrapper
+      .get('tavus-embed')
+      .element.dispatchEvent(new CustomEvent('tavus:error', { detail: { code: 'MEDIA_ERROR' } }))
+    await flushPromises()
+    await typeAndSend(wrapper, 'Contact me at me@example.com or 012-345-6789, IC 990101-14-1234.')
+
+    await buttonNamed(wrapper, 'Try the microphone again').trigger('click')
+    await flushPromises()
+    const context = wrapper.get('.ai-talk-live-video tavus-embed').attributes('conversational-context') ?? ''
+    expect(context).not.toContain('me@example.com')
+    expect(context).not.toContain('012-345-6789')
+    expect(context).not.toContain('990101-14-1234')
+    expect(context).toContain('[EMAIL]')
+    expect(context).toContain('[PHONE]')
+    expect(context).toContain('[ID_NUMBER]')
   })
 
   it('ends live video when leaving the kept-alive Talk tab', async () => {
@@ -394,7 +415,7 @@ describe('AiTalkTab (Talk with Xiaomei)', () => {
       featureKey: 'XIAOMEI_CONVERSATION',
       // The lines before the reported one, by speaker.
       promptSnapshot: `小美: ${OPENER}\nYou: 我学习中文在学校。`,
-      aiResponseSnapshot: '真棒！\nZhēn bàng!\nAwesome!',
+      aiResponseSnapshot: '真棒！\nZhēn bàng!\nAwesome!\n我在学校学习中文。\nPlace comes before the verb.',
     })
     expect(wrapper.get('.ai-talk-tools .ai-reported').text()).toBe('Reported')
     expect(wrapper.emitted('reported')).toHaveLength(1)
@@ -763,11 +784,11 @@ describe('AiTalkTab voice replies', () => {
     expect(wrapper.get<HTMLButtonElement>('[data-testid="ai-talk-mic"]').element.disabled).toBe(true)
   })
 
-  it('says “Your turn” and “Tap the mic” at her opener', () => {
+  it('says “Your turn” and “Click the mic” at her opener', () => {
     const wrapper = mountTalk()
 
     expect(wrapper.get('.ai-talk-state').text()).toBe('Your turn')
-    expect(wrapper.get('.ai-talk-hint').text()).toBe('Tap the mic to talk with Xiaomei!')
+    expect(wrapper.get('.ai-talk-hint').text()).toBe('Click the mic to talk with Xiaomei!')
   })
 
   describe('asking for the microphone', () => {
@@ -831,19 +852,19 @@ describe('AiTalkTab voice replies', () => {
     const status = () => wrapper.get('[data-testid="ai-talk-status"]').text()
 
     await wrapper.get('[data-testid="ai-talk-mic"]').trigger('click')
-    expect(status()).toBe('Listening… Tap Send when you’re done, or Cancel.')
+    expect(status()).toBe('Listening… Click Send when you’re done, or Cancel.')
 
     FakeRecognition.last!.onerror?.({ error: 'no-speech' })
     FakeRecognition.last!.stop()
     await flushPromises()
 
-    expect(status()).toBe('We didn’t catch that. Tap the mic and speak a little longer.')
+    expect(status()).toBe('We didn’t catch that. Click the mic and speak a little longer.')
     expect(wrapper.find('.callout.is-danger').exists()).toBe(false)
     // Her line keeps its tools, as on her other lines.
     expect(wrapper.findAll('.ai-talk-tools button').map((button) => button.text())).toContain('Hide pinyin')
 
     await wrapper.get('[data-testid="ai-talk-mic"]').trigger('click')
-    expect(status()).toBe('Listening… Tap Send when you’re done, or Cancel.')
+    expect(status()).toBe('Listening… Click Send when you’re done, or Cancel.')
   })
 
   it('says nothing was heard when the stop button is pressed before anything was heard', async () => {

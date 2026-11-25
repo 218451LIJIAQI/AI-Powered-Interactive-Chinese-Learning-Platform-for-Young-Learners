@@ -11,6 +11,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
@@ -21,7 +22,9 @@ import lombok.Setter;
 @Getter
 @Setter
 @Entity
-@Table(name = "quiz_questions")
+@Table(name = "quiz_questions", indexes = {
+        @Index(name = "idx_quiz_questions_quiz_order", columnList = "quiz_id,sort_order,created_at")
+})
 public class QuizQuestion extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

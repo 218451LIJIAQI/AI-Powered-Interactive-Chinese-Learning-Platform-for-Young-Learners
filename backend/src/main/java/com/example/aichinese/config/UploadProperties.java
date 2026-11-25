@@ -12,7 +12,6 @@ public class UploadProperties {
     private static final DataSize MAX_CONFIGURED_FILE_SIZE = DataSize.ofGigabytes(10);
 
     private String directory = "./uploads";
-    private DataSize maxFileSize = DataSize.ofMegabytes(10);
     /** The screenshot a learner may add to a support request (Report a problem). */
     private DataSize supportScreenshotMaxFileSize = DataSize.ofMegabytes(5);
     private DataSize aiAudioMaxFileSize = DataSize.ofMegabytes(10);
@@ -22,10 +21,6 @@ public class UploadProperties {
 
     public void setDirectory(String directory) {
         this.directory = requireText(directory, "Upload directory must not be blank.");
-    }
-
-    public void setMaxFileSize(DataSize maxFileSize) {
-        this.maxFileSize = requireValidSize(maxFileSize, "Maximum upload file size");
     }
 
     public void setSupportScreenshotMaxFileSize(DataSize supportScreenshotMaxFileSize) {

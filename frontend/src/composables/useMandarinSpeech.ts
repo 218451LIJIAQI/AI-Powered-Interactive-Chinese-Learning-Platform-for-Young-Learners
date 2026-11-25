@@ -120,6 +120,13 @@ export function useMandarinSpeech() {
     created.onerror = (event) => {
       if (recognition.value !== created || event.error === 'aborted') return
       recognitionError.value = RECOGNITION_ERRORS.get(event.error) ?? 'failed'
+      recognition.value = null
+      heard.value = ''
+      try {
+        created.abort()
+      } catch {
+        // Browser recognition instances may throw InvalidStateError if already stopped.
+      }
     }
     created.onend = () => {
       if (recognition.value === created) recognition.value = null
@@ -133,7 +140,7 @@ export function useMandarinSpeech() {
       if (recognitionError.value === null) recognitionError.value = 'failed'
       return false
     }
-    return true
+    return recognition.value === created
   }
 
   /** Stops listening and forgets what was heard. */

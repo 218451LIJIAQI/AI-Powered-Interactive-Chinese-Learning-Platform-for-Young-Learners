@@ -15,7 +15,7 @@
         :class="{ 'is-active': item.active }"
         :aria-current="item.active ? 'page' : undefined"
         :aria-label="item.count > 0 ? `${item.label}, ${t('dashboard.countBadge', { count: item.count })}` : undefined"
-        :title="item.count > 0 ? t('dashboard.countBadge', { count: item.count }) : undefined"
+        :title="item.count > 0 ? `${item.label}, ${t('dashboard.countBadge', { count: item.count })}` : undefined"
       >
         <IconGlyph :name="item.icon" />
         <span class="sidebar-link-label">{{ item.label }}</span>

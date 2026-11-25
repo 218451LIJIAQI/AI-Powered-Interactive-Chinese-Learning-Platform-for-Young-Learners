@@ -1,6 +1,6 @@
 <template>
   <div class="page-stack">
-    <PageHeaderBlock :title="t('adminLearning.pathPageTitle')" hide-title />
+    <h1 class="sr-only">{{ t('nav.learningPath') }}</h1>
     <AdminContentTabs skip-units />
 
     <StatePanel
@@ -22,6 +22,13 @@
     />
     <section v-else-if="path.data.value" class="panel admin-path" aria-labelledby="learning-path-title">
       <h2 id="learning-path-title" class="card-title">{{ t('adminLearning.unitsTitle') }}</h2>
+      <StatePanel
+        v-if="!path.data.value.levels.length"
+        tone="empty"
+        icon="route"
+        :title="t('adminLearning.noUnits')"
+        :message="t('adminLearning.noUnitsHint')"
+      />
       <section
         v-for="level in path.data.value.levels"
         :key="level.level"
@@ -41,7 +48,7 @@
                 <span class="row-list-title">
                   {{ unit.title }} · <span class="cjk-text" lang="zh-CN">{{ unit.titleZh }}</span>
                 </span>
-                <span class="row-list-meta">{{ unitMetaParts(t, unit).join(' · ') }}</span>
+                <span class="row-list-meta">{{ unitRowMeta(t, unit) }}</span>
               </span>
             </span>
             <span class="row-list-actions">
@@ -62,7 +69,7 @@
     </section>
 
     <section class="panel admin-table-card">
-      <div class="admin-section-head">
+      <div class="section-header">
         <h2 id="level-check-title" class="card-title title-with-count">
           {{ t('adminLearning.levelCheckTitle') }}
           <span v-if="questionTotal" class="count-badge" aria-hidden="true">{{ formatBadgeCount(questionTotal) }}</span>
@@ -92,7 +99,6 @@
       <StatePanel
         v-else-if="questions.error.value"
         tone="error"
-        icon="alert"
         :title="t('adminLearning.questionsError')"
         :message="questions.error.value"
         @retry="questions.reload"
@@ -112,7 +118,13 @@
         </template>
       </StatePanel>
       <template v-else>
-        <div class="data-table-wrap admin-table-wrap" role="region" aria-labelledby="level-check-title" tabindex="0">
+        <div
+          ref="questionsTableRef"
+          class="data-table-wrap admin-table-wrap"
+          role="region"
+          aria-labelledby="level-check-title"
+          tabindex="0"
+        >
           <table class="data-table admin-table admin-table-fixed admin-questions-table">
             <thead>
               <tr>
@@ -131,10 +143,11 @@
                 v-for="row in questionRows"
                 :key="row.id"
                 :class="{ 'is-selected': row.id === questionId }"
+                :data-question-id="row.id"
                 data-testid="question-row"
-                @click="openQuestion(row.id)"
+                @click="onQuestionRowClick(row.id)"
               >
-                <td class="admin-cell-strong">{{ row.prompt }}</td>
+                <td class="admin-cell-strong"><CjkText :text="row.prompt" /></td>
                 <td class="admin-cell-muted">{{ t(SKILL_KEYS[row.skill]) }}</td>
                 <td class="admin-cell-muted">{{ t(DIFFICULTY_KEYS[row.difficulty]) }}</td>
                 <td class="admin-cell-muted">{{ t('hsk.number', { level: LEVEL_HSK[row.level] }) }}</td>
@@ -191,7 +204,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { nextTick, ref, watch } from 'vue'
 
 import { adminLearningApi } from '@/api/learn'
 import { syncContentCount } from '@/components/admin/adminContentCounts'
@@ -205,8 +218,8 @@ import StatePanel from '@/components/common/StatePanel.vue'
 import StatusPill from '@/components/common/StatusPill.vue'
 import LevelCheckQuestionDrawer from '@/components/learn/admin/LevelCheckQuestionDrawer.vue'
 import UnitDetail from '@/components/learn/admin/UnitDetail.vue'
-import { unitMetaParts } from '@/components/learn/admin/unitLessons'
-import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
+import { unitRowMeta } from '@/components/learn/admin/unitLessons'
+import CjkText from '@/components/learning/CjkText.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { useResource, useServerPage } from '@/composables/useResource'
 import { useToast } from '@/composables/useToast'
@@ -262,10 +275,16 @@ function onUnitChanged(message: string): void {
 // One level check question, in a drawer (a null id is a new question)
 
 const questionId = ref<number | null>()
+const questionsTableRef = ref<HTMLElement | null>(null)
 /** Why the last Publish of a row, or its Undo, failed (the page's notice: no drawer is open then). */
 const questionActionError = ref<string | null>(null)
 /** The row whose Publish (or its Undo) is on its way: one at a time. */
 const publishingId = ref<number | null>(null)
+
+function onQuestionRowClick(id: number): void {
+  if (window.getSelection()?.toString()) return
+  openQuestion(id)
+}
 
 function openQuestion(id: number | null): void {
   if (publishingId.value !== null) return
@@ -275,14 +294,15 @@ function openQuestion(id: number | null): void {
 
 /**
  * A new question is saved as a draft unless its Status says otherwise: a draft waits for Publish on its row (A4.06).
- * The toast says how the question was kept; a new question published at once can be taken back with Undo.
+ * The toast says how the question was kept; publishing a new or draft question can be taken back with Undo.
  */
 function onQuestionSaved(question: LevelCheckQuestionDetail): void {
   const published = question.status === 'PUBLISHED'
   const isNew = typeof questionId.value !== 'number'
+  const wasDraft = !isNew && questionRows.value.find((row) => row.id === question.id)?.status === 'DRAFT'
   questionId.value = undefined
   questionActionError.value = null
-  if (isNew && published) showPublished(question.id)
+  if ((isNew || wasDraft) && published) showPublished(question.id)
   else if (isNew) showToast(t('adminLearning.questionAddedDraft'))
   else showToast(t(published ? 'adminLearning.questionSaved' : 'adminLearning.questionSavedDraft'))
   void questions.reload()
@@ -302,6 +322,7 @@ function showPublished(id: number): void {
  */
 async function setQuestionPublished(id: number, publish: boolean): Promise<void> {
   if (publishingId.value !== null || questionId.value !== undefined) return
+  const hadFocus = Boolean(document.activeElement && questionsTableRef.value?.contains(document.activeElement))
   hideToast()
   publishingId.value = id
   questionActionError.value = null
@@ -310,6 +331,13 @@ async function setQuestionPublished(id: number, publish: boolean): Promise<void>
     await questions.reload()
     if (publish) showPublished(id)
     else showToast(t('adminLearning.questionUnpublished'))
+    if (hadFocus && (!document.activeElement || document.activeElement === document.body)) {
+      await nextTick()
+      const rowBtn = questionsTableRef.value?.querySelector<HTMLButtonElement>(
+        `tr[data-question-id="${id}"] .admin-questions-actions button:last-child`,
+      )
+      ;(rowBtn ?? questionsTableRef.value)?.focus()
+    }
   } catch (reason) {
     const failed = publish ? 'adminLearning.questionPublishFailed' : 'adminLearning.saveFailed'
     questionActionError.value = resolveApiError(reason, t(failed))

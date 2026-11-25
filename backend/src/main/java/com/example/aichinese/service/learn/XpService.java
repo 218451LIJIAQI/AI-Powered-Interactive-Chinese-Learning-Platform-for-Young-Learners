@@ -2,6 +2,7 @@ package com.example.aichinese.service.learn;
 
 import static org.springframework.http.HttpStatus.BAD_REQUEST;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -81,7 +82,7 @@ public class XpService {
         StudentProfile locked = accessService.lockProfile(student);
         String badgeName = rewardBadge.badgeName();
         if (!studentBadgeRepository.existsByStudentIdAndBadgeName(locked.getId(), badgeName)) {
-            saveStudentBadge(locked, badgeName);
+            saveStudentBadge(locked, badgeName, clock.serverTimeAt(clock.now()));
         }
     }
 
@@ -143,21 +144,16 @@ public class XpService {
         return new DailyGoalResponse(student.getDailyGoalXp());
     }
 
-    @Transactional(isolation = Isolation.READ_COMMITTED)
-    public DailyGoalResponse changeDailyGoal(SecurityUserDetails currentUser, Integer dailyGoalXp) {
-        return changeDailyGoal(accessService.requireStudent(currentUser), dailyGoalXp);
-    }
-
     /**
      * Changes the daily goal. A lower goal that today's XP already meets counts as reached today (bonus and streak),
      * the same as reaching it with the next lesson.
      */
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    public DailyGoalResponse changeDailyGoal(StudentProfile student, Integer dailyGoalXp) {
+    public DailyGoalResponse changeDailyGoal(SecurityUserDetails currentUser, Integer dailyGoalXp) {
         if (!RewardRules.isDailyGoalOption(dailyGoalXp)) {
             throw new ResponseStatusException(BAD_REQUEST, "Daily goal must be 10, 20 or 30 XP.");
         }
-        XpSession session = begin(student);
+        XpSession session = begin(accessService.requireStudent(currentUser));
         session.student().setDailyGoalXp(dailyGoalXp);
         session.finish();
         return dailyGoalOf(session.student());
@@ -168,12 +164,14 @@ public class XpService {
                 student.getId(), clock.startOf(today), clock.startOf(today.plusDays(1)));
     }
 
-    private void saveStudentBadge(StudentProfile student, String badgeName) {
+    private void saveStudentBadge(StudentProfile student, String badgeName, LocalDateTime at) {
         Badge badge = badgeRepository.findByName(badgeName).orElseThrow();
         StudentBadge studentBadge = new StudentBadge();
         studentBadge.setStudent(student);
         studentBadge.setBadge(badge);
-        studentBadge.setAwardedAt(LocalDateTime.now());
+        studentBadge.setAwardedAt(at);
+        studentBadge.setCreatedAt(at);
+        studentBadge.setUpdatedAt(at);
         studentBadgeRepository.save(studentBadge);
     }
 
@@ -187,6 +185,9 @@ public class XpService {
         private final StudentProfile student;
         /** The total XP before this request's awards: a rank passed since then is a rank-up. */
         private final int startXp;
+        /** Single instant captured at session start so transaction timestamps and platform day never skew across midnight. */
+        private final LocalDate sessionDay;
+        private final LocalDateTime sessionTimestamp;
         private final List<String> newBadges = new ArrayList<>();
         /** Loaded lazily on the first badge check so a session runs at most one earned-badges lookup. */
         private Set<String> earnedBadgeNames;
@@ -196,10 +197,21 @@ public class XpService {
         private XpSession(StudentProfile student) {
             this.student = student;
             this.startXp = student.getTotalPoints();
+            Instant now = clock.now();
+            this.sessionDay = clock.dayAt(now);
+            this.sessionTimestamp = clock.serverTimeAt(now);
         }
 
         public StudentProfile student() {
             return student;
+        }
+
+        LocalDate sessionDay() {
+            return sessionDay;
+        }
+
+        LocalDateTime sessionTimestamp() {
+            return sessionTimestamp;
         }
 
         /** Awards XP once per source: a source that was already paid writes nothing. */
@@ -220,7 +232,7 @@ public class XpService {
         public void badge(RewardBadge rewardBadge) {
             String badgeName = rewardBadge.badgeName();
             if (earnedBadges().add(badgeName)) {
-                saveStudentBadge(student, badgeName);
+                saveStudentBadge(student, badgeName, sessionTimestamp);
                 newBadges.add(rewardBadge.name());
             }
         }
@@ -237,7 +249,7 @@ public class XpService {
          * learner past a rank threshold, says so (with a "You reached Rank N" notification).
          */
         public XpResult finish() {
-            LocalDate today = clock.today();
+            LocalDate today = sessionDay;
             int goal = student.getDailyGoalXp();
             int todayXp = todayXp(student, today);
             boolean reachedBefore = pointsTransactionRepository.existsByStudentIdAndSourceTypeAndSourceId(
@@ -290,6 +302,8 @@ public class XpService {
             transaction.setReason(title);
             transaction.setSourceType(sourceType);
             transaction.setSourceId(sourceId);
+            transaction.setCreatedAt(sessionTimestamp);
+            transaction.setUpdatedAt(sessionTimestamp);
             pointsTransactionRepository.saveAndFlush(transaction);
             student.setTotalPoints(student.getTotalPoints() + xp);
         }

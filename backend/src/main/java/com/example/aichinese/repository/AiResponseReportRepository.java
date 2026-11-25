@@ -8,16 +8,24 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.lang.NonNull;
 
 import com.example.aichinese.dto.admin.AdminDashboardResponse;
 import com.example.aichinese.entity.AiResponseReport;
+import com.example.aichinese.entity.enums.AiFeatureKey;
 import com.example.aichinese.entity.enums.AiResponseReportStatus;
 
 import jakarta.persistence.LockModeType;
 
 public interface AiResponseReportRepository extends JpaRepository<AiResponseReport, Long> {
+
+    @Override
+    @EntityGraph(attributePaths = { "studentUser", "reviewerUser" })
+    @NonNull
+    Optional<AiResponseReport> findById(@NonNull Long id);
 
     @Query(value = """
             select new com.example.aichinese.dto.admin.AdminDashboardResponse$AiReportItem(
@@ -51,5 +59,22 @@ public interface AiResponseReportRepository extends JpaRepository<AiResponseRepo
      * and hold up their own account writes (a token refresh, an AI request) until the review ends.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    Optional<AiResponseReport> findLockedById(Long id);
+    @Query("select report from AiResponseReport report where report.id = :id")
+    Optional<AiResponseReport> findLockedById(@Param("id") Long id);
+
+    /** Account deletion: plan reports carry the learner's own goal words and SparkBot's personal plan copy. */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("delete from AiResponseReport report where report.studentUser.id = :studentUserId and report.featureKey = :featureKey")
+    int deleteByStudentUserIdAndFeatureKey(
+            @Param("studentUserId") Long studentUserId,
+            @Param("featureKey") AiFeatureKey featureKey);
+
+    /** Account deletion: remaining reports keep the AI answer for admin review while dropping learner-written text. */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update AiResponseReport report
+            set report.description = null, report.promptSnapshot = null
+            where report.studentUser.id = :studentUserId
+            """)
+    int clearPersonalTextByStudentUserId(@Param("studentUserId") Long studentUserId);
 }

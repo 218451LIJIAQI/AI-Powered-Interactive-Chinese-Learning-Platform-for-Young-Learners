@@ -3,6 +3,7 @@ package com.example.aichinese.dto.auth;
 import static com.example.aichinese.dto.DtoNormalization.redactValue;
 import static com.example.aichinese.dto.DtoNormalization.strip;
 
+import com.example.aichinese.dto.DtoNormalization;
 import com.example.aichinese.util.LanguageCodes;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
@@ -14,7 +15,8 @@ import jakarta.validation.constraints.Size;
  * Profile settings any signed-in role may change (FRAUTH07). Omitted fields keep their stored values.
  */
 public record UpdateProfileRequest(
-        @Pattern(regexp = "(?s).*\\S.*", message = "Display name is required.")
+        @Pattern(regexp = DtoNormalization.NON_BLANK_PATTERN, message = "Display name is required.")
+        @Pattern(regexp = DtoNormalization.NO_CONTROL_CHARS_PATTERN, message = "Display name contains unsupported control characters.")
         @Size(max = 120, message = "Display name must be 120 characters or fewer.")
         String displayName,
 

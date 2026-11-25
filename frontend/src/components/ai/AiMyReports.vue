@@ -13,7 +13,7 @@
       :message="t('aiHelper.reportsLoadingHint')"
       :skeleton="false"
     />
-    <StatePanel v-else-if="error" tone="error" icon="alert" :title="t('aiHelper.reportsError')" :message="error">
+    <StatePanel v-else-if="error" tone="error" :title="t('aiHelper.reportsError')" :message="error">
       <template #actions>
         <button class="btn btn-secondary btn-sm" type="button" @click="reload">{{ t('common.retry') }}</button>
       </template>
@@ -22,7 +22,7 @@
       <li v-for="{ report, quote } in reportRows" :key="report.id" class="ai-report-item">
         <div class="ai-report-top">
           <strong>{{ t(reportReasonKey(report.reasonCategory)) }}</strong>
-          <StatusPill :label="t(REPORT_STATUS[report.status].labelKey)" :tone="REPORT_STATUS[report.status].tone" />
+          <StatusPill :label="t(AI_REPORT_STATUS_KEYS[report.status])" :tone="REPORT_STATUS_TONES[report.status]" />
         </div>
         <p v-if="quote" class="ai-report-meta">“{{ quote }}”</p>
         <p class="ai-report-meta">
@@ -36,7 +36,11 @@
         <p v-if="report.status === 'PENDING_REVIEW'" class="ai-report-meta">{{ t('aiHelper.reportWaiting') }}</p>
         <div v-else-if="report.reviewerNote" class="ai-report-note">
           <p class="ai-report-note-head">
-            {{ t('aiHelper.adminNote', { time: formatDateTime(report.reviewedAt) }) }}
+            {{
+              report.reviewedAt
+                ? t('aiHelper.adminNote', { time: formatDateTime(report.reviewedAt) })
+                : t('aiHelper.adminNoteNoTime')
+            }}
           </p>
           <p>{{ report.reviewerNote }}</p>
         </div>
@@ -50,7 +54,7 @@
       :message="t('aiHelper.noReports')"
     />
     <PaginationBar
-      v-if="!error"
+      v-if="!loading && !error"
       :page="displayedPage"
       :total-pages="totalPages"
       :label="t('aiHelper.myReports')"
@@ -66,16 +70,22 @@ import { computed, ref, useId, watch } from 'vue'
 import { aiHelperApi } from '@/api/ai'
 import PaginationBar from '@/components/common/PaginationBar.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
-import StatusPill from '@/components/common/StatusPill.vue'
+import StatusPill, { type PillTone } from '@/components/common/StatusPill.vue'
 import { useLocalMessages } from '@/composables/useLocalMessages'
 import { useResource, useServerPage } from '@/composables/useResource'
 import { aiHelperMessages } from '@/plugins/aiHelperMessages'
+import { AI_REPORT_STATUS_KEYS, reportReasonKey } from '@/plugins/aiSafetyMessages'
 import { opsLabelMessages } from '@/plugins/opsLabelMessages'
-import type { StudentAiResponseReportResponse } from '@/types/api'
+import type { StudentAiResponseReportResponse } from '@/types/ai'
+import type { AiResponseReportStatus } from '@/types/api'
 import { formatDateTime } from '@/utils/format'
 import { truncateText } from '@/utils/truncateText'
 
-import { REPORT_STATUS, reportReasonKey } from './aiHelper'
+const REPORT_STATUS_TONES: Readonly<Record<AiResponseReportStatus, PillTone>> = {
+  PENDING_REVIEW: 'info',
+  RESOLVED: 'success',
+  DISMISSED: 'neutral',
+}
 
 const props = defineProps<{ revision: number }>()
 const page = ref(0)

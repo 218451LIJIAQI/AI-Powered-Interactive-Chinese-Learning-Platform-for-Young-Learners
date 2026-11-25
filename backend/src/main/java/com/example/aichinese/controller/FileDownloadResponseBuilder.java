@@ -18,7 +18,7 @@ import com.example.aichinese.util.TextUtils;
 /**
  * Response for a private file download. {@code Cache-Control: no-store} and {@code Pragma: no-cache} are not set
  * here: ApiInterceptorConfig already sets them once on every route that serves a private file (under
- * /api/v1/users, /students and /admin), and a second copy from the response entity would repeat each header.
+ * /api/v1/students and /api/v1/admin), and a second copy from the response entity would repeat each header.
  */
 final class FileDownloadResponseBuilder {
 

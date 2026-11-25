@@ -17,8 +17,9 @@
         :class="{ 'btn-icon': iconOnly }"
         type="button"
         :aria-label="iconOnly ? t('pagination.previous') : undefined"
-        :disabled="page <= 0"
-        @click="emit('update:page', page - 1)"
+        :title="iconOnly ? t('pagination.previous') : undefined"
+        :aria-disabled="page <= 0 || undefined"
+        @click="goTo(page - 1)"
       >
         <IconGlyph name="chevronLeft" :size="16" />
         <span v-if="!iconOnly">{{ t('pagination.previous') }}</span>
@@ -28,8 +29,9 @@
         :class="{ 'btn-icon': iconOnly }"
         type="button"
         :aria-label="iconOnly ? t('pagination.next') : undefined"
-        :disabled="page >= totalPages - 1"
-        @click="emit('update:page', page + 1)"
+        :title="iconOnly ? t('pagination.next') : undefined"
+        :aria-disabled="page >= totalPages - 1 || undefined"
+        @click="goTo(page + 1)"
       >
         <span v-if="!iconOnly">{{ t('pagination.next') }}</span>
         <IconGlyph name="chevronRight" :size="16" />
@@ -40,9 +42,8 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
-import { useLocalMessages } from '@/composables/useLocalMessages'
-import { paginationMessages } from '@/plugins/paginationMessages'
 import { formatNumber } from '@/utils/format'
 
 import IconGlyph from './IconGlyph.vue'
@@ -66,7 +67,12 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{ 'update:page': [page: number] }>()
 
-const { t, locale } = useLocalMessages({ pagination: paginationMessages })
+function goTo(nextPage: number): void {
+  if (nextPage < 0 || nextPage >= props.totalPages) return
+  emit('update:page', nextPage)
+}
+
+const { t, locale } = useI18n()
 const pageText = computed(() =>
   t('pagination.pageOf', {
     page: formatNumber(props.page + 1, locale.value),

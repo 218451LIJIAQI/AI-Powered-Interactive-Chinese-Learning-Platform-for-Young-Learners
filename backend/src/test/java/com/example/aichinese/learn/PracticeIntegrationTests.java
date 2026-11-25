@@ -195,8 +195,7 @@ class PracticeIntegrationTests extends ApiIntegrationTest {
         List<PracticeCatalog.Item> items = practiceCatalog.content(PracticeType.LISTENING, set).items();
 
         JsonNode listening = api.data(mockMvc.perform(api.authGet(path, token)).andExpect(status().isOk()).andReturn());
-        assertThat(listening.toString()).doesNotContain("correctIndex").doesNotContain("explanation")
-                .doesNotContain("streakBonusEarned");
+        assertThat(listening.toString()).doesNotContain("correctIndex").doesNotContain("explanation");
         assertThat(listening.path("items").get(0).path("options").size()).isEqualTo(4);
         // 3 XP an answer, 5 answers.
         assertThat(listening.path("xpReward").asInt()).isEqualTo(15);

@@ -27,6 +27,7 @@ import { useLocalMessages } from '@/composables/useLocalMessages'
 import { hintChromeMessages } from '@/plugins/hintChromeMessages'
 import { practiceAnswerMessages } from '@/plugins/practiceAnswerMessages'
 import type { HintStep, PracticeType } from '@/types/learn'
+import { tracingGlyphs } from '@/utils/tracing'
 
 import type { StuckHint } from './useStuckHint'
 
@@ -48,20 +49,15 @@ const props = withDefaults(
 )
 const emit = defineEmits<{ reported: [] }>()
 
-const { t } = useLocalMessages({ answer: [hintChromeMessages, practiceAnswerMessages] })
+const { t } = useLocalMessages({ answer: practiceAnswerMessages, hintChrome: hintChromeMessages })
 
-const visible = computed(
-  () =>
-    props.active &&
-    props.hint.mode.value !== 'OFF' &&
-    (props.hint.offered.value || props.hint.hint.value !== null || props.hint.refusal.value !== null),
-)
+const visible = computed(() => props.active && props.hint.mode.value !== 'OFF')
 const step = computed(() => props.hint.hint.value)
 const errorMessage = computed(() =>
   props.hint.failed.value ? (props.hint.refusal.value ?? t('answer.hintFailed')) : null,
 )
 const offerText = computed(() => {
-  const prompt = props.hint.mode.value === 'ON_REQUEST' ? t('answer.hintOfferAsk') : t('answer.hintOffer')
+  const prompt = props.hint.mode.value === 'ON_REQUEST' ? t('hintChrome.hintOfferAsk') : t('hintChrome.hintOffer')
   const left = props.hint.budgetLeft.value
   return left !== null && left > 0 ? `${prompt} · ${t('answer.hintsLeftInSet', { count: left }, left)}` : prompt
 })
@@ -97,6 +93,8 @@ function sentenceOf(current: HintStep): string {
       return t('answer.hintFirstSound', { sound: current.text })
     case 'FIRST_LETTER':
       return t('answer.hintFirstLetter', { letter: first })
+    case 'LISTEN_SLOW':
+      return t('answer.hintListenSlow')
     case 'TWO_LEFT':
       return t('answer.hintTwoLeft', { first: optionName(first), second: optionName(second) })
     case 'FIRST_TILE':
@@ -114,7 +112,7 @@ function sentenceOf(current: HintStep): string {
         ? t('answer.hintPair', { word: first, pinyin, meaning: second })
         : t('answer.hintPairNoPinyin', { word: first, meaning: second })
     case 'STROKE_COUNT':
-      return t('answer.hintStrokeCount', { characters: first, count }, count)
+      return t('answer.hintStrokeCount', { characters: tracingGlyphs(first).join('') || first, count }, count)
     case 'STROKE_ORDER':
       return t('answer.hintStrokeOrder')
   }

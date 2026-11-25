@@ -27,8 +27,20 @@ public interface AdminInviteRepository extends JpaRepository<AdminInvite, Long> 
 
     /** Invites that can still be accepted, the most recently sent first (sending again replaces the link). */
     @Query("select i from AdminInvite i where i.acceptedAt is null and i.cancelledAt is null and i.expiresAt > :now"
+            + " and not exists (select 1 from User u where u.email = i.email)"
             + " order by i.updatedAt desc, i.id desc")
     List<AdminInvite> findPending(@Param("now") LocalDateTime now);
+
+    /** Cancels any open invite for an address that has now been registered or claimed by an account. */
+    @Modifying(flushAutomatically = true)
+    @Query("update AdminInvite i set i.cancelledAt = :at"
+            + " where i.email = :email and i.acceptedAt is null and i.cancelledAt is null")
+    int cancelOpenForEmail(@Param("email") String email, @Param("at") LocalDateTime at);
+
+    /** Removes unaccepted invites for a verified deleted account's address so its email cannot linger or resurface. */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("delete from AdminInvite i where i.email = :email and i.acceptedAt is null")
+    int deleteUnacceptedByEmail(@Param("email") String email);
 
     /**
      * Cancels an invite that is still waiting. A bulk update, so the invite's updated_at (when it was last sent) stays

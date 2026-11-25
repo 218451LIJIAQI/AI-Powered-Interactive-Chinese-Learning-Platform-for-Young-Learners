@@ -11,7 +11,7 @@ import com.example.aichinese.entity.EmailChangeToken;
 
 import jakarta.persistence.LockModeType;
 
-public interface EmailChangeTokenRepository extends EmailVerificationTokenRepository<EmailChangeToken> {
+public interface EmailChangeTokenRepository extends OneTimeUserTokenRepository<EmailChangeToken> {
 
     String LATEST_PENDING_BY_USER = """
             from EmailChangeToken t

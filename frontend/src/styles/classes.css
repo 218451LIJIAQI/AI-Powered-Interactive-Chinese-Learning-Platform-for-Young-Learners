@@ -94,11 +94,9 @@ a.student-lesson-activity:is(:hover, :focus-visible) .row-list-title {
 }
 
 .class-catalogue-card-tags > .tag:not(.is-strong) {
-  height: auto;
   padding: 0;
   background: transparent;
   color: var(--tint-fg);
-  white-space: normal;
   overflow-wrap: anywhere;
 }
 
@@ -111,7 +109,7 @@ a.student-lesson-activity:is(:hover, :focus-visible) .row-list-title {
   color: var(--text-primary);
 }
 
-/* The whole card is the link's hit area (and shows its focus ring); the action button sits above it. */
+/* The whole card is the link's hit area (and shows its focus ring). */
 .class-catalogue-card-link::after {
   content: '';
   position: absolute;
@@ -158,8 +156,6 @@ a.student-lesson-activity:is(:hover, :focus-visible) .row-list-title {
 }
 
 .class-catalogue-card-actions {
-  position: relative;
-  z-index: var(--z-raised);
   display: flex;
   justify-content: flex-end;
 }
@@ -635,7 +631,7 @@ a.student-lesson-activity:is(:hover, :focus-visible) {
   background: linear-gradient(
     to right,
     var(--color-primary-500) var(--seek-progress, 0%),
-    var(--color-ink-200) var(--seek-progress, 0%)
+    var(--border-field) var(--seek-progress, 0%)
   );
 }
 
@@ -646,7 +642,7 @@ a.student-lesson-activity:is(:hover, :focus-visible) {
   background: linear-gradient(
     to right,
     var(--color-primary-500) var(--seek-progress, 0%),
-    var(--color-ink-200) var(--seek-progress, 0%)
+    var(--border-field) var(--seek-progress, 0%)
   );
 }
 
@@ -673,6 +669,16 @@ a.student-lesson-activity:is(:hover, :focus-visible) {
 
 .lesson-video-seek:disabled {
   cursor: default;
+}
+
+.lesson-video-seek:disabled::-webkit-slider-thumb {
+  background: var(--border-strong);
+  box-shadow: none;
+}
+
+.lesson-video-seek:disabled::-moz-range-thumb {
+  background: var(--border-strong);
+  box-shadow: none;
 }
 
 .lesson-video-help {
@@ -784,7 +790,7 @@ a.student-lesson-activity:is(:hover, :focus-visible) {
   white-space: nowrap;
 }
 
-/* A flashcard: the phrase large on a sunken tile; flipped, its meaning. The tile keeps its height, so nothing jumps. */
+/* A flashcard: the phrase large on its front; flipped, its meaning. The card keeps its height, so nothing jumps. */
 .class-flashcard-stack {
   display: grid;
   gap: var(--space-3);
@@ -825,7 +831,6 @@ a.student-lesson-activity:is(:hover, :focus-visible) {
 
 .class-flashcard-word.is-long {
   font-size: var(--font-size-5xl);
-  line-height: var(--line-height-tight);
 }
 
 .class-flashcard-meaning {
@@ -903,7 +908,6 @@ a.student-lesson-activity:is(:hover, :focus-visible) {
   aspect-ratio: 1;
   border-radius: var(--radius-md);
   cursor: crosshair;
-  touch-action: none;
 }
 
 /* Matching: two columns of equal-height tiles using the shared primary/success/danger visual states. */
@@ -944,10 +948,6 @@ a.student-lesson-activity:is(:hover, :focus-visible) {
 .class-matching-item:where(:hover:not(:disabled)) {
   background: var(--surface-subtle);
   box-shadow: inset 0 0 0 1px var(--border-interactive);
-}
-
-.class-matching-item:disabled {
-  cursor: default;
 }
 
 .class-matching-item.is-selected {
@@ -1149,6 +1149,24 @@ a.student-lesson-activity:is(:hover, :focus-visible) {
     background: Highlight;
   }
 
+  .lesson-video-seek:disabled::-webkit-slider-runnable-track {
+    border-color: GrayText;
+  }
+
+  .lesson-video-seek:disabled::-moz-range-track {
+    border-color: GrayText;
+  }
+
+  .lesson-video-seek:disabled::-webkit-slider-thumb {
+    border-color: GrayText;
+    background: GrayText;
+  }
+
+  .lesson-video-seek:disabled::-moz-range-thumb {
+    border-color: GrayText;
+    background: GrayText;
+  }
+
   .class-flashcard,
   .class-matching-item {
     border: 1px solid ButtonText;
@@ -1158,12 +1176,16 @@ a.student-lesson-activity:is(:hover, :focus-visible) {
     border: var(--border-width-thick) solid Highlight;
   }
 
-  .class-matching-item.is-paired:not(.is-selected, .is-right, .is-wrong),
+  .class-matching-item.is-paired,
   .class-matching-item.is-right {
     border: var(--border-width-thick) solid Highlight;
     background: Highlight;
     color: HighlightText;
     forced-color-adjust: none;
+  }
+
+  .class-matching-item:is(.is-paired, .is-right) .type-caption {
+    color: inherit;
   }
 
   .class-matching-item.is-wrong {

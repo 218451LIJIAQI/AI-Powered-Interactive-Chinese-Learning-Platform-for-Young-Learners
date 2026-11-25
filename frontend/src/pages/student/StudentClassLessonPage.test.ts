@@ -131,7 +131,7 @@ describe('StudentClassLessonPage', () => {
   it('makes each activity row one link: a chevron when done, Start when not', async () => {
     const { wrapper } = await mountLesson()
 
-    const rows = wrapper.findAll('.student-lesson-activities > li')
+    const rows = wrapper.findAll('.student-lesson-activity-row')
     expect(rows.map((row) => row.findAll('a, button'))).toEqual([[expect.anything()], [expect.anything()]])
     expect(rows.map((row) => row.get('a').attributes('href'))).toEqual([
       '/student/classes/1/lessons/1/activities/flashcards/6',
@@ -190,6 +190,19 @@ describe('StudentClassLessonPage', () => {
     expect(wrapper.find('[data-testid="quiz-best"]').exists()).toBe(false)
   })
 
+  it('says Start instead of Continue on the header CTA when the lesson has not started yet', async () => {
+    api.lesson.mockResolvedValue(
+      lesson({
+        status: 'NOT_STARTED',
+        stepsDone: 0,
+        activities: [{ ...flashcards, done: false }],
+      }),
+    )
+    const { wrapper } = await mountLesson()
+
+    expect(wrapper.get('[data-testid="lesson-next"]').text()).toBe('Start: Classmate Phrases')
+  })
+
   it('plays the video under its own bar, pauses it, and closes it', async () => {
     api.videoBlob.mockResolvedValue(new Blob(['video']))
     const { wrapper } = await mountLesson()
@@ -244,12 +257,12 @@ describe('StudentClassLessonPage', () => {
     await flushPromises()
     await wrapper.get('video').trigger('ended')
     await flushPromises()
-    const error = wrapper.get('.data-notice.is-error')
+    const error = wrapper.get('.data-notice')
     expect(error.text()).toContain('Your video progress could not be saved.')
     await error.get('button').trigger('click')
     await flushPromises()
     expect(wrapper.get('.class-page-header .page-title-copy p').text()).toBe('In progress · 0 of 4 steps')
-    expect(wrapper.find('.data-notice.is-error').exists()).toBe(false)
+    expect(wrapper.find('.data-notice').exists()).toBe(false)
     await wrapper.get('video').trigger('ended')
     expect(api.markVideoWatched).toHaveBeenCalledTimes(2)
   })
@@ -299,18 +312,19 @@ describe('StudentClassLessonPage', () => {
     )
   })
 
-  it('keeps the longest allowed description and its diagnostics within the support ticket limit', async () => {
+  it('keeps the longest allowed multi-line description and its diagnostics within the support ticket limit', async () => {
     const wrapper = await openVideoReport()
     const dialog = wrapper.get('[data-testid="report-problem"]')
     const field = dialog.get<HTMLTextAreaElement>('textarea')
-    const description = '声'.repeat(field.element.maxLength)
+    const firstLine = 'Line 1\nLine 2\n'
+    const description = firstLine + '声'.repeat(field.element.maxLength - firstLine.length)
     await field.setValue(description)
     await dialog.get('form').trigger('submit')
 
     const sent = support.create.mock.calls[0]![0].message
-    expect(sent.length).toBeLessThanOrEqual(4000)
+    expect(sent.length).toBe(4000)
     expect(sent.split('\n')).toEqual([
-      description,
+      ...description.split('\n'),
       '',
       'Lesson: Meeting Classmates · Mandarin for Campus Life',
       `Page: ${window.location.pathname}${window.location.search}`,
@@ -354,7 +368,7 @@ describe('StudentClassLessonPage', () => {
     expect(wrapper.get('.lesson-video-row').text()).toContain('Saying hello')
     expect(wrapper.get('.lesson-video-row').text()).toContain('4:40')
     expect(wrapper.find('.lesson-video-row .btn').exists()).toBe(false)
-    expect(wrapper.find('.student-lesson-activities a').exists()).toBe(false)
+    expect(wrapper.find('.student-lesson-activities-card a').exists()).toBe(false)
     expect(wrapper.get('[data-testid="quiz-start"]').attributes('disabled')).toBeDefined()
     expect(wrapper.get('[data-testid="quiz-best"]').attributes('href')).toBe('/student/quiz/9/attempts/3')
     expect(wrapper.text()).toContain('你叫什么名字？')

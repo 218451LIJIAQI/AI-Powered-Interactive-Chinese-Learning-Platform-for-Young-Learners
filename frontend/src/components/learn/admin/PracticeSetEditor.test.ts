@@ -121,6 +121,12 @@ describe('PracticeSetEditor', () => {
     expect(strokesInput.attributes('aria-invalid')).toBe('true')
     expect(strokesInput.attributes('aria-describedby')).toBe(alert.attributes('id'))
     expect(single.get('[data-testid="editor-save"]').attributes('disabled')).toBeDefined()
+
+    const tooFewForWord = await newTracingSet('你好', '1')
+    expect(tooFewForWord.get('input[id$="-strokes"]').attributes('min')).toBe('2')
+    expect(tooFewForWord.get('input[id$="-strokes"]').attributes('max')).toBe('120')
+    await tooFewForWord.get('input[id$="-strokes"]').trigger('blur')
+    expect(tooFewForWord.get('[role="alert"]').text()).toBe('Each character needs 1 to 60 strokes.')
   })
 
   it('counts ten visible Unicode characters, including supplementary Han characters separated by spaces', async () => {
@@ -223,5 +229,34 @@ describe('PracticeSetEditor', () => {
     pending.resolve(tracingSet())
     await flushPromises()
     expect(wrapper.emitted('saved')).toBeUndefined()
+  })
+
+  it('restores focus to the surviving listening question instead of nested option controls when removing a question', async () => {
+    const wrapper = mount(PracticeSetEditor, {
+      attachTo: document.body,
+      props: { existing: null, saveSet },
+      global: { stubs: { teleport: true } },
+    })
+    try {
+      await wrapper.get('[data-testid="editor-type"]').setValue('LISTENING')
+      await buttonNamed(wrapper, 'Add question').trigger('click')
+      await buttonNamed(wrapper, 'Add question').trigger('click')
+
+      // Removing question 2 with 3 questions keeps remove buttons enabled and focuses surviving question 2's remove button.
+      const removeSecond = wrapper.get<HTMLButtonElement>('[aria-label="Remove item 2"]')
+      removeSecond.element.focus()
+      await removeSecond.trigger('click')
+      await flushPromises()
+      expect((document.activeElement as HTMLElement | null)?.getAttribute('aria-label')).toBe('Remove item 2')
+
+      // Removing down to 1 question disables question remove buttons and focuses the surviving question's first input.
+      const removeLast = wrapper.get<HTMLButtonElement>('[aria-label="Remove item 2"]')
+      removeLast.element.focus()
+      await removeLast.trigger('click')
+      await flushPromises()
+      expect((document.activeElement as HTMLElement | null)?.getAttribute('aria-label')).toBe('Question 1')
+    } finally {
+      wrapper.unmount()
+    }
   })
 })

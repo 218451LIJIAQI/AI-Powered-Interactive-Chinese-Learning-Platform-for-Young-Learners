@@ -10,8 +10,6 @@ import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.example.aichinese.config.seed.DemoOpsSeeder;
@@ -38,10 +36,10 @@ import com.example.aichinese.repository.UserRepository;
 import com.example.aichinese.security.SecurityUserDetails;
 import com.example.aichinese.service.admin.AdminUserService;
 import com.example.aichinese.service.support.SupportService;
+import com.example.aichinese.support.DemoProfileTest;
 
 /** The ops demo data: the prototype's support requests, the admins' notifications, a deactivated learner, the audit log. */
-@SpringBootTest
-@ActiveProfiles({"demo", "demo-test"})
+@DemoProfileTest
 class DemoOpsSeederTests {
 
     @Autowired

@@ -120,6 +120,17 @@ describe('AdminAiSettingsPage', () => {
     expect(wrapper.get('.field-error').text()).toBe('Tulis teks notis AI.')
   })
 
+  it('normalizes the retired teacher notice to the current default in the editor', async () => {
+    api.settings.mockResolvedValue({
+      ...SETTINGS,
+      aiNoticeText: 'AI responses may contain errors and do not replace your teacher.',
+    })
+    const wrapper = await mountPage()
+
+    expect(wrapper.get<HTMLTextAreaElement>('textarea').element.value).toBe('AI can make mistakes.')
+    expect(wrapper.get<HTMLButtonElement>('button[type="submit"]').element.disabled).toBe(true)
+  })
+
   it.each(['success', 'failure'])(
     'holds the submitted settings until save %s and then enables editing',
     async (outcome) => {

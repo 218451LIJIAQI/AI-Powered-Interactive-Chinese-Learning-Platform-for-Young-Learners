@@ -1,10 +1,9 @@
 /* Admin console pages: dashboard, users, content classes, AI reports, usage and settings, support, analytics and audit
    log. Cross-area admin primitives live in admin-shared.css (loaded separately so Vite emits one shared chunk). */
 
-/* Ops-admin shared layout, queue, card, and share-bar primitives */
+/* Ops-admin shared layout, queue, card, and share-list primitives */
 
-.admin-detail-heading,
-.admin-callout-copy {
+.admin-detail-heading {
   display: grid;
   gap: var(--space-1);
   min-width: 0;
@@ -13,18 +12,6 @@
 .admin-list-head {
   display: grid;
   gap: var(--space-0-5);
-  min-width: 0;
-}
-
-.admin-list,
-.admin-detail {
-  display: grid;
-  align-content: start;
-  gap: var(--space-4);
-}
-
-.admin-list > *,
-.admin-detail > * {
   min-width: 0;
 }
 
@@ -38,9 +25,10 @@
 
 .admin-cell-title {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-0-5);
   min-width: 0;
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
 }
 
 .admin-cell-title > strong {
@@ -60,7 +48,8 @@
   min-width: 0;
 }
 
-.admin-select-list {
+.admin-select-list,
+.admin-support-thread {
   display: grid;
   gap: var(--space-3);
   margin: 0;
@@ -122,20 +111,6 @@
   border-top: 1px solid var(--border-subtle);
 }
 
-.admin-sunken {
-  display: grid;
-  gap: var(--space-1);
-  margin: 0;
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-md);
-  background: var(--surface-sunken);
-  overflow-wrap: anywhere;
-}
-
-.admin-sunken > p {
-  margin: 0;
-}
-
 /* A quiet action in a card's head ("View all", "Open account"): its chevron ends on the card's padding edge. */
 .admin-link-action {
   flex: 0 0 auto;
@@ -182,24 +157,52 @@
   white-space: nowrap;
 }
 
-.admin-share-bar {
-  display: block;
-  height: 6px;
-  overflow: hidden;
-  border-radius: var(--radius-pill);
-  background: var(--color-ink-100);
+/* List and detail queues (AI reports, Support): list column 360 (280 under 75rem), detail fills the rest. */
+.admin-list-detail {
+  display: grid;
+  grid-template-columns: var(--list-column) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--grid-gap);
+  min-width: 0;
 }
 
-.admin-share-bar > span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--color-primary-500);
+/* A selectable queue item: bordered, radius 12; the selected one has a 2px ring that does not shift its text. */
+.select-card {
+  display: grid;
+  gap: var(--space-1);
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-3);
+  border: 0;
+  border-radius: var(--radius-btn-lg);
+  background: var(--surface-card);
+  box-shadow: inset 0 0 0 1px var(--border-default);
+  color: var(--text-primary);
+  text-align: left;
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.select-card:hover {
+  background: var(--surface-subtle);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+
+.select-card[aria-current='true'] {
+  background: var(--color-primary-50);
+  box-shadow: inset 0 0 0 var(--border-width-thick) var(--color-primary-500);
 }
 
 @media (max-width: 75rem) {
   .admin-list-detail {
     --list-column: 280px;
+  }
+}
+
+@media (max-width: 48rem) {
+  .admin-list-detail {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -224,7 +227,7 @@
   gap: var(--space-2);
 }
 
-.admin-home-card > .admin-section-head {
+.admin-home-card > .section-header {
   grid-area: heading;
   flex-wrap: nowrap;
   padding-bottom: var(--space-4);
@@ -247,8 +250,8 @@
 }
 
 .admin-home-card .count-badge {
-  background: var(--color-warning-soft);
-  color: var(--color-warning-text);
+  background: var(--color-accent-500);
+  color: var(--text-on-accent);
   font-variant-numeric: tabular-nums;
 }
 
@@ -322,7 +325,7 @@
     column-gap: var(--grid-gap);
   }
 
-  .admin-home-card > .admin-section-head {
+  .admin-home-card > .section-header {
     align-self: start;
     padding: 0;
     border: 0;
@@ -352,12 +355,6 @@
   container-type: inline-size;
 }
 
-.admin-users-side {
-  display: grid;
-  gap: var(--grid-gap);
-  min-width: 0;
-}
-
 .admin-users-table {
   min-width: 30rem;
 }
@@ -365,10 +362,6 @@
 /* The other columns hug their badges; the person takes the rest. */
 .admin-users-col-user {
   width: 100%;
-}
-
-.admin-users-table .admin-cell-title {
-  overflow-wrap: anywhere;
 }
 
 @container (max-width: 41.25rem) {
@@ -390,18 +383,6 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-1) var(--space-3);
-}
-
-.admin-users-invites-copy {
-  display: grid;
-  gap: var(--space-0-5);
-  min-width: 0;
-}
-
-/* Why the account is deactivated, then who did it and when. */
-.admin-users-reason {
-  display: grid;
-  gap: var(--space-0-5);
 }
 
 @media (max-width: 75rem) {
@@ -487,10 +468,6 @@
   flex: 1 1 240px;
 }
 
-.admin-ai-decision > .btn-group {
-  flex-wrap: nowrap;
-}
-
 /* AI usage: totals, the request log and requests by feature */
 
 /* The label over a figure (AI usage, Analytics). */
@@ -529,14 +506,19 @@
   font-size: var(--font-size-2xl);
   font-weight: var(--font-weight-heading);
   line-height: var(--line-height-snug);
+  overflow-wrap: break-word;
 }
 
 .admin-ai-usage {
   display: grid;
-  grid-template-columns: minmax(0, 7fr) minmax(240px, 3fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--grid-gap);
   align-items: start;
   min-width: 0;
+}
+
+.admin-ai-usage.has-summary {
+  grid-template-columns: minmax(0, 7fr) minmax(240px, 3fr);
 }
 
 .admin-ai-log {
@@ -544,17 +526,27 @@
 }
 
 .admin-ai-log .admin-cell-strong {
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+}
+
+.admin-ai-result-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.admin-ai-log-detail td {
+  padding-top: var(--space-2);
+  padding-bottom: var(--space-3);
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  overflow-wrap: anywhere;
 }
 
 /* AI settings */
 
 /* Hints for learners: one row per level, each rule a compact select. */
-.admin-hint-head {
-  display: grid;
-  gap: var(--space-1);
-}
-
 .admin-hint-table th[scope='row'] {
   color: var(--text-primary);
   font-size: var(--font-size-md);
@@ -606,7 +598,7 @@
 }
 
 @media (max-width: 75rem) {
-  .admin-ai-usage,
+  .admin-ai-usage.has-summary,
   .admin-ai-settings-grid {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -616,15 +608,14 @@
   }
 }
 
-/* Support: the conversation with the requester */
-
-.admin-support-thread {
-  display: grid;
-  gap: var(--space-3);
-  margin: 0;
-  padding: 0;
-  list-style: none;
+@media (max-width: 29rem) {
+  .admin-ai-facts,
+  .admin-ai-totals {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
+
+/* Support: the conversation with the requester */
 
 .admin-support-message {
   display: grid;
@@ -655,6 +646,7 @@
 
 .admin-insights-users {
   justify-items: end;
+  margin-inline-start: auto;
   text-align: right;
 }
 
@@ -662,6 +654,13 @@
   container-type: inline-size;
   display: grid;
   gap: var(--space-2);
+}
+
+.mini-chart {
+  width: 100%;
+  height: 220px;
+  overflow: visible;
+  color: var(--color-primary-500);
 }
 
 /* Each label is placed under its point (left set per label); the end labels align to the chart's edges. */
@@ -699,14 +698,15 @@
   visibility: hidden;
 }
 
-@container (max-width: 48rem) {
-  /* Hide the penultimate visible tick when the final date sits flush against the right edge. */
+@container (max-width: 58rem) {
+  /* Hide the inner ticks flanking the flush first and last labels so dates never collide on either edge. */
+  .admin-insights-axis li:nth-child(2 of :not(.is-quiet)):not(:last-child),
   .admin-insights-axis li:nth-last-child(2 of :not(.is-quiet)):not(:first-child) {
     visibility: hidden;
   }
 }
 
-@container (max-width: 32rem) {
+@container (max-width: 38rem) {
   /* Keep only start and end dates on narrow plots so labels never collide. */
   .admin-insights-axis li:not(:first-child):not(:last-child) {
     visibility: hidden;
@@ -753,6 +753,12 @@
   }
 }
 
+@media (max-width: 29rem) {
+  .admin-insights-learning {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* Audit log */
 
 .admin-audit-col-category {
@@ -775,13 +781,12 @@
 }
 
 @media (forced-colors: active) {
-  .admin-share-bar {
+  .select-card {
     border: 1px solid ButtonText;
   }
 
-  .admin-share-bar > span {
-    background: Highlight;
-    forced-color-adjust: none;
+  .select-card[aria-current='true'] {
+    border: var(--border-width-thick) solid Highlight;
   }
 
   .admin-support-message {

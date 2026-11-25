@@ -1,5 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { defineComponent, h, KeepAlive, ref } from 'vue'
 
 import { visibleElementRects } from '@/test/helpers'
@@ -262,5 +262,39 @@ describe('AppOverlay', () => {
     expect(document.documentElement.classList).toContain('has-overlay-open')
     byTestId('confirm-dialog-confirm').click()
     expect(confirmed).toHaveBeenCalledOnce()
+  })
+
+  it('keeps panel keystrokes away from page shortcuts, while letting Escape and Tab through', async () => {
+    const wrapper = mount(AppOverlay, {
+      attachTo: document.body,
+      props: { title: 'Report', testId: 'shortcut-overlay' },
+      slots: {
+        default: '<textarea data-testid="note"></textarea>',
+        footer: '<button data-testid="send" type="button">Send</button>',
+      },
+    })
+    await flushPromises()
+    const pageShortcut = vi.fn()
+    document.addEventListener('keydown', pageShortcut)
+    onTestFinished(() => document.removeEventListener('keydown', pageShortcut))
+    const note = byTestId('note')
+    const localKeys = vi.fn()
+    note.addEventListener('keydown', localKeys)
+
+    for (const key of ['2', 'Enter', 'a']) {
+      note.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
+    }
+    byTestId('send').dispatchEvent(new KeyboardEvent('keydown', { key: '1', bubbles: true }))
+    byTestId('shortcut-overlay').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    expect(pageShortcut).not.toHaveBeenCalled()
+    expect(localKeys).toHaveBeenCalledTimes(3)
+
+    note.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }))
+    note.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    expect(pageShortcut.mock.calls.map(([event]) => (event as KeyboardEvent).key)).toEqual(['Tab', 'Escape'])
+
+    wrapper.unmount()
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: '2', bubbles: true }))
+    expect(pageShortcut).toHaveBeenCalledTimes(3)
   })
 })

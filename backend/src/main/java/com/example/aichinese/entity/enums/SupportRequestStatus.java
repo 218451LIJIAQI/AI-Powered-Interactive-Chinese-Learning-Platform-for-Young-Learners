@@ -1,7 +1,5 @@
 package com.example.aichinese.entity.enums;
 
-import java.util.Optional;
-
 /** Where a Help & support request stands. */
 public enum SupportRequestStatus {
 
@@ -12,9 +10,5 @@ public enum SupportRequestStatus {
     ANSWERED,
 
     /** Marked solved, or closed by itself. It takes no reply; support can reopen it (the Undo of "Mark as solved"). */
-    SOLVED;
-
-    public static Optional<SupportRequestStatus> tryFrom(String value) {
-        return EnumLookups.tryFrom(SupportRequestStatus.class, value);
-    }
+    SOLVED
 }

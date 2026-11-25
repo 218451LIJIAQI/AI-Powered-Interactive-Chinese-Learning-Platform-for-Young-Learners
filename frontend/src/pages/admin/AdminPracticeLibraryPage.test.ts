@@ -1,5 +1,5 @@
 import { flushPromises, type VueWrapper } from '@vue/test-utils'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import * as contentCounts from '@/components/admin/adminContentCounts'
 import { deferred, pageOf } from '@/test/helpers'
@@ -14,10 +14,7 @@ const api = vi.hoisted(() => ({
   changePracticeSet: vi.fn(),
 }))
 
-vi.mock('@/api/learn', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/api/learn')>()),
-  adminLearningApi: api,
-}))
+vi.mock('@/api/learn', () => ({ adminLearningApi: api }))
 
 import AdminPracticeLibraryPage from './AdminPracticeLibraryPage.vue'
 
@@ -131,10 +128,6 @@ describe('AdminPracticeLibraryPage', () => {
     vi.spyOn(contentCounts, 'reloadContentCounts').mockResolvedValue()
     api.practiceSets.mockResolvedValue(pageOf([row]))
     api.practiceSet.mockResolvedValue(detail())
-  })
-
-  afterEach(() => {
-    vi.useRealTimers()
   })
 
   it('lists the sets by title, type, level, status and date, and filters them by type on the server', async () => {
@@ -467,14 +460,13 @@ describe('AdminPracticeLibraryPage', () => {
 
   it.each([4, 5])('keeps a drawer opened during a restore open when the restore is done: set %i', async (id) => {
     const { wrapper, restoration } = await restoreThenOpen(id)
-    api.practiceSet.mockResolvedValue(id === 4 ? detail() : draft({ id: 5, title: 'Numbers 1 to 10' }))
 
     restoration.resolve(detail())
     await flushPromises()
-    // The restored set's drawer shows its new status; another set's drawer is left as it was.
+    // The restored set's drawer shows its new status without a redundant refetch; another set's drawer is left as it was.
     expect(wrapper.get('[data-testid="set-details"] h2').text()).toBe(id === 4 ? 'Ordering food' : 'Numbers 1 to 10')
     expect(wrapper.get('[data-testid="set-details"] .status-pill').text()).toBe(id === 4 ? 'Published' : 'Draft')
-    expect(api.practiceSet).toHaveBeenCalledTimes(id === 4 ? 2 : 1)
+    expect(api.practiceSet).toHaveBeenCalledTimes(1)
     expect(toast(wrapper).text()).toContain('Restored: “Ordering food”.')
   })
 

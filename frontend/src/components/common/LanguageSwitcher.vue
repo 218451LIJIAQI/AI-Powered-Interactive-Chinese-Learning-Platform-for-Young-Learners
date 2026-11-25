@@ -1,5 +1,5 @@
 <template>
-  <div class="pill-switch">
+  <div class="pill-switch" role="group" :aria-label="t('chrome.language')">
     <button
       v-for="option in options"
       :key="option.value"

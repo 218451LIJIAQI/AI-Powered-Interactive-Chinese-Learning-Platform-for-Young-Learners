@@ -3,11 +3,12 @@ import { afterEach, expect } from 'vitest'
 
 import { http } from '@/api/http'
 
+const ORIGINAL_ADAPTER = http.defaults.adapter
+
 /** Puts the shared axios adapter back after every test of the calling file (tests replace it to answer requests). */
 export function restoreAxiosAdapterAfterEach(): void {
-  const originalAdapter = http.defaults.adapter
   afterEach(() => {
-    http.defaults.adapter = originalAdapter
+    http.defaults.adapter = ORIGINAL_ADAPTER
   })
 }
 
@@ -17,6 +18,9 @@ interface CapturedRequest {
   url: string
   data?: unknown
   params?: unknown
+  timeout?: number
+  signal?: InternalAxiosRequestConfig['signal']
+  responseType?: InternalAxiosRequestConfig['responseType']
 }
 
 /** A plain axios response for an adapter to return or throw. */
@@ -55,10 +59,13 @@ function parseData(value: unknown): unknown {
 }
 
 /**
- * Replaces the shared axios adapter: records every request and answers each with an empty success envelope.
- * See restoreAxiosAdapterAfterEach.
+ * Replaces the shared axios adapter: records every request and answers each with `respond` (default: an empty success
+ * envelope). See restoreAxiosAdapterAfterEach.
  */
-export function installAxiosCapture(): CapturedRequest[] {
+export function installAxiosCapture(
+  respond: (config: InternalAxiosRequestConfig) => AxiosResponse | Promise<AxiosResponse> = (config) =>
+    axiosResponse(config, 200, { success: true, data: {} }),
+): CapturedRequest[] {
   const calls: CapturedRequest[] = []
   http.defaults.adapter = (async (config) => {
     calls.push({
@@ -66,8 +73,11 @@ export function installAxiosCapture(): CapturedRequest[] {
       url: config.url ?? '',
       data: parseData(config.data),
       params: config.params,
+      timeout: config.timeout,
+      signal: config.signal,
+      responseType: config.responseType,
     })
-    return axiosResponse(config, 200, { success: true, data: {} })
+    return respond(config)
   }) satisfies AxiosAdapter
   return calls
 }

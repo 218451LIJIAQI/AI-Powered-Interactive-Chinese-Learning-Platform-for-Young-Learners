@@ -2,7 +2,27 @@
   <div class="plan-result" data-testid="plan-result">
     <section class="plan-result-card" aria-labelledby="plan-result-level-title">
       <h3 id="plan-result-level-title" class="page-eyebrow">{{ t('plan.result.yourLevel') }}</h3>
-      <LevelLadder :placed="plan.level.placed" :target="plan.level.target" />
+      <ol class="plan-ladder" :aria-label="t('plan.level.ladder')">
+        <li
+          v-for="(rung, index) in LADDER"
+          :key="rung.code"
+          class="plan-ladder-rung"
+          :class="{
+            'is-reached': index <= placedIndex,
+            'is-target': rung.level === plan.level.target && plan.level.target !== plan.level.placed,
+          }"
+          :style="{ '--rung': index }"
+        >
+          <span class="plan-ladder-tag-slot">
+            <span v-if="rung.level === plan.level.placed" class="tag is-strong">{{ t('plan.result.you') }}</span>
+            <span v-else-if="rung.level === plan.level.target" class="tag is-outline">{{
+              t('plan.result.target')
+            }}</span>
+          </span>
+          <span class="plan-ladder-bar" aria-hidden="true" />
+          <span class="plan-ladder-hsk">{{ t(rung.code) }}</span>
+        </li>
+      </ol>
       <p class="plan-result-level">{{ t(LEVEL_KEYS[plan.level.placed]) }}</p>
       <!-- What the level means for this learner, shown at once: what they can do and what the plan teaches. A learner who
            skipped the level check starts from the first lesson and can take the check later (S1.25). -->
@@ -84,12 +104,11 @@ import { planPathMessages } from '@/plugins/planPathMessages'
 import { planSetupMessages } from '@/plugins/planSetupMessages'
 import { planSummaryMessages } from '@/plugins/planSummaryMessages'
 import type { LearningPlan } from '@/types/plan'
-import { daysBetween, formatWeekdayDate, formatWeekdayLongDate } from '@/utils/format'
+import { daysBetween, formatList, formatWeekdayDate, formatWeekdayLongDate } from '@/utils/format'
 
-import LevelLadder from './LevelLadder.vue'
 import PlanDailyGoal from './PlanDailyGoal.vue'
 import { goalTitle, paceDaily } from './planFormat'
-import { FOCUS_ICONS, LEVEL_KEYS, REASON_ICONS } from './planLabels'
+import { FOCUS_ICONS, LADDER, LEVEL_KEYS, REASON_ICONS, ladderRung } from './planLabels'
 import PlanReportLink from './PlanReportLink.vue'
 
 /**
@@ -106,6 +125,8 @@ const { t, locale } = useLocalMessages({ plan: [planSummaryMessages, planSetupMe
 
 /** The lists stay short: the road and the rail on the next screen carry the rest. */
 const LIST_LENGTH = 3
+
+const placedIndex = computed(() => ladderRung(props.plan.level.placed))
 
 const title = computed(() => goalTitle(t, props.plan.goal.title, props.plan.goal.reason))
 
@@ -130,7 +151,7 @@ const milestoneRules = computed(() => {
   const date = formatWeekdayDate(milestone.date, locale.value)
   const titles = steps.filter((step) => milestone.stepPositions.includes(step.position)).map((step) => step.title)
   if (!titles.length) return t('plan.result.milestoneRulesDate', { date })
-  return t('plan.result.milestoneRules', { date, steps: titles.join(', ') })
+  return t('plan.result.milestoneRules', { date, steps: formatList(titles, locale.value) })
 })
 
 /** SparkBot's text to confirm: the first milestone it suggests, or its summary of the goal. */
@@ -173,13 +194,15 @@ const toLearn = computed(() => {
   return props.plan.goal.goals.slice(0, LIST_LENGTH).map((goal) => t(`plan.outcome.${goal}`))
 })
 
-/** What the daily time is for: Learn lessons, and the first class from its week, or after the first milestone. */
+/** What the daily time is for: Learn lessons, and the first class from its week, or optional classes after the milestone. */
 const dailyTimeFor = computed(() => {
-  const classWeek = props.plan.steps.find((step) => step.kind === 'CLASS')?.weekFrom
-  if (classWeek === undefined) return t('plan.result.weekLearn')
-  return props.plan.milestone
+  const classes = props.plan.steps.filter((step) => step.kind === 'CLASS' && step.status !== 'UNAVAILABLE')
+  const firstClass = classes[0]
+  if (!firstClass) return t('plan.result.weekLearn')
+  const hasOptionalClass = classes.some((step) => !step.joined)
+  return props.plan.milestone && hasOptionalClass
     ? t('plan.result.weekAfterMilestone')
-    : t('plan.result.weekLearnClass', { week: classWeek })
+    : t('plan.result.weekLearnClass', { week: firstClass.weekFrom })
 })
 
 const week = computed(() => {

@@ -36,13 +36,12 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute } from 'vue-router'
 
 import IconGlyph from '@/components/common/IconGlyph.vue'
 import LanguageSwitcher from '@/components/common/LanguageSwitcher.vue'
-import { useLocalMessages } from '@/composables/useLocalMessages'
 import { isNavItemActive, publicNav } from '@/config/navigation'
-import { publicShellMessages } from '@/plugins/publicShellMessages'
 import { useAuthStore } from '@/stores/auth'
 import { defaultRouteForRole } from '@/utils/role'
 
@@ -50,7 +49,7 @@ import AppBrand from './AppBrand.vue'
 
 const route = useRoute()
 const auth = useAuthStore()
-const { t } = useLocalMessages({ shell: publicShellMessages })
+const { t } = useI18n()
 
 const homePath = computed(() => defaultRouteForRole(auth.activeRole))
 

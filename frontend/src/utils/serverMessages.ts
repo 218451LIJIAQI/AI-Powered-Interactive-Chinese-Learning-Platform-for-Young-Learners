@@ -6,19 +6,25 @@
  * the first non-English call; an unknown message is returned unchanged so the backend text remains the fallback.
  *
  * In-app notifications live separately in `notificationMessages.ts` / `serverMessageRows/notifications.ts` so Vite
- * code-splits notification templates and `formatDate` out of the main bundle into `NotificationsPage.vue`.
+ * code-splits notification templates and the regex template matcher out of the main bundle into `NotificationsPage.vue`.
  *
  * Matching ignores case, repeated spaces and a final full stop. `serverMessages.test.ts` scans the backend Java
  * sources to verify every visible backend error message is translated and no stale row remains.
  */
 import type { AppLanguage } from '@/types/api'
-import { documentLanguage } from '@/utils/locale'
+import { documentLanguage, normalizeAppLanguage } from '@/utils/locale'
+import { truncateText } from '@/utils/truncateText'
 
 import { AI_MESSAGES } from './serverMessageRows/ai'
-import { CLASSES_MESSAGES } from './serverMessageRows/classes'
-import { LEARN_MESSAGES } from './serverMessageRows/learn'
-import { NO_PENDING_EMAIL_CHANGE_MESSAGE, OPS_MESSAGES } from './serverMessageRows/ops'
-import { EMAIL_ALREADY_CONFIRMED_MESSAGE, GOAL_DATE_PASSED_MESSAGE, PLAN_MESSAGES } from './serverMessageRows/plan'
+import { CLASSES_MESSAGES, JOIN_CLASS_TO_OPEN_LESSONS_MESSAGE } from './serverMessageRows/classes'
+import { LEARN_MESSAGES, RESTART_LEVEL_CHECK_MESSAGE } from './serverMessageRows/learn'
+import { INVITE_ALREADY_ACCEPTED_MESSAGE, NO_PENDING_EMAIL_CHANGE_MESSAGE, OPS_MESSAGES } from './serverMessageRows/ops'
+import {
+  BUILD_PLAN_FIRST_MESSAGE,
+  EMAIL_ALREADY_CONFIRMED_MESSAGE,
+  GOAL_DATE_PASSED_MESSAGE,
+  PLAN_MESSAGES,
+} from './serverMessageRows/plan'
 import type { MessageRow } from './serverMessageRows/types'
 
 type TranslatedLocale = Exclude<AppLanguage, 'en'>
@@ -32,8 +38,12 @@ export const SERVER_MESSAGE = {
   EMAIL_ALREADY_REGISTERED: 'Email is already registered.',
   WRONG_CURRENT_PASSWORD: 'Current password is incorrect.',
   NO_PENDING_EMAIL_CHANGE: NO_PENDING_EMAIL_CHANGE_MESSAGE,
+  INVITE_ACCEPTED: INVITE_ALREADY_ACCEPTED_MESSAGE,
   EMAIL_ALREADY_CONFIRMED: EMAIL_ALREADY_CONFIRMED_MESSAGE,
+  BUILD_PLAN_FIRST: BUILD_PLAN_FIRST_MESSAGE,
   GOAL_DATE_PASSED: GOAL_DATE_PASSED_MESSAGE,
+  JOIN_CLASS_TO_OPEN_LESSONS: JOIN_CLASS_TO_OPEN_LESSONS_MESSAGE,
+  RESTART_LEVEL_CHECK: RESTART_LEVEL_CHECK_MESSAGE,
 } as const
 
 /** The generic answers of FriendlyErrorMessageResolver and the sign-in, password and AI limit messages a user meets most. */
@@ -225,32 +235,48 @@ export function messageKey(message: string): string {
   return collapseWhitespace(message).toLowerCase().replace(/[.]$/, '')
 }
 
-type ServerMessageLocalizer = (message: string, locale: AppLanguage) => string
-
-/** Lazy O(1) fixed-message localiser; builds the Map only on the first non-English lookup. */
-function createServerMessageLocalizer(rows: readonly MessageRow[]): ServerMessageLocalizer {
-  let fixed: Map<string, Readonly<Record<TranslatedLocale, string>>> | null = null
-
-  return (message, locale) => {
-    if (locale === 'en') return message
-    if (!fixed) {
-      fixed = new Map()
-      for (const row of rows) {
-        fixed.set(messageKey(row[0]), { ms: row[1], 'zh-CN': row[2] })
-      }
-    }
-    return fixed.get(messageKey(message))?.[locale] ?? message
-  }
-}
+let fixedMessages: Map<string, Readonly<Record<TranslatedLocale, string>>> | null = null
 
 /** Shows a known backend request/error message in the interface language; unknown text is returned unchanged. */
-export const localizeServerMessage: ServerMessageLocalizer = createServerMessageLocalizer(MESSAGE_ROWS)
+export function localizeServerMessage(message: string, locale: string = documentLanguage()): string {
+  const language = normalizeAppLanguage(locale) ?? 'en'
+  if (language === 'en') return message
+  if (!fixedMessages) {
+    fixedMessages = new Map()
+    for (const row of MESSAGE_ROWS) {
+      fixedMessages.set(messageKey(row[0]), { ms: row[1], 'zh-CN': row[2] })
+    }
+  }
+  return fixedMessages.get(messageKey(message))?.[language] ?? message
+}
+
+const MAX_USER_MESSAGE_LENGTH = 280
+// eslint-disable-next-line no-control-regex
+const UNSAFE_MESSAGE_CHARACTERS = /[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g
+const TRANSPORT_INTERNAL_MESSAGES = new Set(['Request failed', 'Network Error'])
+
+/**
+ * A server message fit to show: control and bidi characters removed, spaces collapsed, at most 280 characters; null
+ * for a non-string, an empty text or a bare transport error ("Network Error").
+ */
+export function cleanServerMessage(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null
+  }
+
+  const trimmed = value.replace(UNSAFE_MESSAGE_CHARACTERS, ' ').replace(/\s+/g, ' ').trim()
+  if (!trimmed || TRANSPORT_INTERNAL_MESSAGES.has(trimmed)) {
+    return null
+  }
+
+  return trimmed.length > MAX_USER_MESSAGE_LENGTH ? `${truncateText(trimmed, MAX_USER_MESSAGE_LENGTH - 3)}...` : trimmed
+}
 
 /**
  * A message the server may send (e.g. why an AI request was not answered) in the interface language, or `fallback`
- * when it sent none.
+ * when it sent none or sent an unsafe/transport-only text.
  */
 export function serverMessageOr(message: string | null | undefined, fallback: string): string {
-  const trimmed = message?.trim()
-  return trimmed ? localizeServerMessage(trimmed, documentLanguage()) : fallback
+  const cleaned = cleanServerMessage(message)
+  return cleaned ? localizeServerMessage(cleaned, documentLanguage()) : fallback
 }

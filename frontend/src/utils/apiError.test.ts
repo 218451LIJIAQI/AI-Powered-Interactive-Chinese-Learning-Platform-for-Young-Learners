@@ -30,8 +30,12 @@ describe('resolveApiError', () => {
     ).toBe('Please upload a smaller file.')
   })
 
-  it('maps timeout and network failures to learner-friendly messages', () => {
+  it('maps timeout, cancellation, and network failures to learner-friendly messages', () => {
     expect(resolveApiError({ code: 'ECONNABORTED', message: 'timeout of 20000ms exceeded' })).toContain('too long')
+    expect(resolveApiError({ code: 'ETIMEDOUT', message: 'connect ETIMEDOUT' })).toContain('too long')
+    expect(resolveApiError({ code: 'ERR_CANCELED', name: 'CanceledError' }, 'Fallback message.')).toBe(
+      'Fallback message.',
+    )
     expect(resolveApiError({ request: {} })).toContain('cannot reach')
   })
 

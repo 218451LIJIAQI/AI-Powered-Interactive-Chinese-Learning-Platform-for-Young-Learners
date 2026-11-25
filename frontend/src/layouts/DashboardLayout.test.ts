@@ -15,7 +15,6 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@/api/services', () => ({
-  studentApi: { rewards: mocks.rewards },
   shellApi: { navCounts: mocks.navCounts },
   notificationsApi: {
     unreadCount: mocks.unreadCount,
@@ -27,7 +26,7 @@ vi.mock('@/api/services', () => ({
 vi.mock('@/api/learn', () => ({
   learnApi: { lesson: mocks.lesson, checkLesson: mocks.checkLesson },
   hintApi: { settings: async () => null },
-  xpApi: {},
+  xpApi: { rewards: mocks.rewards },
 }))
 
 import AdminAiTabs from '@/components/admin/AdminAiTabs.vue'
@@ -55,7 +54,7 @@ async function mountSignedIn(role: UserRole = 'STUDENT', page = 'home', roles: U
         component: DashboardLayout,
         meta: { roles: [role] },
         children: [
-          { path: 'home', component: { template: '<div class="home-page" />' } },
+          { path: 'home', component: { template: '<div />' } },
           { path: 'notifications', component: NotificationsPage },
           { path: 'ai', name: 'admin-ai-reports', component: AdminAiTabs },
           { path: 'ai/usage', name: 'admin-ai-usage', component: AdminAiTabs },
@@ -139,7 +138,6 @@ describe('DashboardLayout', () => {
   })
 
   it('re-reads the bell’s unread count after a navigation and after a reported change, like the sidebar badges', async () => {
-    mocks.rewards.mockResolvedValue(summary(0, 0))
     mocks.unreadCount.mockResolvedValueOnce({ unreadCount: 0 }).mockResolvedValue({ unreadCount: 3 })
     const { router, wrapper } = await mountSignedIn()
     const bell = () => wrapper.get('[data-testid="topbar-notifications"]')
@@ -256,7 +254,6 @@ describe('DashboardLayout', () => {
   })
 
   it('shows a focus-mode task without the sidebar and header', async () => {
-    mocks.rewards.mockResolvedValue(summary(0, 0))
     const { router, wrapper } = await mountSignedIn()
     expect(wrapper.find('.sidebar').exists()).toBe(true)
 

@@ -1,11 +1,10 @@
 package com.example.aichinese.service.ai;
 
-import static com.example.aichinese.support.ConcurrentTransactions.pauseAfterLookup;
+import static com.example.aichinese.support.ConcurrentTransactions.withAfterMethod;
 import static com.example.aichinese.support.ConcurrentTransactions.withPausedOperation;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -20,9 +19,6 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -30,16 +26,11 @@ import com.example.aichinese.config.PlatformProperties;
 import com.example.aichinese.entity.AiUsageQuotaCounter;
 import com.example.aichinese.entity.User;
 import com.example.aichinese.repository.AiUsageQuotaCounterRepository;
-import com.example.aichinese.repository.UserRepository;
 import com.example.aichinese.service.account.CurrentAccount;
 import com.example.aichinese.service.learn.LearnClock;
+import com.example.aichinese.support.ApiIntegrationTest;
 
-@SpringBootTest(properties = {
-        "DEFAULT_ADMIN_EMAIL=",
-        "DEFAULT_ADMIN_PASSWORD="
-})
-@ActiveProfiles("test")
-class AiUsageLimiterTests {
+class AiUsageLimiterTests extends ApiIntegrationTest {
 
     private static final String PLATFORM_ZONE = "Asia/Singapore";
     private static final Instant FIXED_INSTANT = Instant.parse("2026-05-25T01:00:00Z");
@@ -52,12 +43,9 @@ class AiUsageLimiterTests {
     private static final int STALE_COUNTER_VALUE = 99;
 
     @Autowired
-    private UserRepository userRepository;
-
-    @Autowired
     private CurrentAccount currentAccount;
 
-    @MockitoSpyBean
+    @Autowired
     private AiUsageQuotaCounterRepository quotaCounterRepository;
 
     @Autowired
@@ -125,7 +113,7 @@ class AiUsageLimiterTests {
     void startsANewMinuteAndANewDayOnACounterFromAnEarlierWindow() {
         CurrentAccount mockAccount = mock(CurrentAccount.class);
         AiUsageQuotaCounterRepository mockQuotaRepository = mock(AiUsageQuotaCounterRepository.class);
-        User user = user(MOCK_USER_ID);
+        User user = testUser(MOCK_USER_ID);
         AiUsageQuotaCounter counter = staleCounter(user);
         when(mockAccount.lock(MOCK_USER_ID, user.getSessionVersion(), null)).thenReturn(user);
         when(mockQuotaRepository.findLockedByUserId(MOCK_USER_ID)).thenReturn(Optional.of(counter));
@@ -144,7 +132,7 @@ class AiUsageLimiterTests {
     void validatesBrowserSessionWhenSessionIdIsProvided() {
         CurrentAccount mockAccount = mock(CurrentAccount.class);
         AiUsageQuotaCounterRepository mockQuotaRepository = mock(AiUsageQuotaCounterRepository.class);
-        User user = user(MOCK_USER_ID);
+        User user = testUser(MOCK_USER_ID);
         AiUsageQuotaCounter counter = staleCounter(user);
         when(mockAccount.lock(MOCK_USER_ID, user.getSessionVersion(), "session-42")).thenReturn(user);
         when(mockQuotaRepository.findLockedByUserId(MOCK_USER_ID)).thenReturn(Optional.of(counter));
@@ -187,10 +175,10 @@ class AiUsageLimiterTests {
         User first = createUser("first-request");
         User second = createUser("first-request");
 
-        withPausedOperation(pause -> {
-            pauseAfterLookup(pause).when(quotaCounterRepository).findLockedByUserId(anyLong());
-            springManagedLimiter.checkProviderCallAllowed(first, null);
-        }, () -> springManagedLimiter.checkProviderCallAllowed(second, null));
+        withPausedOperation(
+                pause -> withAfterMethod(quotaCounterRepository, "findLockedByUserId", pause, () ->
+                        springManagedLimiter.checkProviderCallAllowed(first, null)),
+                () -> springManagedLimiter.checkProviderCallAllowed(second, null));
 
         assertThat(persistedCounter(first.getId()).getDayCount()).isEqualTo(1);
         assertThat(persistedCounter(second.getId()).getDayCount()).isEqualTo(1);
@@ -222,14 +210,14 @@ class AiUsageLimiterTests {
 
     private User createUser(String prefix) {
         return transactionTemplate.execute(status -> {
-            User user = user(null);
+            User user = testUser(null);
             user.setEmail(prefix + "-" + UUID.randomUUID() + "@example.com");
             user.setDisplayName(prefix);
             return userRepository.saveAndFlush(user);
         });
     }
 
-    private static User user(Long id) {
+    private static User testUser(Long id) {
         User user = new User();
         user.setId(id);
         user.setPasswordHash("password-hash");

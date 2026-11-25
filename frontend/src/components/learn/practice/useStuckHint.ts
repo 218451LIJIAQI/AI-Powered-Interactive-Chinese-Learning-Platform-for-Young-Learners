@@ -75,7 +75,7 @@ export function useStuckHint(options: StuckHintOptions) {
   })
 
   async function show(): Promise<void> {
-    const itemId = options.budgetKey?.value ?? options.itemKey.value
+    const itemId = budgetId.value
     if (itemId === null || loading.value || !available.value || !options.open.value) return
     const myRun = runVersion.value
     const mine = ++itemRequest

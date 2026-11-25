@@ -34,7 +34,7 @@
           :aria-invalid="messageError ? 'true' : undefined"
           :aria-describedby="messageError ? `${baseId}-message-error` : undefined"
           data-testid="report-problem-message"
-          @blur="checkMessageOnBlur"
+          @blur="checkMessage"
         />
         <p v-if="messageError" :id="`${baseId}-message-error`" class="field-error" role="alert">
           {{ messageError }}
@@ -46,14 +46,14 @@
     </form>
 
     <template #footer>
-      <button class="btn btn-secondary" type="button" :disabled="sending" @click="emit('close')">
+      <button class="btn btn-secondary" type="button" :disabled="sending" @mousedown.prevent @click="emit('close')">
         {{ t('common.cancel') }}
       </button>
       <button
         class="btn btn-primary"
         type="submit"
         :form="`${baseId}-form`"
-        :disabled="sending || !message.trim()"
+        :disabled="sending || !message.trim() || Boolean(messageError)"
         :aria-busy="sending"
         data-testid="report-problem-send"
       >
@@ -64,7 +64,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, useId } from 'vue'
+import { computed, ref, useId, watch } from 'vue'
 
 import { supportApi } from '@/api/ops'
 import AppOverlay from '@/components/common/AppOverlay.vue'
@@ -75,7 +75,7 @@ import { useLocalMessages } from '@/composables/useLocalMessages'
 import { opsLabelMessages } from '@/plugins/opsLabelMessages'
 import { studentClassesMessages } from '@/plugins/studentClassesMessages'
 import { useAuthStore } from '@/stores/auth'
-import type { SupportTopic } from '@/types/ops'
+import type { SelectableSupportTopic } from '@/types/ops'
 import { resolveApiError } from '@/utils/apiError'
 import { SUPPORT_TOPICS, SUPPORT_TOPIC_KEYS } from '@/utils/opsLabels'
 import { truncateText } from '@/utils/truncateText'
@@ -98,7 +98,7 @@ const auth = useAuthStore()
 const isUnmounted = useIsUnmounted()
 
 const email = computed(() => auth.currentUser?.email ?? '')
-const topic = ref<SupportTopic>('CLASSES')
+const topic = ref<SelectableSupportTopic>('CLASSES')
 // Capture the failing page when the dialog opens. Long URLs and user-agent strings must leave room for the learner.
 const diagnostics = [
   t('studentClasses.report.contextLesson', { lesson: props.lessonTitle, classTitle: props.classTitle }),
@@ -107,15 +107,21 @@ const diagnostics = [
 ]
   .map((line) => truncateText(line, 512))
   .join('\n')
-const descriptionLimit = MAX_MESSAGE - diagnostics.length - 2 // Blank line between the description and diagnostics.
+// Blank line (\n\n) before diagnostics; CreateSupportRequest normalises CRLF/CR to LF before @Size(max = 4000).
+const descriptionLimit = MAX_MESSAGE - diagnostics.length - 2
 const message = ref(t('studentClasses.report.videoProblem', { video: props.videoTitle, lesson: props.lessonTitle }))
-const {
-  error: messageError,
-  validate: checkMessage,
-  validateOnBlur: checkMessageOnBlur,
-} = useFieldCheck(message, (value) => (value.trim() ? null : t('studentClasses.report.messageRequired')))
+const { error: messageError, validate: checkMessage } = useFieldCheck(message, (value) => {
+  const trimmed = value.trim()
+  if (!trimmed) return t('studentClasses.report.messageRequired')
+  if (trimmed.length > descriptionLimit) return t('studentClasses.report.messageTooLong')
+  return null
+})
 const sending = ref(false)
 const sendError = ref<string | null>(null)
+
+watch([topic, message], () => {
+  sendError.value = null
+})
 
 async function send(): Promise<void> {
   if (sending.value || !checkMessage()) return

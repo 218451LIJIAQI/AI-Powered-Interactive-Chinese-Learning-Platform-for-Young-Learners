@@ -1,7 +1,5 @@
-import { expect, test } from '@playwright/test'
-
 import { E2E_ACCOUNTS } from './accounts'
-import { switchLanguage } from './support'
+import { expect, switchLanguage, test } from './support'
 
 // The demo profile publishes 8 classes made by the MandarinSpark team; "Chinese Culture and Festivals" and "Study Group
 // Mandarin" are admin drafts, so visitors see neither.
@@ -118,6 +116,7 @@ test('the Help page loads from the header', async ({ page }) => {
 
   await page.getByRole('link', { name: 'Contact us', exact: true }).click()
   await expect(page).toHaveURL(/\/help#contact$/)
+  await expect(page.locator('#contact')).toBeFocused()
   await page.keyboard.press('Tab')
   await expect(page.locator('#help-email')).toBeFocused()
 })
@@ -157,6 +156,9 @@ test('the landing page follows the language switch and switches back', async ({ 
   await expect(page.getByRole('heading', { name: 'Spark your progress in Mandarin.', level: 1 })).toBeVisible()
 
   await switchLanguage(page, '中文')
+  await expect(page.getByRole('heading', { name: '点亮你的中文进步。', level: 1 })).toBeVisible()
+  await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN')
+  await page.reload()
   await expect(page.getByRole('heading', { name: '点亮你的中文进步。', level: 1 })).toBeVisible()
   await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN')
 

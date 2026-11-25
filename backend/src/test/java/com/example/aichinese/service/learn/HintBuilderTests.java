@@ -76,12 +76,35 @@ class HintBuilderTests {
         assertThat(HintBuilder.ladder(item).get(1).kind()).isEqualTo("FIRST_LETTER");
     }
 
+    @Test
+    void vacuousExplanationsContainingOnlyShownPromptFieldsFallBackToFirstLetterOrSound() {
+        GradableItem meaningQuestion = new GradableItem(
+                AnswerKind.CHOICE, LearnQuestionType.MEANING, "What does 茶 mean?",
+                "茶", "chá", null, null,
+                List.of(new ChoiceOption("Tea", null), new ChoiceOption("Water", null),
+                        new ChoiceOption("Coffee", null), new ChoiceOption("Milk", null)),
+                List.of(), "Tea", "茶 (chá) means “Tea”.");
+        assertThat(HintBuilder.ladder(meaningQuestion).get(1).kind()).isEqualTo("FIRST_LETTER");
+
+        GradableItem hanziQuestion = new GradableItem(
+                AnswerKind.CHOICE, LearnQuestionType.HANZI, "Choose the Hanzi for library.",
+                "图书馆", "túshūguǎn", "library", null,
+                List.of(new ChoiceOption("图书馆", null), new ChoiceOption("食堂", null),
+                        new ChoiceOption("教室", null), new ChoiceOption("宿舍", null)),
+                List.of(), "图书馆", "“library” is 图书馆 (túshūguǎn) where books are kept.");
+        HintDto.Step clue = HintBuilder.ladder(hanziQuestion).get(1);
+        assertThat(clue.kind()).isEqualTo("CLUE");
+        assertThat(clue.text()).doesNotContain("图书馆").doesNotContain("túshūguǎn");
+    }
+
     /** An answer or its pinyin written with a capital beyond ASCII ("CAFÉ", "Ài") is still left out of the clue. */
     @Test
     void theClueLeavesOutTheAnswerAndItsPinyinWhateverTheirCase() {
-        assertThat(HintBuilder.maskedExplanation("CAFÉ is where you drink a coffee.", new ChoiceOption("Café", null)))
+        assertThat(HintBuilder.maskedExplanation(
+                "CAFÉ is where you drink a coffee.", new ChoiceOption("Café", null), null, null, null, null))
                 .isEqualTo("___ is where you drink a coffee.");
-        assertThat(HintBuilder.maskedExplanation("Ài (爱) is what you feel for your family.", new ChoiceOption("爱", "ài")))
+        assertThat(HintBuilder.maskedExplanation(
+                "Ài (爱) is what you feel for your family.", new ChoiceOption("爱", "ài"), null, null, null, null))
                 .isEqualTo("___ (___) is what you feel for your family.");
     }
 
@@ -128,6 +151,24 @@ class HintBuilderTests {
         List<HintDto.Step> ladder = HintBuilder.ladder(item);
         assertThat(ladder).extracting(HintDto.Step::kind).containsExactly("FIRST_SOUND", "RULE_OUT");
         assertThat(ladder.get(0).text()).isEqualTo("sh");
+    }
+
+    @Test
+    void twoOptionHanziListeningWithoutPinyinOrExplanationStillProvidesAFallbackHint() {
+        GradableItem multiChar = new GradableItem(AnswerKind.CHOICE, null, "Which phrase did you hear?",
+                null, null, null, "一杯茶",
+                List.of(new ChoiceOption("一杯茶", null), new ChoiceOption("两杯咖啡", null)),
+                List.of(), "一杯茶", null);
+        List<HintDto.Step> multiLadder = HintBuilder.ladder(multiChar);
+        assertThat(multiLadder).extracting(HintDto.Step::kind).containsExactly("FIRST_LETTER");
+        assertThat(multiLadder.get(0).words()).containsExactly("一");
+
+        GradableItem singleChar = new GradableItem(AnswerKind.CHOICE, null, "Which character did you hear?",
+                null, null, null, "茶",
+                List.of(new ChoiceOption("茶", null), new ChoiceOption("水", null)),
+                List.of(), "茶", null);
+        List<HintDto.Step> singleLadder = HintBuilder.ladder(singleChar);
+        assertThat(singleLadder).extracting(HintDto.Step::kind).containsExactly("LISTEN_SLOW");
     }
 
     @Test

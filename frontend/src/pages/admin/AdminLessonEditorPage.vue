@@ -13,6 +13,31 @@
             ]"
           />
         </template>
+        <template v-if="editor.classStatus !== 'ARCHIVED'" #actions>
+          <button
+            v-if="editor.status === 'ARCHIVED'"
+            ref="restoreLessonButton"
+            type="button"
+            class="btn btn-secondary"
+            :disabled="writePending"
+            :aria-busy="pendingAction === 'restoreLesson'"
+            data-testid="restore-lesson"
+            @click="restoreLesson"
+          >
+            <IconGlyph name="archive" :size="16" />{{ t('adminClasses.page.restore') }}
+          </button>
+          <button
+            v-else
+            ref="archiveLessonButton"
+            type="button"
+            class="btn btn-ghost"
+            :disabled="writePending"
+            data-testid="archive-lesson"
+            @click="dialog = 'archive'"
+          >
+            <IconGlyph name="archive" :size="16" />{{ t('adminClasses.page.archive') }}
+          </button>
+        </template>
       </PageHeaderBlock>
 
       <section
@@ -59,15 +84,12 @@
         v-if="tab === 'content'"
         v-model:title="content.title"
         v-model:unit-id="content.unitId"
+        v-model:key-phrases="content.keyPhrases"
         :editor="editor"
-        :key-phrases="content.keyPhrases"
         :unit-names="unitNames"
         :title-error="titleError"
         :write-pending="writePending"
-        @blur-title="checkTitleOnBlur"
-        @add-phrase="content.keyPhrases.push({ chinese: '', pinyin: '', meaning: '' })"
-        @remove-phrase="content.keyPhrases.splice($event, 1)"
-        @update-phrase="updatePhrase"
+        @blur-title="validateTitle"
         @updated="applyEditor"
         @notice="showToast"
         @saving="onPanelSaving"
@@ -75,7 +97,7 @@
       <LessonActivitiesPanel
         v-else-if="tab === 'activities'"
         :editor="editor"
-        :inert="panelLocked"
+        :inert="saving"
         @updated="applyEditor"
         @notice="showToast"
         @saving="onPanelSaving"
@@ -83,7 +105,7 @@
       <LessonQuizPanel
         v-else-if="tab === 'quiz'"
         :editor="editor"
-        :inert="panelLocked"
+        :inert="saving"
         @updated="applyEditor"
         @notice="showToast"
         @error="onPanelError"
@@ -155,11 +177,11 @@
         tone="loading"
         spacious
         :title="t('lessonEditor.loading')"
-        :message="t('lessonEditor.tabs.content')"
+        :message="t('common.loadingMessage')"
       />
       <ClassLoadError
         v-else
-        :title="t('lessonEditor.loadErrorTitle')"
+        :title="t('classes.lessonLoadError')"
         :message="resource.error.value"
         :back-to="classRoute"
         :back-label="t('classes.openClass')"
@@ -207,8 +229,26 @@
       :cancel-label="t('lessonEditor.discard.keep')"
       tone="danger"
       :busy="saving"
+      :error="dialogError"
       @cancel="dialog = null"
       @confirm="discardChanges"
+    />
+
+    <ConfirmDialog
+      :open="dialog === 'archive'"
+      :title="t('lessonEditor.archive.title', { title: editor?.title ?? '' })"
+      :message="
+        dirty
+          ? `${t('lessonEditor.archive.message')} ${t('lessonEditor.archive.unsavedNote')}`
+          : t('lessonEditor.archive.message')
+      "
+      :confirm-label="t('lessonEditor.archive.confirm')"
+      :cancel-label="t('lessonEditor.archive.keep')"
+      tone="danger"
+      :busy="saving"
+      :error="dialogError"
+      @cancel="dialog = null"
+      @confirm="archiveLesson"
     />
 
     <ConfirmDialog
@@ -243,7 +283,7 @@ import IconGlyph from '@/components/common/IconGlyph.vue'
 import RouteTabs, { type RouteTab } from '@/components/common/RouteTabs.vue'
 import StatePanel from '@/components/common/StatePanel.vue'
 import StatusPill from '@/components/common/StatusPill.vue'
-import PageHeaderBlock from '@/components/sections/PageHeaderBlock.vue'
+import PageHeaderBlock from '@/components/layout/PageHeaderBlock.vue'
 import { useEditorLeaveGuard } from '@/composables/useEditorLeaveGuard'
 import { useFieldCheck } from '@/composables/useFieldCheck'
 import { useLocalMessages } from '@/composables/useLocalMessages'
@@ -254,11 +294,10 @@ import { adminClassesMessages } from '@/plugins/adminClassesMessages'
 import { classesMessages } from '@/plugins/classesMessages'
 import { lessonEditorMessages } from '@/plugins/lessonEditorMessages'
 import type { EditorQuestion, LessonEditor } from '@/types/adminClasses'
-import type { KeyPhrase } from '@/types/classes'
+import { CLASS_ACTIVITY_TYPES } from '@/types/classes'
 import { apiErrorStatus, resolveApiError } from '@/utils/apiError'
 import { formatList } from '@/utils/format'
 import {
-  LESSON_ACTIVITY_TYPES,
   QUIZ_SIZE,
   isLessonPinyinReady,
   lessonDraftFields,
@@ -384,7 +423,6 @@ const contentTitle = computed(() => content.value.title)
 const {
   error: titleError,
   validate: validateTitle,
-  validateOnBlur: checkTitleOnBlur,
   reset: resetTitleError,
 } = useFieldCheck(contentTitle, (value) => (value.trim() ? null : t('lessonEditor.details.titleMissing')))
 
@@ -404,11 +442,6 @@ const livePreview = computed<LessonEditor | null>(() =>
       }
     : null,
 )
-
-function updatePhrase(index: number, field: keyof KeyPhrase, value: string): void {
-  const phrase = content.value.keyPhrases[index]
-  if (phrase) phrase[field] = value
-}
 
 function fillContent(lesson: LessonEditor): void {
   content.value = savedLessonContent(lesson)
@@ -441,10 +474,12 @@ usePageRedirect(() => {
   }
 })
 
-const pendingAction = ref<'save' | 'publish' | 'discard' | null>(null)
+const pendingAction = ref<'save' | 'publish' | 'discard' | 'archive' | 'restoreLesson' | 'restore' | null>(null)
 const savingSnapshot = ref<string | null>(null)
 const saving = computed(() => pendingAction.value !== null)
 const saveDraftButton = ref<HTMLButtonElement | null>(null)
+const archiveLessonButton = ref<HTMLButtonElement | null>(null)
+const restoreLessonButton = ref<HTMLButtonElement | null>(null)
 const failure = shallowRef<{ title: string; message: string; retry: (() => void) | null } | null>(null)
 /** A write of the open tab's panel is out (video upload/remove, hint switch, question, AI draft, activity). */
 const panelSaving = ref(false)
@@ -472,30 +507,50 @@ const removeTabGuard = router.beforeEach((to) => {
   }
   return false
 })
+const hasPendingLeaveRisk = computed(() => dirty.value || panelSaving.value || pendingAction.value === 'publish')
+const savingCurrent = computed(
+  () => pendingAction.value === 'save' && savingSnapshot.value === formSnapshot.value && !panelSaving.value,
+)
 const { leaveTarget, leaveWithoutSaving } = useEditorLeaveGuard(
   (target) =>
     target.name === 'admin-lesson' &&
     lessonId.value !== null &&
     parseRecordId(target.params.lessonId) === lessonId.value,
-  dirty,
-  computed(() => savingSnapshot.value === formSnapshot.value),
+  hasPendingLeaveRisk,
+  savingCurrent,
 )
 
-async function persistContent(id: number, version: number): Promise<boolean> {
+async function runPageAction(
+  action: NonNullable<typeof pendingAction.value>,
+  work: (isCurrent: () => boolean) => Promise<void>,
+  onError: (reason: unknown) => void,
+): Promise<void> {
+  const version = pageVersion
+  const isCurrent = () => version === pageVersion
+  pendingAction.value = action
+  failure.value = null
+  try {
+    await work(isCurrent)
+  } catch (reason) {
+    if (isCurrent()) onError(reason)
+  } finally {
+    if (isCurrent()) pendingAction.value = null
+  }
+}
+
+async function persistContent(id: number, isCurrent: () => boolean): Promise<boolean> {
   const submittedSnapshot = formSnapshot.value
   savingSnapshot.value = submittedSnapshot
   try {
     const next = await lessonEditorApi.saveContent(id, {
       ...draft.value,
       unitId: content.value.unitId,
-      minutes: editor.value?.minutes ?? null,
-      summary: editor.value?.summary ?? null,
     })
-    if (version !== pageVersion) return false
+    if (!isCurrent()) return false
     applyEditor(next, formSnapshot.value !== submittedSnapshot)
     return true
   } finally {
-    if (version === pageVersion && savingSnapshot.value === submittedSnapshot) savingSnapshot.value = null
+    if (isCurrent() && savingSnapshot.value === submittedSnapshot) savingSnapshot.value = null
   }
 }
 
@@ -508,13 +563,21 @@ function saveFailureMessage(reason: unknown): string {
 async function saveContent(): Promise<void> {
   const id = lessonId.value
   if (id === null || writePending.value || !editor.value?.editable || !validateTitle()) return
-  const version = pageVersion
-  pendingAction.value = 'save'
-  failure.value = null
-  try {
-    if ((await persistContent(id, version)) && version === pageVersion) showToast(t('lessonEditor.saved'))
-  } catch (reason) {
-    if (version === pageVersion) {
+  const movedPublishedUnit = editor.value.status === 'PUBLISHED' && content.value.unitId !== editor.value.unitId
+  const hadDraftContentChange = publishableContentDirty.value
+  await runPageAction(
+    'save',
+    async (isCurrent) => {
+      if (await persistContent(id, isCurrent)) {
+        const key = movedPublishedUnit
+          ? hadDraftContentChange
+            ? 'lessonEditor.savedWithUnitMove'
+            : 'lessonEditor.savedUnitMoved'
+          : 'lessonEditor.saved'
+        showToast(t(key))
+      }
+    },
+    (reason) => {
       failure.value = {
         title: t('lessonEditor.saveFailedTitle'),
         message: saveFailureMessage(reason),
@@ -523,24 +586,20 @@ async function saveContent(): Promise<void> {
           void saveContent()
         },
       }
-    }
-  } finally {
-    if (version === pageVersion) pendingAction.value = null
-  }
+    },
+  )
 }
 
-// Publish & discard
+// Publish, archive, restore & discard
 
-const dialog = ref<'publish' | 'discard' | null>(null)
+const dialog = ref<'publish' | 'discard' | 'archive' | null>(null)
 const dialogError = ref<string | null>(null)
 
 const pinyinReady = computed(() =>
   editor.value ? isLessonPinyinReady(editor.value, draft.value.keyPhrases, dirty.value) : false,
 )
 const uncheckedAiDraftNumbers = computed(() => uncheckedAiDraftQuestionNumbers(quiz.value))
-const restoringQuestion = ref(false)
-const panelLocked = computed(() => saving.value || restoringQuestion.value)
-const writePending = computed(() => panelLocked.value || panelSaving.value)
+const writePending = computed(() => saving.value || panelSaving.value)
 watch(
   writePending,
   (pending) => {
@@ -554,7 +613,10 @@ const publishBlocker = computed<string | null>(() => {
   if (!current) return null
   if (!content.value.title.trim()) return t('lessonEditor.details.titleMissing')
   const checklist = current.checklist
-  const keyPhrasesReady = dirty.value ? draft.value.keyPhrases.length > 0 : checklist.keyPhrasesAdded
+  const keyPhrasesReady = dirty.value
+    ? draft.value.keyPhrases.length > 0 &&
+      draft.value.keyPhrases.every((phrase) => Boolean(phrase.chinese && phrase.meaning))
+    : checklist.keyPhrasesAdded
   const missing = [
     checklist.videoAdded ? null : t('lessonEditor.footer.needVideo'),
     keyPhrasesReady ? null : t('lessonEditor.footer.needPhrases'),
@@ -593,7 +655,7 @@ const publishChecklist = computed(() => [
   t('lessonEditor.publish.content'),
   t('lessonEditor.publish.activities', {
     types: formatList(
-      LESSON_ACTIVITY_TYPES.map((type) => t(`practiceType.${type}`)),
+      CLASS_ACTIVITY_TYPES.map((type) => t(`practiceType.${type}`)),
       locale.value,
     ),
   }),
@@ -608,56 +670,100 @@ watch(dialog, () => {
 async function publish(): Promise<void> {
   const id = lessonId.value
   if (id === null || writePending.value || !editor.value?.editable) return
-  const version = pageVersion
-  pendingAction.value = 'publish'
   dialogError.value = null
-  failure.value = null
-  try {
-    if (dirty.value && !(await persistContent(id, version))) return
-    if (editor.value?.status === 'PUBLISHED' && !editor.value.hasUnpublishedChanges) {
+  await runPageAction(
+    'publish',
+    async (isCurrent) => {
+      if (dirty.value && !(await persistContent(id, isCurrent))) return
+      if (editor.value?.status === 'PUBLISHED' && !editor.value.hasUnpublishedChanges) {
+        dialog.value = null
+        showToast(t('lessonEditor.saved'))
+        return
+      }
+      const next = await lessonEditorApi.publish(id)
+      if (!isCurrent()) return
+      applyEditor(next)
+      justPublished.value = true
       dialog.value = null
-      showToast(t('lessonEditor.saved'))
-      return
-    }
-    const next = await lessonEditorApi.publish(id)
-    if (version !== pageVersion) return
-    applyEditor(next)
-    justPublished.value = true
-    dialog.value = null
-    await nextTick()
-    statusRef.value?.focus()
-  } catch (reason) {
-    if (version === pageVersion) dialogError.value = resolveApiError(reason, t('lessonEditor.publish.error'))
-  } finally {
-    if (version === pageVersion) pendingAction.value = null
-  }
+      await nextTick()
+      statusRef.value?.focus()
+    },
+    (reason) => {
+      dialogError.value = resolveApiError(reason, t('lessonEditor.publish.error'))
+    },
+  )
 }
 
 async function discardChanges(): Promise<void> {
   const id = lessonId.value
   if (id === null || writePending.value) return
-  const version = pageVersion
-  pendingAction.value = 'discard'
-  failure.value = null
-  try {
-    const next = await lessonEditorApi.discardChanges(id)
-    if (version !== pageVersion) return
-    applyEditor(next, false)
-    showToast(t('lessonEditor.discard.done'))
-  } catch (reason) {
-    if (version === pageVersion) {
+  dialogError.value = null
+  await runPageAction(
+    'discard',
+    async (isCurrent) => {
+      const next = await lessonEditorApi.discardChanges(id)
+      if (!isCurrent()) return
+      applyEditor(next, false)
+      dialog.value = null
+      showToast(t('lessonEditor.discard.done'))
+    },
+    (reason) => {
+      dialogError.value = resolveApiError(reason, t('lessonEditor.discard.error'))
+    },
+  )
+}
+
+async function archiveLesson(): Promise<void> {
+  const id = lessonId.value
+  if (id === null || writePending.value || !editor.value || editor.value.status === 'ARCHIVED') return
+  dialogError.value = null
+  await runPageAction(
+    'archive',
+    async (isCurrent) => {
+      const next = await lessonEditorApi.archive(id)
+      if (!isCurrent()) return
+      applyEditor(next, false)
+      dialog.value = null
+      showToast(t('lessonEditor.archive.done'))
+      await nextTick()
+      ;(restoreLessonButton.value ?? statusRef.value)?.focus()
+    },
+    (reason) => {
+      dialogError.value = resolveApiError(reason, t('lessonEditor.archive.error'))
+    },
+  )
+}
+
+async function restoreLesson(): Promise<void> {
+  const id = lessonId.value
+  if (id === null || writePending.value || editor.value?.status !== 'ARCHIVED') return
+  const hadFocus = document.activeElement === restoreLessonButton.value
+  await runPageAction(
+    'restoreLesson',
+    async (isCurrent) => {
+      const next = await lessonEditorApi.restore(id)
+      if (!isCurrent()) return
+      applyEditor(next, false)
+      const asDraft = next.status === 'DRAFT'
+      showToast(
+        t(asDraft ? 'lessonEditor.archive.restoredDraft' : 'lessonEditor.archive.restored', { title: next.title }),
+      )
+      await nextTick()
+      if (hadFocus || !document.activeElement || document.activeElement === document.body) {
+        ;(archiveLessonButton.value ?? statusRef.value)?.focus()
+      }
+    },
+    (reason) => {
       failure.value = {
         title: '',
-        message: resolveApiError(reason, t('lessonEditor.discard.error')),
-        retry: () => (dialog.value = 'discard'),
+        message: resolveApiError(reason, t('lessonEditor.archive.restoreError')),
+        retry: () => {
+          restoreLessonButton.value?.focus()
+          void restoreLesson()
+        },
       }
-    }
-  } finally {
-    if (version === pageVersion) {
-      pendingAction.value = null
-      dialog.value = null
-    }
-  }
+    },
+  )
 }
 
 // Undo of a deleted question (A3.36)
@@ -673,24 +779,21 @@ function offerQuestionUndo(question: EditorQuestion, quizId: number): void {
 
 async function restoreQuestion(id: number, quizId: number, question: EditorQuestion): Promise<void> {
   if (id !== lessonId.value || writePending.value) return
-  const version = pageVersion
-  restoringQuestion.value = true
-  failure.value = null
-  try {
-    const currentQuizId = quiz.value?.id ?? quizId
-    const next = await lessonEditorApi.addQuestion(id, currentQuizId, {
-      ...questionPayload(question),
-      position: question.number,
-    })
-    if (version !== pageVersion) return
-    applyEditor(next)
-  } catch (reason) {
-    if (version === pageVersion) {
+  await runPageAction(
+    'restore',
+    async (isCurrent) => {
+      const currentQuizId = quiz.value?.id ?? quizId
+      const next = await lessonEditorApi.addQuestion(id, currentQuizId, {
+        ...questionPayload(question),
+        position: question.number,
+      })
+      if (!isCurrent()) return
+      applyEditor(next)
+    },
+    (reason) => {
       failure.value = { title: '', message: resolveApiError(reason, t('lessonEditor.question.error')), retry: null }
-    }
-  } finally {
-    if (version === pageVersion) restoringQuestion.value = false
-  }
+    },
+  )
 }
 
 watch(
@@ -699,7 +802,6 @@ watch(
     pageVersion++
     pendingAction.value = null
     savingSnapshot.value = null
-    restoringQuestion.value = false
     dialog.value = null
     hideToast()
     failure.value = null

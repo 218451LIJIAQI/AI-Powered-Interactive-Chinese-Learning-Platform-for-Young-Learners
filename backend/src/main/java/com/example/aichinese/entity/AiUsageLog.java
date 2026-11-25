@@ -23,7 +23,7 @@ import lombok.Setter;
 @Setter
 @Entity
 @Table(name = "ai_usage_logs", indexes = {
-        @Index(name = "idx_ai_usage_logs_feature_key", columnList = "feature_key"),
+        @Index(name = "idx_ai_usage_logs_feature_status", columnList = "feature_key,status"),
         @Index(name = "idx_ai_usage_logs_created_at", columnList = "created_at"),
         @Index(name = "idx_ai_usage_logs_status_created_at", columnList = "status,created_at"),
         @Index(name = "idx_ai_usage_logs_user_feature_created", columnList = "user_id,feature_key,created_at")

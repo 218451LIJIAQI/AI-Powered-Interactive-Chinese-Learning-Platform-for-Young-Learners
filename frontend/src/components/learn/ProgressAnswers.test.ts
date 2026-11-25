@@ -61,4 +61,11 @@ describe('ProgressAnswers (Progress: answers and hints this week)', () => {
     expect(answers.text()).toContain('Guessed wrong 1')
     expect(answers.get('a').attributes('href')).toBe('/student/practice/mistakes')
   })
+
+  it('shows the answers row without a Review mistakes link when only lucky guesses were recorded', async () => {
+    const wrapper = await mountAnswers(insights({ luckyGuesses: 2 }))
+    const answers = wrapper.get('[data-testid="answers-this-week"]')
+    expect(answers.text()).toContain('Lucky guesses 2')
+    expect(answers.find('a').exists()).toBe(false)
+  })
 })

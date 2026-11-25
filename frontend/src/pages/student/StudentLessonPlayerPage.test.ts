@@ -1,8 +1,8 @@
-import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
+import { flushPromises, type VueWrapper } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { setAccessToken } from '@/api/http'
-import { testRouter } from '@/test/routes'
+import { mountAtRoute } from '@/test/routes'
 import { buttonNamed, checkChoice, deferred } from '@/test/helpers'
 import { answerCheck, hintSettings, lessonPlay, lessonResult, today, xpResult } from '@/test/learnFixtures'
 import type { AnswerCheck, TodaySummary } from '@/types/learn'
@@ -25,14 +25,10 @@ vi.mock('@/api/learn', () => ({
 import StudentLessonPlayerPage from './StudentLessonPlayerPage.vue'
 
 async function mountPage() {
-  const router = await testRouter('/student/learn/lessons/13')
-  const push = vi.spyOn(router, 'push')
-  const wrapper = mount(StudentLessonPlayerPage, {
+  const { wrapper, router } = await mountAtRoute(StudentLessonPlayerPage, '/student/learn/lessons/13', {
     attachTo: document.body,
-    global: { plugins: [router], stubs: { teleport: true } },
   })
-  await flushPromises()
-  return { wrapper, push }
+  return { wrapper, push: vi.spyOn(router, 'push') }
 }
 
 async function skipToResult(wrapper: VueWrapper): Promise<void> {
@@ -428,7 +424,7 @@ describe('StudentLessonPlayerPage (focus mode lesson)', () => {
     expect(push).toHaveBeenCalledWith(expect.objectContaining({ name: 'student-learn' }))
   })
 
-  it('closing the result screen keeps what unlocked for the path banner', async () => {
+  it('closing the result screen keeps what unlocked for the path toast', async () => {
     // Nothing Chinese came up in this question, so there is no phrase to say.
     const { wrapper, push } = await finishOneQuestionLesson()
 
@@ -454,5 +450,14 @@ describe('StudentLessonPlayerPage (focus mode lesson)', () => {
 
     expect(wrapper.text()).toContain('This lesson is still locked. Finish the lessons before it first.')
     expect(wrapper.find('[data-testid="question-stage"]').exists()).toBe(false)
+  })
+
+  it('shows an alert icon and distinct message when a lesson has no questions', async () => {
+    api.lesson.mockResolvedValue({ ...lessonPlay(), questions: [] })
+    const { wrapper } = await mountPage()
+
+    expect(wrapper.get('.state-panel .state-title').text()).toBe('This lesson cannot be opened')
+    expect(wrapper.get('.state-panel .muted').text()).toBe('This lesson has no questions right now.')
+    expect(wrapper.findAll('.state-panel button')).toHaveLength(0)
   })
 })

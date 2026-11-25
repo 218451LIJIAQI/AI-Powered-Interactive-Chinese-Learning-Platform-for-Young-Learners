@@ -12,13 +12,15 @@ import io.swagger.v3.oas.annotations.media.Schema;
 public record AiQuizGeneratorResponse(
         String title,
         List<Question> questions,
-        AiRequestStatus status) {
+        AiRequestStatus status,
+        String message) {
 
     @Override
     public String toString() {
         return "AiQuizGeneratorResponse[title=" + redactLength(title)
                 + ", questions=" + (questions == null ? 0 : questions.size())
-                + ", status=" + status + "]";
+                + ", status=" + status
+                + ", message=" + redactLength(message) + "]";
     }
 
     @Schema(name = "AiGeneratedQuizQuestion")

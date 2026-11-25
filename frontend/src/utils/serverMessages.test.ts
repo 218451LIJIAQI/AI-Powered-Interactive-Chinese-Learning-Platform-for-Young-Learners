@@ -32,7 +32,7 @@ describe('localised backend error messages (FRLANG02)', () => {
     expect(localizeServerMessage('Invalid email or password.', 'en')).toBe('Invalid email or password.')
     expect(localizeServerMessage('Lesson 12 has no quiz yet.', 'ms')).toBe('Lesson 12 has no quiz yet.')
     // Notification templates do not run against API errors, preventing false-match collisions.
-    expect(localizeServerMessage('About something unexpected.', 'ms')).toBe('About something unexpected.')
+    expect(localizeServerMessage('You reached Rank 3', 'ms')).toBe('You reached Rank 3')
   })
 
   it('keeps the daily AI limit distinct from the generic rate-limit message', () => {
@@ -368,7 +368,6 @@ describe.runIf(hasBackendSources)('every notification title and message is trans
     expect(texts.filter((text) => text.field === 'message').length).toBeGreaterThan(8)
     expect([...new Set(texts.map((text) => text.file))].sort()).toEqual(
       [
-        'config/seed/DemoOpsSeeder.java',
         'service/AiResponseReportService.java',
         'service/admin/AdminUserService.java',
         'service/learn/LearnerNotifications.java',

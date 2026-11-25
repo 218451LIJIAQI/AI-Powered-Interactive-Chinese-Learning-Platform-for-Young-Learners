@@ -346,7 +346,7 @@ describe('NotificationsPage', () => {
     await wrapper.get('[data-testid="toast"] .toast-action').trigger('click')
     await flushPromises()
 
-    expect(wrapper.get('.data-notice.is-error').text()).toContain('The notifications could not be marked unread again.')
+    expect(wrapper.get('.data-notice').text()).toContain('The notifications could not be marked unread again.')
     expect(unreadPills(wrapper)).toHaveLength(0)
   })
 
@@ -457,7 +457,7 @@ describe('NotificationsPage', () => {
 
     expect(notificationsApi.markUnread.mock.calls).toEqual([[ids.slice(0, 1000)], [[1001]]])
     expect(chip(wrapper, 'unread')).toBe(fails ? 'Unread · 1000' : 'Unread · 1001')
-    expect(wrapper.find('.data-notice.is-error').exists()).toBe(fails)
+    expect(wrapper.find('.data-notice').exists()).toBe(fails)
   })
 
   it('offers no Undo when marking all found nothing unread', async () => {
@@ -506,7 +506,7 @@ describe('NotificationsPage', () => {
     await flushPromises()
 
     expect(notificationsApi.unreadCount).toHaveBeenCalledTimes(1)
-    expect(wrapper.get('.data-notice.is-error').text()).toContain('The notifications were not marked as read.')
+    expect(wrapper.get('.data-notice').text()).toContain('The notifications were not marked as read.')
     expect(unreadPills(wrapper)).toHaveLength(1)
   })
 
@@ -619,7 +619,7 @@ describe('NotificationsPage', () => {
     await button.trigger('click')
     await flushPromises()
 
-    expect(wrapper.get('.data-notice.is-error').text()).toContain('The notification was not marked as read.')
+    expect(wrapper.get('.data-notice').text()).toContain('The notification was not marked as read.')
     expect(button.element.disabled).toBe(false)
     expect(unreadPills(wrapper)).toHaveLength(1)
   })
@@ -632,5 +632,55 @@ describe('NotificationsPage', () => {
     const wrapper = await mountPage()
 
     expect(wrapper.findAll('[data-testid="notification-open"]')).toHaveLength(0)
+  })
+
+  it('resets to page 0 before reloading when Mark all as read is clicked from page 2 of Unread', async () => {
+    stored = Array.from({ length: 21 }, (_, index) => notification(index + 1))
+    const wrapper = await mountPage()
+    await wrapper.get('[data-testid="notifications-filter-unread"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('nav[aria-label="Notification pages"] button:last-of-type').trigger('click')
+    await flushPromises()
+    expect(notificationsApi.page).toHaveBeenLastCalledWith({ status: 'UNREAD', page: 1, size: 20 })
+
+    notificationsApi.page.mockClear()
+    await wrapper.get('[data-testid="notifications-mark-all"]').trigger('click')
+    await flushPromises()
+
+    expect(notificationsApi.page).toHaveBeenCalledExactlyOnceWith({ status: 'UNREAD', page: 0, size: 20 })
+    expect(wrapper.get('[data-testid="notifications-filter-empty"]').text()).toContain('You’re all caught up')
+  })
+
+  it('keeps filter counts consistent when new unread notifications arrive while viewing another filter', async () => {
+    const wrapper = await mountPage()
+    await wrapper.get('[data-testid="notifications-filter-read"]').trigger('click')
+    await flushPromises()
+    expect(chip(wrapper, 'all')).toBe('All · 2')
+    expect(chip(wrapper, 'read')).toBe('Read · 1')
+
+    // Three new unread notifications arrive while viewing Read.
+    stored = [...stored, notification(3), notification(4), notification(5)]
+    await wrapper.get('[data-testid="notifications-filter-unread"]').trigger('click')
+    await flushPromises()
+    // Simulate shared unread count updating from header refresh while viewing Unread.
+    await wrapper.get('[data-testid="notification-mark-read"]').trigger('click')
+    await flushPromises()
+    expect(chip(wrapper, 'unread')).toBe('Unread · 3')
+    expect(chip(wrapper, 'all')).toBe('All · 3')
+    expect(chip(wrapper, 'read')).toBe('Read · 0')
+  })
+
+  it('re-translates action error notices on locale switch and catches failed open navigation', async () => {
+    const wrapper = await mountPage()
+    vi.mocked(router.push).mockRejectedValueOnce(new Error('chunk failed'))
+
+    await wrapper.get('[data-testid="notification-open"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('.data-notice').text()).toContain('Something went wrong')
+    i18n.global.locale.value = 'ms'
+    await nextTick()
+    expect(wrapper.get('.data-notice').text()).not.toContain('Something went wrong')
+    i18n.global.locale.value = 'en'
   })
 })

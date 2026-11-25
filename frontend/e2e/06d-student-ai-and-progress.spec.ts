@@ -1,7 +1,5 @@
-import { expect, test } from '@playwright/test'
-
 import { AMIRA, MY_CLASS, numberIn, rankName, sidebarStatus, signInAmira, toast } from './studentSupport'
-import { API_BASE_URL, apiAuthHeaders, sidebar } from './support'
+import { API_BASE_URL, apiAuthHeaders, bestEffortApi, expect, sidebar, test } from './support'
 
 // Pure API test: uses only the request fixture outside the serial browser suite so no browser page is started.
 test('the AI endpoints say the AI is unavailable instead of making up an answer', async ({ request }) => {
@@ -64,7 +62,6 @@ test.describe('Notifications, AI Helper, and Progress', () => {
     // No confirm step: it is done at once, and the toast can take it back.
     await page.clock.install()
     let markedIds: number[] = []
-    let undone = false
     try {
       const readAll = page.waitForResponse(
         (response) =>
@@ -91,15 +88,12 @@ test.describe('Notifications, AI Helper, and Progress', () => {
       await expect(unreadChip).toHaveText(`Unread · ${unread}`)
       await expect(unreadRows).toHaveCount(unread)
       await expect(bell).toHaveAccessibleName(`Notifications - ${unread} unread`)
-      undone = true
+      markedIds = []
     } finally {
-      if (markedIds.length > 0 && !undone) {
-        try {
-          const headers = await apiAuthHeaders(request, AMIRA)
-          await request.patch(`${API_BASE_URL}/notifications/unread`, { headers, data: { ids: markedIds } })
-        } catch {
-          // Best-effort teardown: do not mask the primary test failure.
-        }
+      if (markedIds.length > 0) {
+        await bestEffortApi(request, AMIRA, (headers) =>
+          request.patch(`${API_BASE_URL}/notifications/unread`, { headers, data: { ids: markedIds } }),
+        )
       }
     }
   })
@@ -170,9 +164,17 @@ test.describe('Notifications, AI Helper, and Progress', () => {
         await route.fulfill({ response, json: body })
       })
       let photosSubmitted = 0
-      const submissions: Array<{ type: string | null; targetText: string | null }> = []
+      const submissions: Array<{
+        type: string | null
+        targetText: string | null
+        languagePreference: string | null
+        fileName: string | null
+      }> = []
       const multipartField = (body: string, name: string): string | null =>
         new RegExp(`Content-Disposition:\\s*form-data;\\s*name="${name}"\\r?\\n\\r?\\n([^\\r\\n]+)`).exec(body)?.[1] ??
+        null
+      const multipartFilename = (body: string, name: string): string | null =>
+        new RegExp(`Content-Disposition:\\s*form-data;\\s*name="${name}";\\s*filename="([^"]+)"`).exec(body)?.[1] ??
         null
 
       await page.route(/\/api\/v1\/ai\/practice-checks(?:$|\?)/, async (route) => {
@@ -180,14 +182,22 @@ test.describe('Notifications, AI Helper, and Progress', () => {
         const body = route.request().postDataBuffer()?.toString('utf8') ?? ''
         const submittedType = multipartField(body, 'type')
         const submittedTarget = multipartField(body, 'targetText')
-        submissions.push({ type: submittedType, targetText: submittedTarget })
+        submissions.push({
+          type: submittedType,
+          targetText: submittedTarget,
+          languagePreference: multipartField(body, 'languagePreference'),
+          fileName: multipartFilename(body, 'file'),
+        })
         const isRecording = submittedType === 'RECORDING'
         const check = {
           id: 999,
           type: isRecording ? 'RECORDING' : 'HANDWRITING',
+          lessonTitle: null,
           targetText: submittedTarget ?? (isRecording ? '山' : '好'),
-          checkedAt: '2026-11-18T09:00:00+08:00',
+          checkedAt: '2026-11-18T09:00:00',
           score: 84,
+          clarityScore: null,
+          paceScore: null,
           headline: 'One small adjustment',
           tips: [],
           ...(isRecording
@@ -245,9 +255,9 @@ test.describe('Notifications, AI Helper, and Progress', () => {
       await expect(result).toContainText('The 女 component is wide.')
       await expect(result).toContainText('Make 女 narrower to leave room for 子.')
       expect(submissions).toEqual([
-        { type: 'RECORDING', targetText: '山' },
-        { type: 'HANDWRITING', targetText: '好' },
-        { type: 'HANDWRITING', targetText: '好' },
+        { type: 'RECORDING', targetText: '山', languagePreference: 'en', fileName: 'voice.webm' },
+        { type: 'HANDWRITING', targetText: '好', languagePreference: 'en', fileName: 'handwriting.png' },
+        { type: 'HANDWRITING', targetText: '好', languagePreference: 'en', fileName: 'handwriting.png' },
       ])
     } finally {
       try {
@@ -268,7 +278,10 @@ test.describe('Notifications, AI Helper, and Progress', () => {
     await expect(page.getByRole('heading', { name: 'Progress', level: 1 })).toBeAttached()
     const rank = page.getByRole('region', { name: 'Your rank' })
     await expect(rank).toContainText(rankName(xp))
-    await expect(rank.getByRole('progressbar', { name: `Progress to the next rank: ${xp % 100}%` })).toBeVisible()
+    await expect(rank.getByRole('progressbar', { name: 'Progress to the next rank' })).toHaveAttribute(
+      'aria-valuenow',
+      String(xp % 100),
+    )
     await expect(rank).toContainText(`${100 - (xp % 100)} XP to ${rankName(xp + 100)}`)
 
     const streak = page.getByRole('region', { name: /^\d+ day streak$/ })
@@ -278,6 +291,8 @@ test.describe('Notifications, AI Helper, and Progress', () => {
     const badges = page.getByRole('region', { name: 'Badges' })
     await expect(badges.getByRole('button')).toHaveCount(8)
     await expect(badges.getByRole('button', { name: /^First Steps .*Earned$/ })).toBeVisible()
+    await expect(badges.getByRole('button', { name: /^XP Starter .*Earned$/ })).toBeVisible()
+    expect(xp).toBeGreaterThanOrEqual(50)
     await expect(badges.getByRole('button', { name: /^300 XP / })).toHaveAccessibleName(
       xp >= 300 ? /Earned$/ : /Not earned yet$/,
     )
@@ -306,7 +321,7 @@ test.describe('Notifications, AI Helper, and Progress', () => {
       await expect(row).toContainText(`${percent}%`)
       if (percent === 0) await expect(row).toContainText('Not started')
       else if (weeklyChange > 0) await expect(row).toContainText(`+${weeklyChange} this week`)
-      await expect(row.getByRole('progressbar', { name: `${label}: ${percent}%` })).toBeVisible()
+      await expect(row.getByRole('progressbar', { name: label })).toHaveAttribute('aria-valuenow', String(percent))
     }
     const { label, tab } = SKILLS[weakest]!
     await expect(card).toContainText(`Weakest right now: ${label}.`)
@@ -320,14 +335,14 @@ test.describe('Notifications, AI Helper, and Progress', () => {
     await expect(plan).toContainText('Travel to Shanghai')
     await expect(plan).toContainText(/by \w{3} \d{1,2} \w{3,4} \d{4} · week 2 of 10/)
     await expect(plan).toContainText('HSK 1 → HSK 2')
-    await expect(plan.getByRole('progressbar', { name: /^Plan progress: \d+%$/ })).toBeVisible()
+    await expect(plan.getByRole('progressbar', { name: 'Plan progress' })).toHaveAttribute('aria-valuenow', /^\d+$/)
     await plan.getByRole('link', { name: 'View my plan' }).click()
 
     await expect(page).toHaveURL(/\/student\/progress\/plan$/)
     await expect(page.getByRole('heading', { name: 'My learning plan', level: 1 })).toBeVisible()
     await expect(page.getByText(/^Travel to Shanghai · by .+ · week \d+ of \d+$/)).toBeVisible()
     const glance = page.getByRole('region', { name: 'Your plan at a glance' })
-    await expect(glance.getByRole('heading')).toHaveText(['Mandarin level', 'Plan progress', 'This week', 'Pace'])
+    await expect(glance.locator('.page-eyebrow')).toHaveText(['Mandarin level', 'Plan progress', 'This week', 'Pace'])
     await expect(glance).toContainText('HSK 1 → HSK 2')
     await expect(glance).toContainText('1–2 hours a day')
     const steps = page.getByRole('region', { name: 'Your path' }).getByRole('list', { name: 'The steps of your plan' })
